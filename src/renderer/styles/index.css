@@ -1,0 +1,237 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom scrollbar styles */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Dark mode scrollbar */
+.dark ::-webkit-scrollbar-thumb {
+  background: #4b5563;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #6b7280;
+}
+
+/* Titlebar drag region */
+.titlebar-drag {
+  -webkit-app-region: drag;
+}
+
+.titlebar-no-drag {
+  -webkit-app-region: no-drag;
+}
+
+/* Email body styling */
+.email-body {
+  word-break: break-word;
+}
+
+/* HTML email body styling */
+.email-html-body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.email-html-body img {
+  max-width: 100%;
+  height: auto;
+}
+
+.email-html-body a {
+  color: #2563eb;
+  text-decoration: underline;
+}
+
+.email-html-body a:hover {
+  color: #1d4ed8;
+}
+
+.email-html-body table {
+  border-collapse: collapse;
+  max-width: 100%;
+}
+
+.email-html-body td, .email-html-body th {
+  padding: 4px 8px;
+}
+
+.email-html-body blockquote {
+  border-left: 3px solid #d1d5db;
+  padding-left: 12px;
+  margin-left: 0;
+  color: #6b7280;
+}
+
+.email-html-body pre {
+  background: #f3f4f6;
+  padding: 8px;
+  border-radius: 4px;
+  overflow-x: auto;
+}
+
+.email-html-body h1, .email-html-body h2, .email-html-body h3 {
+  margin-top: 16px;
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+.email-html-body p {
+  margin-bottom: 8px;
+}
+
+.email-html-body ul, .email-html-body ol {
+  padding-left: 24px;
+  margin-bottom: 8px;
+}
+
+/* Dark mode email body overrides */
+.dark .email-html-body a {
+  color: #60a5fa;
+}
+
+.dark .email-html-body a:hover {
+  color: #93bbfd;
+}
+
+.dark .email-html-body blockquote {
+  border-left-color: #4b5563;
+  color: #9ca3af;
+}
+
+.dark .email-html-body pre {
+  background: #1f2937;
+}
+
+/* TipTap editor (compose) list/formatting styles — Tailwind Preflight resets these */
+.tiptap ul, .tiptap ol {
+  padding-left: 1.5em;
+  margin-bottom: 0.5em;
+}
+
+.tiptap ul { list-style-type: disc; }
+.tiptap ol { list-style-type: decimal; }
+
+.tiptap li {
+  margin-bottom: 0.15em;
+}
+
+.tiptap li p {
+  margin-bottom: 0;
+}
+
+.tiptap blockquote {
+  border-left: 3px solid #d1d5db;
+  padding-left: 12px;
+  margin-left: 0;
+  color: #6b7280;
+}
+
+.dark .tiptap blockquote {
+  border-left-color: #4b5563;
+  color: #9ca3af;
+}
+
+/* Priority badge colors */
+.priority-high {
+  @apply bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300;
+}
+
+.priority-medium {
+  @apply bg-yellow-100 text-yellow-800 dark:bg-amber-900/30 dark:text-amber-300;
+}
+
+.priority-low {
+  @apply bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300;
+}
+
+.priority-done {
+  @apply bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300;
+}
+
+.priority-skipped {
+  @apply bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400;
+}
+
+/* Agent panel markdown styles */
+.agent-markdown p {
+  margin-bottom: 0.5em;
+}
+
+.agent-markdown p:last-child {
+  margin-bottom: 0;
+}
+
+.agent-markdown h1, .agent-markdown h2, .agent-markdown h3 {
+  font-weight: 600;
+  margin-top: 0.75em;
+  margin-bottom: 0.25em;
+}
+
+.agent-markdown h1 { font-size: 1.1em; }
+.agent-markdown h2 { font-size: 1.05em; }
+.agent-markdown h3 { font-size: 1em; }
+
+.agent-markdown ul, .agent-markdown ol {
+  padding-left: 1.25em;
+  margin-bottom: 0.5em;
+}
+
+.agent-markdown ul { list-style-type: disc; }
+.agent-markdown ol { list-style-type: decimal; }
+
+.agent-markdown li {
+  margin-bottom: 0.15em;
+}
+
+.agent-markdown code {
+  @apply bg-gray-100 dark:bg-gray-900 px-1 py-0.5 rounded text-xs font-mono;
+}
+
+.agent-markdown pre {
+  @apply bg-gray-100 dark:bg-gray-900 p-2 rounded text-xs overflow-x-auto my-1;
+}
+
+.agent-markdown pre code {
+  @apply bg-transparent p-0;
+}
+
+.agent-markdown blockquote {
+  @apply border-l-2 border-gray-300 dark:border-gray-600 pl-3 my-1 text-gray-600 dark:text-gray-400;
+}
+
+.agent-markdown a {
+  @apply text-blue-600 dark:text-blue-400 underline;
+}
+
+.agent-markdown strong {
+  @apply font-semibold;
+}
+
+.agent-markdown table {
+  @apply border-collapse text-xs my-1;
+}
+
+.agent-markdown th, .agent-markdown td {
+  @apply border border-gray-200 dark:border-gray-700 px-2 py-1;
+}
+
+.agent-markdown th {
+  @apply bg-gray-50 dark:bg-gray-800 font-medium;
+}

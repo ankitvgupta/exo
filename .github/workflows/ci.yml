@@ -1,0 +1,88 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  typecheck:
+    name: Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npx tsc --noEmit -p tsconfig.node.json
+
+      - run: npx tsc --noEmit -p tsconfig.web.json
+
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    env:
+      CI: true
+      EXO_DEMO_MODE: true
+      ELECTRON_DISABLE_SANDBOX: 1
+      NODE_OPTIONS: --max-old-space-size=4096
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Get Playwright version for cache key
+        id: pw-version
+        run: echo "version=$(node -p "require('./package-lock.json').packages['node_modules/@playwright/test'].version")" >> "$GITHUB_OUTPUT"
+
+      - name: Cache apt packages for Electron
+        uses: actions/cache@v4
+        id: apt-cache
+        with:
+          path: ~/apt-cache
+          key: apt-electron-chromium-${{ runner.os }}-pw${{ steps.pw-version.outputs.version }}
+
+      - name: Install system dependencies for Electron
+        run: |
+          # Clear runner's pre-existing archives so we only cache our own packages
+          sudo apt-get clean || true
+          # Restore our cached .deb files to avoid re-downloading from mirrors
+          if [ -d ~/apt-cache ]; then
+            sudo cp ~/apt-cache/*.deb /var/cache/apt/archives/ 2>/dev/null || true
+          fi
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends xvfb
+          # Only install chromium deps — Electron is Chromium-based, so firefox
+          # and webkit system deps are unnecessary and add ~60% more packages.
+          npx playwright install-deps chromium
+          # Save only our installed packages for next run
+          rm -rf ~/apt-cache && mkdir -p ~/apt-cache
+          sudo cp /var/cache/apt/archives/*.deb ~/apt-cache/ 2>/dev/null || true
+
+      - name: Build Electron app
+        run: npm run build
+
+      - name: Run tests
+        run: ./scripts/run-tests.sh
+
+      - name: Upload test report
+        uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 14
+          if-no-files-found: ignore

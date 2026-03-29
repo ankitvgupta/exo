@@ -1,0 +1,284 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  # ── Job 1: Build + sign on macOS (expensive runner, kept short) ──────────
+  build-and-sign:
+    runs-on: macos-latest
+    env:
+      NODE_OPTIONS: --max-old-space-size=4096
+    outputs:
+      submission-id: ${{ steps.notarize-submit.outputs.submission-id }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Run unit tests
+        run: npm run test:unit
+
+      - name: Set version from git tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          # For stable tags (exactly X.Y.Z with no suffix), zero-pad to 3 parts
+          if [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            IFS='.' read -ra PARTS <<< "$VERSION"
+            while [ ${#PARTS[@]} -lt 3 ]; do PARTS+=("0"); done
+            VERSION="${PARTS[0]}.${PARTS[1]}.${PARTS[2]}"
+          fi
+          echo "Setting package version to $VERSION"
+          npm version "$VERSION" --no-git-tag-version --allow-same-version
+
+      - name: Build
+        env:
+          MAIN_VITE_GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          MAIN_VITE_GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          VITE_POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
+          VITE_POSTHOG_HOST: ${{ secrets.POSTHOG_HOST }}
+        run: npm run build
+
+      - name: Import signing certificate
+        uses: apple-actions/import-codesign-certs@v3
+        with:
+          p12-file-base64: ${{ secrets.CSC_LINK }}
+          p12-password: ${{ secrets.CSC_KEY_PASSWORD }}
+
+      - name: Install Apple intermediate CA certificates
+        run: |
+          curl -sfL -o /tmp/DeveloperIDG2CA.cer https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer
+          # Import may fail if cert already exists in the .p12 bundle — that's OK
+          security import /tmp/DeveloperIDG2CA.cer -t cert -k ~/Library/Keychains/signing_temp.keychain || true
+
+      - name: Verify signing identity
+        run: |
+          security find-identity -v -p codesigning
+          if security find-identity -v -p codesigning | grep -q "0 valid identities found"; then
+            echo "ERROR: No valid signing identities found"
+            exit 1
+          fi
+
+      - name: Build distributables (signed)
+        run: npx electron-builder --publish never
+        timeout-minutes: 10
+
+      - name: Submit for notarization (no wait)
+        id: notarize-submit
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          DMG=$(ls release/*.dmg 2>/dev/null | head -1)
+          if [ -z "$DMG" ]; then
+            echo "ERROR: No .dmg file found in release/"
+            exit 1
+          fi
+          echo "Submitting $DMG for notarization..."
+          xcrun notarytool submit "$DMG" \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --output-format json | tee /tmp/notarize-output.json
+          SUBMISSION_ID=$(jq -r '.id' /tmp/notarize-output.json)
+          if [ -z "$SUBMISSION_ID" ] || [ "$SUBMISSION_ID" = "null" ]; then
+            echo "ERROR: Failed to get submission ID from notarytool"
+            cat /tmp/notarize-output.json
+            exit 1
+          fi
+          echo "Submission ID: $SUBMISSION_ID"
+          echo "submission-id=$SUBMISSION_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-assets
+          path: |
+            release/*.dmg
+            release/*.zip
+            release/*.yml
+            release/*.blockmap
+          retention-days: 7
+
+  # ── Job 2: Poll notarization on Linux (cheap runner for the wait) ────────
+  wait-for-notarization:
+    needs: build-and-sign
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Poll notarization status
+        env:
+          SUBMISSION_ID: ${{ needs.build-and-sign.outputs.submission-id }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+        run: |
+          umask 077
+          echo "$APPLE_API_KEY_P8" > /tmp/apikey.p8
+          python3 << 'PYEOF'
+          import json, time, base64, os, subprocess, sys, tempfile, urllib.request
+
+          KEY_ID = os.environ["APPLE_API_KEY_ID"]
+          ISSUER_ID = os.environ["APPLE_API_ISSUER_ID"]
+          SUBMISSION_ID = os.environ["SUBMISSION_ID"]
+          KEY_FILE = "/tmp/apikey.p8"
+
+          def b64url(data):
+              if isinstance(data, str): data = data.encode()
+              return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
+
+          def der_to_raw(der):
+              """Convert DER-encoded ECDSA signature to raw R||S (64 bytes)."""
+              idx = 2  # skip 0x30 <len>
+              assert der[idx] == 0x02
+              rlen = der[idx + 1]
+              r = der[idx + 2:idx + 2 + rlen]
+              idx = idx + 2 + rlen
+              assert der[idx] == 0x02
+              slen = der[idx + 1]
+              s = der[idx + 2:idx + 2 + slen]
+              return r[-32:].rjust(32, b"\x00") + s[-32:].rjust(32, b"\x00")
+
+          def generate_jwt():
+              header = b64url(json.dumps({"alg": "ES256", "kid": KEY_ID, "typ": "JWT"}))
+              now = int(time.time())
+              payload = b64url(json.dumps({"iss": ISSUER_ID, "iat": now, "exp": now + 1200, "aud": "appstoreconnect-v1"}))
+              signing_input = f"{header}.{payload}".encode()
+              with tempfile.NamedTemporaryFile(delete=False) as f:
+                  f.write(signing_input)
+                  input_path = f.name
+              sig_path = input_path + ".sig"
+              try:
+                  subprocess.run(["openssl", "dgst", "-sha256", "-sign", KEY_FILE, "-out", sig_path, input_path], check=True)
+                  with open(sig_path, "rb") as f:
+                      der_sig = f.read()
+              finally:
+                  for p in (input_path, sig_path):
+                      try: os.unlink(p)
+                      except OSError: pass
+              return f"{header}.{payload}.{b64url(der_to_raw(der_sig))}"
+
+          print(f"Waiting for notarization of submission {SUBMISSION_ID}...")
+          jwt = generate_jwt()
+          API_URL = f"https://appstoreconnect.apple.com/notary/v2/submissions/{SUBMISSION_ID}"
+          consecutive_errors = 0
+          MAX_CONSECUTIVE_ERRORS = 10
+
+          for attempt in range(1, 121):  # 120 × 30s = 60 min
+              try:
+                  req = urllib.request.Request(API_URL, headers={"Authorization": f"Bearer {jwt}"})
+                  with urllib.request.urlopen(req) as resp:
+                      data = json.loads(resp.read())
+                  status = data["data"]["attributes"]["status"]
+                  consecutive_errors = 0
+              except Exception as e:
+                  consecutive_errors += 1
+                  status = f"error: {e}"
+                  if consecutive_errors >= MAX_CONSECUTIVE_ERRORS:
+                      print(f"FATAL: {MAX_CONSECUTIVE_ERRORS} consecutive errors, aborting")
+                      sys.exit(1)
+
+              print(f"[{attempt}/120] Notarization status: {status}", flush=True)
+
+              if status == "Accepted":
+                  print("Notarization successful!")
+                  sys.exit(0)
+              elif status in ("Invalid", "Rejected"):
+                  print(f"Notarization FAILED: {status}")
+                  sys.exit(1)
+
+              # Refresh JWT every 15 min (before 20-min expiry)
+              if attempt % 30 == 0:
+                  jwt = generate_jwt()
+                  print("Refreshed JWT token", flush=True)
+
+              time.sleep(30)
+
+          print("Timed out waiting for notarization")
+          sys.exit(1)
+          PYEOF
+
+      - name: Clean up
+        if: always()
+        run: rm -f /tmp/apikey.p8
+
+  # ── Job 3: Staple notarization ticket on macOS ───────────────────────────
+  staple:
+    needs: [build-and-sign, wait-for-notarization]
+    runs-on: macos-latest
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: release-assets
+          path: release
+
+      - name: Staple notarization ticket to DMG
+        run: |
+          for dmg in release/*.dmg; do
+            echo "Stapling $dmg..."
+            xcrun stapler staple "$dmg"
+          done
+
+      - name: Upload stapled artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-assets-stapled
+          path: |
+            release/*.dmg
+            release/*.zip
+            release/*.yml
+            release/*.blockmap
+          retention-days: 7
+
+  # ── Job 4: Upload release assets (cheap Linux runner) ────────────────────
+  release:
+    needs: [build-and-sign, staple]
+    if: |
+      needs.build-and-sign.result == 'success' &&
+      needs.staple.result == 'success' &&
+      startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download stapled artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: release-assets-stapled
+          path: release
+
+      - name: Upload assets to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Detect pre-release tags (e.g. v1.2.3-beta.1, v1.2.3-rc.1)
+          PRERELEASE_FLAG=""
+          LATEST_FLAG=""
+          if [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-.+ ]]; then
+            PRERELEASE_FLAG="--prerelease"
+            LATEST_FLAG="--latest=false"
+          fi
+          gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" 2>/dev/null || \
+            gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes $PRERELEASE_FLAG $LATEST_FLAG
+          # Ensure flags are set even if the release already existed
+          if [[ -n "$PRERELEASE_FLAG" ]]; then
+            gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --prerelease --latest=false
+          fi
+          gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" release/* --clobber

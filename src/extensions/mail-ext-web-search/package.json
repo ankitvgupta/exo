@@ -1,0 +1,31 @@
+{
+  "name": "mail-ext-web-search",
+  "version": "1.0.0",
+  "description": "Search the web for information about email senders",
+  "main": "./src/index.ts",
+  "mailExtension": {
+    "id": "web-search",
+    "displayName": "Sender Web Search",
+    "description": "Search the web for information about email senders",
+    "builtIn": true,
+    "activationEvents": ["onEmail"],
+    "contributes": {
+      "sidebarPanels": [
+        {
+          "id": "sender-profile",
+          "title": "Sender",
+          "priority": 100
+        }
+      ],
+      "settings": [
+        {
+          "id": "enabled",
+          "type": "boolean",
+          "default": true,
+          "title": "Enable sender lookup",
+          "description": "Automatically look up information about email senders"
+        }
+      ]
+    }
+  }
+}

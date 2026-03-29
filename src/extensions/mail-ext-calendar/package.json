@@ -1,0 +1,32 @@
+{
+  "name": "mail-ext-calendar",
+  "version": "1.0.0",
+  "description": "Show calendar events for dates mentioned in emails",
+  "main": "./src/index.ts",
+  "mailExtension": {
+    "id": "calendar",
+    "displayName": "Calendar",
+    "description": "Show calendar events for dates mentioned in emails",
+    "builtIn": true,
+    "activationEvents": ["onEmail"],
+    "contributes": {
+      "sidebarPanels": [
+        {
+          "id": "day-view",
+          "title": "Calendar",
+          "priority": 100,
+          "scope": "email"
+        }
+      ],
+      "settings": [
+        {
+          "id": "enabled",
+          "type": "boolean",
+          "default": true,
+          "title": "Enable calendar sidebar",
+          "description": "Show calendar events for dates mentioned in emails"
+        }
+      ]
+    }
+  }
+}
