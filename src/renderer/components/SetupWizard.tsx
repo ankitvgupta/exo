@@ -83,13 +83,12 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
     try {
       const result = await window.api.gmail.saveCredentials(googleClientId.trim(), googleClientSecret.trim()) as IpcResponse<void>;
       if (result.success) {
-        // Move to the next step
-        if (visibleSteps.includes("apikey")) {
-          setStep("apikey");
-        } else if (visibleSteps.includes("oauth")) {
-          setStep("oauth");
+        const credIdx = visibleSteps.indexOf("credentials");
+        const next = visibleSteps[credIdx + 1];
+        if (next) {
+          setStep(next);
         } else {
-          await enterExtensionsStep();
+          setStep("apikey");
         }
       } else {
         setError(result.error ?? "Failed to save credentials");
