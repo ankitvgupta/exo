@@ -146,9 +146,11 @@ export function SearchBar({ isOpen, onClose }: SearchBarProps) {
         });
     }
 
-    // Fire remote search for each account and merge results
+    // Fire remote search for each account and merge results.
+    // Use Promise.all to ensure remoteSearchStatus transitions to "complete"
+    // even when all accounts return empty or fully-deduplicated results.
     if (isOnline) {
-      for (const accountId of accountIds) {
+      const remotePromises = accountIds.map((accountId) =>
         window.api.emails.searchRemote(query, accountId, 500)
           .then((response: { success: boolean; data?: { emails: DashboardEmail[]; nextPageToken?: string }; error?: string }) => {
             if (useAppStore.getState().activeSearchQuery !== query) return;
@@ -171,8 +173,17 @@ export function SearchBar({ isOpen, onClose }: SearchBarProps) {
           .catch((err: unknown) => {
             if (useAppStore.getState().activeSearchQuery !== query) return;
             setRemoteSearchError(err instanceof Error ? err.message : "Gmail search failed");
-          });
-      }
+          })
+      );
+      Promise.all(remotePromises).then(() => {
+        // If no individual response called setRemoteSearchResults (e.g. all
+        // results were empty or duplicates), the status is still "searching".
+        // Force it to "complete" so the spinner stops.
+        const s = useAppStore.getState();
+        if (s.activeSearchQuery === query && s.remoteSearchStatus === "searching") {
+          setRemoteSearchResults(s.remoteSearchResults ?? []);
+        }
+      });
     } else {
       setRemoteSearchResults([]);
     }

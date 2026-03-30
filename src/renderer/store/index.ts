@@ -1521,10 +1521,11 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   markThreadAsRead: (threadId) => {
     const state = get();
-    const accountId = state.currentAccountId;
-    if (!accountId) return;
-
     const threadEmails = state.emails.filter((e) => e.threadId === threadId);
+
+    // In All accounts mode, derive the accountId from the thread's emails
+    const accountId = state.currentAccountId ?? threadEmails[0]?.accountId ?? null;
+    if (!accountId) return;
     const unreadEmails = threadEmails.filter((e) => e.labelIds?.includes("UNREAD"));
     if (unreadEmails.length === 0) return;
 
