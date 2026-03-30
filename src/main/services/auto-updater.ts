@@ -99,7 +99,7 @@ class AutoUpdateService extends EventEmitter {
       autoUpdater.setFeedURL({
         provider: "github",
         owner: "ankitvgupta",
-        repo: "mail-client",
+        repo: "mail-app",
         private: true,
         token: process.env.GH_TOKEN || undefined,
       });

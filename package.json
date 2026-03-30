@@ -5,7 +5,7 @@
   "description": "Automated email draft generator using Claude AI and Gmail",
   "repository": {
     "type": "git",
-    "url": "https://github.com/ankitvgupta/mail-client.git"
+    "url": "https://github.com/ankitvgupta/mail-app.git"
   },
   "type": "module",
   "main": "./out/main/index.js",
@@ -135,7 +135,7 @@
     "publish": {
       "provider": "github",
       "owner": "ankitvgupta",
-      "repo": "mail-client",
+      "repo": "mail-app",
       "private": true
     },
     "directories": {

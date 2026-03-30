@@ -3,7 +3,7 @@
 **Date**: 2026-02-10
 **App**: Exo (Electron + React + TypeScript)
 **Mode**: Demo mode (`EXO_DEMO_MODE=true`)
-**Branch**: `mail-client-testing`
+**Branch**: `mail-app-testing`
 
 ## Summary
 

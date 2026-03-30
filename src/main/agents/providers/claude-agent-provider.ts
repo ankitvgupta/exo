@@ -63,7 +63,7 @@ export class ClaudeAgentProvider implements AgentProvider {
 
     // Create in-process MCP server with our tools
     const mcpServer = createSdkMcpServer({
-      name: "mail-client-tools",
+      name: "mail-app-tools",
       version: "1.0.0",
       tools: mcpTools,
     });
@@ -84,9 +84,9 @@ export class ClaudeAgentProvider implements AgentProvider {
     // Build MCP server map — always include our tool server,
     // conditionally include Chrome DevTools for browser automation
     const mcpServerMap: Record<string, McpServerConfig> = {
-      "mail-client-tools": mcpServer,
+      "mail-app-tools": mcpServer,
     };
-    const allowedToolPatterns = tools.map((t) => `mcp__mail-client-tools__${t.name}`);
+    const allowedToolPatterns = tools.map((t) => `mcp__mail-app-tools__${t.name}`);
 
     const browserConfig = this.frameworkConfig.browserConfig;
     if (browserConfig?.enabled) {
@@ -101,7 +101,7 @@ export class ClaudeAgentProvider implements AgentProvider {
     }
 
     // Add user-configured custom MCP servers
-    const reservedNames = new Set(["mail-client-tools", "chrome-devtools"]);
+    const reservedNames = new Set(["mail-app-tools", "chrome-devtools"]);
     // Prevent user env vars from overriding security-sensitive keys
     const protectedEnvKeys = new Set([
       "ANTHROPIC_API_KEY", "CLAUDECODE",
@@ -385,7 +385,7 @@ function buildMcpToolWithTracking(
 
 /**
  * Strip the MCP server prefix from a tool name.
- * "mcp__mail-client-tools__read_email" → "read_email"
+ * "mcp__mail-app-tools__read_email" → "read_email"
  */
 function baseToolName(name: string): string {
   if (name.startsWith("mcp__")) {

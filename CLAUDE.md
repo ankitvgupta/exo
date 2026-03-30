@@ -92,7 +92,7 @@ Generally i will give one git worktree one branch to work with and itll be clear
 - When starting work in a new worktree, copy over any gitignored files needed from the main worktree (environment variables, local config, credentials, etc.).
 - Do NOT copy `.claude/` directory contents or `CLAUDE.md` — those are tracked by git and will already be in the worktree.
 - Do NOT use `git -C <path>` or `git -c` flags unnecessarily — you are already working inside the worktree, so just run git commands directly from the current directory.
-- **Worktree dev setup for this project**: The main worktree is at `/Users/ankit/src/mail-client/`. To run `npm run dev` with real accounts, copy these files from the main worktree:
+- **Worktree dev setup for this project**: The main worktree is at `/Users/ankit/src/mail-app/`. To run `npm run dev` with real accounts, copy these files from the main worktree:
   1. `.env` → needed at build time for `MAIN_VITE_GOOGLE_CLIENT_ID` / `MAIN_VITE_GOOGLE_CLIENT_SECRET` and `ANTHROPIC_API_KEY`
   2. `.dev-data/tokens*.json` → per-account OAuth tokens
   3. `.dev-data/exo-config.json` → app config (API keys, settings)
