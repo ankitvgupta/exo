@@ -1940,8 +1940,14 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
 
   // In "All accounts" mode currentAccountId is null, so derive the effective
   // account from the selected email so thread fetch, attachments, compose, and
-  // actions all work correctly.
-  const effectiveAccountId = currentAccountId ?? selectedEmail?.accountId ?? null;
+  // actions all work correctly. Fall back to the primary/first account so that
+  // composing a new email works even when no email is selected.
+  const effectiveAccountId =
+    currentAccountId
+    ?? selectedEmail?.accountId
+    ?? accounts.find(a => a.isPrimary)?.id
+    ?? accounts[0]?.id
+    ?? null;
   const effectiveAccount = accounts.find(a => a.id === effectiveAccountId);
   const effectiveUserEmail = effectiveAccount?.email;
 

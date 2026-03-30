@@ -391,9 +391,11 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
       };
 
       // --- Helper: merge+dedup+thread search results (same order as rendered list) ---
-      const currentUserEmail = accounts.find((a: { id: string }) => a.id === effectiveAccountId)?.email;
+      const kbUserEmails = effectiveAccountId
+        ? new Set([accounts.find((a: { id: string }) => a.id === effectiveAccountId)?.email].filter(Boolean) as string[])
+        : new Set(accounts.map((a: { email: string }) => a.email));
       const getSearchThreads = () =>
-        mergeAndThreadSearchResults(activeSearchResults, remoteSearchResults, currentUserEmail);
+        mergeAndThreadSearchResults(activeSearchResults, remoteSearchResults, kbUserEmails);
 
       // --- Helper: navigate search results up/down (by thread) ---
       const navigateSearchResults = (direction: "up" | "down") => {

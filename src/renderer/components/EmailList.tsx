@@ -114,24 +114,27 @@ export function EmailList() {
   }, [openCompose, setSelectedEmailId, setSelectedThreadId, setSelectedDraftId, setViewMode]);
 
   // Load snoozed emails on mount / account switch.
-  // In "All" mode, iterate over every account and merge results.
+  // In "All" mode, fetch every account in parallel then merge before calling the
+  // setter once — setSnoozedThreads is a replace operation so calling it per-account
+  // in a loop would discard all but the last response.
   useEffect(() => {
     const accountIds = currentAccountId ? [currentAccountId] : accounts.map((a) => a.id);
     if (accountIds.length === 0) return;
 
-    for (const accountId of accountIds) {
+    const promises = accountIds.map((accountId) =>
       (window as any).api.snooze.list(accountId).then((response: any) => {
-        if (response.success && response.data) {
-          setSnoozedThreads(response.data);
-        }
         if (response.expired?.length > 0) {
           const store = useAppStore.getState();
           for (const email of response.expired) {
             store.handleThreadUnsnoozed(email.threadId, email.snoozeUntil);
           }
         }
-      });
-    }
+        return response.success && response.data ? response.data : [];
+      })
+    );
+    Promise.all(promises).then((results) => {
+      setSnoozedThreads(results.flat());
+    });
   }, [currentAccountId, accounts, setSnoozedThreads]);
 
   // Listen for snooze events from main process, filtered by current account.
@@ -168,22 +171,26 @@ export function EmailList() {
   }, []);
 
   // Load archive-ready threads on mount / account switch.
-  // In "All" mode, iterate over every account and merge results.
+  // Same Promise.all pattern as snooze loading — setArchiveReadyThreads replaces
+  // state, so we must collect all accounts before calling it once.
   useEffect(() => {
     const accountIds = currentAccountId ? [currentAccountId] : accounts.map((a) => a.id);
     if (accountIds.length === 0) return;
 
-    for (const accountId of accountIds) {
+    const promises = accountIds.map((accountId) =>
       (window as any).api.archiveReady.getThreads(accountId).then((result: any) => {
         if (result.success && result.data) {
-          const items = result.data.map((t: { threadId: string; reason: string }) => ({
+          return result.data.map((t: { threadId: string; reason: string }) => ({
             threadId: t.threadId,
             reason: t.reason,
           }));
-          setArchiveReadyThreads(items);
         }
-      });
-    }
+        return [];
+      })
+    );
+    Promise.all(promises).then((results) => {
+      setArchiveReadyThreads(results.flat());
+    });
   }, [currentAccountId, accounts, setArchiveReadyThreads]);
 
   // Listen for new archive-ready results from background prefetch

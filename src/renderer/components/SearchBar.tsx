@@ -159,7 +159,9 @@ export function SearchBar({ isOpen, onClose }: SearchBarProps) {
               if (newEmails.length > 0) {
                 setRemoteSearchResults([...existing, ...newEmails]);
               }
-              if (response.data.nextPageToken) {
+              // Only store nextPageToken for single-account searches — in All
+              // accounts mode the token is ambiguous and "load more" is disabled.
+              if (response.data.nextPageToken && currentAccountId) {
                 useAppStore.getState().setRemoteSearchNextPageToken(response.data.nextPageToken);
               }
             } else {

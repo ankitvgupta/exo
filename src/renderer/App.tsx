@@ -170,7 +170,13 @@ function SearchResultsView() {
     remoteSearchLoadingMore,
   } = useAppStore();
 
-  const currentUserEmail = accounts.find(a => a.id === currentAccountId)?.email;
+  const searchUserEmails = useMemo(() => {
+    if (currentAccountId) {
+      const email = accounts.find(a => a.id === currentAccountId)?.email;
+      return email ? new Set([email]) : new Set<string>();
+    }
+    return new Set(accounts.map(a => a.email));
+  }, [currentAccountId, accounts]);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
 
@@ -259,11 +265,13 @@ function SearchResultsView() {
 
   // Merge local and remote results, deduplicate, and group into threads
   const searchThreads = useMemo(
-    () => mergeAndThreadSearchResults(activeSearchResults, remoteSearchResults, currentUserEmail),
-    [activeSearchResults, remoteSearchResults, currentUserEmail],
+    () => mergeAndThreadSearchResults(activeSearchResults, remoteSearchResults, searchUserEmails),
+    [activeSearchResults, remoteSearchResults, searchUserEmails],
   );
 
-  const hasMoreResults = !!remoteSearchNextPageToken && remoteSearchStatus === "complete";
+  // "Load more" only works when a single account is selected — in All accounts
+  // mode the stored nextPageToken is ambiguous (could be from any account).
+  const hasMoreResults = !!currentAccountId && !!remoteSearchNextPageToken && remoteSearchStatus === "complete";
 
   return (
     <div className="flex-1 min-w-0 flex flex-col bg-white dark:bg-gray-800">
@@ -603,9 +611,17 @@ export default function App() {
           }));
           setAccounts(fullAccounts);
 
-          // Default to "All accounts" when multiple accounts, single account otherwise
+          // Respect defaultAccountView config for startup account selection
+          const configResult = await window.api.settings.get();
+          const defaultView = configResult.success ? configResult.data.defaultAccountView ?? "all" : "all";
+
           if (fullAccounts.length > 1) {
-            setCurrentAccountId(null);
+            if (defaultView === "primary") {
+              const primary = fullAccounts.find(a => a.isPrimary) || fullAccounts[0];
+              setCurrentAccountId(primary.id);
+            } else {
+              setCurrentAccountId(null);
+            }
           } else if (fullAccounts.length === 1) {
             setCurrentAccountId(fullAccounts[0].id);
           }
@@ -1165,8 +1181,16 @@ export default function App() {
         // Reload sent emails too
         await reloadSentEmailsForAccount(currentAccountId);
       } else {
-        // Fallback to legacy fetch for default account
-        await fetchEmails();
+        // All accounts mode: sync every account and reload emails
+        await Promise.all(accounts.map(async (account) => {
+          await window.api.sync.now(account.id);
+          const result = await window.api.sync.getEmails(account.id);
+          if (result.success && result.data) {
+            addEmails(result.data);
+            prefetchEmailBodies(result.data.map((e: DashboardEmail) => e.id)).catch(console.error);
+          }
+          await reloadSentEmailsForAccount(account.id);
+        }));
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch emails");
@@ -1763,7 +1787,10 @@ function SnoozeOverlay() {
 
   const selectedEmail = emails.find((e) => e.id === selectedEmailId);
 
-  if (!showSnoozeMenu || !selectedEmail || !currentAccountId) return null;
+  // In "All accounts" mode currentAccountId is null — derive from the selected email
+  const effectiveAccountId = currentAccountId ?? selectedEmail?.accountId ?? null;
+
+  if (!showSnoozeMenu || !selectedEmail || !effectiveAccountId) return null;
 
   // Determine if we're in batch mode (any multi-select, even 1 thread via 'x')
   const isBatchSnooze = selectedThreadIds.size > 0;
@@ -1783,7 +1810,7 @@ function SnoozeOverlay() {
         <SnoozeMenu
           emailId={selectedEmail.id}
           threadId={selectedEmail.threadId}
-          accountId={currentAccountId}
+          accountId={effectiveAccountId}
           onSnooze={(snoozedEmail: SnoozedEmail) => {
             if (isBatchSnooze) {
               // Batch snooze: snooze all selected threads using the same snoozeUntil time
@@ -1821,7 +1848,7 @@ function SnoozeOverlay() {
                       id: `snooze-${tid}-${Date.now()}`,
                       emailId: thread.latestEmail.id,
                       threadId: tid,
-                      accountId: currentAccountId,
+                      accountId: effectiveAccountId,
                       snoozeUntil: snoozedEmail.snoozeUntil,
                       snoozedAt: snoozedEmail.snoozedAt,
                     });
@@ -1836,7 +1863,7 @@ function SnoozeOverlay() {
                 id: `snooze-batch-${Date.now()}`,
                 type: "snooze",
                 threadCount: threadIdsToSnooze.length,
-                accountId: currentAccountId,
+                accountId: effectiveAccountId,
                 emails: [],
                 scheduledAt: Date.now(),
                 delayMs: 5000,
@@ -1850,7 +1877,7 @@ function SnoozeOverlay() {
                   (window as any).api.snooze.snooze(
                     thread.latestEmail.id,
                     tid,
-                    currentAccountId,
+                    effectiveAccountId,
                     snoozeUntil,
                   ).catch((err: unknown) => console.error("Batch snooze failed for thread", tid, err));
                 }
@@ -1893,7 +1920,7 @@ function SnoozeOverlay() {
                 id: `snooze-${snoozedThreadId}-${Date.now()}`,
                 type: "snooze",
                 threadCount: 1,
-                accountId: currentAccountId,
+                accountId: effectiveAccountId,
                 emails: [],
                 scheduledAt: Date.now(),
                 delayMs: 5000,
