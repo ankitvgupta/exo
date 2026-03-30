@@ -82,6 +82,12 @@ export class ClaudeAgentProvider implements AgentProvider {
     };
     const allowedToolPatterns = tools.map((t) => `mcp__mail-client-tools__${t.name}`);
 
+    // Build a set of tool name prefixes that are allowed to execute.
+    // This is used by canUseTool to block system-inherited MCP servers
+    // (e.g. PostHog, Circleback from ~/.claude.json) that the SDK discovers
+    // despite settingSources: [].
+    const allowedMcpPrefixes = new Set(["mcp__mail-client-tools__"]);
+
     const browserConfig = this.frameworkConfig.browserConfig;
     if (browserConfig?.enabled) {
       mcpServerMap["chrome-devtools"] = {
@@ -92,6 +98,7 @@ export class ClaudeAgentProvider implements AgentProvider {
         ],
       };
       allowedToolPatterns.push("mcp__chrome-devtools__*");
+      allowedMcpPrefixes.add("mcp__chrome-devtools__");
     }
 
     // Add user-configured custom MCP servers
@@ -136,6 +143,7 @@ export class ClaudeAgentProvider implements AgentProvider {
         continue; // Invalid config — skip
       }
       allowedToolPatterns.push(`mcp__${name}__*`);
+      allowedMcpPrefixes.add(`mcp__${name}__`);
     }
 
     const q = query({
@@ -145,14 +153,21 @@ export class ClaudeAgentProvider implements AgentProvider {
         systemPrompt,
         abortController,
         mcpServers: mcpServerMap,
-        allowedTools: allowedToolPatterns,
+        tools: ["Glob", "Grep", "WebSearch", "AskUserQuestion"],
+        // Auto-approve built-in tools + our configured MCP tools.
+        // With dontAsk, anything NOT in this list is silently denied —
+        // this blocks system-inherited MCPs (PostHog, Circleback, etc.)
+        // from ~/.claude.json without needing fragile glob patterns.
+        allowedTools: [
+          "Glob", "Grep", "WebSearch", "AskUserQuestion",
+          ...allowedToolPatterns,
+        ],
         includePartialMessages: true,
         maxTurns: 25,
-        // Safe to bypass: the SDK runs in an isolated utility process with no filesystem
-        // access. All tool calls are routed through the orchestrator's toolExecutor, which
-        // checks PermissionGate before execution — MEDIUM/HIGH risk tools require user approval.
-        permissionMode: "bypassPermissions",
-        allowDangerouslySkipPermissions: true,
+        // dontAsk: only allowedTools can execute, everything else is denied.
+        // This replaces bypassPermissions — we don't need blanket bypass since
+        // we explicitly list every tool we want.
+        permissionMode: "dontAsk",
         // Don't load any filesystem settings, we provide everything
         settingSources: [],
         // Don't persist sessions for SDK calls from within the app
