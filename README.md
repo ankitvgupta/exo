@@ -19,6 +19,8 @@ Exo treats AI as a first-class citizen — not a bolted-on feature. Every email 
 - **Archive-ready detection** — identifies threads that are conversationally complete and can be safely archived
 - **Reminder detection** — recognizes Boomerang/reminder service emails and traces back to the original sender
 
+<video src="assets/Multiple Actions.mp4" width="100%"></video>
+
 ### Agent System
 
 - **Cmd+J agent palette** — ask Claude to do anything with the current email: draft a reply, look something up, forward with context. Agent traces are displayed in a sidebar tab
@@ -26,6 +28,8 @@ Exo treats AI as a first-class citizen — not a bolted-on feature. Every email 
 - **Per-email agent tasks** — each email can have its own running agent task, visible in the sidebar
 - **Follow-up conversations** — continue talking to the agent about a specific email across multiple turns
 - **Agent-to-agent communication** — Exo's built-in Claude agent can delegate to external agents you bring. Register a third-party agent (like [OpenClaw](https://openclaw.com)) or one internal to your company, and the Exo agent will automatically call out to it when it needs domain-specific information. For example, if you register your company's internal knowledge agent, the Exo agent can ask it "what's the status of the Acme deal?" while drafting a reply, without you having to switch tools
+
+<video src="assets/Agent to Agent Communication.mp4" width="100%"></video>
 
 ### Memory System
 
