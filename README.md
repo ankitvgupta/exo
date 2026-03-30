@@ -54,7 +54,7 @@ Exo treats AI as a first-class citizen — not a bolted-on feature. Every email 
 ### Email Composition
 
 - **Rich text editor** — ProseMirror-based compose with formatting toolbar
-- **@mention autocomplete** — type @ or + in the compose body to mention someone and auto-add them as CC
+- **`@`mention autocomplete** — type `@` or `+` in the compose body to mention someone and auto-add them as CC
 - **CC/BCC fields** — collapsible, with full autocomplete from contact history
 - **Email signatures** — create and manage multiple signatures, auto-appended to outgoing mail
 - **Inline reply** — reply directly below any message in a thread, not just the latest one
