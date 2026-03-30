@@ -23,7 +23,7 @@ Exo treats AI as a first-class citizen — not a bolted-on feature. Every email 
 - **Agent tools** — the agent can read emails, read/update drafts, search Gmail, and forward messages
 - **Per-email agent tasks** — each email can have its own running agent task, visible in the sidebar
 - **Follow-up conversations** — continue talking to the agent about a specific email across multiple turns
-- **Bring your own agents** — register custom AI agent providers via the extension system. Build internal agents for your company (e.g., a support triage agent that checks your ticketing system, or an agent that looks up customer context in your CRM) and plug them directly into Exo's sidebar
+- **Agent-to-agent communication** — Exo's built-in Claude agent can delegate to external agents you bring. Register a third-party agent (like [OpenClaw](https://openclaw.com)) or one internal to your company, and the Exo agent will automatically call out to it when it needs domain-specific information. For example, if you register your company's internal knowledge agent, the Exo agent can ask it "what's the status of the Acme deal?" while drafting a reply, without you having to switch tools
 
 ### Memory System
 
@@ -37,7 +37,7 @@ Exo treats AI as a first-class citizen — not a bolted-on feature. Every email 
 - **Bundled extensions** — ship with the app, statically imported at build time
 - **Private extensions** — discovered at build time via `import.meta.glob`, auto-registered. Use this to add proprietary extensions for your team without forking
 - **Runtime-installable extensions** — install/uninstall extensions without rebuilding the app
-- **Custom agent providers** — extensions can register their own AI agent providers that appear in the Cmd+J palette alongside the built-in Claude agent. This is the primary way to bring your own agents — build an agent that talks to your company's internal APIs, knowledge bases, or tooling, package it as an extension, and it shows up as a first-class option in the agent palette
+- **Custom agent providers** — extensions can register their own AI agent providers. Build an agent that talks to your company's internal APIs, knowledge bases, or tooling, package it as an extension, and it appears in the Cmd+J palette alongside the built-in Claude agent. The Exo agent can also sub-delegate to your agent provider, so your internal agents participate in the conversation automatically when relevant
 - **Extension authentication** — extensions can require auth, with banner UI and onboarding integration
 - **Sidebar panels** — extensions can add custom sidebar tabs scoped to specific emails (e.g., show CRM data, support ticket status, or deal context alongside the email)
 - **MCP server support** — configure custom MCP servers that agents can use as tool providers
