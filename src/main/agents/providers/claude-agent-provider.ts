@@ -75,6 +75,12 @@ export class ClaudeAgentProvider implements AgentProvider {
     const onAbort = () => abortController.abort();
     signal.addEventListener("abort", onAbort, { once: true });
 
+    // Built-in SDK tools handled internally by the SDK process.
+    // Used for: tools list, allowedTools whitelist, and filtering
+    // tool_call_start events (built-in tools never get tool_call_end).
+    const builtInTools = ["Glob", "Grep", "WebSearch", "AskUserQuestion"] as const;
+    const builtInToolSet = new Set<string>(builtInTools);
+
     // Build MCP server map — always include our tool server,
     // conditionally include Chrome DevTools for browser automation
     const mcpServerMap: Record<string, McpServerConfig> = {
@@ -145,14 +151,18 @@ export class ClaudeAgentProvider implements AgentProvider {
         systemPrompt,
         abortController,
         mcpServers: mcpServerMap,
-        allowedTools: allowedToolPatterns,
+        tools: [...builtInTools],
+        // Auto-approve built-in tools + our configured MCP tools.
+        // With dontAsk, anything NOT in this list is silently denied —
+        // this blocks system-inherited MCPs (PostHog, Circleback, etc.)
+        // from ~/.claude.json without needing fragile glob patterns.
+        allowedTools: [...builtInTools, ...allowedToolPatterns],
         includePartialMessages: true,
         maxTurns: 25,
-        // Safe to bypass: the SDK runs in an isolated utility process with no filesystem
-        // access. All tool calls are routed through the orchestrator's toolExecutor, which
-        // checks PermissionGate before execution — MEDIUM/HIGH risk tools require user approval.
-        permissionMode: "bypassPermissions",
-        allowDangerouslySkipPermissions: true,
+        // dontAsk: only allowedTools can execute, everything else is denied.
+        // This replaces bypassPermissions — we don't need blanket bypass since
+        // we explicitly list every tool we want.
+        permissionMode: "dontAsk",
         // Don't load any filesystem settings, we provide everything
         settingSources: [],
         // Don't persist sessions for SDK calls from within the app
@@ -219,6 +229,11 @@ export class ClaudeAgentProvider implements AgentProvider {
         // Key by the base tool name (without MCP prefix) since the MCP handler
         // only knows the short name when it pushes to completedToolCalls.
         for (const event of mapSdkMessage(message)) {
+          // Skip built-in tool events — they're handled internally by the SDK
+          // and never produce tool_call_end, which would leave orphaned spinners.
+          if (event.type === "tool_call_start" && builtInToolSet.has(event.toolName)) {
+            continue;
+          }
           if (event.type === "tool_call_start") {
             const key = baseToolName(event.toolName);
             if (!pendingToolCallIds.has(key)) {
