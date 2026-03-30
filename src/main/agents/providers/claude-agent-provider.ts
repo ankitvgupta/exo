@@ -75,11 +75,11 @@ export class ClaudeAgentProvider implements AgentProvider {
     const onAbort = () => abortController.abort();
     signal.addEventListener("abort", onAbort, { once: true });
 
-    // Built-in SDK tools that are handled internally by the SDK process.
-    // These don't flow through our MCP tool handler, so they never get
-    // tool_call_end events. We skip emitting tool_call_start for them
-    // to avoid orphaned spinners in the UI.
-    const builtInTools = new Set(["Glob", "Grep", "WebSearch", "AskUserQuestion"]);
+    // Built-in SDK tools handled internally by the SDK process.
+    // Used for: tools list, allowedTools whitelist, and filtering
+    // tool_call_start events (built-in tools never get tool_call_end).
+    const builtInTools = ["Glob", "Grep", "WebSearch", "AskUserQuestion"] as const;
+    const builtInToolSet = new Set<string>(builtInTools);
 
     // Build MCP server map — always include our tool server,
     // conditionally include Chrome DevTools for browser automation
@@ -151,15 +151,12 @@ export class ClaudeAgentProvider implements AgentProvider {
         systemPrompt,
         abortController,
         mcpServers: mcpServerMap,
-        tools: ["Glob", "Grep", "WebSearch", "AskUserQuestion"],
+        tools: [...builtInTools],
         // Auto-approve built-in tools + our configured MCP tools.
         // With dontAsk, anything NOT in this list is silently denied —
         // this blocks system-inherited MCPs (PostHog, Circleback, etc.)
         // from ~/.claude.json without needing fragile glob patterns.
-        allowedTools: [
-          "Glob", "Grep", "WebSearch", "AskUserQuestion",
-          ...allowedToolPatterns,
-        ],
+        allowedTools: [...builtInTools, ...allowedToolPatterns],
         includePartialMessages: true,
         maxTurns: 25,
         // dontAsk: only allowedTools can execute, everything else is denied.
@@ -234,7 +231,7 @@ export class ClaudeAgentProvider implements AgentProvider {
         for (const event of mapSdkMessage(message)) {
           // Skip built-in tool events — they're handled internally by the SDK
           // and never produce tool_call_end, which would leave orphaned spinners.
-          if (event.type === "tool_call_start" && builtInTools.has(event.toolName)) {
+          if (event.type === "tool_call_start" && builtInToolSet.has(event.toolName)) {
             continue;
           }
           if (event.type === "tool_call_start") {
