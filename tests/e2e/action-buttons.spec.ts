@@ -57,8 +57,8 @@ test.describe("Email Action Buttons", () => {
   });
 
   test("action buttons are visible in thread header when email is selected", async () => {
-    // Select an email (Emily Watson's Q3 report — not snoozed in demo mode)
-    await selectEmail(page, "Emily");
+    // Select an email (Garry Tan's Q3 report — not snoozed in demo mode)
+    await selectEmail(page, "Garry");
 
     // Verify all action buttons are present by their title attributes
     await expect(page.locator("button[title='Archive']")).toBeVisible();
@@ -80,7 +80,7 @@ test.describe("Email Action Buttons", () => {
   test("star button toggles between star and unstar", async () => {
     // Ensure we're viewing an email
     await ensureInList(page);
-    await selectEmail(page, "Emily");
+    await selectEmail(page, "Garry");
 
     // The initial state should be "Star" (unstarred)
     const starButton = page.locator("button[title='Star']");
@@ -215,9 +215,9 @@ test.describe("Email Action Buttons", () => {
     await ensureInList(page);
 
     // Select any remaining email
-    const anyEmail = page.locator("button").filter({ hasText: "Emily" }).first();
+    const anyEmail = page.locator("button").filter({ hasText: "Garry" }).first();
     if (await anyEmail.isVisible().catch(() => false)) {
-      await selectEmail(page, "Emily");
+      await selectEmail(page, "Garry");
 
       // Verify the buttons area is rendered (action + compose buttons visible)
       await expect(page.locator("button[title='Archive']")).toBeVisible();

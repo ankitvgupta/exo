@@ -646,9 +646,9 @@ export function registerSyncIpc(): void {
 
       // Seed correspondent profiles for style testing contacts
       saveCorrespondentProfile({
-        email: "jake.torres@gmail.com",
+        email: "casey.morgan@example.com",
         accountId: "default",
-        displayName: "Jake Torres",
+        displayName: "Casey Morgan",
         emailCount: 10,
         avgWordCount: 7,
         dominantGreeting: "hey",
@@ -657,9 +657,9 @@ export function registerSyncIpc(): void {
         lastComputedAt: Date.now(),
       });
       saveCorrespondentProfile({
-        email: "m.chen@whitfield-partners.com",
+        email: "g.ralston@whitfield-partners.com",
         accountId: "default",
-        displayName: "Dr. Margaret Chen",
+        displayName: "Dr. Geoff Ralston",
         emailCount: 10,
         avgWordCount: 120,
         dominantGreeting: "dear",

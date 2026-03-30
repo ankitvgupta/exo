@@ -46,17 +46,17 @@ test.describe("Sender Profile - Display", () => {
     // Sender name should be visible in the detail view
     // Demo emails have known senders
     const senderNames = [
-      "Sarah Johnson",
-      "Michael Chen",
-      "GitHub Actions",
+      "Garry Tan",
+      "Jared Friedman",
+      "Michael Seibel",
+      "GitHub",
       "Tech Weekly",
-      "Alex Rodriguez",
       "Amazon",
-      "Lisa",
-      "Jennifer",
-      "David",
-      "Emily",
-      "Mike",
+      "Gustaf",
+      "Diana",
+      "Tom Blomfield",
+      "Nicolas",
+      "Dalton",
     ];
 
     let foundSender = false;
@@ -241,7 +241,7 @@ test.describe("Sender Profile - Full View", () => {
     expect(bodyText).toBeTruthy();
 
     // At least one known demo sender should be visible
-    const knownSenders = ["Sarah", "Michael", "GitHub", "Alex", "Lisa", "Jennifer", "David", "Emily", "Mike"];
+    const knownSenders = ["Garry", "Jared", "Michael", "GitHub", "Gustaf", "Diana", "Tom", "Nicolas", "Dalton"];
     let found = false;
     for (const sender of knownSenders) {
       if (bodyText?.includes(sender)) {

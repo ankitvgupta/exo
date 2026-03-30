@@ -182,6 +182,13 @@ export class AgentCoordinator {
         chromeProfilePath: browser.chromeProfilePath,
       } : undefined,
       mcpServers: appConfig.mcpServers,
+      providers: {
+        "openclaw-agent": {
+          enabled: appConfig.openclaw?.enabled ?? false,
+          gatewayUrl: appConfig.openclaw?.gatewayUrl ?? "",
+          gatewayToken: appConfig.openclaw?.gatewayToken ?? "",
+        },
+      },
     };
     this.workerReady = populatePrivateProviderConfig(baseConfig).then(
       (enrichedConfig) => { this.initWorker(enrichedConfig); },

@@ -13,6 +13,7 @@ import type {
 } from "./types";
 import { AgentProviderRegistry } from "./providers/registry";
 import { ClaudeAgentProvider } from "./providers/claude-agent-provider";
+import { OpenClawAgentProvider } from "./providers/openclaw/openclaw-agent-provider";
 import { PermissionGate } from "./permission-gate";
 import type { ToolRegistry } from "./tools/registry";
 import type { ProxyContext } from "./tools/types";
@@ -56,6 +57,16 @@ export class AgentOrchestrator {
     // Register the Claude provider by default
     this.providerRegistry.register(
       new ClaudeAgentProvider(deps.config),
+    );
+
+    // Register the OpenClaw provider
+    const ocSettings = deps.config.providers?.["openclaw-agent"];
+    this.providerRegistry.register(
+      new OpenClawAgentProvider({
+        enabled: ocSettings?.enabled ?? false,
+        gatewayUrl: ocSettings?.gatewayUrl ?? "",
+        gatewayToken: ocSettings?.gatewayToken ?? "",
+      }),
     );
 
     // Register any auto-discovered private providers

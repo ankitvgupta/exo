@@ -36,7 +36,7 @@ test.describe("Email Body Rendering", () => {
 
   test("renders plain text email correctly", async () => {
     // Wait for email list to populate (use senders known to not be pre-snoozed)
-    const emailItem = page.locator("button").filter({ hasText: /Lisa|HR Team|Product Team|Amazon/i }).first();
+    const emailItem = page.locator("button").filter({ hasText: /Garry|HR Team|Product Team|Amazon/i }).first();
     await expect(emailItem).toBeVisible({ timeout: 15000 });
 
     // Click on an email to show detail in split view

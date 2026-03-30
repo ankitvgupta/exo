@@ -153,7 +153,7 @@ test.describe("Snooze Feature — Natural Language Input", () => {
     page = result.page;
 
     // Wait for email list to populate
-    await page.locator("button").filter({ hasText: /High|Medium|Low|Emily|HR Team|Product Team/ }).first().waitFor({ timeout: 15000 });
+    await page.locator("button").filter({ hasText: /High|Medium|Low|Garry|HR Team|Product Team/ }).first().waitFor({ timeout: 15000 });
   });
 
   test.afterAll(async () => {
@@ -164,9 +164,9 @@ test.describe("Snooze Feature — Natural Language Input", () => {
 
   test("parses natural language time in text input", async () => {
     // Select an email — use a sender that exists in demo data and is not snoozed
-    const emailButton = page.locator("button").filter({ hasText: "Emily" }).first();
+    const emailButton = page.locator("button").filter({ hasText: "Garry" }).first();
     if (!(await emailButton.isVisible())) return;
-    await selectAndOpenEmail(page, "Emily");
+    await selectAndOpenEmail(page, "Garry");
 
     // Open snooze menu
     const snoozeButton = page.locator("button[title='Snooze (h)'], button[title='Snoozed']").first();
@@ -190,9 +190,9 @@ test.describe("Snooze Feature — Natural Language Input", () => {
 
   test("shows error for unparseable input", async () => {
     // Select an email
-    const emailButton = page.locator("button").filter({ hasText: "Emily" }).first();
+    const emailButton = page.locator("button").filter({ hasText: "Garry" }).first();
     if (!(await emailButton.isVisible())) return;
-    await selectAndOpenEmail(page, "Emily");
+    await selectAndOpenEmail(page, "Garry");
 
     // Open snooze menu
     const snoozeButton = page.locator("button[title='Snooze (h)'], button[title='Snoozed']").first();
@@ -211,9 +211,9 @@ test.describe("Snooze Feature — Natural Language Input", () => {
 
   test("can snooze with Enter key after typing time", async () => {
     // Select an email
-    const emailButton = page.locator("button").filter({ hasText: "Emily" }).first();
+    const emailButton = page.locator("button").filter({ hasText: "Garry" }).first();
     if (!(await emailButton.isVisible())) return;
-    await selectAndOpenEmail(page, "Emily");
+    await selectAndOpenEmail(page, "Garry");
 
     // Open snooze menu
     const snoozeButton = page.locator("button[title='Snooze (h)'], button[title='Snoozed']").first();
@@ -295,10 +295,10 @@ test.describe("Snooze Feature — Snooze Banner & Unsnooze", () => {
   });
 
   test("snooze button turns amber when thread is snoozed", async () => {
-    // Snooze an email (Mike is not snoozed in demo mode)
-    const emailButton = page.locator("button").filter({ hasText: "Mike" }).first();
+    // Snooze an email (Gustaf is not snoozed in demo mode)
+    const emailButton = page.locator("button").filter({ hasText: "Gustaf" }).first();
     if (!(await emailButton.isVisible())) return;
-    await selectAndOpenEmail(page, "Mike");
+    await selectAndOpenEmail(page, "Gustaf");
 
     const snoozeButton = page.locator("button[title='Snooze (h)'], button[title='Snoozed']").first();
     await snoozeButton.click();
@@ -314,7 +314,7 @@ test.describe("Snooze Feature — Snooze Banner & Unsnooze", () => {
       await snoozedTab.click();
       await page.waitForTimeout(300);
 
-      const snoozedEmail = page.locator("button").filter({ hasText: "Mike" }).first();
+      const snoozedEmail = page.locator("button").filter({ hasText: "Gustaf" }).first();
       if (await snoozedEmail.isVisible()) {
         await snoozedEmail.click();
         await page.waitForTimeout(500);

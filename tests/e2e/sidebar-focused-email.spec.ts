@@ -11,12 +11,12 @@ import { launchElectronApp } from "./launch-helpers";
 
 // The multi-sender thread senders in chronological order.
 const THREAD_SENDERS = [
-  { id: "demo-multi-001", name: "Priya Sharma", email: "priya.sharma@acmecorp.com" },
-  { id: "demo-multi-002", name: "Carlos Mendez", email: "carlos.mendez@acmecorp.com" },
-  { id: "demo-multi-003", name: "Nina Okafor", email: "nina.okafor@acmecorp.com" },
-  { id: "demo-multi-004", name: "Tom Bradley", email: "tom.bradley@acmecorp.com" },
-  { id: "demo-multi-005", name: "Aisha Patel", email: "aisha.patel@acmecorp.com" },
-  { id: "demo-multi-006", name: "Priya Sharma", email: "priya.sharma@acmecorp.com" },
+  { id: "demo-multi-001", name: "Nicolas Dessaigne", email: "nicolas.d@acmecorp.com" },
+  { id: "demo-multi-002", name: "Pete Koomen", email: "pete.koomen@acmecorp.com" },
+  { id: "demo-multi-003", name: "Aaron Epstein", email: "aaron.epstein@acmecorp.com" },
+  { id: "demo-multi-004", name: "Brad Flora", email: "brad.flora@acmecorp.com" },
+  { id: "demo-multi-005", name: "Harj Taggar", email: "harj.taggar@acmecorp.com" },
+  { id: "demo-multi-006", name: "Nicolas Dessaigne", email: "nicolas.d@acmecorp.com" },
 ];
 
 test.describe("Sidebar reflects focused email in thread", () => {

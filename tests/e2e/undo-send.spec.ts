@@ -100,7 +100,7 @@ test.describe("Undo Send - Inline Reply", () => {
   test("app loads with inbox emails", async () => {
     await expect(page.locator("text=Exo")).toBeVisible();
     await expect(page.locator("text=Inbox").first()).toBeVisible();
-    await expect(page.locator("button").filter({ hasText: "Sarah Chen" }).first()).toBeVisible({ timeout: 5000 });
+    await expect(page.locator("button").filter({ hasText: "Garry Tan" }).first()).toBeVisible({ timeout: 5000 });
 
     await takeScreenshot(electronApp, page, "undo-send-01-app-loaded");
   });
@@ -108,8 +108,8 @@ test.describe("Undo Send - Inline Reply", () => {
   test("inline reply shows undo toast with Undo button on send", async () => {
     await page.waitForTimeout(500);
 
-    // Select Sarah Chen's email
-    const emailItem = page.locator("button").filter({ hasText: "Sarah Chen" }).first();
+    // Select Garry Tan's email
+    const emailItem = page.locator("button").filter({ hasText: "Garry Tan" }).first();
     await emailItem.click();
     await page.waitForTimeout(800);
 
@@ -129,7 +129,7 @@ test.describe("Undo Send - Inline Reply", () => {
 
     // Type some reply text
     await editor.click();
-    await editor.type("Thanks for the update, Sarah. I will review the project status.", { delay: 10 });
+    await editor.type("Thanks for the update, Garry. I will review the quarterly report.", { delay: 10 });
 
     await takeScreenshot(electronApp, page, "undo-send-04-reply-typed");
 
@@ -190,8 +190,8 @@ test.describe("Undo Send - Inline Reply Undo Action", () => {
   test("clicking Undo restores the draft with content", async () => {
     await page.waitForTimeout(500);
 
-    // Select Sarah Chen's email
-    const emailItem = page.locator("button").filter({ hasText: "Sarah Chen" }).first();
+    // Select Garry Tan's email
+    const emailItem = page.locator("button").filter({ hasText: "Garry Tan" }).first();
     await expect(emailItem).toBeVisible({ timeout: 5000 });
     await emailItem.click();
     await page.waitForTimeout(1000);
@@ -404,7 +404,7 @@ test.describe("Undo Send - Forward", () => {
   test("forward with undo-send shows toast and Undo button", async () => {
     await page.waitForTimeout(500);
 
-    const emailItem = page.locator("button").filter({ hasText: "Sarah Chen" }).first();
+    const emailItem = page.locator("button").filter({ hasText: "Garry Tan" }).first();
     await expect(emailItem).toBeVisible({ timeout: 5000 });
     await emailItem.click();
     await page.waitForTimeout(800);

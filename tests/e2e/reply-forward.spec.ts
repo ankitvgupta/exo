@@ -28,7 +28,7 @@ async function openFirstEmailInFullView(page: Page): Promise<void> {
   // If email list items don't have a test ID, fall back to finding buttons in the list
   const emailButton = (await firstEmail.isVisible().catch(() => false))
     ? firstEmail
-    : page.locator("button").filter({ hasText: "Sarah" }).first();
+    : page.locator("button").filter({ hasText: "Garry" }).first();
 
   await emailButton.click();
   await page.waitForTimeout(500);
