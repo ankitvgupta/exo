@@ -21,6 +21,7 @@ import type {
   AgentFrameworkConfig,
   ToolExecutorFn,
 } from "../types";
+import type { CliToolConfig } from "../../../shared/types";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
 /**
@@ -68,7 +69,7 @@ export class ClaudeAgentProvider implements AgentProvider {
       tools: mcpTools,
     });
 
-    const systemPrompt = buildSystemPrompt(context, tools, context.memoryContext);
+    const systemPrompt = buildSystemPrompt(context, tools, context.memoryContext, cliTools);
     const abortController = new AbortController();
 
     // Link the external signal to our internal controller
@@ -142,6 +143,12 @@ export class ClaudeAgentProvider implements AgentProvider {
         continue; // Invalid config — skip
       }
       allowedToolPatterns.push(`mcp__${name}__*`);
+    }
+
+    // Add user-configured CLI tools as allowed Bash patterns
+    const cliTools = this.frameworkConfig.cliTools ?? [];
+    for (const cliTool of cliTools) {
+      allowedToolPatterns.push(`Bash(${cliTool.command}:*)`);
     }
 
     const q = query({
@@ -396,7 +403,7 @@ function baseToolName(name: string): string {
   return name;
 }
 
-function buildSystemPrompt(context: AgentContext, tools: AgentToolSpec[], memoryContext?: string): string {
+function buildSystemPrompt(context: AgentContext, tools: AgentToolSpec[], memoryContext?: string, cliTools?: CliToolConfig[]): string {
   const parts: string[] = [
     "You are an AI assistant embedded in a Gmail client application.",
     "You help users manage their email efficiently by reading, analyzing, drafting, and organizing messages.",
@@ -482,6 +489,21 @@ function buildSystemPrompt(context: AgentContext, tools: AgentToolSpec[], memory
     for (const guidance of toolGuidance) {
       parts.push("");
       parts.push(guidance);
+    }
+  }
+
+  // Add CLI tool guidance
+  const activeCli = cliTools?.filter(t => t.command.trim()) ?? [];
+  if (activeCli.length > 0) {
+    parts.push("");
+    parts.push("## CLI Tools");
+    parts.push("The following CLI tools are available via the Bash tool:");
+    for (const t of activeCli) {
+      parts.push("");
+      parts.push(`- **${t.command}**: Run via \`Bash(${t.command} ...)\`.`);
+      if (t.instructions.trim()) {
+        parts.push(`  ${t.instructions.trim()}`);
+      }
     }
   }
 

@@ -182,6 +182,7 @@ export class AgentCoordinator {
         chromeProfilePath: browser.chromeProfilePath,
       } : undefined,
       mcpServers: appConfig.mcpServers,
+      cliTools: appConfig.cliTools,
     };
     this.workerReady = populatePrivateProviderConfig(baseConfig).then(
       (enrichedConfig) => { this.initWorker(enrichedConfig); },

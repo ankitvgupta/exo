@@ -298,6 +298,12 @@ export const McpServerConfigSchema = z.discriminatedUnion("type", [
 
 export type McpServerConfig = z.infer<typeof McpServerConfigSchema>;
 
+export const CliToolConfigSchema = z.object({
+  command: z.string().min(1),
+  instructions: z.string().default(""),
+});
+export type CliToolConfig = z.infer<typeof CliToolConfigSchema>;
+
 // AI model tiers — user-facing names mapped to specific model IDs
 export const MODEL_TIERS = ["haiku", "sonnet", "opus"] as const;
 export const ModelTierSchema = z.enum(["haiku", "sonnet", "opus"]);
@@ -380,6 +386,7 @@ export const ConfigSchema = z.object({
     chromeProfilePath: z.string().optional(),
   }).optional(),
   mcpServers: z.record(z.string(), McpServerConfigSchema).optional(),
+  cliTools: z.array(CliToolConfigSchema).optional(),
   posthog: z.object({
     enabled: z.boolean().default(false),
     sessionReplay: z.boolean().default(false),
