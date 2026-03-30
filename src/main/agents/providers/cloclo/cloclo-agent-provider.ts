@@ -19,37 +19,34 @@ const SLOW_WARNING_MS = 30_000;
  * Execute `cloclo` CLI and return the response text.
  * Cloclo outputs structured JSON via `--json` flag.
  */
+/** Flags that must not be overridden by user-supplied extraFlags. */
+const RESERVED_FLAGS = new Set(["-p", "--print", "--json", "-m", "--model"]);
+
 function execCloclo(
   message: string,
   signal: AbortSignal,
   model?: string,
   extraFlags?: string[],
-  onSlow?: () => void,
 ): Promise<string> {
   return new Promise((resolve, reject) => {
-    let slowTimer: ReturnType<typeof setTimeout> | null = null;
-
-    if (onSlow) {
-      slowTimer = setTimeout(onSlow, SLOW_WARNING_MS);
-    }
-
     let child: ReturnType<typeof execFile>;
     const onAbort = () => {
-      if (slowTimer) clearTimeout(slowTimer);
       child?.kill("SIGTERM");
     };
     signal.addEventListener("abort", onAbort, { once: true });
 
     const args = ["-p", message, "--json"];
     if (model) args.push("-m", model);
-    if (extraFlags) args.push(...extraFlags);
+    if (extraFlags) {
+      const safe = extraFlags.filter((f) => !RESERVED_FLAGS.has(f.split("=")[0]));
+      args.push(...safe);
+    }
 
     child = execFile(
       "cloclo",
       args,
       { timeout: TIMEOUT_MS, env: { ...process.env, NO_COLOR: "1" } },
       (error, stdout, stderr) => {
-        if (slowTimer) clearTimeout(slowTimer);
         signal.removeEventListener("abort", onAbort);
 
         if (signal.aborted) {
