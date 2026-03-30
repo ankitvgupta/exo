@@ -73,7 +73,7 @@ test.describe("Database isolation between demo and production modes", () => {
   });
 
   test.beforeAll(() => {
-    tmpDir = mkdtempSync(join(tmpdir(), "mail-client-db-test-"));
+    tmpDir = mkdtempSync(join(tmpdir(), "mail-app-db-test-"));
     prodDbPath = join(tmpDir, "exo.db");
     demoDbPath = join(tmpDir, "exo-demo.db");
   });

@@ -96,7 +96,7 @@ if (hasMainEntry) {
       `--outfile="${join(buildDir, "dist/main.js")}" ` +
       `--external:electron --external:better-sqlite3 ` +
       // Extension types are provided by the host app at runtime
-      `--alias:@mail-client/extension-types=@mail-client/extension-types ` +
+      `--alias:@mail-app/extension-types=@mail-app/extension-types ` +
       `--define:process.env.NODE_ENV='"production"'`,
       { stdio: "inherit", cwd: extPath }
     );

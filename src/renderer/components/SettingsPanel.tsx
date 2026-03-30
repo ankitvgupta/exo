@@ -2282,7 +2282,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                           servers = obj;
                         }
 
-                        const reservedNames = new Set(["mail-client-tools", "chrome-devtools"]);
+                        const reservedNames = new Set(["mail-app-tools", "chrome-devtools"]);
                         const validated: Record<string, McpServerConfig> = {};
 
                         for (const [name, config] of Object.entries(servers)) {
