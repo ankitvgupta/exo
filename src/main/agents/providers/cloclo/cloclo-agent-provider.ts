@@ -117,11 +117,11 @@ export class ClocloAgentProvider implements AgentProvider {
   }
 
   updateConfig(config: Partial<AgentFrameworkConfig>): void {
-    const cc = config.providers?.["cloclo-agent"];
+    const cc = config.providers?.["cloclo-agent"] as Partial<ClocloProviderConfig> | undefined;
     if (cc) {
       if ("enabled" in cc) this.enabled = Boolean(cc.enabled);
-      if ("model" in cc) this.model = cc.model as string | undefined;
-      if ("extraFlags" in cc) this.extraFlags = (cc.extraFlags as string[]) ?? [];
+      if ("model" in cc) this.model = cc.model;
+      if ("extraFlags" in cc) this.extraFlags = Array.isArray(cc.extraFlags) ? cc.extraFlags : [];
     }
   }
 
