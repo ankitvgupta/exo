@@ -11,9 +11,12 @@ function threadMatchesSplit(thread: EmailThread, split: InboxSplit): boolean {
     return emailMatchesSplit(thread.latestEmail, split);
   }
 
-  // Evaluate label conditions against ANY email in the thread (Gmail labels are thread-level)
+  // Evaluate label conditions against the thread (Gmail labels are thread-level).
+  // Negated conditions use .every() — "NOT label X" means no email has it.
   const labelResults = labelConditions.map((c) =>
-    thread.emails.some((email) => evaluateCondition(email, c))
+    c.negate
+      ? thread.emails.every((email) => evaluateCondition(email, c))
+      : thread.emails.some((email) => evaluateCondition(email, c))
   );
 
   // Evaluate non-label conditions against only the latest email
@@ -81,7 +84,7 @@ export function SplitTabs() {
     return (t: EmailThread) =>
       recentlyUnsnoozedThreadIds.has(t.threadId) ||
       !exclusiveSplits.some((s) => threadMatchesSplit(t, s));
-  }, [splits, recentlyUnsnoozedThreadIds]);
+  }, [splits, recentlyUnsnoozedThreadIds, labelMapVersion]);
 
   const archiveReadyCount = useMemo(
     () => threads.filter(
