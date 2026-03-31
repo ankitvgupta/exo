@@ -301,7 +301,7 @@ test.describe("Settings Panel - Undo Send Delay", () => {
   });
 
   test("can set undo send to Off", async () => {
-    const offButton = page.locator("button:has-text('Off')");
+    const offButton = page.getByTestId("settings-panel").locator("button:has-text('Off')");
     await offButton.click();
     await page.waitForTimeout(300);
 

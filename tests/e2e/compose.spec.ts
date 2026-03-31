@@ -216,7 +216,7 @@ test.describe("Compose - Reply", () => {
     await page.waitForTimeout(1000);
 
     // Find an email in the list
-    const emailButton = page.locator("button").filter({ hasText: "Sarah" }).first();
+    const emailButton = page.locator("button").filter({ hasText: "Garry" }).first();
     if (await emailButton.isVisible()) {
       await emailButton.click();
       await page.waitForTimeout(800);
@@ -307,7 +307,7 @@ test.describe("Compose - Forward", () => {
     await page.waitForTimeout(1000);
 
     // Select an email
-    const emailButton = page.locator("button").filter({ hasText: "Sarah" }).first();
+    const emailButton = page.locator("button").filter({ hasText: "Garry" }).first();
     if (await emailButton.isVisible()) {
       await emailButton.click();
       await page.waitForTimeout(800);

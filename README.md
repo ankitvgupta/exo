@@ -6,6 +6,10 @@ An open source, AI-native desktop email client. Built with Electron, React, Type
 
 Exo treats AI as a first-class citizen — not a bolted-on feature. Every email gets analyzed, prioritized, and optionally drafted before you even open it. The goal is zero cognitive load: open your inbox and everything is already handled or ready to send.
 
+## Getting Started 
+
+You can click the "Download .dmg" button above to download a Mac app that is ready for configuration. All you need to provide is Gmail API information (it has instructions) and an Anthropic API Key. If you're a developer, see the instructions at the bottom, or ask Claude Code to figure it out. 
+
 ## Features
 
 ### AI-Powered Email
@@ -19,6 +23,10 @@ Exo treats AI as a first-class citizen — not a bolted-on feature. Every email 
 - **Archive-ready detection** — identifies threads that are conversationally complete and can be safely archived
 - **Reminder detection** — recognizes Boomerang/reminder service emails and traces back to the original sender
 
+
+https://github.com/user-attachments/assets/1e5d1e33-c46d-4519-aae5-e00aed8dda6b
+
+
 ### Agent System
 
 - **Cmd+J agent palette** — ask Claude to do anything with the current email: draft a reply, look something up, forward with context. Agent traces are displayed in a sidebar tab
@@ -26,6 +34,12 @@ Exo treats AI as a first-class citizen — not a bolted-on feature. Every email 
 - **Per-email agent tasks** — each email can have its own running agent task, visible in the sidebar
 - **Follow-up conversations** — continue talking to the agent about a specific email across multiple turns
 - **Agent-to-agent communication** — Exo's built-in Claude agent can delegate to external agents you bring. Register a third-party agent (like [OpenClaw](https://openclaw.com)) or one internal to your company, and the Exo agent will automatically call out to it when it needs domain-specific information. For example, if you register your company's internal knowledge agent, the Exo agent can ask it "what's the status of the Acme deal?" while drafting a reply, without you having to switch tools
+
+
+
+https://github.com/user-attachments/assets/442f5320-2bec-4348-937d-48ad2100552e
+
+
 
 ### Memory System
 

@@ -139,11 +139,14 @@ test.describe("Keyboard Navigation - Enter and Escape", () => {
 
   test("Enter opens email in full view", async () => {
     await expect(page.locator("text=Inbox").first()).toBeVisible({ timeout: 10000 });
+    // Wait for email list to fully render before keyboard nav
+    await page.locator("[data-testid='email-list-item'], button").filter({ hasText: /Garry|HR Team/ }).first().waitFor({ timeout: 10000 });
+    await page.waitForTimeout(500);
 
     // Select first thread
     await page.keyboard.press("j");
     // Wait for selection before pressing Enter
-    await expect(page.locator("div[data-thread-id][data-selected='true']")).toBeVisible({ timeout: 5000 });
+    await expect(page.locator("div[data-thread-id][data-selected='true']")).toBeVisible({ timeout: 10000 });
 
     // Open full view
     await page.keyboard.press("Enter");

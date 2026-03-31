@@ -40,7 +40,7 @@ test.describe("Inline Images - Reading", () => {
 
   test("email with inline images displays images correctly", async () => {
     // Find and click the email with inline images
-    const emailItem = page.locator("button").filter({ hasText: /Rachel|Landing Page Mockups/i }).first();
+    const emailItem = page.locator("button").filter({ hasText: /Surbhi|Landing Page Mockups/i }).first();
     await expect(emailItem).toBeVisible({ timeout: 10000 });
     await emailItem.click();
     await page.waitForTimeout(1500);
@@ -83,7 +83,7 @@ test.describe("Inline Images - Reading", () => {
     await page.waitForTimeout(500);
 
     // Click the Q3 report email which has an external image (https://via.placeholder.com)
-    const emailItem = page.locator("button").filter({ hasText: /Emily|Q3 Quarterly/i }).first();
+    const emailItem = page.locator("button").filter({ hasText: /Garry|Q3 Quarterly/i }).first();
     await expect(emailItem).toBeVisible({ timeout: 10000 });
     await emailItem.click();
     await page.waitForTimeout(1500);

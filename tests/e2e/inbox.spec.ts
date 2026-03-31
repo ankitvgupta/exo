@@ -106,7 +106,7 @@ test.describe("Exo E2E - Email Detail", () => {
 
   test("shows email content when selected", async () => {
     // Click on any visible email in the list (senders may be snoozed from prior runs)
-    const candidates = ["Lisa", "HR Team", "Jennifer", "David", "Emily", "Mike"];
+    const candidates = ["Garry", "HR Team", "Jared", "Diana", "Gustaf", "Michael"];
     let clicked = false;
     for (const name of candidates) {
       const btn = page.locator("button").filter({ hasText: name }).first();

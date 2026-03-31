@@ -37,7 +37,7 @@ test.describe("Image Loading in Emails", () => {
   test("images load in HTML emails", async () => {
     // Wait for app and emails to load
     await page.waitForSelector("text=Exo", { timeout: 15000 });
-    await page.locator("button").filter({ hasText: /Lisa|HR Team|Product Team/ }).first().waitFor({ timeout: 10000 });
+    await page.locator("button").filter({ hasText: /Garry|HR Team|Product Team/ }).first().waitFor({ timeout: 10000 });
 
     // Find an HTML email — Product Team newsletter is always visible (not snoozed)
     const htmlEmail = page.locator("button").filter({ hasText: "Weekly Product Update" }).first();

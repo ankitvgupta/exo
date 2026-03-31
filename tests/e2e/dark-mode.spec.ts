@@ -155,7 +155,7 @@ test.describe("Dark Mode", () => {
   test("inbox email list renders with dark colors", async () => {
     // Verify the inbox area has dark-themed elements
     // Check that at least one email row exists and has appropriate dark styling
-    const emailButtons = page.locator("button").filter({ hasText: /Lisa|HR Team|Amazon|GitHub|Product Team/ });
+    const emailButtons = page.locator("button").filter({ hasText: /Garry|HR Team|Amazon|GitHub|Product Team/ });
     const count = await emailButtons.count();
     expect(count).toBeGreaterThan(0);
 
