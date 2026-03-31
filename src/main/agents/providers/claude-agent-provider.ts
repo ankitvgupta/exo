@@ -430,15 +430,19 @@ function buildBashPreToolUseHook(
       | undefined;
     const command = toolInput?.command ?? "";
 
-    // Reject commands containing shell operators or newlines that could chain additional commands
-    // e.g. "ls && rm -rf /" or "ls; cat /etc/passwd" or "ls\nrm -rf /"
-    if (/[;&|`$><\n\r]/.test(command)) {
+    // Use an allowlist of safe characters instead of a blocklist of dangerous ones.
+    // A blocklist is fragile — bash has many execution syntaxes (subshells, brace
+    // expansion, history expansion, escape sequences) that are hard to enumerate.
+    // Allowed: alphanumeric, whitespace, hyphens, underscores, dots, slashes,
+    // colons, equals, commas, @, and quotes (for paths and arguments).
+    if (!/^[a-zA-Z0-9\s\-_./\\:=,@"']+$/.test(command)) {
       return {
         hookSpecificOutput: {
           hookEventName: "PreToolUse" as const,
           permissionDecision: "deny" as const,
           permissionDecisionReason:
-            "Shell operators (;, &, |, `, $, >, <) are not allowed in CLI tool commands.",
+            "Command contains characters not in the allowed set. " +
+            "Only alphanumeric characters, spaces, hyphens, underscores, dots, slashes, colons, equals, commas, @, and quotes are permitted.",
         },
       };
     }
