@@ -8,9 +8,11 @@ import { ComposeEditor } from "./ComposeEditor";
 import { formatSnoozeTime } from "./SnoozeMenu";
 import { AddressInput } from "./AddressInput";
 import { EmailAttachmentList, ComposeAttachmentList, AttachmentPreviewModal } from "./AttachmentList";
-import type { DashboardEmail, ReplyInfo, IpcResponse, SnoozedEmail, ComposeMode, AttachmentMeta, LocalDraft, Memory, MemoryScope } from "../../shared/types";
+import type { DashboardEmail, ReplyInfo, IpcResponse, ComposeMode, AttachmentMeta, LocalDraft, Memory, MemoryScope } from "../../shared/types";
 import type { RestoredDraft } from "../store";
 import { useComposeForm } from "../hooks/useComposeForm";
+import { useSendAsAliases, detectAliasFromThread } from "../hooks/useSendAsAliases";
+import { FromSelector } from "./FromSelector";
 import { THREAD_NAV_EVENT } from "../hooks/useKeyboardShortcuts";
 import type { ComposeFormState } from "../hooks/useComposeForm";
 import { ComposeToolbar } from "./ComposeToolbar";
@@ -898,6 +900,7 @@ function InlineReply({
   draftEmailId,
   onDiscardDraft,
   nameMap: externalNameMap,
+  threadEmails: threadEmailsProp,
 }: {
   replyInfo: ReplyInfo;
   accountId: string;
@@ -917,11 +920,21 @@ function InlineReply({
   onDiscardDraft?: () => void;
   /** Map of lowercase email → display name for rendering name chips */
   nameMap?: Map<string, string>;
+  /** Thread emails for auto-detecting the correct send-as alias */
+  threadEmails?: DashboardEmail[];
 }) {
   const isForward = composeMode === "forward";
 
+  // Auto-detect "from" alias based on which alias the thread was addressed to
+  const { aliases, defaultAlias } = useSendAsAliases(accountId);
+  const autoDetectedFrom = useMemo(
+    () => threadEmailsProp ? detectAliasFromThread(aliases, threadEmailsProp) : undefined,
+    [aliases, threadEmailsProp]
+  );
+
   const form = useComposeForm({
     accountId,
+    initialFrom: restoredDraft?.from ?? autoDetectedFrom ?? defaultAlias,
     initialTo: restoredDraft?.to !== undefined ? restoredDraft.to : (isForward ? [] : replyInfo.to),
     initialCc: restoredDraft?.cc !== undefined ? restoredDraft.cc : (replyInfo.cc.length > 0 ? replyInfo.cc : []),
     initialBcc: restoredDraft?.bcc !== undefined ? restoredDraft.bcc : [],
@@ -1309,7 +1322,7 @@ function InlineReply({
                     className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 px-1"
                     data-testid="inline-reply-cc-bcc-toggle"
                   >
-                    Cc / Bcc
+                    {aliases.length > 1 ? "From / Cc / Bcc" : "Cc / Bcc"}
                   </button>
                 )}
               </>
@@ -1364,6 +1377,7 @@ function InlineReply({
                   onChipDrop={(email, sourceField) => form.handleRecipientDrop("bcc", email, sourceField)}
                   onChipDragStart={handleRecipientDragStart}
                 />
+                <FromSelector aliases={aliases} selected={form.from} onChange={form.setFrom} />
               </div>
             )}
           </>
@@ -1580,8 +1594,11 @@ function NewEmailCompose({
   onDiscard?: () => void;
   initialDraft?: RestoredDraft | null;
 }) {
+  const { aliases, defaultAlias } = useSendAsAliases(accountId);
+
   const form = useComposeForm({
     accountId,
+    initialFrom: initialDraft?.from ?? defaultAlias,
     initialTo: initialDraft?.to ?? [],
     initialCc: initialDraft?.cc ?? [],
     initialBcc: initialDraft?.bcc ?? [],
@@ -1708,7 +1725,7 @@ function NewEmailCompose({
       {/* Compose form */}
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-3xl mx-auto px-4">
-          {/* To field with Cc/Bcc toggle */}
+          {/* To field with Cc/Bcc/From toggle */}
           <div className="flex items-center">
             <div className="flex-1 min-w-0">
               <AddressInput
@@ -1734,12 +1751,12 @@ function NewEmailCompose({
                 className="ml-2 flex-shrink-0 text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
                 data-testid="compose-cc-bcc-toggle"
               >
-                Cc/Bcc
+                {aliases.length > 1 ? "From/Cc/Bcc" : "Cc/Bcc"}
               </button>
             )}
           </div>
 
-          {/* Collapsible Cc/Bcc fields */}
+          {/* Collapsible Cc/Bcc/From fields */}
           {form.showCcBcc && (
             <>
               <AddressInput
@@ -1768,6 +1785,7 @@ function NewEmailCompose({
                 onChipDrop={(email, sourceField) => form.handleRecipientDrop("bcc", email, sourceField)}
                 onChipDragStart={form.handleRecipientDragStart}
               />
+              <FromSelector aliases={aliases} selected={form.from} onChange={form.setFrom} />
             </>
           )}
 
@@ -2995,6 +3013,7 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
                   draftEmailId={draftEmail?.draft && draftEmail.draft.status !== "edited" ? draftEmail.id : undefined}
                   onDiscardDraft={handleDiscardDraft}
                   nameMap={nameMap}
+                  threadEmails={threadEmails}
                 />
               )}
             </div>

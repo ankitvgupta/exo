@@ -390,6 +390,8 @@ export const ConfigSchema = z.object({
     gatewayUrl: z.string().default(""),
     gatewayToken: z.string().default(""),
   }).optional(),
+  /** Per-account default send-as alias: maps accountId → email address */
+  defaultSendAs: z.record(z.string(), z.string()).optional(),
   configVersion: z.number().optional(),
 });
 
@@ -472,6 +474,14 @@ export type ComposeAttachment = {
   size?: number;
 };
 
+// Gmail send-as alias
+export type SendAsAlias = {
+  email: string;
+  displayName: string | null;
+  isPrimary: boolean;
+  treatAsAlias: boolean;
+};
+
 // Options for composing a message (used internally)
 export type ComposeMessageOptions = {
   from?: string;
@@ -508,6 +518,7 @@ export const LocalDraftSchema = z.object({
   gmailDraftId: z.string().optional(),
   threadId: z.string().optional(),
   inReplyTo: z.string().optional(),
+  from: z.string().optional(),
   to: z.array(z.string()),
   cc: z.array(z.string()).optional(),
   bcc: z.array(z.string()).optional(),
@@ -759,6 +770,7 @@ export type ScheduledMessage = {
   id: string;
   accountId: string;
   type: "send" | "reply";
+  from?: string;
   threadId?: string;
   to: string[];
   cc?: string[];
