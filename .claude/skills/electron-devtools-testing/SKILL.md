@@ -1,7 +1,6 @@
 ---
 name: electron-devtools-testing
 description: Test the Electron app interactively using Chrome DevTools Protocol. Use when the user asks to test, verify, or interact with the running app via browser automation.
-disable-model-invocation: true
 ---
 
 Test the Exo Electron app interactively using Chrome DevTools Protocol (CDP) via the `chrome-devtools` MCP.
