@@ -12,8 +12,17 @@ export function setLabelMap(accountId: string, labels: Array<{ id: string; name:
   labelNameToIdsByAccount.set(accountId, map);
 }
 
-function resolveLabelNameToId(value: string): string | undefined {
+function resolveLabelNameToId(value: string, accountId?: string): string | undefined {
   const lower = value.toLowerCase();
+  // Prefer the specific account's label map when available
+  if (accountId) {
+    const accountMap = labelNameToIdsByAccount.get(accountId);
+    if (accountMap) {
+      const id = accountMap.get(lower);
+      if (id) return id;
+    }
+  }
+  // Fall back to searching all accounts
   for (const map of labelNameToIdsByAccount.values()) {
     const id = map.get(lower);
     if (id) return id;
@@ -71,7 +80,7 @@ export function evaluateCondition(email: DashboardEmail, condition: InboxSplit["
       if (labelIds.includes(condition.value)) {
         matches = true;
       } else {
-        const resolvedId = resolveLabelNameToId(condition.value);
+        const resolvedId = resolveLabelNameToId(condition.value, email.accountId);
         matches = resolvedId ? labelIds.includes(resolvedId) : false;
       }
       break;
