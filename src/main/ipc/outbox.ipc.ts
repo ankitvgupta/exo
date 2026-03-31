@@ -12,31 +12,32 @@ function getMainWindow(): BrowserWindow | null {
 
 export function registerOutboxIpc(): void {
   // Set up outbox service event listeners
-  outboxService.on("statsChanged", (stats: OutboxStats) => {
+  outboxService.on("statsChanged", (...args: unknown[]) => {
+    const stats = args[0] as OutboxStats;
     const window = getMainWindow();
     if (window) {
       window.webContents.send("outbox:stats-changed", stats);
     }
   });
 
-  outboxService.on("sent", (data: { id: string; gmailId?: string; threadId?: string }) => {
+  outboxService.on("sent", (...args: unknown[]) => {
+    const data = args[0] as { id: string; gmailId?: string; threadId?: string };
     const window = getMainWindow();
     if (window) {
       window.webContents.send("outbox:sent", data);
     }
   });
 
-  outboxService.on(
-    "failed",
-    (data: { id: string; error: string; permanent: boolean; retryCount?: number }) => {
-      const window = getMainWindow();
-      if (window) {
-        window.webContents.send("outbox:failed", data);
-      }
-    },
-  );
+  outboxService.on("failed", (...args: unknown[]) => {
+    const data = args[0] as { id: string; error: string; permanent: boolean; retryCount?: number };
+    const window = getMainWindow();
+    if (window) {
+      window.webContents.send("outbox:failed", data);
+    }
+  });
 
-  outboxService.on("authRequired", (data: { accountId: string; itemId: string }) => {
+  outboxService.on("authRequired", (...args: unknown[]) => {
+    const data = args[0] as { accountId: string; itemId: string };
     const window = getMainWindow();
     if (window) {
       window.webContents.send("outbox:auth-required", data);

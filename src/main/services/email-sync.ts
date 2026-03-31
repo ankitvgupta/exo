@@ -536,7 +536,7 @@ class EmailSyncService {
         }
       } else {
         account.status = "error";
-        account.lastError = error.message;
+        account.lastError = errMsg;
         this.onSyncStatusChange?.(accountId, "error");
       }
     }

@@ -308,7 +308,7 @@ export class GmailClient {
     log.info("\nOpening browser for Google authorization...");
     log.info("If browser doesn't open, visit this URL:\n");
     log.info(authUrl);
-    log.info();
+    log.info("");
 
     // Open browser using Electron's shell
     await shell.openExternal(authUrl);
@@ -616,8 +616,8 @@ export class GmailClient {
       return header?.value || "";
     };
 
-    const body = await this.extractBodyWithImages(message.payload, message.id!);
-    const attachments = this.extractAttachments(message.payload);
+    const body = await this.extractBodyWithImages(message.payload!, message.id!);
+    const attachments = this.extractAttachments(message.payload!);
 
     const cc = getHeader("cc");
     const bcc = getHeader("bcc");
@@ -666,8 +666,8 @@ export class GmailClient {
         return header?.value || "";
       };
 
-      const body = await this.extractBodyWithImages(message.payload, message.id!);
-      const attachments = this.extractAttachments(message.payload);
+      const body = await this.extractBodyWithImages(message.payload!, message.id!);
+      const attachments = this.extractAttachments(message.payload!);
 
       const cc = getHeader("cc");
       const bcc = getHeader("bcc");
@@ -736,7 +736,7 @@ export class GmailClient {
     const images = new Map<string, { mimeType: string; data?: string; attachmentId?: string }>();
 
     const walk = (part: gmail_v1.Schema$MessagePart) => {
-      const headers: Array<{ name?: string; value?: string }> = part.headers || [];
+      const headers = part.headers || [];
       const contentId = headers.find((h) => h.name?.toLowerCase() === "content-id")?.value;
 
       if (contentId && part.mimeType?.startsWith("image/")) {
@@ -744,8 +744,8 @@ export class GmailClient {
         const cid = contentId.replace(/^<|>$/g, "");
         images.set(cid, {
           mimeType: part.mimeType,
-          data: part.body?.data,
-          attachmentId: part.body?.attachmentId,
+          data: part.body?.data ?? undefined,
+          attachmentId: part.body?.attachmentId ?? undefined,
         });
       }
 

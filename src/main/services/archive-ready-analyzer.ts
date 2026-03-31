@@ -68,7 +68,7 @@ export class ArchiveReadyAnalyzer {
       const parsed = JSON.parse(stripJsonFences(textBlock.text));
       return ArchiveReadyResultSchema.parse(parsed);
     } catch (_error) {
-      log.error("Failed to parse archive-ready response:", textBlock.text);
+      log.error({ responseText: textBlock.text }, "Failed to parse archive-ready response");
       return {
         archive_ready: false,
         reason: "Failed to parse analysis - keeping in inbox for safety",

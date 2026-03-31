@@ -125,69 +125,65 @@ export function registerSyncIpc(): void {
 
   // Forward permanent action failures to the renderer so it can restore emails,
   // and roll back the optimistic DB update
-  pendingActionsQueue.on(
-    "action-failed",
-    (data: { emailId: string; accountId: string; action: string; error: string }) => {
-      log.error(
-        `[Sync] Pending action permanently failed: ${data.action} ${data.emailId} - ${data.error}`,
-      );
+  pendingActionsQueue.on("action-failed", (...args: unknown[]) => {
+    const data = args[0] as { emailId: string; accountId: string; action: string; error: string };
+    log.error(
+      `[Sync] Pending action permanently failed: ${data.action} ${data.emailId} - ${data.error}`,
+    );
 
-      // Roll back the optimistic DB change so the email isn't lost locally
-      if (data.action === "archive") {
-        const email = getEmail(data.emailId);
-        if (email) {
-          const labels = email.labelIds || [];
-          if (!labels.includes("INBOX")) {
-            updateEmailLabelIds(data.emailId, [...labels, "INBOX"]);
-          }
-        }
-      } else if (data.action === "trash") {
-        const saved = trashedEmailData.get(data.emailId);
-        if (saved) {
-          saveEmail(
-            {
-              id: saved.id,
-              threadId: saved.threadId,
-              subject: saved.subject,
-              from: saved.from,
-              to: saved.to,
-              date: saved.date,
-              body: saved.body || "",
-              snippet: saved.snippet,
-              labelIds: saved.labelIds,
-            },
-            data.accountId,
-          );
-          trashedEmailData.delete(data.emailId);
+    // Roll back the optimistic DB change so the email isn't lost locally
+    if (data.action === "archive") {
+      const email = getEmail(data.emailId);
+      if (email) {
+        const labels = email.labelIds || [];
+        if (!labels.includes("INBOX")) {
+          updateEmailLabelIds(data.emailId, [...labels, "INBOX"]);
         }
       }
-
-      const window = getMainWindow();
-      if (window) {
-        window.webContents.send("sync:action-failed", data);
+    } else if (data.action === "trash") {
+      const saved = trashedEmailData.get(data.emailId);
+      if (saved) {
+        saveEmail(
+          {
+            id: saved.id,
+            threadId: saved.threadId,
+            subject: saved.subject,
+            from: saved.from,
+            to: saved.to,
+            date: saved.date,
+            body: saved.body || "",
+            snippet: saved.snippet,
+            labelIds: saved.labelIds,
+          },
+          data.accountId,
+        );
+        trashedEmailData.delete(data.emailId);
       }
-    },
-  );
+    }
+
+    const window = getMainWindow();
+    if (window) {
+      window.webContents.send("sync:action-failed", data);
+    }
+  });
 
   // When a queued action succeeds, clean up saved data and notify the renderer
-  pendingActionsQueue.on(
-    "action-succeeded",
-    (data: { emailId: string; accountId: string; action: string }) => {
-      trashedEmailData.delete(data.emailId);
-      const window = getMainWindow();
-      if (window) {
-        window.webContents.send("sync:emails-removed", {
-          accountId: data.accountId,
-          emailIds: [data.emailId],
-        });
-        window.webContents.send("sync:action-succeeded", {
-          emailId: data.emailId,
-          accountId: data.accountId,
-          action: data.action,
-        });
-      }
-    },
-  );
+  pendingActionsQueue.on("action-succeeded", (...args: unknown[]) => {
+    const data = args[0] as { emailId: string; accountId: string; action: string };
+    trashedEmailData.delete(data.emailId);
+    const window = getMainWindow();
+    if (window) {
+      window.webContents.send("sync:emails-removed", {
+        accountId: data.accountId,
+        emailIds: [data.emailId],
+      });
+      window.webContents.send("sync:action-succeeded", {
+        emailId: data.emailId,
+        accountId: data.accountId,
+        action: data.action,
+      });
+    }
+  });
 
   // Set up sync service callbacks
   emailSyncService.onNewEmailsReceived((accountId, emails) => {

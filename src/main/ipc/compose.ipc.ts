@@ -293,7 +293,7 @@ export function registerComposeIpc(): void {
       options: SendMessageOptions & { accountId: string },
     ): Promise<IpcResponse<SendMessageResult>> => {
       if (useFakeData) {
-        log.info("[DEMO] Sending message to:", options.to);
+        log.info({ to: options.to }, "[DEMO] Sending message");
         await new Promise((resolve) => setTimeout(resolve, 500));
         // Still trigger draft-edit learning in demo mode so we can test it
         if (options.threadId && !options.isForward) {
@@ -566,7 +566,7 @@ export function registerComposeIpc(): void {
       { gmailDraftId, accountId }: { gmailDraftId: string; accountId: string },
     ): Promise<IpcResponse<{ id: string; threadId: string }>> => {
       if (useFakeData) {
-        log.info("[DEMO] Sending Gmail draft:", gmailDraftId);
+        log.info({ gmailDraftId }, "[DEMO] Sending Gmail draft");
         await new Promise((resolve) => setTimeout(resolve, 500));
         return {
           success: true,
@@ -664,7 +664,7 @@ export function registerComposeIpc(): void {
       { gmailDraftId, accountId }: { gmailDraftId: string; accountId: string },
     ): Promise<IpcResponse<void>> => {
       if (useFakeData) {
-        log.info("[DEMO] Deleting Gmail draft:", gmailDraftId);
+        log.info({ gmailDraftId }, "[DEMO] Deleting Gmail draft");
         return { success: true, data: undefined };
       }
 
@@ -739,7 +739,7 @@ export function registerComposeIpc(): void {
       { messageId, accountId }: { messageId: string; accountId: string },
     ): Promise<IpcResponse<void>> => {
       if (useFakeData) {
-        log.info("[DEMO] Archiving message:", messageId);
+        log.info({ messageId }, "[DEMO] Archiving message");
         return { success: true, data: undefined };
       }
 
@@ -768,7 +768,7 @@ export function registerComposeIpc(): void {
       { messageId, accountId }: { messageId: string; accountId: string },
     ): Promise<IpcResponse<void>> => {
       if (useFakeData) {
-        log.info("[DEMO] Trashing message:", messageId);
+        log.info({ messageId }, "[DEMO] Trashing message");
         return { success: true, data: undefined };
       }
 
@@ -797,7 +797,7 @@ export function registerComposeIpc(): void {
       { messageId, accountId, starred }: { messageId: string; accountId: string; starred: boolean },
     ): Promise<IpcResponse<void>> => {
       if (useFakeData) {
-        log.info("[DEMO] Setting star:", messageId, starred);
+        log.info({ messageId, starred }, "[DEMO] Setting star");
         return { success: true, data: undefined };
       }
 
@@ -826,7 +826,7 @@ export function registerComposeIpc(): void {
       { messageId, accountId, read }: { messageId: string; accountId: string; read: boolean },
     ): Promise<IpcResponse<void>> => {
       if (useFakeData) {
-        log.info("[DEMO] Setting read:", messageId, read);
+        log.info({ messageId, read }, "[DEMO] Setting read");
         return { success: true, data: undefined };
       }
 
