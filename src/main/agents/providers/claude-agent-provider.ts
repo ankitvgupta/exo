@@ -216,6 +216,22 @@ export class ClaudeAgentProvider implements AgentProvider {
               if (block.type === "tool_result") {
                 const preview = JSON.stringify(block).slice(0, 500);
                 console.log(`[ClaudeAgent:tool_result] ${preview}`);
+
+                // Emit tool_call_end for Bash tool results so the UI can display them.
+                // Built-in tools are handled by the SDK subprocess, so their results
+                // come back as tool_result blocks in user messages rather than through
+                // our MCP handler's completedToolCalls queue.
+                const toolUseId = block.tool_use_id as string | undefined;
+                if (toolUseId) {
+                  const ids = pendingToolCallIds.get("Bash");
+                  if (ids?.includes(toolUseId)) {
+                    ids.splice(ids.indexOf(toolUseId), 1);
+                    const resultText = Array.isArray(block.content)
+                      ? block.content.map((c: Record<string, unknown>) => c.text ?? "").join("")
+                      : typeof block.content === "string" ? block.content : JSON.stringify(block.content);
+                    yield { type: "tool_call_end" as const, toolCallId: toolUseId, result: resultText };
+                  }
+                }
               }
             }
           }
@@ -239,7 +255,8 @@ export class ClaudeAgentProvider implements AgentProvider {
         for (const event of mapSdkMessage(message)) {
           // Skip built-in tool events — they're handled internally by the SDK
           // and never produce tool_call_end, which would leave orphaned spinners.
-          if (event.type === "tool_call_start" && builtInToolSet.has(event.toolName)) {
+          // Exception: Bash events are forwarded so CLI tool results are visible.
+          if (event.type === "tool_call_start" && builtInToolSet.has(event.toolName) && event.toolName !== "Bash") {
             continue;
           }
           if (event.type === "tool_call_start") {
@@ -553,6 +570,7 @@ function buildSystemPrompt(context: AgentContext, tools: AgentToolSpec[], memory
     }
     parts.push("");
     parts.push("Any other commands will be rejected. Use the Bash tool with the allowed commands only.");
+    parts.push("IMPORTANT: The user cannot see Bash tool results directly — they only see your text response. After running a command, include the relevant parts of the output in your response so the user can see what happened.");
   }
 
   return parts.join("\n");
