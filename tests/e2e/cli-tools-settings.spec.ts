@@ -53,7 +53,7 @@ test.describe("Settings - CLI Tools", () => {
 
   test("shows CLI Tools section with heading and description", async () => {
     await expect(page.locator("h4:has-text('CLI Tools')")).toBeVisible({ timeout: 5000 });
-    await expect(page.locator("text=Bash(command:*)")).toBeVisible();
+    await expect(page.locator("text=Allow the agent to run specific CLI commands")).toBeVisible();
   });
 
   test("shows Add CLI Tool button when no tools configured", async () => {
