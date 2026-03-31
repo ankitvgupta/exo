@@ -1,8 +1,11 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { createMessage } from "./anthropic-service";
 import type { GmailClient } from "./gmail-client";
 import { CalendaringAgent } from "./calendaring-agent";
 import { getEnrichmentBySender } from "../extensions/enrichment-store";
 import {
+import { createLogger } from "./logger";
+
+const log = createLogger("draft-generator");
   DEFAULT_DRAFT_PROMPT,
   DRAFT_FORMAT_SUFFIX,
   type AnalysisResult,
@@ -33,13 +36,11 @@ function extractReplyAllCc(email: { from: string; to: string; cc?: string }, use
 }
 
 export class DraftGenerator {
-  private anthropic: Anthropic;
   private model: string;
   private calendaringModel: string;
   private prompt: string;
 
   constructor(model: string = "claude-sonnet-4-20250514", prompt: string = DEFAULT_DRAFT_PROMPT, calendaringModel?: string) {
-    this.anthropic = new Anthropic();
     this.model = model;
     this.calendaringModel = calendaringModel ?? model;
     // Always append format suffix so the user can't accidentally remove it
@@ -74,7 +75,7 @@ export class DraftGenerator {
 SENDER CONTEXT (from web search):
 ${profile.summary}
 ---`;
-          console.log(`[DraftGenerator] Using cached sender context for ${senderEmail}`);
+          log.info(`[DraftGenerator] Using cached sender context for ${senderEmail}`);
         }
       }
     }
@@ -98,7 +99,7 @@ Do NOT propose specific times yourself - defer to the assistant.`;
       }
     }
 
-    const response = await this.anthropic.messages.create({
+    const response = await createMessage({
       model: this.model,
       max_tokens: 1024,
       messages: [
@@ -123,7 +124,7 @@ Date: ${email.date}
 ${email.body}`,
         },
       ],
-    });
+    }, { caller: "draft-generator", emailId: email.id });
 
     const textBlock = response.content.find((block) => block.type === "text");
     if (!textBlock || textBlock.type !== "text") {
@@ -158,13 +159,13 @@ ${email.body}`,
 RECIPIENT CONTEXT (${recipient}, from web search):
 ${profile.summary}
 ---`;
-            console.log(`[DraftGenerator] Using cached recipient context for ${recipientEmail}`);
+            log.info(`[DraftGenerator] Using cached recipient context for ${recipientEmail}`);
           }
         }
       }
     }
 
-    const response = await this.anthropic.messages.create({
+    const response = await createMessage({
       model: this.model,
       max_tokens: 1024,
       messages: [
@@ -182,7 +183,7 @@ INSTRUCTIONS:
 ${instructions}`,
         },
       ],
-    });
+    }, { caller: "draft-generator-compose" });
 
     const textBlock = response.content.find((block) => block.type === "text");
     if (!textBlock || textBlock.type !== "text") {
@@ -211,7 +212,7 @@ ${instructions}`,
 ORIGINAL SENDER CONTEXT (${email.from}, from web search):
 ${profile.summary}
 ---`;
-          console.log(`[DraftGenerator] Using cached sender context for forward from ${senderEmail}`);
+          log.info(`[DraftGenerator] Using cached sender context for forward from ${senderEmail}`);
         }
       }
     }
@@ -221,7 +222,7 @@ ${profile.summary}
       ? email.subject
       : `Fwd: ${email.subject}`;
 
-    const response = await this.anthropic.messages.create({
+    const response = await createMessage({
       model: this.model,
       max_tokens: 1024,
       messages: [
@@ -246,7 +247,7 @@ Date: ${email.date}
 ${email.body}`,
         },
       ],
-    });
+    }, { caller: "draft-generator-forward", emailId: email.id });
 
     const textBlock = response.content.find((block) => block.type === "text");
     if (!textBlock || textBlock.type !== "text") {
@@ -271,11 +272,11 @@ ${email.body}`,
       : `Re: ${email.subject}`;
 
     if (dryRun) {
-      console.log("\n[DRY RUN] Would create draft:");
-      console.log(`  To: ${replyTo}`);
-      console.log(`  Subject: ${subject}`);
-      console.log(`  Thread: ${email.threadId}`);
-      console.log(`  Body:\n${draftBody.split("\n").map((l) => "    " + l).join("\n")}`);
+      log.info("\n[DRY RUN] Would create draft:");
+      log.info(`  To: ${replyTo}`);
+      log.info(`  Subject: ${subject}`);
+      log.info(`  Thread: ${email.threadId}`);
+      log.info(`  Body:\n${draftBody.split("\n").map((l) => "    " + l).join("\n")}`);
 
       return {
         emailId: email.id,

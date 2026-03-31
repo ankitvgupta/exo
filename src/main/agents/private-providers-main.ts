@@ -1,4 +1,7 @@
 import type { AgentFrameworkConfig } from './types';
+import { createLogger } from "../services/logger";
+
+const log = createLogger("private-providers");
 
 export type MainSetup = {
   populateConfig?: (config: AgentFrameworkConfig) => Promise<AgentFrameworkConfig>;
@@ -42,7 +45,7 @@ export async function populatePrivateProviderConfig(config: AgentFrameworkConfig
       try {
         enriched = await mod.populateConfig(enriched);
       } catch (err) {
-        console.warn(`[PrivateProviders] Config enrichment failed for ${modulePath}:`, err);
+        log.warn({ err: err }, `[PrivateProviders] Config enrichment failed for ${modulePath}`);
       }
     }
   }
@@ -52,7 +55,7 @@ export async function populatePrivateProviderConfig(config: AgentFrameworkConfig
     try {
       enriched = await enricher(enriched);
     } catch (err) {
-      console.warn(`[PrivateProviders] Config enrichment failed for installed provider ${id}:`, err);
+      log.warn({ err: err }, `[PrivateProviders] Config enrichment failed for installed provider ${id}`);
     }
   }
 
@@ -88,7 +91,7 @@ export async function getProvidersNeedingAuth(): Promise<
     try {
       needsAuth = !(await checker());
     } catch (error) {
-      console.error(`[PrivateProviders] checkAuth failed for ${id}:`, error);
+      log.error({ err: error }, `[PrivateProviders] checkAuth failed for ${id}`);
     }
     results.push({ providerId: id, displayName: name, needsAuth });
   }
@@ -115,7 +118,7 @@ export function registerProviderAuth(
   if (setup.populateConfig) {
     installedConfigEnrichers.set(id, setup.populateConfig);
   }
-  console.log(`[PrivateProviders] Registered installed provider auth: ${id}`);
+  log.info(`[PrivateProviders] Registered installed provider auth: ${id}`);
 }
 
 /**
@@ -127,5 +130,5 @@ export function unregisterProviderAuth(id: string): void {
   authCheckers.delete(id);
   providerDisplayNames.delete(id);
   installedConfigEnrichers.delete(id);
-  console.log(`[PrivateProviders] Unregistered installed provider auth: ${id}`);
+  log.info(`[PrivateProviders] Unregistered installed provider auth: ${id}`);
 }

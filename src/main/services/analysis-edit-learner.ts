@@ -16,7 +16,7 @@
  * Analysis memories are injected into the analysis prompt (not the draft prompt).
  */
 import { randomUUID } from "crypto";
-import Anthropic from "@anthropic-ai/sdk";
+import { createMessage } from "./anthropic-service";
 import {
   getDraftMemories,
   saveDraftMemory,
@@ -29,6 +29,9 @@ import {
 import { consolidateMemoryScopes, filterAgainstPromotedMemories } from "./draft-edit-learner";
 import { parseJsonArray, normalizeScope, CONSUMER_DOMAINS } from "./memory-learner-utils";
 import type { Memory, MemoryScope, DraftMemory } from "../../shared/types";
+import { createLogger } from "./logger";
+
+const log = createLogger("analysis-edit-learner");
 
 /** Promotion threshold — lower than drafting (3) since priority overrides are rarer */
 const PROMOTION_THRESHOLD = 2;
@@ -102,19 +105,19 @@ export async function learnFromPriorityOverrideWithReason(params: {
   );
 
   if (result.action === "duplicate") {
-    console.log(`[AnalysisEditLearner] Memory with reason already covered — skipping`);
+    log.info(`[AnalysisEditLearner] Memory with reason already covered — skipping`);
     return { memory, saved: false };
   } else if (result.action === "consolidate") {
     // consolidateMemoryScopes already persisted changes (deleted overlapping, possibly created global)
     if (result.createdGlobal) {
-      console.log(`[AnalysisEditLearner] Consolidated into global memory: ${result.createdGlobal.content}`);
+      log.info(`[AnalysisEditLearner] Consolidated into global memory: ${result.createdGlobal.content}`);
       return { memory: result.createdGlobal, saved: true };
     }
-    console.log(`[AnalysisEditLearner] Consolidated existing memories — not saving original`);
+    log.info(`[AnalysisEditLearner] Consolidated existing memories — not saving original`);
     return { memory, saved: false };
   } else {
     saveMemory(memory);
-    console.log(`[AnalysisEditLearner] Saved analysis memory with reason: [${scope.scope}${scope.scopeValue ? `:${scope.scopeValue}` : ""}] ${reason}`);
+    log.info(`[AnalysisEditLearner] Saved analysis memory with reason: [${scope.scope}${scope.scopeValue ? `:${scope.scopeValue}` : ""}] ${reason}`);
     return { memory, saved: true };
   }
 }
@@ -128,12 +131,12 @@ export async function learnFromPriorityOverrideInferred(
 ): Promise<AnalysisLearnResult> {
   const { accountId, senderEmail, senderDomain, subject } = override;
 
-  console.log(`[AnalysisEditLearner] Inferring patterns from priority override: ${formatOverrideDescription(override)}`);
+  log.info(`[AnalysisEditLearner] Inferring patterns from priority override: ${formatOverrideDescription(override)}`);
 
   // 1. Extract observations via Claude
   const observations = await analyzeOverride(override);
   if (!observations || observations.length === 0) {
-    console.log(`[AnalysisEditLearner] No observations extracted — nothing to save`);
+    log.info(`[AnalysisEditLearner] No observations extracted — nothing to save`);
     return { promoted: [], draftMemoriesCreated: 0 };
   }
 
@@ -141,7 +144,7 @@ export async function learnFromPriorityOverrideInferred(
   const promotedMemories = getMemories(accountId, "analysis").filter(m => m.enabled);
   const filteredObservations = await filterAgainstPromotedMemories(observations, promotedMemories);
   if (filteredObservations.length === 0) {
-    console.log(`[AnalysisEditLearner] All observations already covered by promoted memories`);
+    log.info(`[AnalysisEditLearner] All observations already covered by promoted memories`);
     return { promoted: [], draftMemoriesCreated: 0 };
   }
 
@@ -171,7 +174,7 @@ export async function learnFromPriorityOverrideInferred(
       const updated = incrementDraftMemoryVote(match.matchedDraftMemoryId, sourceEmailId);
       if (!updated) continue;
 
-      console.log(`[AnalysisEditLearner] Voted on draft memory ${match.matchedDraftMemoryId} (now ${updated.voteCount} votes): ${updated.content}`);
+      log.info(`[AnalysisEditLearner] Voted on draft memory ${match.matchedDraftMemoryId} (now ${updated.voteCount} votes): ${updated.content}`);
 
       // Check for promotion (threshold = 2 for analysis)
       if (updated.voteCount >= PROMOTION_THRESHOLD) {
@@ -183,12 +186,12 @@ export async function learnFromPriorityOverrideInferred(
         );
 
         if (result.action === "duplicate") {
-          console.log(`[AnalysisEditLearner] Draft memory "${updated.content}" already covered — deleting`);
+          log.info(`[AnalysisEditLearner] Draft memory "${updated.content}" already covered — deleting`);
           deleteDraftMemory(updated.id);
           continue;
         }
 
-        console.log(`[AnalysisEditLearner] Promoting draft memory: ${updated.content}`);
+        log.info(`[AnalysisEditLearner] Promoting draft memory: ${updated.content}`);
         const memory: Memory = {
           id: randomUUID(),
           accountId,
@@ -244,14 +247,14 @@ export async function learnFromPriorityOverrideInferred(
       };
       saveDraftMemory(dm);
       draftMemoriesCreated++;
-      console.log(`[AnalysisEditLearner] Created draft memory: [${dm.scope}${dm.scopeValue ? `:${dm.scopeValue}` : ""}] ${dm.content}`);
+      log.info(`[AnalysisEditLearner] Created draft memory: [${dm.scope}${dm.scopeValue ? `:${dm.scopeValue}` : ""}] ${dm.content}`);
     }
   }
 
   // 6. Enforce cap
   evictOldestDraftMemories(accountId, MAX_DRAFT_MEMORIES, "analysis");
 
-  console.log(`[AnalysisEditLearner] Done: ${promoted.length} promoted, ${draftMemoriesCreated} draft memories`);
+  log.info(`[AnalysisEditLearner] Done: ${promoted.length} promoted, ${draftMemoriesCreated} draft memories`);
   return { promoted, draftMemoriesCreated };
 }
 
@@ -264,10 +267,9 @@ async function analyzeOverride(override: AnalysisOverride): Promise<AnalysisObse
     return null;
   }
 
-  const anthropic = new Anthropic();
   const overrideDesc = formatOverrideDescription(override);
 
-  const response = await anthropic.messages.create({
+  const response = await createMessage({
     model: "claude-sonnet-4-20250514",
     max_tokens: 2048,
     messages: [{
@@ -308,7 +310,7 @@ Content should be a clear directive for an email triage system, like:
 Return [] if the override seems purely situational with no generalizable pattern.
 Respond with ONLY the JSON array.`,
     }],
-  });
+  }, { caller: "analysis-edit-learner-analyze", emailId: override.emailId, accountId: override.accountId });
 
   const textBlock = response.content.find(b => b.type === "text");
   const text = textBlock?.type === "text" ? textBlock.text : "";
@@ -349,8 +351,7 @@ async function matchAnalysisDraftMemories(
     return observations.map((_, i) => ({ observationIndex: i, matchedDraftMemoryId: null }));
   }
 
-  const anthropic = new Anthropic();
-  const response = await anthropic.messages.create({
+  const response = await createMessage({
     model: "claude-sonnet-4-5-20250929",
     max_tokens: 1024,
     messages: [{
@@ -366,7 +367,7 @@ ${observations.map((o, i) => `[${i}] [${o.scope}${o.scopeValue ? `:${o.scopeValu
 For each observation, return the id of the matching draft memory, or null if new.
 Respond with ONLY a JSON array: [{"observationIndex": 0, "matchedDraftMemoryId": "..." or null}, ...]`,
     }],
-  });
+  }, { caller: "analysis-edit-learner-match" });
 
   const text = response.content[0]?.type === "text" ? response.content[0].text : "";
   const parsed = parseJsonArray<{
@@ -400,8 +401,7 @@ async function classifyScope(
     return { scope: "person", scopeValue: senderEmail.toLowerCase() };
   }
 
-  const anthropic = new Anthropic();
-  const response = await anthropic.messages.create({
+  const response = await createMessage({
     model: "claude-haiku-4-5-20251001",
     max_tokens: 256,
     messages: [{
@@ -423,7 +423,7 @@ For domain: scopeValue = "${senderDomain.toLowerCase()}"
 For category: scopeValue = "category-name"
 For global: scopeValue = null`,
     }],
-  });
+  }, { caller: "analysis-edit-learner-classify-scope" });
 
   const text = response.content[0]?.type === "text" ? response.content[0].text : "";
   try {

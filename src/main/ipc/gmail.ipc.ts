@@ -4,6 +4,9 @@ import { saveEmail, getEmailIds, getInboxEmails, getEmail, saveAccount, getAccou
 import { getConfig } from "./settings.ipc";
 import type { IpcResponse, DashboardEmail } from "../../shared/types";
 import { DEMO_INBOX_EMAILS, DEMO_EXPECTED_ANALYSIS } from "../demo/fake-inbox";
+import { createLogger } from "../services/logger";
+
+const log = createLogger("gmail-ipc");
 
 const isTestMode = process.env.EXO_TEST_MODE === "true";
 const isDemoMode = process.env.EXO_DEMO_MODE === "true";
@@ -23,7 +26,7 @@ function resolveTargetAccountId(accountId?: string): string {
   const fallbackId = fallbackAccount?.id ?? "default";
 
   if (trimmedAccountId) {
-    console.warn(`[Gmail] Requested account "${trimmedAccountId}" not found, falling back to "${fallbackId}"`);
+    log.warn(`[Gmail] Requested account "${trimmedAccountId}" not found, falling back to "${fallbackId}"`);
   }
 
   return fallbackId;
@@ -122,7 +125,7 @@ export function registerGmailIpc(): void {
         const displayName = await client.fetchDisplayName();
         const isPrimary = existingAccounts.length === 0;
         saveAccount(accountId, profile.emailAddress, displayName ?? undefined, isPrimary);
-        console.log(`[OAuth] Saved new account: ${profile.emailAddress} (${accountId})`);
+        log.info(`[OAuth] Saved new account: ${profile.emailAddress} (${accountId})`);
       }
 
       return { success: true, data: undefined };
@@ -188,7 +191,7 @@ export function registerGmailIpc(): void {
         }
 
         if (newEmailCount > 0) {
-          console.log(`[Gmail] Fetched ${newEmailCount} new emails`);
+          log.info(`[Gmail] Fetched ${newEmailCount} new emails`);
         }
 
         // Get ALL inbox emails from DB (not just the ones from this API call)
@@ -253,13 +256,13 @@ export function registerGmailIpc(): void {
     ): Promise<IpcResponse<{ draftId: string }>> => {
       // In demo mode, simulate draft creation
       if (useFakeData) {
-        console.log(`[DEMO] Creating draft for email ${emailId}`);
-        console.log(`[DEMO] Draft body: ${body.substring(0, 100)}...`);
+        log.info(`[DEMO] Creating draft for email ${emailId}`);
+        log.info(`[DEMO] Draft body: ${body.substring(0, 100)}...`);
         if (cc?.length) {
-          console.log(`[DEMO] CC: ${cc.join(", ")}`);
+          log.info(`[DEMO] CC: ${cc.join(", ")}`);
         }
         if (bcc?.length) {
-          console.log(`[DEMO] BCC: ${bcc.join(", ")}`);
+          log.info(`[DEMO] BCC: ${bcc.join(", ")}`);
         }
         return { success: true, data: { draftId: `demo-draft-${Date.now()}` } };
       }

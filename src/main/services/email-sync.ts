@@ -8,6 +8,9 @@ import { networkMonitor } from "./network-monitor";
 // Background sync disabled - was causing memory issues
 // import { backgroundSyncService } from "./background-sync";
 import type { Email, DashboardEmail } from "../../shared/types";
+import { createLogger } from "./logger";
+
+const log = createLogger("sync");
 
 const DEFAULT_SYNC_INTERVAL = 30000; // 30 seconds
 
@@ -57,12 +60,12 @@ class EmailSyncService {
     if (this.networkListenersSetup) return;
 
     networkMonitor.on("offline", () => {
-      console.log("[Sync] Went offline, pausing sync");
+      log.info("[Sync] Went offline, pausing sync");
       this.pauseAllSync();
     });
 
     networkMonitor.on("online", () => {
-      console.log("[Sync] Back online, resuming sync");
+      log.info("[Sync] Back online, resuming sync");
       this.resumeAllSync();
     });
 
@@ -123,12 +126,12 @@ class EmailSyncService {
     if (hasCompletedFullSync) {
       // We have emails, use incremental sync from stored history
       client.setLastHistoryId(storedHistoryId);
-      console.log(`[Sync] Using stored history for ${profile.emailAddress}: ${storedHistoryId}`);
+      log.info(`[Sync] Using stored history for ${profile.emailAddress}: ${storedHistoryId}`);
     } else {
       // New account or no emails - clear history ID so full sync happens
       // Note: getProfile() sets lastHistoryId, so we must explicitly clear it
       client.setLastHistoryId(null);
-      console.log(`[Sync] No stored emails for ${profile.emailAddress}, will do full sync (historyId=${storedHistoryId}, hasEmails=${hasExistingEmails})`);
+      log.info(`[Sync] No stored emails for ${profile.emailAddress}, will do full sync (historyId=${storedHistoryId}, hasEmails=${hasExistingEmails})`);
     }
 
     this.accounts.set(accountId, {
@@ -141,7 +144,7 @@ class EmailSyncService {
       needsFirstSyncTriage: !hasCompletedFullSync,
     });
 
-    console.log(`[Sync] Registered account: ${profile.emailAddress} (${accountId}, needsFirstSyncTriage=${!hasCompletedFullSync})`);
+    log.info(`[Sync] Registered account: ${profile.emailAddress} (${accountId}, needsFirstSyncTriage=${!hasCompletedFullSync})`);
 
     return {
       accountId,
@@ -161,7 +164,7 @@ class EmailSyncService {
         clearInterval(account.intervalId);
       }
       this.accounts.delete(accountId);
-      console.log(`[Sync] Unregistered account: ${accountId}`);
+      log.info(`[Sync] Unregistered account: ${accountId}`);
     }
   }
 
@@ -182,7 +185,7 @@ class EmailSyncService {
   startSync(accountId: string): void {
     const account = this.accounts.get(accountId);
     if (!account) {
-      console.error(`[Sync] Account not found: ${accountId}`);
+      log.error(`[Sync] Account not found: ${accountId}`);
       return;
     }
 
@@ -199,7 +202,7 @@ class EmailSyncService {
       this.syncAccount(accountId);
     }, this.syncInterval);
 
-    console.log(`[Sync] Started sync for ${account.email} (every ${this.syncInterval / 1000}s)`);
+    log.info(`[Sync] Started sync for ${account.email} (every ${this.syncInterval / 1000}s)`);
   }
 
   /**
@@ -211,7 +214,7 @@ class EmailSyncService {
       clearInterval(account.intervalId);
       account.intervalId = null;
       account.status = "idle";
-      console.log(`[Sync] Stopped sync for ${account.email}`);
+      log.info(`[Sync] Stopped sync for ${account.email}`);
     }
   }
 
@@ -337,7 +340,7 @@ class EmailSyncService {
 
     if (toFetch.length === 0) return;
 
-    console.log(`[Sync] Backfilling ${toFetch.length} sent emails for inbox threads (${account.email})`);
+    log.info(`[Sync] Backfilling ${toFetch.length} sent emails for inbox threads (${account.email})`);
     const newEmails: DashboardEmail[] = [];
 
     for (let i = 0; i < toFetch.length; i++) {
@@ -348,7 +351,7 @@ class EmailSyncService {
           newEmails.push({ ...email, accountId, labelIds: email.labelIds, analysis: undefined, draft: undefined });
         }
       } catch (err) {
-        console.error(`[Sync] Failed to fetch sent email ${toFetch[i].id}:`, err);
+        log.error({ err: err }, `[Sync] Failed to fetch sent email ${toFetch[i].id}`);
       }
       // Yield every 10 fetches to avoid starving the event loop
       if ((i + 1) % 10 === 0) {
@@ -393,7 +396,7 @@ class EmailSyncService {
 
     if (toFetch.length === 0) return;
 
-    console.log(`[Sync] Syncing ${toFetch.length} sent emails for Sent view (${account.email})`);
+    log.info(`[Sync] Syncing ${toFetch.length} sent emails for Sent view (${account.email})`);
     const newEmails: DashboardEmail[] = [];
 
     for (let i = 0; i < toFetch.length; i++) {
@@ -404,7 +407,7 @@ class EmailSyncService {
           newEmails.push({ ...email, accountId, labelIds: email.labelIds, analysis: undefined, draft: undefined });
         }
       } catch (err) {
-        console.error(`[Sync] Failed to fetch sent email ${toFetch[i].id}:`, err);
+        log.error({ err: err }, `[Sync] Failed to fetch sent email ${toFetch[i].id}`);
       }
       // Yield every 10 fetches to avoid starving the event loop
       if ((i + 1) % 10 === 0) {
@@ -427,7 +430,7 @@ class EmailSyncService {
     const { client } = account;
     const historyId = client.getLastHistoryId();
 
-    console.log(`[Sync] syncAccount called for ${account.email}, historyId=${historyId}`);
+    log.info(`[Sync] syncAccount called for ${account.email}, historyId=${historyId}`);
 
     account.status = "syncing";
     this.onSyncStatusChange?.(accountId, "syncing");
@@ -440,14 +443,14 @@ class EmailSyncService {
         // hasFirstSyncPending() to return true the entire time to suppress
         // premature processAllPending() calls.
         const runTriage = account.needsFirstSyncTriage ?? false;
-        console.log(`[Sync] FULL SYNC for ${account.email} (no history ID, runTriage=${runTriage})`);
+        log.info(`[Sync] FULL SYNC for ${account.email} (no history ID, runTriage=${runTriage})`);
         await this.fullSync(accountId, { runTriage });
         if (runTriage) {
           account.needsFirstSyncTriage = false; // consume after triage completes
         }
       } else {
         // Incremental sync using History API
-        console.log(`[Sync] INCREMENTAL sync for ${account.email} from history ${historyId}`);
+        log.info(`[Sync] INCREMENTAL sync for ${account.email} from history ${historyId}`);
         await this.incrementalSync(accountId, historyId);
       }
 
@@ -455,11 +458,11 @@ class EmailSyncService {
       account.lastError = undefined;
       this.onSyncStatusChange?.(accountId, "idle");
     } catch (error: any) {
-      console.error(`[Sync] Error syncing ${account.email}:`, error.message);
+      log.error({ err: error.message }, `[Sync] Error syncing ${account.email}`);
 
       if (isAuthError(error)) {
         // Auth failure — stop sync for this account, notify caller
-        console.error(`[Sync] Auth error for ${account.email}, stopping sync`);
+        log.error(`[Sync] Auth error for ${account.email}, stopping sync`);
         this.stopSync(accountId);
         account.status = "error";
         account.lastError = "Authentication expired";
@@ -467,14 +470,14 @@ class EmailSyncService {
         this.onAuthErrorCallback?.(accountId, account.email);
       } else if (error.message === "HISTORY_EXPIRED") {
         // History ID expired, do full sync
-        console.log(`[Sync] History expired, doing full sync for ${account.email}`);
+        log.info(`[Sync] History expired, doing full sync for ${account.email}`);
         try {
           await this.fullSync(accountId);
           account.status = "idle";
           this.onSyncStatusChange?.(accountId, "idle");
         } catch (fullSyncError: any) {
           if (isAuthError(fullSyncError)) {
-            console.error(`[Sync] Auth error during full sync for ${account.email}`);
+            log.error(`[Sync] Auth error during full sync for ${account.email}`);
             this.stopSync(accountId);
             account.status = "error";
             account.lastError = "Authentication expired";
@@ -504,23 +507,23 @@ class EmailSyncService {
     if (!account) return [];
 
     const { client } = account;
-    console.log(`[Sync] fullSync starting for ${account.email}`);
+    log.info(`[Sync] fullSync starting for ${account.email}`);
 
     // Get profile to update history ID
     const profile = await client.getProfile();
     setHistoryId(accountId, profile.historyId);
-    console.log(`[Sync] fullSync got profile, historyId=${profile.historyId}`);
+    log.info(`[Sync] fullSync got profile, historyId=${profile.historyId}`);
 
     // Get emails with INBOX label (the actual inbox, not all mail)
     const searchResults = await client.getEmailsByLabel("INBOX", EmailSyncService.MAX_SYNC_EMAILS);
-    console.log(`[Sync] fullSync found ${searchResults.length} inbox emails`);
+    log.info(`[Sync] fullSync found ${searchResults.length} inbox emails`);
 
     const existingIds = getEmailIds(accountId);
-    console.log(`[Sync] fullSync existing emails: ${existingIds.size}`);
+    log.info(`[Sync] fullSync existing emails: ${existingIds.size}`);
 
     // Filter to only new emails, then fetch full content concurrently
     const newIds = searchResults.filter(r => !existingIds.has(r.id)).map(r => r.id);
-    console.log(`[Sync] fullSync fetching ${newIds.length} new emails (concurrent, batch size 10)`);
+    log.info(`[Sync] fullSync fetching ${newIds.length} new emails (concurrent, batch size 10)`);
 
     // Emit initial progress
     this.onSyncProgress?.(accountId, { fetched: 0, total: newIds.length });
@@ -591,7 +594,7 @@ class EmailSyncService {
     }));
 
     if (newEmails.length > 0) {
-      console.log(`[Sync] Fetched ${newEmails.length} new emails for ${account.email}`);
+      log.info(`[Sync] Fetched ${newEmails.length} new emails for ${account.email}`);
     }
 
     // When runTriage is set, do first-time triage as a post-sync step
@@ -611,7 +614,7 @@ class EmailSyncService {
         const analysisThreadIds = new Set(analysisWindow.map(e => e.threadId));
         const skipThreadIds = [...new Set(overflow.map(e => e.threadId))].filter(tid => !analysisThreadIds.has(tid));
         batchInsertOnboardingSkips(skipIds, skipThreadIds, accountId);
-        console.log(
+        log.info(
           `[Sync] First-time triage for ${accountId}: ` +
           `${analysisWindow.length} to analyze, ${overflow.length} overflow skipped`
         );
@@ -641,11 +644,11 @@ class EmailSyncService {
 
       // Queue analysis window for prefetch
       if (analysisWindow.length > 0) {
-        prefetchService.queueEmails(analysisWindow.map(e => e.id)).catch(console.error);
+        prefetchService.queueEmails(analysisWindow.map(e => e.id)).catch((err) => log.error({ err }, "Unhandled error"));
       }
     } else if (!effectiveSkipPrefetch && newEmails.length > 0) {
       // Queue new emails for prefetching (analysis, sender profiles, drafts)
-      prefetchService.queueEmails(newEmails.map(e => e.id)).catch(console.error);
+      prefetchService.queueEmails(newEmails.map(e => e.id)).catch((err) => log.error({ err }, "Unhandled error"));
     }
 
     // Backfill sent emails for inbox threads
@@ -732,7 +735,7 @@ class EmailSyncService {
       const recentThreadIds = new Set(recentEmails.map(e => e.threadId));
       const skipThreadIds = [...new Set(toSkip.map(e => e.threadId))].filter(tid => !recentThreadIds.has(tid));
       batchInsertOnboardingSkips(skipIds, skipThreadIds, accountId);
-      console.log(
+      log.info(
         `[Sync] Onboarding triage for ${accountId}: ` +
         `${recentEmails.length} to analyze, ${oldInWindow.length} old in window, ` +
         `${overflow.length} overflow, ${toSkip.length} total skipped`
@@ -827,7 +830,7 @@ class EmailSyncService {
 
     // Handle deleted/archived emails
     if (filteredDeleted.length > 0) {
-      console.log(`[Sync] ${filteredDeleted.length} emails removed for ${account.email}`);
+      log.info(`[Sync] ${filteredDeleted.length} emails removed for ${account.email}`);
 
       // Clean up Gmail drafts BEFORE deleting email records — deleteEmail
       // removes the local draft row but doesn't touch Gmail, and once the
@@ -850,7 +853,7 @@ class EmailSyncService {
 
     // Fetch new emails
     if (changes.newMessageIds.length > 0) {
-      console.log(`[Sync] ${changes.newMessageIds.length} new emails for ${account.email}`);
+      log.info(`[Sync] ${changes.newMessageIds.length} new emails for ${account.email}`);
 
       const newEmails: DashboardEmail[] = [];
 
@@ -868,7 +871,7 @@ class EmailSyncService {
             });
           }
         } catch (err) {
-          console.error(`[Sync] Failed to fetch email ${id}:`, err);
+          log.error({ err: err }, `[Sync] Failed to fetch email ${id}`);
         }
       }
 
@@ -880,7 +883,7 @@ class EmailSyncService {
         snoozeService.unsnoozeForReplies(threadIds, accountId);
 
         // Queue new emails for prefetching (analysis, sender profiles, drafts)
-        prefetchService.queueEmails(newEmails.map(e => e.id)).catch(console.error);
+        prefetchService.queueEmails(newEmails.map(e => e.id)).catch((err) => log.error({ err }, "Unhandled error"));
 
         // New received emails invalidate archive-ready status for their threads —
         // remove immediately so the thread goes back to the prioritized inbox.
@@ -951,7 +954,7 @@ class EmailSyncService {
           );
           if (userAlsoReplied) continue;
 
-          console.log(`[Sync] Force-queueing agent draft for ${email.id} — thread ${tid} had a draft removed by new activity`);
+          log.info(`[Sync] Force-queueing agent draft for ${email.id} — thread ${tid} had a draft removed by new activity`);
           prefetchService.forceQueueAgentDraft(email.id);
           forceQueuedThreads.add(tid);
         }
@@ -972,7 +975,7 @@ class EmailSyncService {
         const currentLabels = email.labelIds || ["INBOX"];
         if (currentLabels.includes("UNREAD")) {
           const newLabels = currentLabels.filter(l => l !== "UNREAD");
-          console.log(`[Sync] Marking ${messageId} as read: ${JSON.stringify(currentLabels)} → ${JSON.stringify(newLabels)}`);
+          log.info(`[Sync] Marking ${messageId} as read: ${JSON.stringify(currentLabels)} → ${JSON.stringify(newLabels)}`);
           updateEmailLabelIds(messageId, newLabels);
           labelUpdates.push({ emailId: messageId, labelIds: newLabels });
         }
@@ -986,7 +989,7 @@ class EmailSyncService {
         const currentLabels = email.labelIds || ["INBOX"];
         if (!currentLabels.includes("UNREAD")) {
           const newLabels = [...currentLabels, "UNREAD"];
-          console.log(`[Sync] Marking ${messageId} as unread: ${JSON.stringify(currentLabels)} → ${JSON.stringify(newLabels)}`);
+          log.info(`[Sync] Marking ${messageId} as unread: ${JSON.stringify(currentLabels)} → ${JSON.stringify(newLabels)}`);
           updateEmailLabelIds(messageId, newLabels);
           labelUpdates.push({ emailId: messageId, labelIds: newLabels });
         }
@@ -994,7 +997,7 @@ class EmailSyncService {
     }
 
     if (labelUpdates.length > 0) {
-      console.log(`[Sync] ${labelUpdates.length} label updates for ${account.email}`);
+      log.info(`[Sync] ${labelUpdates.length} label updates for ${account.email}`);
       this.onEmailsUpdated?.(accountId, labelUpdates);
     }
 
@@ -1032,7 +1035,7 @@ class EmailSyncService {
       try {
         const healthy = await account.client.checkTokenHealth();
         if (!healthy) {
-          console.error(`[Sync] Health check failed for ${account.email}, token expired`);
+          log.error(`[Sync] Health check failed for ${account.email}, token expired`);
           this.stopSync(accountId);
           account.status = "error";
           account.lastError = "Authentication expired";
@@ -1058,7 +1061,7 @@ class EmailSyncService {
 
     if (affectedThreadIds.length === 0) return;
 
-    console.log(`[Sync] Clearing archive-ready for ${affectedThreadIds.length} threads (new activity detected)`);
+    log.info(`[Sync] Clearing archive-ready for ${affectedThreadIds.length} threads (new activity detected)`);
     deleteArchiveReadyForThreads(affectedThreadIds, accountId);
 
     // Notify renderer to remove from archive-ready set
@@ -1067,7 +1070,7 @@ class EmailSyncService {
       for (const threadId of affectedThreadIds) {
         notifyArchiveReady(threadId, accountId, false, "");
       }
-    }).catch(console.error);
+    }).catch((err) => log.error({ err }, "Unhandled error"));
   }
 
   /**

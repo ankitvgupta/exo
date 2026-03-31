@@ -9,6 +9,9 @@ import { isNetworkError } from "../services/network-errors";
 import { learnFromDraftEdit } from "../services/draft-edit-learner";
 import type { IpcResponse, LocalDraft, GmailDraft, ComposeMode, ReplyInfo, SendMessageOptions, SendMessageResult } from "../../shared/types";
 import { formatAddressesWithNames, extractThreadNames } from "../utils/address-formatting";
+import { createLogger } from "../services/logger";
+
+const log = createLogger("compose-ipc");
 
 const isTestMode = process.env.EXO_TEST_MODE === "true";
 const isDemoMode = process.env.EXO_DEMO_MODE === "true";
@@ -189,7 +192,7 @@ function triggerThreadReanalysis(threadId: string, accountId: string): void {
     // Notify renderer to remove from archive-ready set
     import("./prefetch.ipc").then(({ notifyArchiveReady }) => {
       notifyArchiveReady(threadId, accountId, false, "");
-    }).catch(console.error);
+    }).catch((err) => log.error({ err }, "Unhandled error"));
   }
 
   // Cancel any previously pending reanalysis for this thread
@@ -231,7 +234,7 @@ async function markThreadAsReadAfterSend(
     }
   } catch (error) {
     // Non-critical — the send succeeded, read status will sync eventually
-    console.error("[Compose] Failed to mark thread as read after send:", error);
+    log.error({ err: error }, "[Compose] Failed to mark thread as read after send");
   }
 }
 
@@ -253,7 +256,7 @@ export function registerComposeIpc(): void {
     "compose:send",
     async (_, options: SendMessageOptions & { accountId: string }): Promise<IpcResponse<SendMessageResult>> => {
       if (useFakeData) {
-        console.log("[DEMO] Sending message to:", options.to);
+        log.info("[DEMO] Sending message to:", options.to);
         await new Promise((resolve) => setTimeout(resolve, 500));
         // Still trigger draft-edit learning in demo mode so we can test it
         if (options.threadId && !options.isForward) {
@@ -264,7 +267,7 @@ export function registerComposeIpc(): void {
             sentBodyText: options.bodyText,
           }).then((result) => {
             if (result && (result.promoted.length > 0 || result.draftMemoriesCreated > 0)) {
-              console.log(`[DEMO] Draft edit learning: ${result.promoted.length} promoted, ${result.draftMemoriesCreated} draft memories created/voted`);
+              log.info(`[DEMO] Draft edit learning: ${result.promoted.length} promoted, ${result.draftMemoriesCreated} draft memories created/voted`);
               notifyDraftEditLearned({
                 promoted: result.promoted,
                 draftMemoriesCreated: result.draftMemoriesCreated,
@@ -272,7 +275,7 @@ export function registerComposeIpc(): void {
               });
             }
           }).catch((err) => {
-            console.error("[DEMO] Draft edit learning failed:", err);
+            log.error({ err: err }, "[DEMO] Draft edit learning failed");
           });
         }
         return { success: true, data: { id: `demo-sent-${Date.now()}`, threadId: `demo-thread-${Date.now()}` } };
@@ -289,7 +292,7 @@ export function registerComposeIpc(): void {
 
       // If we know we're offline, queue immediately
       if (!networkMonitor.isOnline) {
-        console.log("[Compose] Offline, queueing message to outbox");
+        log.info("[Compose] Offline, queueing message to outbox");
         const result = queueToOutbox(options);
         return { success: true, data: result };
       }
@@ -299,7 +302,7 @@ export function registerComposeIpc(): void {
         const client = syncService.getClientForAccount(options.accountId);
         if (!client) {
           // No client - queue to outbox, will be sent when client is available
-          console.log("[Compose] No client available, queueing to outbox");
+          log.info("[Compose] No client available, queueing to outbox");
           const result = queueToOutbox(options);
           return { success: true, data: result };
         }
@@ -320,7 +323,7 @@ export function registerComposeIpc(): void {
             sentBodyText: options.bodyText,
           }).then((result) => {
             if (result && (result.promoted.length > 0 || result.draftMemoriesCreated > 0)) {
-              console.log(`[Compose] Draft edit learning: ${result.promoted.length} promoted, ${result.draftMemoriesCreated} draft memories created/voted`);
+              log.info(`[Compose] Draft edit learning: ${result.promoted.length} promoted, ${result.draftMemoriesCreated} draft memories created/voted`);
               notifyDraftEditLearned({
                 promoted: result.promoted,
                 draftMemoriesCreated: result.draftMemoriesCreated,
@@ -328,7 +331,7 @@ export function registerComposeIpc(): void {
               });
             }
           }).catch((err) => {
-            console.error("[Compose] Draft edit learning failed:", err);
+            log.error({ err: err }, "[Compose] Draft edit learning failed");
           });
         }
 
@@ -336,7 +339,7 @@ export function registerComposeIpc(): void {
       } catch (error) {
         // If network error, auto-queue instead of failing
         if (isNetworkError(error)) {
-          console.log("[Compose] Network error during send, queueing to outbox");
+          log.info("[Compose] Network error during send, queueing to outbox");
           networkMonitor.setOffline(); // Update state since we now know
           const result = queueToOutbox(options);
           return { success: true, data: result };
@@ -457,7 +460,7 @@ export function registerComposeIpc(): void {
     "compose:save-gmail-draft",
     async (_, { localDraftId, accountId }: { localDraftId: string; accountId: string }): Promise<IpcResponse<{ gmailDraftId: string }>> => {
       if (useFakeData) {
-        console.log("[DEMO] Saving Gmail draft");
+        log.info("[DEMO] Saving Gmail draft");
         await new Promise((resolve) => setTimeout(resolve, 300));
         return { success: true, data: { gmailDraftId: `demo-gmail-draft-${Date.now()}` } };
       }
@@ -503,7 +506,7 @@ export function registerComposeIpc(): void {
     "compose:send-gmail-draft",
     async (_, { gmailDraftId, accountId }: { gmailDraftId: string; accountId: string }): Promise<IpcResponse<{ id: string; threadId: string }>> => {
       if (useFakeData) {
-        console.log("[DEMO] Sending Gmail draft:", gmailDraftId);
+        log.info("[DEMO] Sending Gmail draft:", gmailDraftId);
         await new Promise((resolve) => setTimeout(resolve, 500));
         return { success: true, data: { id: `demo-sent-${Date.now()}`, threadId: `demo-thread-${Date.now()}` } };
       }
@@ -589,7 +592,7 @@ export function registerComposeIpc(): void {
     "compose:delete-gmail-draft",
     async (_, { gmailDraftId, accountId }: { gmailDraftId: string; accountId: string }): Promise<IpcResponse<void>> => {
       if (useFakeData) {
-        console.log("[DEMO] Deleting Gmail draft:", gmailDraftId);
+        log.info("[DEMO] Deleting Gmail draft:", gmailDraftId);
         return { success: true, data: undefined };
       }
 
@@ -658,7 +661,7 @@ export function registerComposeIpc(): void {
     "compose:archive",
     async (_, { messageId, accountId }: { messageId: string; accountId: string }): Promise<IpcResponse<void>> => {
       if (useFakeData) {
-        console.log("[DEMO] Archiving message:", messageId);
+        log.info("[DEMO] Archiving message:", messageId);
         return { success: true, data: undefined };
       }
 
@@ -684,7 +687,7 @@ export function registerComposeIpc(): void {
     "compose:trash",
     async (_, { messageId, accountId }: { messageId: string; accountId: string }): Promise<IpcResponse<void>> => {
       if (useFakeData) {
-        console.log("[DEMO] Trashing message:", messageId);
+        log.info("[DEMO] Trashing message:", messageId);
         return { success: true, data: undefined };
       }
 
@@ -710,7 +713,7 @@ export function registerComposeIpc(): void {
     "compose:star",
     async (_, { messageId, accountId, starred }: { messageId: string; accountId: string; starred: boolean }): Promise<IpcResponse<void>> => {
       if (useFakeData) {
-        console.log("[DEMO] Setting star:", messageId, starred);
+        log.info("[DEMO] Setting star:", messageId, starred);
         return { success: true, data: undefined };
       }
 
@@ -736,7 +739,7 @@ export function registerComposeIpc(): void {
     "compose:mark-read",
     async (_, { messageId, accountId, read }: { messageId: string; accountId: string; read: boolean }): Promise<IpcResponse<void>> => {
       if (useFakeData) {
-        console.log("[DEMO] Setting read:", messageId, read);
+        log.info("[DEMO] Setting read:", messageId, read);
         return { success: true, data: undefined };
       }
 

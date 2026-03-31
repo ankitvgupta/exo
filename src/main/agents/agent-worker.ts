@@ -17,6 +17,9 @@ import type {
   WorkerMessage,
 } from "./types";
 import { AgentOrchestrator } from "./orchestrator";
+import { createLogger } from "../services/logger";
+
+const log = createLogger("agent-worker");
 
 // --- State ---
 
@@ -146,7 +149,7 @@ function handleMainMessage(msg: WorkerMessage): void {
         config: msg.config,
         setActiveTaskId: (taskId) => { activeTaskId = taskId; },
       });
-      console.log("[AgentWorker] Initialized with orchestrator");
+      log.info("[AgentWorker] Initialized with orchestrator");
       break;
 
     case "run": {
@@ -234,14 +237,14 @@ function handleMainMessage(msg: WorkerMessage): void {
           type: "provider_loaded",
           providerId: msg.providerId,
         } satisfies CoordinatorMessage);
-        console.log(`[AgentWorker] Loaded installed provider: ${msg.providerId}`);
+        log.info(`[AgentWorker] Loaded installed provider: ${msg.providerId}`);
       } catch (err) {
         process.parentPort.postMessage({
           type: "provider_load_error",
           providerId: msg.providerId,
           error: err instanceof Error ? err.message : String(err),
         } satisfies CoordinatorMessage);
-        console.error(`[AgentWorker] Failed to load provider ${msg.providerId}:`, err);
+        log.error({ err: err }, `[AgentWorker] Failed to load provider ${msg.providerId}`);
       }
       break;
     }
@@ -249,7 +252,7 @@ function handleMainMessage(msg: WorkerMessage): void {
     case "unload_provider": {
       if (orchestrator) {
         orchestrator.unregisterProvider(msg.providerId);
-        console.log(`[AgentWorker] Unloaded provider: ${msg.providerId}`);
+        log.info(`[AgentWorker] Unloaded provider: ${msg.providerId}`);
       }
       break;
     }
@@ -367,4 +370,4 @@ process.parentPort.on("message", (event) => {
   handleMainMessage(msg);
 });
 
-console.log("[AgentWorker] Utility process started");
+log.info("[AgentWorker] Utility process started");

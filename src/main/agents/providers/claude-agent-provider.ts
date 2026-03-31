@@ -22,6 +22,9 @@ import type {
   ToolExecutorFn,
 } from "../types";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { createLogger } from "../../services/logger";
+
+const log = createLogger("claude-agent");
 
 /**
  * Claude Agent Provider - Uses the Claude Agent SDK to run an agent that
@@ -187,7 +190,7 @@ export class ClaudeAgentProvider implements AgentProvider {
         },
         // Capture stderr so subprocess errors are visible in logs
         stderr: (data: string) => {
-          console.log(`[ClaudeAgent:stderr] ${data.trimEnd()}`);
+          log.info(`[ClaudeAgent:stderr] ${data.trimEnd()}`);
         },
       },
     });
@@ -207,7 +210,7 @@ export class ClaudeAgentProvider implements AgentProvider {
             for (const block of content) {
               if (block.type === "tool_result") {
                 const preview = JSON.stringify(block).slice(0, 500);
-                console.log(`[ClaudeAgent:tool_result] ${preview}`);
+                log.info(`[ClaudeAgent:tool_result] ${preview}`);
               }
             }
           }

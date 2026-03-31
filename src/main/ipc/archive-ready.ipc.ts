@@ -13,6 +13,9 @@ import {
 import { getConfig, getModelIdForFeature } from "./settings.ipc";
 import { getEmailSyncService } from "./sync.ipc";
 import type { IpcResponse, DashboardEmail } from "../../shared/types";
+import { createLogger } from "../services/logger";
+
+const log = createLogger("archive-ready-ipc");
 
 const isTestMode = process.env.EXO_TEST_MODE === "true";
 const isDemoMode = process.env.EXO_DEMO_MODE === "true";
@@ -228,7 +231,7 @@ export function registerArchiveReadyIpc(): void {
             analyzed++;
             if (result.archive_ready) ready++;
           } catch (error) {
-            console.error(
+            log.error(
               `[ArchiveReady] Failed to analyze thread ${threadId}:`,
               error
             );
@@ -318,7 +321,7 @@ export function registerArchiveReadyIpc(): void {
             updateEmailLabelIds(email.id, labels.filter((l: string) => l !== "INBOX"));
             archivedIds.push(email.id);
           } catch (err) {
-            console.error(
+            log.error(
               `[ArchiveReady] Failed to archive email ${email.id}:`,
               err
             );
@@ -406,7 +409,7 @@ export function registerArchiveReadyIpc(): void {
               updateEmailLabelIds(email.id, labels.filter((l: string) => l !== "INBOX"));
               threadArchived = true;
             } catch (err) {
-              console.error(
+              log.error(
                 `[ArchiveReady] Failed to archive email ${email.id}:`,
                 err
               );

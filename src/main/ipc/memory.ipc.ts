@@ -1,6 +1,6 @@
 import { ipcMain } from "electron";
 import { randomUUID } from "crypto";
-import Anthropic from "@anthropic-ai/sdk";
+import { createMessage } from "../services/anthropic-service";
 import {
   saveMemory,
   getMemory,
@@ -15,6 +15,9 @@ import {
 } from "../db";
 import type { IpcResponse, Memory, DraftMemory, MemoryScope, MemorySource, MemoryType } from "../../shared/types";
 import { consolidateMemoryScopes } from "../services/draft-edit-learner";
+import { createLogger } from "../services/logger";
+
+const log = createLogger("memory-ipc");
 
 export function registerMemoryIpc(): void {
   // Memory operations use the real SQLite DB even in demo/test mode —
@@ -146,8 +149,7 @@ export function registerMemoryIpc(): void {
         };
       }
       try {
-        const anthropic = new Anthropic();
-        const response = await anthropic.messages.create({
+        const response = await createMessage({
           model: "claude-haiku-4-5-20251001", // simple JSON classification — always haiku, independent of user model config
           max_tokens: 256,
           messages: [{
@@ -165,7 +167,7 @@ Determine:
 
 Respond in JSON only: {"scope":"...","scopeValue":"...","content":"..."}`,
           }],
-        });
+        }, { caller: "memory-classify" });
 
         const text = response.content[0]?.type === "text" ? response.content[0].text : "";
         // Extract JSON object — find the first { and match to its closing }
@@ -270,7 +272,7 @@ Respond in JSON only: {"scope":"...","scopeValue":"...","content":"..."}`,
           if (!covering) {
             return { success: false, error: "Draft memory is a duplicate but covering memory could not be identified" };
           }
-          console.log(`[MemoryIPC] Draft memory "${dm.content}" is already covered by a promoted memory — deleting`);
+          log.info(`[MemoryIPC] Draft memory "${dm.content}" is already covered by a promoted memory — deleting`);
           deleteDraftMemory(id);
           return { success: true, data: covering };
         }

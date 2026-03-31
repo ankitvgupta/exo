@@ -6,6 +6,9 @@ import {
   deleteEnrichmentBySender as dbDeleteBySender,
 } from "../db";
 import type { EnrichmentData, ExtensionEnrichmentResult } from "../../shared/extension-types";
+import { createLogger } from "../services/logger";
+
+const log = createLogger("enrichment-store");
 
 /**
  * Store enrichment data for an email
@@ -51,7 +54,7 @@ export function getEnrichments(emailId: string): ExtensionEnrichmentResult[] {
 
   const totalTime = performance.now() - t0;
   if (totalTime > 5) {
-    console.log(`[PERF] getEnrichments ${emailId.slice(0,8)} DB=${dbTime.toFixed(1)}ms total=${totalTime.toFixed(1)}ms records=${records.length}`);
+    log.info(`[PERF] getEnrichments ${emailId.slice(0,8)} DB=${dbTime.toFixed(1)}ms total=${totalTime.toFixed(1)}ms records=${records.length}`);
   }
   return result;
 }
@@ -119,7 +122,7 @@ function parseEnrichmentData(
   try {
     return JSON.parse(rawData) as Record<string, unknown>;
   } catch (error) {
-    console.warn(
+    log.warn(
       `[EnrichmentStore] Failed to parse enrichment payload`,
       { extensionId, panelId, error: error instanceof Error ? error.message : "Unknown error" }
     );

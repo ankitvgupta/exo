@@ -4,6 +4,9 @@ import type {
   BadgeProvider,
 } from "../../shared/extension-types";
 import { getExtensionStorage, setExtensionStorage } from "../db";
+import { createLogger } from "../services/logger";
+
+const log = createLogger("extension-api");
 
 // Registries for providers (managed by extension-host)
 let enrichmentProviderRegistry: Map<string, EnrichmentProvider> = new Map();
@@ -52,7 +55,7 @@ export function createExtensionAPI(extensionId: string): ExtensionAPI {
   return {
     registerEnrichmentProvider(provider: EnrichmentProvider): void {
       const fullId = `${extensionId}:${provider.id}`;
-      console.log(`[Extensions] Registered enrichment provider: ${fullId}`);
+      log.info(`[Extensions] Registered enrichment provider: ${fullId}`);
       enrichmentProviderRegistry.set(fullId, {
         ...provider,
         id: fullId,
@@ -61,7 +64,7 @@ export function createExtensionAPI(extensionId: string): ExtensionAPI {
 
     registerBadgeProvider(provider: BadgeProvider): void {
       const fullId = `${extensionId}:${provider.id}`;
-      console.log(`[Extensions] Registered badge provider: ${fullId}`);
+      log.info(`[Extensions] Registered badge provider: ${fullId}`);
       badgeProviderRegistry.set(fullId, {
         ...provider,
         id: fullId,
@@ -84,12 +87,12 @@ export function createExtensionAPI(extensionId: string): ExtensionAPI {
 
     emitAuthRequired(message?: string): void {
       const displayName = extensionDisplayNames.get(extensionId) || extensionId;
-      console.log(`[Extensions] Auth required for ${displayName}: ${message || "(no message)"}`);
+      log.info(`[Extensions] Auth required for ${displayName}: ${message || "(no message)"}`);
       authRequiredCallback?.(extensionId, displayName, message);
     },
 
     registerAuthHandler(handler: () => Promise<void>, options?: { checkAuth?: () => Promise<boolean> }): void {
-      console.log(`[Extensions] Registered auth handler for ${extensionId}`);
+      log.info(`[Extensions] Registered auth handler for ${extensionId}`);
       authHandlers.set(extensionId, { handler, checkAuth: options?.checkAuth });
     },
   };
@@ -134,7 +137,7 @@ export async function checkExtensionAuth(extensionId: string): Promise<boolean> 
   try {
     return await entry.checkAuth();
   } catch (error) {
-    console.error(`[Extensions] checkAuth failed for ${extensionId}:`, error);
+    log.error({ err: error }, `[Extensions] checkAuth failed for ${extensionId}`);
     return false;
   }
 }

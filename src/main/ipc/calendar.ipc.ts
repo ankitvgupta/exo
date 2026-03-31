@@ -2,6 +2,9 @@ import { ipcMain, BrowserWindow } from "electron";
 import { findAllCalendarAccounts } from "../../extensions/mail-ext-calendar/src/google-calendar-client";
 import { getCalendarEventsForDate, getAllCalendarSyncStates, setCalendarVisibility, getAccounts, type CalendarEventRow } from "../db";
 import { calendarSyncService } from "../services/calendar-sync";
+import { createLogger } from "../services/logger";
+
+const log = createLogger("calendar-ipc");
 
 /** Map DB rows to the shape the renderer expects. */
 function rowsToEvents(rows: CalendarEventRow[]) {
@@ -38,7 +41,7 @@ export function registerCalendarIpc(): void {
         const filtered = rows.filter((r) => accountSet.has(r.accountId));
         return { success: true, events: rowsToEvents(filtered), hasCalendarAccess: true, hasSynced };
       } catch (error) {
-        console.error("[Calendar IPC] Failed to fetch events:", error);
+        log.error({ err: error }, "[Calendar IPC] Failed to fetch events");
         return {
           success: false,
           error: error instanceof Error ? error.message : "Unknown error",
@@ -70,7 +73,7 @@ export function registerCalendarIpc(): void {
         accountEmails: accountMap,
       };
     } catch (error) {
-      console.error("[Calendar IPC] Failed to get calendars:", error);
+      log.error({ err: error }, "[Calendar IPC] Failed to get calendars");
       return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
     }
   });
@@ -87,7 +90,7 @@ export function registerCalendarIpc(): void {
         }
         return { success: true };
       } catch (error) {
-        console.error("[Calendar IPC] Failed to set visibility:", error);
+        log.error({ err: error }, "[Calendar IPC] Failed to set visibility");
         return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
       }
     }
@@ -111,6 +114,6 @@ export function registerCalendarIpc(): void {
 
   // Start background calendar sync
   calendarSyncService.startSync().catch((err) => {
-    console.error("[Calendar IPC] Failed to start calendar sync:", err);
+    log.error({ err: err }, "[Calendar IPC] Failed to start calendar sync");
   });
 }

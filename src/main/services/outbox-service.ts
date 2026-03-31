@@ -13,6 +13,9 @@ import {
   type OutboxStats,
 } from "../db";
 import type { GmailClient } from "./gmail-client";
+import { createLogger } from "./logger";
+
+const log = createLogger("outbox");
 
 // Type for the message payload to queue
 export type OutboxMessage = {
@@ -84,7 +87,7 @@ class OutboxService extends EventEmitter {
       createdAt: now,
     });
 
-    console.log(`[Outbox] Queued message ${id} to ${message.to.join(", ")}`);
+    log.info(`[Outbox] Queued message ${id} to ${message.to.join(", ")}`);
     this.emit("queued", { id, message });
     this.emit("statsChanged", this.getStats());
 
@@ -154,7 +157,7 @@ class OutboxService extends EventEmitter {
     }
 
     deleteOutboxItem(id);
-    console.log(`[Outbox] Removed message ${id}`);
+    log.info(`[Outbox] Removed message ${id}`);
     this.emit("statsChanged", this.getStats());
     return true;
   }
@@ -169,14 +172,14 @@ class OutboxService extends EventEmitter {
     }
 
     this.processing = true;
-    console.log("[Outbox] Starting queue processing");
+    log.info("[Outbox] Starting queue processing");
 
     try {
       // Get pending items (limited by batch size)
       const pending = getPendingOutbox(undefined, BATCH_SIZE);
 
       if (pending.length === 0) {
-        console.log("[Outbox] No pending messages");
+        log.info("[Outbox] No pending messages");
         return;
       }
 
@@ -191,13 +194,13 @@ class OutboxService extends EventEmitter {
       // Process items sequentially (Gmail rate limits)
       for (const item of pending) {
         if (!networkMonitor.isOnline) {
-          console.log("[Outbox] Went offline during processing, stopping");
+          log.info("[Outbox] Went offline during processing, stopping");
           break;
         }
 
         // Check for duplicate using local cache
         if (this.isDuplicateInCache(item)) {
-          console.log(`[Outbox] Skipping ${item.id} - found in recent sent`);
+          log.info(`[Outbox] Skipping ${item.id} - found in recent sent`);
           this.markAsSent(item.id);
           continue;
         }
@@ -215,7 +218,7 @@ class OutboxService extends EventEmitter {
         setTimeout(() => this.processQueue(), 1000);
       }
     } catch (error) {
-      console.error("[Outbox] Error processing queue:", error);
+      log.error({ err: error }, "[Outbox] Error processing queue");
     } finally {
       this.processing = false;
     }
@@ -228,7 +231,7 @@ class OutboxService extends EventEmitter {
   private async refreshSentCache(accountId: string): Promise<void> {
     const client = this.clientResolver?.(accountId);
     if (!client) {
-      console.warn(`[Outbox] No client for account ${accountId}, skipping sent cache`);
+      log.warn(`[Outbox] No client for account ${accountId}, skipping sent cache`);
       return;
     }
 
@@ -261,13 +264,13 @@ class OutboxService extends EventEmitter {
           });
         } catch (error) {
           // Skip individual email errors
-          console.warn(`[Outbox] Failed to read sent email ${result.id}:`, error);
+          log.warn({ err: error }, `[Outbox] Failed to read sent email ${result.id}`);
         }
       }
 
-      console.log(`[Outbox] Loaded ${this.recentSentCache.size} recent sent emails for dedup`);
+      log.info(`[Outbox] Loaded ${this.recentSentCache.size} recent sent emails for dedup`);
     } catch (error) {
-      console.warn("[Outbox] Failed to refresh sent cache:", error);
+      log.warn({ err: error }, "[Outbox] Failed to refresh sent cache");
       // Continue anyway - better to risk duplicate than block sends
     }
   }
@@ -324,7 +327,7 @@ class OutboxService extends EventEmitter {
   private async sendMessage(item: OutboxItem): Promise<void> {
     const client = this.clientResolver?.(item.accountId);
     if (!client) {
-      console.error(`[Outbox] No client for account ${item.accountId}`);
+      log.error(`[Outbox] No client for account ${item.accountId}`);
       this.handleFailure(item, "Account not connected — re-authenticate to send", true);
       this.emit("authRequired", { accountId: item.accountId, itemId: item.id });
       return;
@@ -350,7 +353,7 @@ class OutboxService extends EventEmitter {
 
       // Success!
       updateOutboxStatus(item.id, "sent");
-      console.log(`[Outbox] Sent message ${item.id}, Gmail ID: ${result.id}`);
+      log.info(`[Outbox] Sent message ${item.id}, Gmail ID: ${result.id}`);
       this.emit("sent", { id: item.id, gmailId: result.id, threadId: result.threadId });
       this.emit("statsChanged", this.getStats());
     } catch (error) {
@@ -359,7 +362,7 @@ class OutboxService extends EventEmitter {
 
       if (isNetworkError) {
         // Network error - go offline and stop processing
-        console.log(`[Outbox] Network error sending ${item.id}, going offline`);
+        log.info(`[Outbox] Network error sending ${item.id}, going offline`);
         networkMonitor.setOffline();
         // Revert to pending so it's retried later
         updateOutboxStatus(item.id, "pending", errorMessage);
@@ -380,12 +383,12 @@ class OutboxService extends EventEmitter {
     if (newRetryCount >= MAX_RETRIES) {
       // Permanently failed
       updateOutboxStatus(item.id, "failed", errorMessage, incrementRetry);
-      console.error(`[Outbox] Message ${item.id} permanently failed: ${errorMessage}`);
+      log.error(`[Outbox] Message ${item.id} permanently failed: ${errorMessage}`);
       this.emit("failed", { id: item.id, error: errorMessage, permanent: true });
     } else {
       // Temporarily failed, will be retried
       updateOutboxStatus(item.id, "pending", errorMessage, incrementRetry);
-      console.warn(`[Outbox] Message ${item.id} failed (retry ${newRetryCount}/${MAX_RETRIES}): ${errorMessage}`);
+      log.warn(`[Outbox] Message ${item.id} failed (retry ${newRetryCount}/${MAX_RETRIES}): ${errorMessage}`);
       this.emit("failed", { id: item.id, error: errorMessage, permanent: false, retryCount: newRetryCount });
     }
 

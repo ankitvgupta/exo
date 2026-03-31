@@ -18,6 +18,9 @@ import { agentCoordinator } from "../agents/agent-coordinator";
 import type { AgentContext } from "../agents/types";
 import { DEFAULT_AGENT_DRAFTER_PROMPT } from "../../shared/types";
 import type { Email, DashboardEmail } from "../../shared/types";
+import { createLogger } from "./logger";
+
+const log = createLogger("prefetch");
 
 // Lazy import to avoid circular dependency
 let notifyEmailAnalyzed: ((emailId: string) => void) | null = null;
@@ -152,7 +155,7 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
    * This is the main entry point - call this when new emails arrive
    */
   async queueEmails(emailIds: string[]): Promise<void> {
-    console.log(`[Prefetch] Queueing ${emailIds.length} emails for prefetch`);
+    log.info(`[Prefetch] Queueing ${emailIds.length} emails for prefetch`);
 
     for (const emailId of emailIds) {
       // First, queue analysis if not already analyzed
@@ -213,25 +216,25 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
    */
   async processAllPending(): Promise<void> {
     const t0 = performance.now();
-    console.log(`[PERF] processAllPending START`);
+    log.info(`[PERF] processAllPending START`);
 
     const tConfig = performance.now();
     const config = getConfig();
-    console.log(`[PERF] processAllPending getConfig took ${(performance.now() - tConfig).toFixed(1)}ms`);
+    log.info(`[PERF] processAllPending getConfig took ${(performance.now() - tConfig).toFixed(1)}ms`);
 
     // Only process inbox emails - use efficient DB query instead of loading all emails
     const tGetEmails = performance.now();
     const inboxEmails = getInboxEmails();
-    console.log(`[PERF] processAllPending getInboxEmails took ${(performance.now() - tGetEmails).toFixed(1)}ms, returned ${inboxEmails.length} emails`);
+    log.info(`[PERF] processAllPending getInboxEmails took ${(performance.now() - tGetEmails).toFixed(1)}ms, returned ${inboxEmails.length} emails`);
 
     const unanalyzed = inboxEmails.filter((e) => !e.analysis);
 
     // Queue analysis for unanalyzed emails
     if (unanalyzed.length > 0) {
-      console.log(`[Prefetch] Processing ${unanalyzed.length} unanalyzed inbox emails`);
+      log.info(`[Prefetch] Processing ${unanalyzed.length} unanalyzed inbox emails`);
       await this.queueEmails(unanalyzed.map((e) => e.id));
     } else {
-      console.log("[Prefetch] No unanalyzed inbox emails to process");
+      log.info("[Prefetch] No unanalyzed inbox emails to process");
     }
 
     // Queue sender-profiles for ALL analyzed inbox emails in priority order
@@ -283,7 +286,7 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
           queuedCount++;
         }
 
-        console.log(`[Prefetch] Queueing ${queuedCount} unique sender-profile lookups (deduplicated ${deduplicatedCount} from ${needsSenderProfile.length} emails)`);
+        log.info(`[Prefetch] Queueing ${queuedCount} unique sender-profile lookups (deduplicated ${deduplicatedCount} from ${needsSenderProfile.length} emails)`);
         this.processQueue();
       }
     }
@@ -297,8 +300,8 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
     const isDemoMode = process.env.EXO_DEMO_MODE === "true";
     const skipAgentDrafts = autoDraft?.enabled === false || isTestMode || isDemoMode;
     if (skipAgentDrafts) {
-      if (autoDraft?.enabled === false) console.log("[Prefetch] Auto-drafting disabled in config — skipping agent drafts");
-      if (isTestMode || isDemoMode) console.log("[Prefetch] Test/demo mode — skipping agent drafts");
+      if (autoDraft?.enabled === false) log.info("[Prefetch] Auto-drafting disabled in config — skipping agent drafts");
+      if (isTestMode || isDemoMode) log.info("[Prefetch] Test/demo mode — skipping agent drafts");
     }
     const allowedPriorities = autoDraft?.priorities ?? ["high", "medium", "low"];
     const candidateEmails = skipAgentDrafts ? [] : inboxEmails.filter((e) =>
@@ -358,7 +361,7 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
         });
         this.processedDraftThreads.add(email.threadId);
       }
-      console.log(`[Prefetch] Queueing ${needsDraft.length} agent drafts (${candidateEmails.length} candidates deduplicated to ${needsDraft.length} threads)`);
+      log.info(`[Prefetch] Queueing ${needsDraft.length} agent drafts (${candidateEmails.length} candidates deduplicated to ${needsDraft.length} threads)`);
       this.processQueue();
     }
 
@@ -413,7 +416,7 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
     }
 
     if (queued > 0) {
-      console.log(`[Prefetch] Queueing ${queued} threads for archive-ready analysis`);
+      log.info(`[Prefetch] Queueing ${queued} threads for archive-ready analysis`);
       this.processQueue();
     }
   }
@@ -452,7 +455,7 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
     }
 
     if (queued > 0) {
-      console.log(
+      log.info(
         `[Prefetch] Re-queueing ${queued} threads for archive-ready re-analysis (sent emails synced)`
       );
       this.processQueue();
@@ -461,12 +464,12 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
 
   private async processQueue(): Promise<void> {
     if (this.isRunning) {
-      console.log(`[PERF] processQueue SKIPPED (already running)`);
+      log.info(`[PERF] processQueue SKIPPED (already running)`);
       return;
     }
 
     const t0 = performance.now();
-    console.log(`[PERF] processQueue START, queue length=${this.queue.length}`);
+    log.info(`[PERF] processQueue START, queue length=${this.queue.length}`);
 
     this.isRunning = true;
     this.status = "running";
@@ -545,16 +548,16 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
             await this.processTask(task);
             const taskTime = performance.now() - tTask;
             if (taskTime > 100) {
-              console.log(`[PERF] processTask ${task.type}:${task.emailId.slice(0,8)} took ${taskTime.toFixed(1)}ms`);
+              log.info(`[PERF] processTask ${task.type}:${task.emailId.slice(0,8)} took ${taskTime.toFixed(1)}ms`);
             }
           } catch (error) {
-            console.error(`[Prefetch] Error processing task:`, error);
+            log.error({ err: error }, `[Prefetch] Error processing task`);
           }
         }));
 
         const batchTime = performance.now() - tBatch;
         if (batch.length > 1) {
-          console.log(`[PERF] Parallel batch of ${batch.length} tasks took ${batchTime.toFixed(1)}ms`);
+          log.info(`[PERF] Parallel batch of ${batch.length} tasks took ${batchTime.toFixed(1)}ms`);
         }
 
         this.currentTask = undefined;
@@ -562,7 +565,7 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
 
         taskCount += batch.length;
         if (taskCount % 10 === 0 || taskCount === batch.length) {
-          console.log(`[PERF] processQueue progress: ${taskCount} tasks done, ${this.queue.length} remaining, elapsed ${(performance.now() - t0).toFixed(0)}ms`);
+          log.info(`[PERF] processQueue progress: ${taskCount} tasks done, ${this.queue.length} remaining, elapsed ${(performance.now() - t0).toFixed(0)}ms`);
         }
 
         // Brief delay between batches to avoid rate limiting and CPU spikes.
@@ -577,7 +580,7 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
       this.status = "idle";
       this.currentTask = undefined;
       this.emitProgress();
-      console.log(`[PERF] processQueue END total ${(performance.now() - t0).toFixed(1)}ms`);
+      log.info(`[PERF] processQueue END total ${(performance.now() - t0).toFixed(1)}ms`);
 
       // If items were added while we were finishing (e.g., clear() + processAllPending()
       // happened during our run), restart to pick them up.
@@ -628,7 +631,7 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
             case "low": priority = 30; break;
           }
         }
-        console.log(`[Prefetch] Email ${emailId} already analyzed, queueing sender-profile (priority=${priority})`);
+        log.info(`[Prefetch] Email ${emailId} already analyzed, queueing sender-profile (priority=${priority})`);
         this.queue.push({
           emailId,
           type: "sender-profile",
@@ -638,7 +641,7 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
       return;
     }
 
-    console.log(`[Prefetch] Analyzing email ${emailId}`);
+    log.info(`[Prefetch] Analyzing email ${emailId}`);
 
     try {
       const analyzer = this.getAnalyzer();
@@ -665,7 +668,7 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
       this.processedAnalysis.add(emailId);
       this.processedCounts.analysis++;
 
-      console.log(`[Prefetch] Analyzed ${emailId}: ${result.priority} priority, needs_reply=${result.needs_reply}`);
+      log.info(`[Prefetch] Analyzed ${emailId}: ${result.priority} priority, needs_reply=${result.needs_reply}`);
 
       // Notify renderer that this email was analyzed
       const notify = await getNotifyFn();
@@ -694,11 +697,11 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
           if (this.pendingSenderLookups.has(senderEmail)) {
             // Already queued - just add this email to the waiting list
             this.pendingSenderLookups.get(senderEmail)!.push(emailId);
-            console.log(`[Prefetch] Email ${emailId} added to pending lookup for sender ${senderEmail}`);
+            log.info(`[Prefetch] Email ${emailId} added to pending lookup for sender ${senderEmail}`);
           } else {
             // New sender - queue it
             this.pendingSenderLookups.set(senderEmail, [emailId]);
-            console.log(`[Prefetch] Queueing sender-profile for ${emailId} (sender=${senderEmail}, priority=${priority})`);
+            log.info(`[Prefetch] Queueing sender-profile for ${emailId} (sender=${senderEmail}, priority=${priority})`);
             this.queue.push({
               emailId,
               type: "sender-profile",
@@ -749,7 +752,7 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
         }
       }
     } catch (error) {
-      console.error(`[Prefetch] Failed to analyze ${emailId}:`, error);
+      log.error({ err: error }, `[Prefetch] Failed to analyze ${emailId}`);
 
       // Still queue sender-profile even when analysis fails.
       // Extension enrichments (e.g. third-party services) don't depend on
@@ -801,12 +804,12 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
 
     // Skip if we already processed this sender (another concurrent task handled it)
     if (this.processedSenderProfiles.has(senderEmail)) {
-      console.log(`[Prefetch] Skipping ${senderEmail} - already processed by another task`);
+      log.info(`[Prefetch] Skipping ${senderEmail} - already processed by another task`);
       this.processedExtensionEnrichments.add(emailId);
       return;
     }
 
-    console.log(`[Prefetch] Running extension enrichment for sender ${senderEmail} (email ${emailId})`);
+    log.info(`[Prefetch] Running extension enrichment for sender ${senderEmail} (email ${emailId})`);
 
     try {
       const extensionHost = getExtensionHost();
@@ -837,15 +840,15 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
             }
           }
         }
-        console.log(`[Prefetch] Enrichment complete for ${senderEmail} (1 lookup + ${cachedCount} cache hits)`);
+        log.info(`[Prefetch] Enrichment complete for ${senderEmail} (1 lookup + ${cachedCount} cache hits)`);
       } else {
-        console.log(`[Prefetch] Enrichment complete for ${senderEmail}`);
+        log.info(`[Prefetch] Enrichment complete for ${senderEmail}`);
       }
 
       // Clean up pending lookups for this sender
       this.pendingSenderLookups.delete(senderEmail);
     } catch (error) {
-      console.error(`[Prefetch] Failed to run extension enrichment for ${senderEmail}:`, error);
+      log.error({ err: error }, `[Prefetch] Failed to run extension enrichment for ${senderEmail}`);
       // Clean up pending lookups even on failure
       this.pendingSenderLookups.delete(senderEmail);
     }
@@ -900,7 +903,7 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
 
       this.processAgentDraft(task.emailId)
         .catch((error) => {
-          console.error(`[Prefetch] Agent draft pool error for ${task.emailId}:`, error);
+          log.error({ err: error }, `[Prefetch] Agent draft pool error for ${task.emailId}`);
         })
         .finally(() => {
           this.activeAgentDraftCount--;
@@ -954,7 +957,7 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
       this.forceQueuedDrafts.delete(emailId);
     }
 
-    console.log(`[Prefetch] Starting agent draft for email ${emailId} (priority=${email.analysis?.priority ?? "unknown"})`);
+    log.info(`[Prefetch] Starting agent draft for email ${emailId} (priority=${email.analysis?.priority ?? "unknown"})`);
 
     const taskId = `auto-draft-${emailId}-${Date.now()}`;
 
@@ -967,7 +970,7 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
 
       const accounts = getAccounts();
       if (accounts.length === 0) {
-        console.warn(`[Prefetch] No accounts configured — skipping agent draft for ${emailId}`);
+        log.warn(`[Prefetch] No accounts configured — skipping agent draft for ${emailId}`);
         this.processedDrafts.add(emailId);
         this.markAgentDraftDone(emailId, "failed");
         return;
@@ -997,7 +1000,7 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
       try {
         updateDraftAgentTaskId(emailId, taskId);
       } catch (err) {
-        console.warn(`[Prefetch] Failed to link agent task ${taskId} to draft for ${emailId}:`, err);
+        log.warn({ err: err }, `[Prefetch] Failed to link agent task ${taskId} to draft for ${emailId}`);
       }
 
       this.processedDrafts.add(emailId);
@@ -1005,9 +1008,9 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
       this.markAgentDraftDone(emailId, "completed");
       this.activeAgentTaskIds.delete(emailId);
 
-      console.log(`[Prefetch] Agent draft completed for ${emailId} (taskId=${taskId})`);
+      log.info(`[Prefetch] Agent draft completed for ${emailId} (taskId=${taskId})`);
     } catch (error) {
-      console.error(`[Prefetch] Failed agent draft for ${emailId}:`, error);
+      log.error({ err: error }, `[Prefetch] Failed agent draft for ${emailId}`);
       // Only mark as processed if this task hasn't been superseded by a rerun.
       // When drafts:rerun-agent cancels the old task, its catch block runs asynchronously
       // after removeFromProcessedDrafts() has already cleared the email for re-queuing.
@@ -1053,7 +1056,7 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
       return;
     }
 
-    console.log(`[Prefetch] Analyzing archive-readiness for thread ${threadId}`);
+    log.info(`[Prefetch] Analyzing archive-readiness for thread ${threadId}`);
 
     try {
       const archiveAnalyzer = this.getArchiveReadyAnalyzer();
@@ -1069,7 +1072,7 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
       this.processedArchiveReady.add(compositeKey);
       this.processedCounts.archiveReady++;
 
-      console.log(
+      log.info(
         `[Prefetch] Thread ${threadId}: archive_ready=${result.archive_ready}, reason=${result.reason}`
       );
 
@@ -1077,7 +1080,7 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
       const notify = await getNotifyArchiveReadyFn();
       notify(threadId, accountId, result.archive_ready, result.reason);
     } catch (error) {
-      console.error(`[Prefetch] Failed archive-ready analysis for thread ${threadId}:`, error);
+      log.error({ err: error }, `[Prefetch] Failed archive-ready analysis for thread ${threadId}`);
     }
   }
 
@@ -1133,7 +1136,7 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
       try {
         listener(progress);
       } catch (e) {
-        console.error("[Prefetch] Error in progress listener:", e);
+        log.error({ err: e }, "[Prefetch] Error in progress listener");
       }
     }
   }
@@ -1195,7 +1198,7 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
    * all emails that were skipped due to missing credentials.
    */
   resetExtensionEnrichments(): void {
-    console.log(`[Prefetch] Resetting extension enrichment tracking (was: ${this.processedExtensionEnrichments.size} emails, ${this.processedSenderProfiles.size} senders)`);
+    log.info(`[Prefetch] Resetting extension enrichment tracking (was: ${this.processedExtensionEnrichments.size} emails, ${this.processedSenderProfiles.size} senders)`);
     this.processedExtensionEnrichments.clear();
     this.processedSenderProfiles.clear();
     this.pendingSenderLookups.clear();
@@ -1270,7 +1273,7 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
     // Clear and re-set thread tracking only when we actually queue
     const email = getEmail(emailId);
     if (email?.threadId) this.processedDraftThreads.delete(email.threadId);
-    console.log(`[Prefetch] Force-queueing agent draft for ${emailId} (thread received new reply)`);
+    log.info(`[Prefetch] Force-queueing agent draft for ${emailId} (thread received new reply)`);
     this.forceQueuedDrafts.add(emailId);
     this.queue.push({
       emailId,

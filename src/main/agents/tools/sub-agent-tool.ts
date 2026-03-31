@@ -9,6 +9,9 @@ import type {
 import type { AgentContext, ScopedAgentEvent } from "../../../shared/agent-types";
 import type { ToolDefinition } from "./types";
 import { ToolRiskLevel } from "./types";
+import { createLogger } from "../../services/logger";
+
+const log = createLogger("sub-agent-tool");
 
 /**
  * Dependencies injected into the sub-agent tool factory.
@@ -94,7 +97,7 @@ export function createSubAgentTool(deps: SubAgentToolDeps): ToolDefinition<{ que
       let resultConversationId: string | undefined;
       let eventCount = 0;
 
-      console.log(`[SubAgentTool] Starting ${toolConfig.name} run (nestedRunId=${nestedRunId})`);
+      log.info(`[SubAgentTool] Starting ${toolConfig.name} run (nestedRunId=${nestedRunId})`);
 
       let runResult: AgentRunResult;
       let completed = false;
@@ -139,7 +142,7 @@ export function createSubAgentTool(deps: SubAgentToolDeps): ToolDefinition<{ que
         lastConversationId = resultConversationId;
       }
 
-      console.log(`[SubAgentTool] ${toolConfig.name} completed: ${eventCount} events, state=${runResult.state}, text=${textParts.join("").length} chars`);
+      log.info(`[SubAgentTool] ${toolConfig.name} completed: ${eventCount} events, state=${runResult.state}, text=${textParts.join("").length} chars`);
 
       // Emit final state for the nested run
       emitToRenderer(taskId, {

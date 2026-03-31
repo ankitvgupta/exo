@@ -7,6 +7,9 @@ import { prefetchService } from "../services/prefetch-service";
 import { deleteNeedsAuthEnrichments, getEmail, getEmailsByThread } from "../db";
 import { getProvidersNeedingAuth } from "../agents/private-providers-main";
 import type { ExtensionPanelInfo, ExtensionEnrichmentResult, InstalledExtensionInfo } from "../../shared/extension-types";
+import { createLogger } from "../services/logger";
+
+const log = createLogger("extensions-ipc");
 
 /**
  * Register IPC handlers for extension system
@@ -19,7 +22,7 @@ export function registerExtensionsIpc(): void {
     const t0 = performance.now();
     const result = { success: true, data: extensionHost.getSidebarPanels() };
     const elapsed = performance.now() - t0;
-    if (elapsed > 5) console.log(`[PERF] extensions:get-panels took ${elapsed.toFixed(1)}ms`);
+    if (elapsed > 5) log.info(`[PERF] extensions:get-panels took ${elapsed.toFixed(1)}ms`);
     return result;
   });
 
@@ -30,7 +33,7 @@ export function registerExtensionsIpc(): void {
       const t0 = performance.now();
       const result = { success: true, data: extensionHost.getCachedEnrichments(emailId) };
       const elapsed = performance.now() - t0;
-      if (elapsed > 5) console.log(`[PERF] extensions:get-enrichments ${emailId.slice(0,8)} took ${elapsed.toFixed(1)}ms`);
+      if (elapsed > 5) log.info(`[PERF] extensions:get-enrichments ${emailId.slice(0,8)} took ${elapsed.toFixed(1)}ms`);
       return result;
     }
   );
@@ -56,7 +59,7 @@ export function registerExtensionsIpc(): void {
         );
 
         const elapsed = performance.now() - t0;
-        if (elapsed > 5) console.log(`[PERF] extensions:enrich-email ${emailId.slice(0,8)} took ${elapsed.toFixed(1)}ms`);
+        if (elapsed > 5) log.info(`[PERF] extensions:enrich-email ${emailId.slice(0,8)} took ${elapsed.toFixed(1)}ms`);
 
         if (!allCached) {
           // Trigger on-demand enrichment in the background.
@@ -65,14 +68,14 @@ export function registerExtensionsIpc(): void {
           if (email) {
             const threadEmails = getEmailsByThread(email.threadId, email.accountId);
             extensionHost.enrichEmail(email, threadEmails, { allowNewLookups: true }).catch(err => {
-              console.error("[Extensions IPC] Background enrichment failed:", err);
+              log.error({ err: err }, "[Extensions IPC] Background enrichment failed");
             });
           }
         }
 
         return { success: true, data: enrichments, pending: !allCached };
       } catch (error) {
-        console.error("[Extensions IPC] enrich-email error:", error);
+        log.error({ err: error }, "[Extensions IPC] enrich-email error");
         return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
       }
     }
@@ -140,7 +143,7 @@ export function registerExtensionsIpc(): void {
 
         return { success: true, data: combined };
       } catch (error) {
-        console.error("[Extensions IPC] get-pending-auths error:", error);
+        log.error({ err: error }, "[Extensions IPC] get-pending-auths error");
         return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
       }
     }
@@ -167,13 +170,13 @@ export function registerExtensionsIpc(): void {
 
         // Auth succeeded - clear stale needsAuth placeholders from enrichments cache, then re-queue
         const clearedEnrichments = deleteNeedsAuthEnrichments(extensionId);
-        console.log(`[Extensions IPC] Auth succeeded for ${extensionId}, cleared ${clearedEnrichments} needsAuth enrichments, re-queuing`);
+        log.info(`[Extensions IPC] Auth succeeded for ${extensionId}, cleared ${clearedEnrichments} needsAuth enrichments, re-queuing`);
         prefetchService.resetExtensionEnrichments();
         prefetchService.processAllPending();
 
         return { success: true };
       } catch (error) {
-        console.error(`[Extensions IPC] authenticate error for ${extensionId}:`, error);
+        log.error({ err: error }, `[Extensions IPC] authenticate error for ${extensionId}`);
         return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
       }
     }
@@ -213,7 +216,7 @@ export function registerExtensionsIpc(): void {
 
         return { success: true, data: info };
       } catch (error) {
-        console.error("[Extensions IPC] install error:", error);
+        log.error({ err: error }, "[Extensions IPC] install error");
         return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
       }
     }
@@ -239,7 +242,7 @@ export function registerExtensionsIpc(): void {
 
         return { success: true };
       } catch (error) {
-        console.error(`[Extensions IPC] uninstall error for ${extensionId}:`, error);
+        log.error({ err: error }, `[Extensions IPC] uninstall error for ${extensionId}`);
         return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
       }
     }

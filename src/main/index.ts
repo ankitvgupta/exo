@@ -106,7 +106,7 @@ if (envFile) {
     }
     log.info("[Config] Loaded .env file");
   } catch (e) {
-    log.warn("[Config] Failed to load .env file:", e);
+    log.warn({ err: e }, "[Config] Failed to load .env file");
   }
 }
 

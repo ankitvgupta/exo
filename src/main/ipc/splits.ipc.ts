@@ -8,6 +8,9 @@ import {
 } from "../../shared/types";
 import { getDataDir } from "../data-dir";
 import {
+import { createLogger } from "../services/logger";
+
+const log = createLogger("splits-ipc");
   discoverSuperhumanAccounts,
   readSuperhumanSplits,
   convertSuperhumanSplits,
@@ -176,10 +179,10 @@ export function registerSplitsIpc(): void {
             const shSplits = await readSuperhumanSplits(filePath);
             // Run conversion to get the actual importable count (skips disabled/shared)
             const { splits: converted } = convertSuperhumanSplits(shSplits, "", 0);
-            console.log(`[SuperhumanImport] ${email}: ${converted.length} importable of ${shSplits.length} total`);
+            log.info(`[SuperhumanImport] ${email}: ${converted.length} importable of ${shSplits.length} total`);
             accounts.push({ email, splitCount: converted.length });
           } catch (e) {
-            console.error(`[SuperhumanImport] Failed to read splits for ${email}:`, e);
+            log.error({ err: e }, `[SuperhumanImport] Failed to read splits for ${email}`);
             accounts.push({ email, splitCount: 0 });
           }
         }

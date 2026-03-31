@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { createMessage } from "./anthropic-service";
 import { stripJsonFences } from "../../shared/strip-json-fences";
 import {
   ARCHIVE_READY_JSON_FORMAT,
@@ -8,14 +8,15 @@ import {
   type DashboardEmail,
 } from "../../shared/types";
 import { stripQuotedContent } from "./strip-quoted-content";
+import { createLogger } from "./logger";
+
+const log = createLogger("archive-ready");
 
 export class ArchiveReadyAnalyzer {
-  private anthropic: Anthropic;
   private model: string;
   private customPrompt: string | null;
 
   constructor(model: string = "claude-sonnet-4-20250514", prompt?: string) {
-    this.anthropic = new Anthropic();
     this.model = model;
     this.customPrompt = prompt && prompt !== DEFAULT_ARCHIVE_READY_PROMPT ? prompt : null;
   }
@@ -31,7 +32,7 @@ export class ArchiveReadyAnalyzer {
       ? this.customPrompt + ARCHIVE_READY_JSON_FORMAT
       : DEFAULT_ARCHIVE_READY_PROMPT + ARCHIVE_READY_JSON_FORMAT;
 
-    const response = await this.anthropic.messages.create({
+    const response = await createMessage({
       model: this.model,
       max_tokens: 256,
       system: [
@@ -47,11 +48,11 @@ export class ArchiveReadyAnalyzer {
           content: threadContent,
         },
       ],
-    });
+    }, { caller: "archive-ready-analyzer" });
 
     // Log cache performance
     const usage = response.usage as unknown as Record<string, number>;
-    console.log(
+    log.info(
       `[ArchiveReady] Usage: input=${usage.input_tokens}, output=${usage.output_tokens}, cache_read=${usage.cache_read_input_tokens || 0}, cache_create=${usage.cache_creation_input_tokens || 0}`
     );
 
@@ -64,7 +65,7 @@ export class ArchiveReadyAnalyzer {
       const parsed = JSON.parse(stripJsonFences(textBlock.text));
       return ArchiveReadyResultSchema.parse(parsed);
     } catch (error) {
-      console.error(
+      log.error(
         "Failed to parse archive-ready response:",
         textBlock.text
       );

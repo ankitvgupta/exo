@@ -126,7 +126,7 @@ function initFTS5(db: DatabaseInstance): void {
       log.info("[DB] FTS5 search index created and populated");
     }
   } catch (error) {
-    log.error("[DB] Failed to initialize FTS5:", error);
+    log.error({ err: error }, "[DB] Failed to initialize FTS5");
   }
 }
 
@@ -402,7 +402,7 @@ export function checkpointWal(): void {
   try {
     db.pragma("wal_checkpoint(PASSIVE)");
   } catch (e) {
-    log.error("[DB] WAL checkpoint failed:", e);
+    log.error({ err: e }, "[DB] WAL checkpoint failed");
   }
 }
 
@@ -415,12 +415,12 @@ export function closeDatabase(): void {
   try {
     db.pragma("wal_checkpoint(TRUNCATE)");
   } catch (e) {
-    log.error("[DB] WAL checkpoint failed during close:", e);
+    log.error({ err: e }, "[DB] WAL checkpoint failed during close");
   }
   try {
     db.close();
   } catch (e) {
-    log.error("[DB] Error closing database:", e);
+    log.error({ err: e }, "[DB] Error closing database");
   }
   db = null;
 }
@@ -2618,7 +2618,7 @@ export function searchEmails(query: string, options: SearchOptions = {}): Search
     const stmt = db.prepare(sql);
     rows = stmt.all(...params) as Array<Record<string, unknown>>;
   } catch (error) {
-    log.error("[DB] FTS5 search error, falling back to LIKE:", error);
+    log.error({ err: error }, "[DB] FTS5 search error, falling back to LIKE");
     // rows stays empty, will trigger LIKE fallback
   }
 
@@ -2655,7 +2655,7 @@ export function searchEmails(query: string, options: SearchOptions = {}): Search
       const stmt = db.prepare(sql);
       rows = stmt.all(...params) as Array<Record<string, unknown>>;
     } catch (likeError) {
-      log.error("[DB] LIKE fallback search error:", likeError);
+      log.error({ err: likeError }, "[DB] LIKE fallback search error");
       return [];
     }
   }
@@ -2692,7 +2692,7 @@ export function getSearchSuggestions(query: string, limit: number = 10): string[
     const rows = stmt.all(`%${query}%`, limit) as Array<{ address: string }>;
     return rows.map((row) => row.address);
   } catch (error) {
-    log.error("[DB] Search suggestions error:", error);
+    log.error({ err: error }, "[DB] Search suggestions error");
     return [];
   }
 }
@@ -2719,7 +2719,7 @@ export function rebuildSearchIndex(): void {
 
     log.info("[DB] FTS5 search index rebuilt");
   } catch (error) {
-    log.error("[DB] Failed to rebuild search index:", error);
+    log.error({ err: error }, "[DB] Failed to rebuild search index");
   }
 }
 
@@ -2858,7 +2858,7 @@ export function getContactSuggestions(query: string, limit: number = 10): Contac
       }
     }
   } catch (error) {
-    log.error("[DB] Contact suggestions error:", error);
+    log.error({ err: error }, "[DB] Contact suggestions error");
     return [];
   }
 

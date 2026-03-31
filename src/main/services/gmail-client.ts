@@ -12,6 +12,9 @@ import type { Email, EmailSearchResult, SentEmail, GmailDraft, SendMessageOption
 import { getAccounts } from "../db";
 import { getDataDir } from "../data-dir";
 import { extractEmail } from "../utils/address-formatting";
+import { createLogger } from "./logger";
+
+const log = createLogger("gmail");
 
 // Lazy — app.getPath() throws if called before Electron is initialized (e.g. in unit tests).
 // getDataDir() is itself lazy (defers app.getPath() to call time), so this is safe.
@@ -42,7 +45,7 @@ export async function migrateOldConfigIfNeeded(): Promise<void> {
     }
   } catch (err: unknown) {
     if ((err as NodeJS.ErrnoException).code === "ENOENT") return; // fresh install
-    console.warn("[Config] Could not scan old config dir:", err);
+    log.warn({ err: err }, "[Config] Could not scan old config dir");
   }
 
   for (const file of filesToMigrate) {
@@ -53,11 +56,11 @@ export async function migrateOldConfigIfNeeded(): Promise<void> {
     } catch {
       try {
         await copyFile(src, dst);
-        console.log(`[Config] Migrated ${file} to ${newDir}`);
+        log.info(`[Config] Migrated ${file} to ${newDir}`);
       } catch (err: unknown) {
         const code = (err as NodeJS.ErrnoException).code;
         if (code !== "ENOENT") {
-          console.warn(`[Config] Could not migrate ${file}: ${err}`);
+          log.warn(`[Config] Could not migrate ${file}: ${err}`);
         }
       }
     }
@@ -169,7 +172,7 @@ export class GmailClient {
     // The google-auth-library automatically refreshes access tokens when they expire,
     // but only in-memory. Without this listener, refreshed tokens are lost on restart.
     this.oauth2Client.on("tokens", (tokens) => {
-      console.log(`[Gmail] Token refreshed for account ${this.accountId}, persisting to disk`);
+      log.info(`[Gmail] Token refreshed for account ${this.accountId}, persisting to disk`);
       const tokensFile = getTokensFile(this.accountId);
       // Merge with existing tokens (refresh_token may not be in the event).
       // If the file can't be read (race with another write, missing, etc.),
@@ -182,7 +185,7 @@ export class GmailClient {
         .catch(() => tokens)
         .then((merged) => writeFile(tokensFile, JSON.stringify(merged, null, 2)))
         .catch((err) => {
-          console.error(`[Gmail] Failed to persist refreshed tokens for ${this.accountId}:`, err);
+          log.error({ err: err }, `[Gmail] Failed to persist refreshed tokens for ${this.accountId}`);
         });
     });
 
@@ -190,7 +193,7 @@ export class GmailClient {
     this.oauth2Client.setCredentials(tokens);
 
     this.gmail = google.gmail({ version: "v1", auth: this.oauth2Client });
-    console.log("Connected to Gmail API");
+    log.info("Connected to Gmail API");
   }
 
   private async loadCredentials(): Promise<Credentials> {
@@ -261,18 +264,18 @@ export class GmailClient {
       const isExpired = expiryDate != null && expiryDate < Date.now() + 5 * 60 * 1000;
 
       if (isExpired && tokens.refresh_token) {
-        console.log(`[Gmail] Access token expired for ${this.accountId}, attempting refresh`);
+        log.info(`[Gmail] Access token expired for ${this.accountId}, attempting refresh`);
         try {
           // Use a temporary client to refresh since this.oauth2Client already exists
           this.oauth2Client!.setCredentials(tokens);
           const { credentials } = await this.oauth2Client!.refreshAccessToken();
           const merged = { ...tokens, ...credentials };
           await writeFile(tokensFile, JSON.stringify(merged, null, 2));
-          console.log(`[Gmail] Token refresh successful for ${this.accountId}`);
+          log.info(`[Gmail] Token refresh successful for ${this.accountId}`);
           return merged as { access_token: string; refresh_token: string };
         } catch (err) {
           // Refresh failed — token is likely revoked (Google "testing" mode 7-day expiry)
-          console.error(`[Gmail] Token refresh failed for ${this.accountId}:`, err);
+          log.error({ err: err }, `[Gmail] Token refresh failed for ${this.accountId}`);
           throw err;
         }
       }
@@ -292,10 +295,10 @@ export class GmailClient {
       prompt: "consent",
     });
 
-    console.log("\nOpening browser for Google authorization...");
-    console.log("If browser doesn't open, visit this URL:\n");
-    console.log(authUrl);
-    console.log();
+    log.info("\nOpening browser for Google authorization...");
+    log.info("If browser doesn't open, visit this URL:\n");
+    log.info(authUrl);
+    log.info();
 
     // Open browser using Electron's shell
     await shell.openExternal(authUrl);
@@ -349,7 +352,7 @@ export class GmailClient {
       };
 
       server.listen(3847, () => {
-        console.log("Waiting for authorization...");
+        log.info("Waiting for authorization...");
       });
 
       // Timeout after 5 minutes
@@ -364,7 +367,7 @@ export class GmailClient {
     const { tokens } = await oauth2Client.getToken(code);
 
     await writeFile(getTokensFile(this.accountId), JSON.stringify(tokens, null, 2));
-    console.log(`Authorization successful! Tokens saved for account: ${this.accountId}\n`);
+    log.info(`Authorization successful! Tokens saved for account: ${this.accountId}\n`);
 
     return tokens as { access_token: string; refresh_token: string };
   }
@@ -372,7 +375,7 @@ export class GmailClient {
   async disconnect(): Promise<void> {
     this.oauth2Client = null;
     this.gmail = null;
-    console.log("Disconnected from Gmail API");
+    log.info("Disconnected from Gmail API");
   }
 
   /** Delete the stored token file for this account. */
@@ -381,7 +384,7 @@ export class GmailClient {
     const tokensFile = getTokensFile(this.accountId);
     try {
       await unlink(tokensFile);
-      console.log(`[Gmail] Deleted token file for account ${this.accountId}`);
+      log.info(`[Gmail] Deleted token file for account ${this.accountId}`);
     } catch {
       // File may not exist, that's fine
     }
@@ -421,7 +424,7 @@ export class GmailClient {
     const tokens = await this.doOAuthFlow();
     this.oauth2Client.setCredentials(tokens);
     this.gmail = google.gmail({ version: "v1", auth: this.oauth2Client });
-    console.log(`[Gmail] Re-authenticated account ${this.accountId}`);
+    log.info(`[Gmail] Re-authenticated account ${this.accountId}`);
   }
 
   async listCapabilities(): Promise<string[]> {
@@ -497,7 +500,7 @@ export class GmailClient {
       }
 
       if (allMessages.length % 500 === 0 && allMessages.length > 0) {
-        console.log(`[Gmail] getEmailsByLabel(${labelId}): fetched ${allMessages.length} IDs...`);
+        log.info(`[Gmail] getEmailsByLabel(${labelId}): fetched ${allMessages.length} IDs...`);
       }
     } while (pageToken);
 
@@ -554,7 +557,7 @@ export class GmailClient {
 
       // Log progress for large syncs
       if (allMessages.length % 500 === 0 && allMessages.length > 0) {
-        console.log(`[Gmail] Fetched ${allMessages.length} message IDs...`);
+        log.info(`[Gmail] Fetched ${allMessages.length} message IDs...`);
       }
     } while (pageToken);
 
@@ -825,7 +828,7 @@ export class GmailClient {
           try {
             base64Data = await this.getAttachment(messageId, imageInfo.attachmentId);
           } catch (err) {
-            console.error(`[Gmail] Failed to fetch inline image ${cid}:`, err);
+            log.error({ err: err }, `[Gmail] Failed to fetch inline image ${cid}`);
             return;
           }
         }
@@ -873,7 +876,7 @@ export class GmailClient {
           imagePayload = msg.data.payload;
         }
       } catch (err) {
-        console.error(`[GmailClient] Failed to fetch body for message ${messageId}:`, err);
+        log.error({ err: err }, `[GmailClient] Failed to fetch body for message ${messageId}`);
       }
     }
 
@@ -1208,7 +1211,7 @@ export class GmailClient {
           fullDrafts.push(fullDraft);
         }
       } catch (error) {
-        console.error(`Failed to fetch draft ${draft.id}:`, error);
+        log.error({ err: error }, `Failed to fetch draft ${draft.id}`);
       }
     }
 
@@ -1251,7 +1254,7 @@ export class GmailClient {
         snippet: message.snippet || "",
       };
     } catch (error) {
-      console.error(`Failed to get draft ${draftId}:`, error);
+      log.error({ err: error }, `Failed to get draft ${draftId}`);
       return null;
     }
   }
@@ -1418,7 +1421,7 @@ export class GmailClient {
         subject: getHeader("subject"),
       };
     } catch (error) {
-      console.error(`Failed to get message headers for ${messageId}:`, error);
+      log.error({ err: error }, `Failed to get message headers for ${messageId}`);
       return null;
     }
   }
@@ -1455,7 +1458,7 @@ export class GmailClient {
       const primarySendAs = sendAsResponse.data.sendAs?.find(s => s.isPrimary);
       const sendAsName = primarySendAs?.displayName?.trim() || null;
       if (sendAsName) {
-        console.log(`[GmailClient] Display name from send-as: "${sendAsName}"`);
+        log.info(`[GmailClient] Display name from send-as: "${sendAsName}"`);
         return sendAsName;
       }
 
@@ -1470,7 +1473,7 @@ export class GmailClient {
         );
         if (matchingAlias?.displayName) {
           const name = matchingAlias.displayName.trim();
-          console.log(`[GmailClient] Display name from send-as alias match: "${name}"`);
+          log.info(`[GmailClient] Display name from send-as alias match: "${name}"`);
           return name;
         }
       }
@@ -1481,17 +1484,17 @@ export class GmailClient {
         const userInfo = await oauth2.userinfo.get();
         const name = userInfo.data.name?.trim() || null;
         if (name) {
-          console.log(`[GmailClient] Display name from userinfo: "${name}"`);
+          log.info(`[GmailClient] Display name from userinfo: "${name}"`);
           return name;
         }
       } catch (userinfoError) {
-        console.warn("[GmailClient] Userinfo fallback failed:", userinfoError);
+        log.warn({ err: userinfoError }, "[GmailClient] Userinfo fallback failed");
       }
 
-      console.warn("[GmailClient] No display name found from send-as or People API");
+      log.warn("[GmailClient] No display name found from send-as or People API");
       return null;
     } catch (error) {
-      console.warn("[GmailClient] Failed to fetch send-as display name:", error);
+      log.warn({ err: error }, "[GmailClient] Failed to fetch send-as display name");
       return null;
     }
   }
@@ -1655,7 +1658,7 @@ export class GmailClient {
     } catch (error: any) {
       // History ID might be too old (404 error) - need full resync
       if (error.code === 404 || error.status === 404) {
-        console.log("[Gmail] History ID expired, need full resync");
+        log.info("[Gmail] History ID expired, need full resync");
         throw new Error("HISTORY_EXPIRED");
       }
       throw error;
@@ -1700,7 +1703,7 @@ export class GmailClient {
           date: getHeader("date"),
         });
       } catch (error) {
-        console.error(`Failed to read sent email ${m.id}:`, error);
+        log.error({ err: error }, `Failed to read sent email ${m.id}`);
       }
     }
 

@@ -2,6 +2,9 @@ import { BrowserWindow } from "electron";
 import { GmailClient } from "./gmail-client";
 import { getAllEmailIds, saveEmail } from "../db";
 import type { Email } from "../../shared/types";
+import { createLogger } from "./logger";
+
+const log = createLogger("background-sync");
 
 export type BackgroundSyncProgress = {
   accountId: string;
@@ -28,7 +31,7 @@ class BackgroundSyncService {
   async startAllMailSync(accountId: string, client: GmailClient): Promise<void> {
     const existingState = this.accountStates.get(accountId);
     if (existingState?.isRunning) {
-      console.log(`[BackgroundSync] Already running for ${accountId}`);
+      log.info(`[BackgroundSync] Already running for ${accountId}`);
       return;
     }
 
@@ -39,29 +42,29 @@ class BackgroundSyncService {
     };
     this.accountStates.set(accountId, state);
 
-    console.log(`[BackgroundSync] Starting all-mail sync for ${accountId}`);
+    log.info(`[BackgroundSync] Starting all-mail sync for ${accountId}`);
     this.emitProgress(accountId, "running", 0, 0);
 
     try {
       // Get all mail IDs (excluding trash/spam)
       // Use searchAllEmails with pagination for large mailboxes
-      console.log("[BackgroundSync] Fetching all mail IDs...");
+      log.info("[BackgroundSync] Fetching all mail IDs...");
       const allMailResults = await client.searchAllEmails(
         "in:anywhere -in:trash -in:spam",
         10000 // max emails to sync
       );
-      console.log(`[BackgroundSync] Found ${allMailResults.length} total emails in account`);
+      log.info(`[BackgroundSync] Found ${allMailResults.length} total emails in account`);
 
       // Filter out already-synced emails
       const existingIds = new Set(getAllEmailIds(accountId));
       const toSync = allMailResults.filter((m) => !existingIds.has(m.id));
-      console.log(`[BackgroundSync] ${toSync.length} emails need syncing (${existingIds.size} already synced)`);
+      log.info(`[BackgroundSync] ${toSync.length} emails need syncing (${existingIds.size} already synced)`);
 
       state.totalCount = toSync.length;
       this.emitProgress(accountId, "running", 0, toSync.length);
 
       if (toSync.length === 0) {
-        console.log("[BackgroundSync] All emails already synced");
+        log.info("[BackgroundSync] All emails already synced");
         state.isRunning = false;
         this.emitProgress(accountId, "completed", 0, 0);
         return;
@@ -73,7 +76,7 @@ class BackgroundSyncService {
 
       for (let i = 0; i < toSync.length; i += BATCH_SIZE) {
         if (!state.isRunning) {
-          console.log("[BackgroundSync] Sync stopped by user");
+          log.info("[BackgroundSync] Sync stopped by user");
           break;
         }
 
@@ -85,7 +88,7 @@ class BackgroundSyncService {
 
         // Log progress
         if (state.syncedCount % 100 === 0 || state.syncedCount === state.totalCount) {
-          console.log(`[BackgroundSync] Progress: ${state.syncedCount}/${state.totalCount}`);
+          log.info(`[BackgroundSync] Progress: ${state.syncedCount}/${state.totalCount}`);
         }
 
         // Small delay between batches to avoid rate limits
@@ -94,12 +97,12 @@ class BackgroundSyncService {
         }
       }
 
-      console.log(`[BackgroundSync] Completed for ${accountId}: synced ${state.syncedCount} emails`);
+      log.info(`[BackgroundSync] Completed for ${accountId}: synced ${state.syncedCount} emails`);
       state.isRunning = false;
       this.emitProgress(accountId, "completed", state.syncedCount, state.totalCount);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : "Unknown error";
-      console.error(`[BackgroundSync] Error for ${accountId}:`, errorMsg);
+      log.error({ err: errorMsg }, `[BackgroundSync] Error for ${accountId}`);
       state.isRunning = false;
       state.lastError = errorMsg;
       this.emitProgress(accountId, "error", state.syncedCount, state.totalCount, errorMsg);
@@ -122,7 +125,7 @@ class BackgroundSyncService {
         }
       } catch (err) {
         // Log but don't fail the entire batch
-        console.error(`[BackgroundSync] Failed to fetch email ${id}:`, err);
+        log.error({ err: err }, `[BackgroundSync] Failed to fetch email ${id}`);
       }
     }
   }
@@ -134,7 +137,7 @@ class BackgroundSyncService {
     const state = this.accountStates.get(accountId);
     if (state) {
       state.isRunning = false;
-      console.log(`[BackgroundSync] Stopping sync for ${accountId}`);
+      log.info(`[BackgroundSync] Stopping sync for ${accountId}`);
     }
   }
 

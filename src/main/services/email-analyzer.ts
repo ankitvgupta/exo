@@ -1,7 +1,10 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { createMessage } from "./anthropic-service";
 import { AnalysisResultSchema, ANALYSIS_JSON_FORMAT, DEFAULT_ANALYSIS_PROMPT, type AnalysisResult, type Email } from "../../shared/types";
 import { stripQuotedContent } from "./strip-quoted-content";
 import { stripJsonFences } from "../../shared/strip-json-fences";
+import { createLogger } from "./logger";
+
+const log = createLogger("analyzer");
 // Lazy-imported to avoid pulling in ../db → electron at module load time,
 // which breaks unit tests running under plain Node (not Electron).
 let _buildAnalysisMemoryContext: typeof import("./memory-context").buildAnalysisMemoryContext | null = null;
@@ -126,12 +129,10 @@ Output: {"needs_reply": true, "reason": "Time-sensitive contract requiring sign-
 Now analyze the following email:`;
 
 export class EmailAnalyzer {
-  private anthropic: Anthropic;
   private model: string;
   private customPrompt: string | null;
 
   constructor(model: string = "claude-sonnet-4-20250514", prompt?: string) {
-    this.anthropic = new Anthropic();
     this.model = model;
     // Only use custom prompt if it differs from default
     this.customPrompt = prompt && prompt !== DEFAULT_ANALYSIS_PROMPT ? prompt : null;
@@ -159,7 +160,7 @@ export class EmailAnalyzer {
     }
 
     // Prompt caching enabled via cache_control (requires 1024+ tokens in system)
-    const response = await this.anthropic.messages.create({
+    const response = await createMessage({
       model: this.model,
       max_tokens: 256,
       system: [
@@ -180,11 +181,11 @@ Date: ${email.date}
 ${emailContent}${analysisMemoryContext}`,
         },
       ],
-    });
+    }, { caller: "email-analyzer", emailId: email.id, accountId });
 
     // Log cache performance
     const usage = response.usage as unknown as Record<string, number>;
-    console.log(`[Analyzer] Usage: input=${usage.input_tokens}, output=${usage.output_tokens}, cache_read=${usage.cache_read_input_tokens || 0}, cache_create=${usage.cache_creation_input_tokens || 0}`);
+    log.info(`[Analyzer] Usage: input=${usage.input_tokens}, output=${usage.output_tokens}, cache_read=${usage.cache_read_input_tokens || 0}, cache_create=${usage.cache_creation_input_tokens || 0}`);
 
     const textBlock = response.content.find((block) => block.type === "text");
     if (!textBlock || textBlock.type !== "text") {
@@ -195,7 +196,7 @@ ${emailContent}${analysisMemoryContext}`,
       const parsed = JSON.parse(stripJsonFences(textBlock.text));
       return AnalysisResultSchema.parse(parsed);
     } catch (error) {
-      console.error("Failed to parse analysis response:", textBlock.text);
+      log.error({ err: textBlock.text }, "Failed to parse analysis response");
       // Default to not needing reply if parsing fails
       return {
         needs_reply: false,

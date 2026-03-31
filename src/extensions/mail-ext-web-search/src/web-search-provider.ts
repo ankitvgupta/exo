@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { createMessage } from "../../../../main/services/anthropic-service";
 import type {
   ExtensionContext,
   EnrichmentProvider,
@@ -187,8 +187,6 @@ export function createWebSearchProvider(
   context: ExtensionContext,
   getModelId: () => string,
 ): EnrichmentProvider {
-  const client = new Anthropic();
-
   return {
     id: "sender-lookup",
     panelId: "sender-profile",
@@ -249,7 +247,7 @@ export function createWebSearchProvider(
         // Use Claude with web search to find information
         const searchQuery = buildSearchQuery(senderName, realSenderEmail);
 
-        const response = await client.messages.create({
+        const response = await createMessage({
           model: getModelId(),
           max_tokens: 200, // Responses are ~100 tokens
           tools: [
@@ -287,7 +285,7 @@ If you can't find specific information, return:
 }`,
             },
           ],
-        });
+        }, { caller: "web-search-sender-lookup" });
 
         // Extract the text response
         let jsonText = "";

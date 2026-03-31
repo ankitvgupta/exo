@@ -11,9 +11,13 @@
  */
 import { randomUUID } from "crypto";
 import Anthropic from "@anthropic-ai/sdk";
+import { createMessage, recordStreamingCall } from "./anthropic-service";
 import { getThreadDraftBody, getDraftMemories, saveDraftMemory, incrementDraftMemoryVote, deleteDraftMemory, evictOldestDraftMemories, saveMemory, getMemories, deleteMemory, getDatabase } from "../db";
 import { parseJsonArray, normalizeScope } from "./memory-learner-utils";
 import type { Memory, MemoryScope, MemorySource, MemoryType, DraftMemory } from "../../shared/types";
+import { createLogger } from "./logger";
+
+const log = createLogger("draft-edit-learner");
 
 /** Result of learning from a draft edit */
 export interface DraftEditLearnResult {
@@ -94,6 +98,7 @@ async function analyzeDraftEdit(params: {
   const { originalDraft, sentBody, senderEmail, senderDomain, subject } = params;
 
   const anthropic = new Anthropic();
+  const streamStartTime = Date.now();
   const stream = anthropic.messages.stream({
     model: "claude-opus-4-20250514",
     max_tokens: 16000,
@@ -194,15 +199,19 @@ Respond with ONLY the JSON array, no other text.`,
   });
   const response = await stream.finalMessage();
 
+  // Record streaming call cost
+  const streamUsage = response.usage as unknown as Record<string, number>;
+  recordStreamingCall("claude-opus-4-20250514", "draft-edit-learner-analyze", streamUsage, Date.now() - streamStartTime);
+
   // Log thinking if present
   const thinkingBlock = response.content.find(b => b.type === "thinking");
   if (thinkingBlock?.type === "thinking") {
-    console.log(`[DraftEditLearner] === THINKING ===\n${thinkingBlock.thinking}\n[DraftEditLearner] === END THINKING ===`);
+    log.info(`[DraftEditLearner] === THINKING ===\n${thinkingBlock.thinking}\n[DraftEditLearner] === END THINKING ===`);
   }
 
   const textBlock = response.content.find(b => b.type === "text");
   const text = textBlock?.type === "text" ? textBlock.text : "";
-  console.log(`[DraftEditLearner] Raw response: ${text}`);
+  log.info(`[DraftEditLearner] Raw response: ${text}`);
 
   // Parse JSON array from response
   const parsed = parseJsonArray<{
@@ -213,13 +222,13 @@ Respond with ONLY the JSON array, no other text.`,
   }>(text);
 
   if (!parsed || parsed.length === 0) {
-    console.log(`[DraftEditLearner] No observations found in response — skipping`);
+    log.info(`[DraftEditLearner] No observations found in response — skipping`);
     return null;
   }
 
-  console.log(`[DraftEditLearner] Claude extracted ${parsed.length} observations:`);
+  log.info(`[DraftEditLearner] Claude extracted ${parsed.length} observations:`);
   for (const item of parsed) {
-    console.log(`[DraftEditLearner]   [${item.scope}${item.scopeValue ? `:${item.scopeValue}` : ""}] ${item.content} (context: ${item.emailContext ?? "none"})`);
+    log.info(`[DraftEditLearner]   [${item.scope}${item.scopeValue ? `:${item.scopeValue}` : ""}] ${item.content} (context: ${item.emailContext ?? "none"})`);
   }
 
   return parsed
@@ -246,8 +255,7 @@ async function matchDraftMemories(
   observations: DraftEditObservation[],
   draftMemories: DraftMemory[],
 ): Promise<Array<{ observationIndex: number; matchedDraftMemoryId: string | null }>> {
-  const anthropic = new Anthropic();
-  const response = await anthropic.messages.create({
+  const response = await createMessage({
     model: "claude-sonnet-4-5-20250929",
     max_tokens: 1024,
     messages: [{
@@ -273,7 +281,7 @@ For each new observation, return:
 
 Respond with ONLY a JSON array: [{"observationIndex": 0, "matchedDraftMemoryId": "..." or null}, ...]`,
     }],
-  });
+  }, { caller: "draft-edit-learner-match" });
 
   const text = response.content[0]?.type === "text" ? response.content[0].text : "";
   const parsed = parseJsonArray<{
@@ -314,8 +322,7 @@ export async function filterAgainstPromotedMemories(
     return observations;
   }
 
-  const anthropic = new Anthropic();
-  const response = await anthropic.messages.create({
+  const response = await createMessage({
     model: "claude-sonnet-4-5-20250929",
     max_tokens: 1024,
     messages: [{
@@ -348,7 +355,7 @@ ${observations.map((o, i) => `[${i}] [${o.scope}${o.scopeValue ? `:${o.scopeValu
 For each observation, return whether it is covered by an existing promoted memory.
 Respond with ONLY a JSON array: [{"observationIndex": 0, "isDuplicate": true/false}, ...]`,
     }],
-  });
+  }, { caller: "draft-edit-learner-filter" });
 
   const text = response.content[0]?.type === "text" ? response.content[0].text : "";
   const parsed = parseJsonArray<{
@@ -366,7 +373,7 @@ Respond with ONLY a JSON array: [{"observationIndex": 0, "isDuplicate": true/fal
 
   const filtered = observations.filter((_, i) => !duplicateIndices.has(i));
   if (duplicateIndices.size > 0) {
-    console.log(`[DraftEditLearner] Filtered out ${duplicateIndices.size} observations already covered by promoted memories`);
+    log.info(`[DraftEditLearner] Filtered out ${duplicateIndices.size} observations already covered by promoted memories`);
   }
   return filtered;
 }
@@ -401,8 +408,7 @@ export async function consolidateMemoryScopes(
     return { action: "save", deletedIds: [], createdGlobal: null, coveringMemoryId: null };
   }
 
-  const anthropic = new Anthropic();
-  const response = await anthropic.messages.create({
+  const response = await createMessage({
     model: "claude-sonnet-4-5-20250929",
     max_tokens: 1024,
     messages: [{
@@ -436,7 +442,7 @@ Return: {"action": "save"}
 
 Respond with ONLY the JSON object.`,
     }],
-  });
+  }, { caller: "draft-edit-learner-consolidate", accountId });
 
   const text = response.content[0]?.type === "text" ? response.content[0].text : "";
   const jsonStart = text.indexOf("{");
@@ -458,7 +464,7 @@ Respond with ONLY the JSON object.`,
       const coveringId = parsed.coveringId && existingMemories.some(m => m.id === parsed.coveringId)
         ? parsed.coveringId
         : null;
-      console.log(`[DraftEditLearner] consolidateMemoryScopes("${candidate.content}") → duplicate (covered by ${coveringId})`);
+      log.info(`[DraftEditLearner] consolidateMemoryScopes("${candidate.content}") → duplicate (covered by ${coveringId})`);
       return { action: "duplicate", deletedIds: [], createdGlobal: null, coveringMemoryId: coveringId };
     }
 
@@ -482,7 +488,7 @@ Respond with ONLY the JSON object.`,
         // LLM says a global already covers this — verify one actually exists before deleting
         const hasGlobal = existingMemories.some(m => m.scope === "global");
         if (!hasGlobal) {
-          console.warn(`[DraftEditLearner] LLM returned consolidate with globalContent=null but no global memory exists — skipping deletion to prevent data loss`);
+          log.warn(`[DraftEditLearner] LLM returned consolidate with globalContent=null but no global memory exists — skipping deletion to prevent data loss`);
           return { action: "save", deletedIds: [], createdGlobal: null, coveringMemoryId: null };
         }
       }
@@ -516,7 +522,7 @@ Respond with ONLY the JSON object.`,
       });
       runConsolidation();
 
-      console.log(`[DraftEditLearner] consolidateMemoryScopes("${candidate.content}") → consolidate (deleted ${idsToDelete.length}, newGlobal=${!!globalMemory})`);
+      log.info(`[DraftEditLearner] consolidateMemoryScopes("${candidate.content}") → consolidate (deleted ${idsToDelete.length}, newGlobal=${!!globalMemory})`);
       return { action: "consolidate", deletedIds: idsToDelete, createdGlobal: globalMemory, coveringMemoryId: coveringId };
     }
 
@@ -537,17 +543,17 @@ export async function learnFromDraftEdit(params: {
   sentBodyText?: string;
 }): Promise<DraftEditLearnResult | null> {
   const { threadId, accountId, sentBodyHtml } = params;
-  console.log(`[DraftEditLearner] Called for thread ${threadId}`);
+  log.info(`[DraftEditLearner] Called for thread ${threadId}`);
 
   // 1. Find the original AI draft for this thread
   const draftInfo = getThreadDraftBody(threadId, accountId);
   if (!draftInfo) {
-    console.log(`[DraftEditLearner] No AI draft found for thread ${threadId} — skipping`);
+    log.info(`[DraftEditLearner] No AI draft found for thread ${threadId} — skipping`);
     return null;
   }
 
   const { draftBody: rawDraftBody, fromAddress, subject } = draftInfo;
-  console.log(`[DraftEditLearner] Found AI draft for thread ${threadId}, subject: "${subject}"`);
+  log.info(`[DraftEditLearner] Found AI draft for thread ${threadId}, subject: "${subject}"`);
 
   // 2. Normalize both to plain text for comparison
   const originalDraft = htmlToPlainText(rawDraftBody);
@@ -556,7 +562,7 @@ export async function learnFromDraftEdit(params: {
 
   // 3. Check if the edit is meaningful
   if (!areMeaningfullyDifferent(originalDraft, sentPlainText)) {
-    console.log(`[DraftEditLearner] Edit not meaningful enough — skipping`);
+    log.info(`[DraftEditLearner] Edit not meaningful enough — skipping`);
     return null;
   }
 
@@ -565,9 +571,9 @@ export async function learnFromDraftEdit(params: {
   const senderEmail = senderMatch ? senderMatch[1].toLowerCase() : fromAddress.toLowerCase();
   const senderDomain = senderEmail.includes("@") ? senderEmail.split("@")[1] : "";
 
-  console.log(`[DraftEditLearner] Original draft (${originalDraft.length} chars):\n${originalDraft.slice(0, 500)}`);
-  console.log(`[DraftEditLearner] Sent text (${sentPlainText.length} chars):\n${sentPlainText.slice(0, 500)}`);
-  console.log(`[DraftEditLearner] Calling Claude to analyze edit for ${senderEmail}...`);
+  log.info(`[DraftEditLearner] Original draft (${originalDraft.length} chars):\n${originalDraft.slice(0, 500)}`);
+  log.info(`[DraftEditLearner] Sent text (${sentPlainText.length} chars):\n${sentPlainText.slice(0, 500)}`);
+  log.info(`[DraftEditLearner] Calling Claude to analyze edit for ${senderEmail}...`);
 
   // 5. Analyze the delta — extract observations (relaxed bar, no dedup against real memories)
   const observations = await analyzeDraftEdit({
@@ -579,7 +585,7 @@ export async function learnFromDraftEdit(params: {
   });
 
   if (!observations || observations.length === 0) {
-    console.log(`[DraftEditLearner] No observations extracted — nothing to save`);
+    log.info(`[DraftEditLearner] No observations extracted — nothing to save`);
     return null;
   }
 
@@ -590,7 +596,7 @@ export async function learnFromDraftEdit(params: {
   const promotedMemories = getMemories(accountId, "drafting").filter(m => m.enabled);
   const filteredObservations = await filterAgainstPromotedMemories(observations, promotedMemories);
   if (filteredObservations.length === 0) {
-    console.log(`[DraftEditLearner] All observations already covered by promoted memories — nothing to save`);
+    log.info(`[DraftEditLearner] All observations already covered by promoted memories — nothing to save`);
     return null;
   }
 
@@ -600,11 +606,11 @@ export async function learnFromDraftEdit(params: {
   // 7. Match observations to existing draft memories (skip if none exist)
   let matches: Array<{ observationIndex: number; matchedDraftMemoryId: string | null }>;
   if (existingDraftMemories.length > 0) {
-    console.log(`[DraftEditLearner] Matching ${filteredObservations.length} observations against ${existingDraftMemories.length} draft memories...`);
+    log.info(`[DraftEditLearner] Matching ${filteredObservations.length} observations against ${existingDraftMemories.length} draft memories...`);
     matches = await matchDraftMemories(filteredObservations, existingDraftMemories);
-    console.log(`[DraftEditLearner] Match results: ${matches.map(m => `obs[${m.observationIndex}]→${m.matchedDraftMemoryId ?? "new"}`).join(", ")}`);
+    log.info(`[DraftEditLearner] Match results: ${matches.map(m => `obs[${m.observationIndex}]→${m.matchedDraftMemoryId ?? "new"}`).join(", ")}`);
   } else {
-    console.log(`[DraftEditLearner] No existing draft memories — all ${filteredObservations.length} observations are new`);
+    log.info(`[DraftEditLearner] No existing draft memories — all ${filteredObservations.length} observations are new`);
     matches = filteredObservations.map((_, i) => ({ observationIndex: i, matchedDraftMemoryId: null }));
   }
 
@@ -616,7 +622,7 @@ export async function learnFromDraftEdit(params: {
   // Use threadId as source identifier for tracking which edits contributed
   const sourceEmailId = threadId;
 
-  console.log(`[DraftEditLearner] Processing ${filteredObservations.length} observations (sender: ${senderEmail}, domain: ${senderDomain}, subject: "${subject}")`);
+  log.info(`[DraftEditLearner] Processing ${filteredObservations.length} observations (sender: ${senderEmail}, domain: ${senderDomain}, subject: "${subject}")`);
 
   for (const match of matches) {
     const observation = filteredObservations[match.observationIndex];
@@ -627,7 +633,7 @@ export async function learnFromDraftEdit(params: {
       const updated = incrementDraftMemoryVote(match.matchedDraftMemoryId, sourceEmailId);
       if (!updated) continue;
 
-      console.log(`[DraftEditLearner] Voted on draft memory ${match.matchedDraftMemoryId} (now ${updated.voteCount} votes): ${updated.content}`);
+      log.info(`[DraftEditLearner] Voted on draft memory ${match.matchedDraftMemoryId} (now ${updated.voteCount} votes): ${updated.content}`);
 
       // Check for promotion
       if (updated.voteCount >= PROMOTION_THRESHOLD) {
@@ -638,12 +644,12 @@ export async function learnFromDraftEdit(params: {
         );
 
         if (result.action === "duplicate") {
-          console.log(`[DraftEditLearner] Draft memory "${updated.content}" is already covered by a promoted memory — deleting instead of promoting`);
+          log.info(`[DraftEditLearner] Draft memory "${updated.content}" is already covered by a promoted memory — deleting instead of promoting`);
           deleteDraftMemory(updated.id);
           continue;
         }
 
-        console.log(`[DraftEditLearner] Promoting draft memory to real memory: ${updated.content}`);
+        log.info(`[DraftEditLearner] Promoting draft memory to real memory: ${updated.content}`);
         const memory: Memory = {
           id: randomUUID(),
           accountId,
@@ -702,13 +708,13 @@ export async function learnFromDraftEdit(params: {
       saveDraftMemory(dm);
       draftMemoriesCreated++;
       draftMemoryIds.push(dm.id);
-      console.log(`[DraftEditLearner] Created draft memory: [${dm.scope}${dm.scopeValue ? `:${dm.scopeValue}` : ""}] ${dm.content}`);
+      log.info(`[DraftEditLearner] Created draft memory: [${dm.scope}${dm.scopeValue ? `:${dm.scopeValue}` : ""}] ${dm.content}`);
     }
   }
 
   // 9. Enforce cap
   evictOldestDraftMemories(accountId, MAX_DRAFT_MEMORIES, "drafting");
 
-  console.log(`[DraftEditLearner] Done: ${promoted.length} promoted, ${draftMemoriesCreated} draft memories created/voted on`);
+  log.info(`[DraftEditLearner] Done: ${promoted.length} promoted, ${draftMemoriesCreated} draft memories created/voted on`);
   return { promoted, draftMemoriesCreated, draftMemoryIds };
 }

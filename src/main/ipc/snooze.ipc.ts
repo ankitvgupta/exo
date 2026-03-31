@@ -2,6 +2,9 @@ import { ipcMain, BrowserWindow } from "electron";
 import { snoozeService } from "../services/snooze-service";
 import { getDueSnoozedEmails, unsnoozeEmail } from "../db";
 import type { IpcResponse, SnoozedEmail } from "../../shared/types";
+import { createLogger } from "../services/logger";
+
+const log = createLogger("snooze-ipc");
 
 export function registerSnoozeIpc(): void {
   // Set up the unsnooze callback to broadcast to renderer
@@ -41,7 +44,7 @@ export function registerSnoozeIpc(): void {
 
         return { success: true, data: result };
       } catch (error) {
-        console.error("[Snooze IPC] Failed to snooze:", error);
+        log.error({ err: error }, "[Snooze IPC] Failed to snooze");
         return {
           success: false,
           error: error instanceof Error ? error.message : "Failed to snooze email",
@@ -73,7 +76,7 @@ export function registerSnoozeIpc(): void {
 
         return { success: true, data: undefined };
       } catch (error) {
-        console.error("[Snooze IPC] Failed to unsnooze:", error);
+        log.error({ err: error }, "[Snooze IPC] Failed to unsnooze");
         return {
           success: false,
           error: error instanceof Error ? error.message : "Failed to unsnooze email",
@@ -103,13 +106,13 @@ export function registerSnoozeIpc(): void {
           }
         }
         if (expired.length > 0) {
-          console.log(`[Snooze IPC] Processed ${expired.length} expired snooze(s) for account ${accountId}`);
+          log.info(`[Snooze IPC] Processed ${expired.length} expired snooze(s) for account ${accountId}`);
         }
 
         const snoozed = snoozeService.getSnoozedEmails(accountId);
         return { success: true, data: snoozed, expired };
       } catch (error) {
-        console.error("[Snooze IPC] Failed to list snoozed:", error);
+        log.error({ err: error }, "[Snooze IPC] Failed to list snoozed");
         return {
           success: false,
           error: error instanceof Error ? error.message : "Failed to list snoozed emails",
@@ -129,7 +132,7 @@ export function registerSnoozeIpc(): void {
         const snoozed = snoozeService.getSnoozedByThread(threadId, accountId);
         return { success: true, data: snoozed };
       } catch (error) {
-        console.error("[Snooze IPC] Failed to get snooze:", error);
+        log.error({ err: error }, "[Snooze IPC] Failed to get snooze");
         return {
           success: false,
           error: error instanceof Error ? error.message : "Failed to get snooze info",

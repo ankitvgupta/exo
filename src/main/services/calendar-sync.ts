@@ -9,6 +9,9 @@ import {
   invalidateCalendarAccountCache,
 } from "../../extensions/mail-ext-calendar/src/google-calendar-client";
 import {
+import { createLogger } from "./logger";
+
+const log = createLogger("calendar-sync");
   saveCalendarEvents,
   deleteCalendarEvent,
   getCalendarSyncState,
@@ -35,14 +38,14 @@ class CalendarSyncService {
   async startSync(): Promise<void> {
     if (this.intervalId) return;
 
-    console.log("[CalendarSync] Starting calendar sync");
+    log.info("[CalendarSync] Starting calendar sync");
     // Do initial sync immediately
     await this.syncAll();
 
     // Set up periodic sync
     this.intervalId = setInterval(() => {
       this.syncAll().catch((err) => {
-        console.error("[CalendarSync] Periodic sync failed:", err);
+        log.error({ err: err }, "[CalendarSync] Periodic sync failed");
       });
     }, SYNC_INTERVAL);
   }
@@ -59,7 +62,7 @@ class CalendarSyncService {
     // Clear the account-discovery cache so new accounts are found immediately
     invalidateCalendarAccountCache();
     this.syncAll().catch((err) => {
-      console.error("[CalendarSync] syncNow failed:", err);
+      log.error({ err: err }, "[CalendarSync] syncNow failed");
     });
   }
 
@@ -72,7 +75,7 @@ class CalendarSyncService {
       try {
         cb();
       } catch (err) {
-        console.error("[CalendarSync] Callback error:", err);
+        log.error({ err: err }, "[CalendarSync] Callback error");
       }
     }
   }
@@ -97,7 +100,7 @@ class CalendarSyncService {
         this.notifyEventsUpdated();
       }
     } catch (err) {
-      console.error("[CalendarSync] syncAll failed:", err);
+      log.error({ err: err }, "[CalendarSync] syncAll failed");
     } finally {
       this.syncing = false;
     }
@@ -120,7 +123,7 @@ class CalendarSyncService {
         if (changed) anyChanges = true;
       }
     } catch (err) {
-      console.error(`[CalendarSync] Failed to sync account ${accountId}:`, err);
+      log.error({ err: err }, `[CalendarSync] Failed to sync account ${accountId}`);
     }
 
     return anyChanges;
@@ -149,7 +152,7 @@ class CalendarSyncService {
 
       // Handle 410 GONE — clear only this calendar and do full sync
       if (result.fullSyncRequired) {
-        console.log(`${logPrefix}: clearing data for full re-sync`);
+        log.info(`${logPrefix}: clearing data for full re-sync`);
         clearSingleCalendarData(accountId, calendarId);
         return this.syncCalendar(accountId, calendarId, calendarName, calendarColor);
       }
@@ -162,7 +165,7 @@ class CalendarSyncService {
           deleteCalendarEvent(id, accountId);
         }
         changed = true;
-        console.log(`${logPrefix}: deleted ${result.deletedIds.length} events`);
+        log.info(`${logPrefix}: deleted ${result.deletedIds.length} events`);
       }
 
       // Process new/updated events
@@ -185,9 +188,9 @@ class CalendarSyncService {
         changed = true;
 
         if (isIncremental) {
-          console.log(`${logPrefix}: updated ${result.events.length} events (incremental)`);
+          log.info(`${logPrefix}: updated ${result.events.length} events (incremental)`);
         } else {
-          console.log(`${logPrefix}: synced ${result.events.length} events (full sync)`);
+          log.info(`${logPrefix}: synced ${result.events.length} events (full sync)`);
         }
       }
 
@@ -207,7 +210,7 @@ class CalendarSyncService {
 
       return changed;
     } catch (err) {
-      console.error(`${logPrefix}: sync failed:`, err);
+      log.error({ err: err }, `${logPrefix}: sync failed`);
       return false;
     }
   }

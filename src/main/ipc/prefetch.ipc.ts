@@ -2,6 +2,9 @@ import { ipcMain, BrowserWindow } from "electron";
 import { prefetchService, type PrefetchProgress } from "../services/prefetch-service";
 import { getEmail } from "../db";
 import type { IpcResponse, DashboardEmail } from "../../shared/types";
+import { createLogger } from "../services/logger";
+
+const log = createLogger("prefetch-ipc");
 
 // Get the main window for sending IPC events
 function getMainWindow(): BrowserWindow | null {
@@ -55,7 +58,7 @@ export function registerPrefetchIpc(): void {
     try {
       // Start processing in background (non-blocking)
       prefetchService.processAllPending().catch((error) => {
-        console.error("[Prefetch] Error in processAllPending:", error);
+        log.error({ err: error }, "[Prefetch] Error in processAllPending");
       });
       return { success: true, data: undefined };
     } catch (error) {

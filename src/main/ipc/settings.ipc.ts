@@ -25,6 +25,9 @@ import { getEnrichmentBySender } from "../extensions/enrichment-store";
 import { autoUpdateService } from "../services/auto-updater";
 
 import { getDataDir } from "../data-dir";
+import { createLogger } from "../services/logger";
+
+const log = createLogger("settings-ipc");
 
 // Lazy-initialized to avoid running before initDevData() — ES module import
 // hoisting would otherwise cause the Store constructor to create files in
@@ -388,21 +391,21 @@ export function registerSettingsIpc(): void {
         // Clear stale data for changed prompts (inbox only — archived emails don't need re-processing)
         if (analysisChanged) {
           const cleared = clearInboxAnalyses();
-          console.log(`[Settings] Analysis prompt changed — cleared ${cleared} inbox analyses`);
+          log.info(`[Settings] Analysis prompt changed — cleared ${cleared} inbox analyses`);
           // Drafts depend on analysis context, so clear them too (with their agent traces)
           const { draftsCleared: clearedDrafts, tracesCleared: clearedTraces } = clearInboxPendingDraftsAndTraces();
-          console.log(`[Settings] Also cleared ${clearedDrafts} pending drafts, ${clearedTraces} agent traces (depend on analysis)`);
+          log.info(`[Settings] Also cleared ${clearedDrafts} pending drafts, ${clearedTraces} agent traces (depend on analysis)`);
           // Archive-ready depends on analysis too
           const clearedArchive = clearInboxArchiveReady();
-          console.log(`[Settings] Also cleared ${clearedArchive} inbox archive-ready results`);
+          log.info(`[Settings] Also cleared ${clearedArchive} inbox archive-ready results`);
         } else {
           if (draftChanged || agentDrafterChanged) {
             const { draftsCleared: cleared, tracesCleared } = clearInboxPendingDraftsAndTraces();
-            console.log(`[Settings] ${agentDrafterChanged ? "Agent drafter" : "Draft"} prompt changed — cleared ${cleared} pending drafts, ${tracesCleared} agent traces`);
+            log.info(`[Settings] ${agentDrafterChanged ? "Agent drafter" : "Draft"} prompt changed — cleared ${cleared} pending drafts, ${tracesCleared} agent traces`);
           }
           if (archiveReadyChanged) {
             const cleared = clearInboxArchiveReady();
-            console.log(`[Settings] Archive-ready prompt changed — cleared ${cleared} inbox archive-ready results`);
+            log.info(`[Settings] Archive-ready prompt changed — cleared ${cleared} inbox archive-ready results`);
           }
         }
 
@@ -424,7 +427,7 @@ export function registerSettingsIpc(): void {
 
           // Re-trigger background processing
           prefetchService.processAllPending().catch((error) => {
-            console.error("[Settings] Error re-processing after prompt change:", error);
+            log.error({ err: error }, "[Settings] Error re-processing after prompt change");
           });
         } else {
           prefetchService.reset();
@@ -634,7 +637,7 @@ export function registerSettingsIpc(): void {
         const enrichment = getEnrichmentBySender(emailAddr.toLowerCase(), "web-search");
         if (enrichment?.data) {
           const data = enrichment.data as { name: string; summary: string; email: string; lookupAt?: number };
-          console.log(`[SenderProfile] Using extension cache for ${emailAddr}`);
+          log.info(`[SenderProfile] Using extension cache for ${emailAddr}`);
           return {
             success: true,
             data: {
@@ -649,7 +652,7 @@ export function registerSettingsIpc(): void {
         // Fall back to legacy sender_profiles table
         const existingProfile = getSenderProfile(emailAddr);
         if (existingProfile) {
-          console.log(`[SenderProfile] Using legacy cache for ${emailAddr}`);
+          log.info(`[SenderProfile] Using legacy cache for ${emailAddr}`);
           return { success: true, data: existingProfile };
         }
 

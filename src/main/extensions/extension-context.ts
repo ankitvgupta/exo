@@ -9,6 +9,7 @@ import {
   setExtensionStorage,
   deleteExtensionStorage,
 } from "../db";
+import { createLogger as createPinoLogger } from "../services/logger";
 
 /**
  * Create storage API for an extension
@@ -66,23 +67,25 @@ function createSecrets(extensionId: string): ExtensionSecrets {
 }
 
 /**
- * Create logger for an extension
+ * Create logger for an extension.
+ * Wraps the pino structured logger so extension log output
+ * goes through the same pipeline as the rest of the app.
  */
-function createLogger(extensionId: string): ExtensionLogger {
-  const prefix = `[Ext:${extensionId}]`;
+function createExtLogger(extensionId: string): ExtensionLogger {
+  const pino = createPinoLogger(`ext:${extensionId}`);
 
   return {
     info(message: string, ...args: unknown[]) {
-      console.log(prefix, message, ...args);
+      pino.info({ args: args.length > 0 ? args : undefined }, message);
     },
     warn(message: string, ...args: unknown[]) {
-      console.warn(prefix, message, ...args);
+      pino.warn({ args: args.length > 0 ? args : undefined }, message);
     },
     error(message: string, ...args: unknown[]) {
-      console.error(prefix, message, ...args);
+      pino.error({ args: args.length > 0 ? args : undefined }, message);
     },
     debug(message: string, ...args: unknown[]) {
-      console.debug(prefix, message, ...args);
+      pino.debug({ args: args.length > 0 ? args : undefined }, message);
     },
   };
 }
@@ -99,6 +102,6 @@ export function createExtensionContext(
     extensionPath,
     storage: createStorage(extensionId),
     secrets: createSecrets(extensionId),
-    logger: createLogger(extensionId),
+    logger: createExtLogger(extensionId),
   };
 }

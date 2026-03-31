@@ -15,6 +15,9 @@ import { scheduledSendService } from "../services/scheduled-send-service";
 import { getEmailSyncService } from "./sync.ipc";
 import type { IpcResponse, ScheduledMessage, ScheduledMessageStats, SendMessageOptions } from "../../shared/types";
 import { formatAddressesWithNames, extractThreadNames } from "../utils/address-formatting";
+import { createLogger } from "../services/logger";
+
+const log = createLogger("scheduled-send-ipc");
 
 const isTestMode = process.env.EXO_TEST_MODE === "true";
 const isDemoMode = process.env.EXO_DEMO_MODE === "true";
@@ -52,7 +55,7 @@ export function registerScheduledSendIpc(): void {
       options: SendMessageOptions & { accountId: string; scheduledAt: number }
     ): Promise<IpcResponse<ScheduledMessage>> => {
       if (useFakeData) {
-        console.log("[DEMO] Scheduling message to:", options.to, "at", new Date(options.scheduledAt));
+        log.info("[DEMO] Scheduling message to:", options.to, "at", new Date(options.scheduledAt));
         const msg: ScheduledMessage = {
           id: `demo-scheduled-${Date.now()}`,
           accountId: options.accountId,
@@ -103,7 +106,7 @@ export function registerScheduledSendIpc(): void {
           createdAt: now,
         });
 
-        console.log(`[ScheduledSend] Scheduled message ${id} for ${new Date(options.scheduledAt).toISOString()}`);
+        log.info(`[ScheduledSend] Scheduled message ${id} for ${new Date(options.scheduledAt).toISOString()}`);
 
         const row = getScheduledMessage(id);
         if (!row) {
@@ -170,15 +173,15 @@ export function registerScheduledSendIpc(): void {
               references: row.references || undefined,
             });
             draftId = draft.id;
-            console.log(`[ScheduledSend] Created Gmail draft ${draftId} from cancelled message ${id}`);
+            log.info(`[ScheduledSend] Created Gmail draft ${draftId} from cancelled message ${id}`);
           } catch (draftError) {
             // Draft creation is best-effort; still cancel the scheduled message
-            console.warn(`[ScheduledSend] Failed to create draft for cancelled message ${id}:`, draftError);
+            log.warn({ err: draftError }, `[ScheduledSend] Failed to create draft for cancelled message ${id}`);
           }
         }
 
         updateScheduledMessageStatus(id, "cancelled");
-        console.log(`[ScheduledSend] Cancelled message ${id}`);
+        log.info(`[ScheduledSend] Cancelled message ${id}`);
         broadcastStatsChanged();
         return { success: true, data: { draftId } };
       } catch (error) {
@@ -204,7 +207,7 @@ export function registerScheduledSendIpc(): void {
         }
 
         updateScheduledMessageTime(id, scheduledAt);
-        console.log(`[ScheduledSend] Rescheduled message ${id} to ${new Date(scheduledAt).toISOString()}`);
+        log.info(`[ScheduledSend] Rescheduled message ${id} to ${new Date(scheduledAt).toISOString()}`);
 
         const updated = getScheduledMessage(id);
         if (!updated) {

@@ -18,6 +18,9 @@ import { generateDraftForEmail, generateForwardForEmail } from "../services/draf
 import { saveDraftAndSync } from "../services/gmail-draft-sync";
 import { DEFAULT_STYLE_PROMPT } from "../../shared/types";
 import { populatePrivateProviderConfig } from "./private-providers-main";
+import { createLogger } from "../services/logger";
+
+const log = createLogger("agent-coordinator");
 
 /**
  * Coordinates the agent utility process from the main process.
@@ -124,7 +127,7 @@ export class AgentCoordinator {
     // Worker lives in out/worker/, one level up from out/main/ where __dirname points
     const workerPath = path.join(__dirname, "..", "worker", "agent-worker.cjs");
     if (!existsSync(workerPath)) {
-      console.warn(`[AgentCoordinator] Worker not found at ${workerPath} — agent commands will fail until the worker is built`);
+      log.warn(`[AgentCoordinator] Worker not found at ${workerPath} — agent commands will fail until the worker is built`);
       return;
     }
     this.worker = utilityProcess.fork(workerPath, [], { stdio: ["ignore", "pipe", "pipe"] });
@@ -134,13 +137,13 @@ export class AgentCoordinator {
     this.worker.stdout?.on("data", (data: Buffer) => {
       const lines = data.toString().trimEnd().split("\n");
       for (const line of lines) {
-        console.log(`[AgentWorker:out] ${line}`);
+        log.info(`[AgentWorker:out] ${line}`);
       }
     });
     this.worker.stderr?.on("data", (data: Buffer) => {
       const lines = data.toString().trimEnd().split("\n");
       for (const line of lines) {
-        console.error(`[AgentWorker:err] ${line}`);
+        log.error(`[AgentWorker:err] ${line}`);
       }
     });
 
@@ -149,7 +152,7 @@ export class AgentCoordinator {
     });
 
     this.worker.on("exit", (code) => {
-      console.log(`[AgentCoordinator] Worker exited with code ${code}`);
+      log.info(`[AgentCoordinator] Worker exited with code ${code}`);
       this.worker = null;
       // Close all active MessagePorts to prevent resource leaks
       for (const [, port] of this.activePorts) {
@@ -199,7 +202,7 @@ export class AgentCoordinator {
     if (this.installedProviders.size > 0) {
       this.workerReady = this.workerReady.then(() => {
         for (const [providerId, providerPath] of this.installedProviders) {
-          console.log(`[AgentCoordinator] Re-loading installed provider on respawn: ${providerId}`);
+          log.info(`[AgentCoordinator] Re-loading installed provider on respawn: ${providerId}`);
           this.sendToWorker({
             type: "load_provider",
             providerId,
@@ -357,9 +360,9 @@ export class AgentCoordinator {
         status: state,
         messagesJson: JSON.stringify(events),
       });
-      console.log(`[AgentCoordinator] Persisted ${events.length} events for task ${taskId}`);
+      log.info(`[AgentCoordinator] Persisted ${events.length} events for task ${taskId}`);
     } catch (err) {
-      console.error(`[AgentCoordinator] Failed to persist events for task ${taskId}:`, err);
+      log.error({ err: err }, `[AgentCoordinator] Failed to persist events for task ${taskId}`);
     }
 
     this.taskEvents.delete(taskId);
@@ -525,7 +528,7 @@ export class AgentCoordinator {
           cb.resolve({ success: false, error: msg.error });
           this.providerLoadCallbacks.delete(msg.providerId);
         }
-        console.error(`[AgentCoordinator] Provider ${msg.providerId} load error: ${msg.error}`);
+        log.error(`[AgentCoordinator] Provider ${msg.providerId} load error: ${msg.error}`);
         break;
       }
       case "provider_health": {

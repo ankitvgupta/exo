@@ -22,11 +22,14 @@ import { loadManifest, findExtensionPaths } from "./manifest-loader";
 import { createExtensionContext } from "./extension-context";
 import { createExtensionAPI, setRegistries, setAuthRequiredCallback, registerExtensionDisplayName, getAuthHandler, getAuthExtensions, checkExtensionAuth, hasCheckAuth } from "./extension-api";
 import { saveEnrichment, getEnrichments, hasValidEnrichment, getEnrichmentBySender } from "./enrichment-store";
+import { createLogger } from "../services/logger";
+
+const log = createLogger("extension-host");
 
 // Memory logging helper
 function logMemory(label: string): void {
   const used = process.memoryUsage();
-  console.log(`[Memory:${label}] RSS: ${Math.round(used.rss / 1024 / 1024)}MB, Heap: ${Math.round(used.heapUsed / 1024 / 1024)}/${Math.round(used.heapTotal / 1024 / 1024)}MB`);
+  log.info(`[Memory:${label}] RSS: ${Math.round(used.rss / 1024 / 1024)}MB, Heap: ${Math.round(used.heapUsed / 1024 / 1024)}/${Math.round(used.heapTotal / 1024 / 1024)}MB`);
 }
 
 /**
@@ -88,7 +91,7 @@ export class ExtensionHost {
    */
   async loadExtensions(bundledPath: string, installedPath?: string): Promise<void> {
     const extensionPaths = findExtensionPaths(bundledPath, installedPath);
-    console.log(`[Extensions] Found ${extensionPaths.length} extension(s) to load`);
+    log.info(`[Extensions] Found ${extensionPaths.length} extension(s) to load`);
 
     for (const extPath of extensionPaths) {
       await this.loadExtension(extPath);
@@ -106,7 +109,7 @@ export class ExtensionHost {
 
     // Check if already loaded
     if (this.extensions.has(manifest.id)) {
-      console.warn(`[Extensions] Extension ${manifest.id} already loaded, skipping`);
+      log.warn(`[Extensions] Extension ${manifest.id} already loaded, skipping`);
       return false;
     }
 
@@ -124,7 +127,7 @@ export class ExtensionHost {
           scope: panel.scope ?? "sender",
         };
         this.sidebarPanels.set(`${manifest.id}:${panel.id}`, registration);
-        console.log(`[Extensions] Registered sidebar panel: ${manifest.id}:${panel.id}`);
+        log.info(`[Extensions] Registered sidebar panel: ${manifest.id}:${panel.id}`);
       }
     }
 
@@ -149,7 +152,7 @@ export class ExtensionHost {
 
     this.extensions.set(manifest.id, loadedExt);
     registerExtensionDisplayName(manifest.id, manifest.displayName);
-    console.log(`[Extensions] Loaded extension: ${manifest.id}`);
+    log.info(`[Extensions] Loaded extension: ${manifest.id}`);
 
     return true;
   }
@@ -171,12 +174,12 @@ export class ExtensionHost {
   async activateExtension(extensionId: string): Promise<boolean> {
     const ext = this.extensions.get(extensionId);
     if (!ext) {
-      console.error(`[Extensions] Extension ${extensionId} not found`);
+      log.error(`[Extensions] Extension ${extensionId} not found`);
       return false;
     }
 
     if (ext.isActive) {
-      console.warn(`[Extensions] Extension ${extensionId} already active`);
+      log.warn(`[Extensions] Extension ${extensionId} already active`);
       return true;
     }
 
@@ -184,7 +187,7 @@ export class ExtensionHost {
       // For bundled extensions, use pre-registered modules
       const module = this.bundledModules.get(extensionId);
       if (!module) {
-        console.error(`[Extensions] No module registered for ${extensionId}`);
+        log.error(`[Extensions] No module registered for ${extensionId}`);
         return false;
       }
 
@@ -197,10 +200,10 @@ export class ExtensionHost {
       await module.activate(ext.context, api);
 
       ext.isActive = true;
-      console.log(`[Extensions] Activated extension: ${extensionId}`);
+      log.info(`[Extensions] Activated extension: ${extensionId}`);
       return true;
     } catch (error) {
-      console.error(`[Extensions] Failed to activate extension ${extensionId}:`, error);
+      log.error({ err: error }, `[Extensions] Failed to activate extension ${extensionId}`);
       return false;
     }
   }
@@ -210,7 +213,7 @@ export class ExtensionHost {
    */
   registerBundledModule(extensionId: string, module: ExtensionModule): void {
     this.bundledModules.set(extensionId, module);
-    console.log(`[Extensions] Registered bundled module: ${extensionId}`);
+    log.info(`[Extensions] Registered bundled module: ${extensionId}`);
   }
 
   /**
@@ -222,7 +225,7 @@ export class ExtensionHost {
     module: ExtensionModule
   ): Promise<void> {
     if (this.extensions.has(manifest.id)) {
-      console.warn(`[Extensions] Extension ${manifest.id} already loaded, skipping`);
+      log.warn(`[Extensions] Extension ${manifest.id} already loaded, skipping`);
       return;
     }
 
@@ -240,7 +243,7 @@ export class ExtensionHost {
           scope: panel.scope ?? "sender",
         };
         this.sidebarPanels.set(`${manifest.id}:${panel.id}`, registration);
-        console.log(`[Extensions] Registered sidebar panel: ${manifest.id}:${panel.id}`);
+        log.info(`[Extensions] Registered sidebar panel: ${manifest.id}:${panel.id}`);
       }
     }
 
@@ -301,10 +304,10 @@ export class ExtensionHost {
 
       ext.isActive = false;
       ext.module = null;
-      console.log(`[Extensions] Deactivated extension: ${extensionId}`);
+      log.info(`[Extensions] Deactivated extension: ${extensionId}`);
       return true;
     } catch (error) {
-      console.error(`[Extensions] Failed to deactivate extension ${extensionId}:`, error);
+      log.error({ err: error }, `[Extensions] Failed to deactivate extension ${extensionId}`);
       return false;
     }
   }
@@ -380,7 +383,7 @@ export class ExtensionHost {
       this.enrichmentInProgress.add(email.id);
 
       try {
-        console.log(`[Extensions] Starting enrichment for ${email.id}`);
+        log.info(`[Extensions] Starting enrichment for ${email.id}`);
         const enrichment = await provider.enrich(email, threadEmails);
         if (enrichment) {
           // Save to database with sender email for cross-email caching
@@ -398,7 +401,7 @@ export class ExtensionHost {
           this.notifyEnrichmentReady(email.id, result);
         }
       } catch (error) {
-        console.error(`[Extensions] Enrichment provider ${provider.id} failed:`, error);
+        log.error({ err: error }, `[Extensions] Enrichment provider ${provider.id} failed`);
       } finally {
         this.enrichmentInProgress.delete(email.id);
       }
@@ -500,9 +503,9 @@ export class ExtensionHost {
       throw new Error(`No auth handler registered for extension: ${extensionId}`);
     }
 
-    console.log(`[Extensions] Triggering auth for ${extensionId}`);
+    log.info(`[Extensions] Triggering auth for ${extensionId}`);
     await handler();
-    console.log(`[Extensions] Auth completed for ${extensionId}`);
+    log.info(`[Extensions] Auth completed for ${extensionId}`);
   }
 
   /**
@@ -617,12 +620,12 @@ export class ExtensionHost {
         await this.loadInstalledExtension(extDir);
         loaded++;
       } catch (error) {
-        console.error(`[Extensions] Failed to load installed extension at ${extDir}:`, error);
+        log.error({ err: error }, `[Extensions] Failed to load installed extension at ${extDir}`);
       }
     }
 
     if (loaded > 0) {
-      console.log(`[Extensions] Loaded ${loaded} installed extension(s)`);
+      log.info(`[Extensions] Loaded ${loaded} installed extension(s)`);
     }
   }
 
@@ -667,7 +670,7 @@ export class ExtensionHost {
     }
 
     if (this.extensions.has(id)) {
-      console.warn(`[Extensions] Extension ${id} already loaded, skipping installed version`);
+      log.warn(`[Extensions] Extension ${id} already loaded, skipping installed version`);
       return;
     }
 
@@ -744,7 +747,7 @@ export class ExtensionHost {
       }
     }
 
-    console.log(`[Extensions] Loaded installed package: ${displayName} (${id})`);
+    log.info(`[Extensions] Loaded installed package: ${displayName} (${id})`);
   }
 
   /**
@@ -766,7 +769,7 @@ export class ExtensionHost {
         const setup = setupModule.default || setupModule;
         registerProviderAuth(id, setup);
       } catch (err) {
-        console.error(`[Extensions] Failed to load main-setup.js for ${id}:`, err);
+        log.error({ err: err }, `[Extensions] Failed to load main-setup.js for ${id}`);
       }
     }
 
@@ -780,7 +783,7 @@ export class ExtensionHost {
         if (ext) {
           (ext as unknown as { loadError: string }).loadError = result.error ?? "Unknown load error";
         }
-        console.error(`[Extensions] Agent provider ${id} failed to load: ${result.error}`);
+        log.error(`[Extensions] Agent provider ${id} failed to load: ${result.error}`);
       }
     }
   }
@@ -935,7 +938,7 @@ export class ExtensionHost {
       rmSync(ext.path, { recursive: true, force: true });
     }
 
-    console.log(`[Extensions] Uninstalled extension: ${extensionId}`);
+    log.info(`[Extensions] Uninstalled extension: ${extensionId}`);
     return true;
   }
 

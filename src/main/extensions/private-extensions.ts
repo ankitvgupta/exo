@@ -9,6 +9,9 @@
 
 import type { ExtensionHost } from "./extension-host";
 import { ExtensionManifestSchema, type ExtensionModule } from "../../shared/extension-types";
+import { createLogger } from "../services/logger";
+
+const log = createLogger("private-extensions");
 
 // Use Vite's import.meta.glob to discover private extension modules at build time
 // This will be an empty object if extensions-private doesn't exist
@@ -48,16 +51,16 @@ export async function registerPrivateExtensions(
     try {
       const pkg = getPackageJson(path);
       if (!pkg?.mailExtension) {
-        console.warn(`[Extensions] Private extension at ${path} missing mailExtension`);
+        log.warn(`[Extensions] Private extension at ${path} missing mailExtension`);
         continue;
       }
 
       const manifest = ExtensionManifestSchema.parse(pkg.mailExtension);
       const module = privateExtensionModules[path];
       await extensionHost.registerBundledExtensionFull(manifest, module);
-      console.log(`[Extensions] Registered private extension: ${manifest.id}`);
+      log.info(`[Extensions] Registered private extension: ${manifest.id}`);
     } catch (e) {
-      console.warn(`[Extensions] Failed to load private extension from ${path}:`, e);
+      log.warn({ err: e }, `[Extensions] Failed to load private extension from ${path}`);
     }
   }
 }

@@ -9,6 +9,9 @@ import {
   getSentEmailCountToRecipient,
 } from "../db";
 import type { GmailClient } from "./gmail-client";
+import { createLogger } from "./logger";
+
+const log = createLogger("style-profiler");
 
 // ============================================
 // Heuristic signal extraction
@@ -201,7 +204,7 @@ async function fetchAndCacheSentEmails(
     try {
       saveEmail(email, accountId);
     } catch (err) {
-      console.warn(`[StyleProfiler] Failed to cache email ${email.id}:`, err);
+      log.warn({ err: err }, `[StyleProfiler] Failed to cache email ${email.id}`);
     }
     rows.push({
       id: email.id,
@@ -213,7 +216,7 @@ async function fetchAndCacheSentEmails(
     });
   }
 
-  console.log(`[StyleProfiler] Gmail search "${query}" → fetched ${rows.length} emails`);
+  log.info(`[StyleProfiler] Gmail search "${query}" → fetched ${rows.length} emails`);
   return rows;
 }
 
@@ -260,7 +263,7 @@ async function selectExamples(
       );
       addRowsToExamples(gmailRows, recipientEmail, examples, seenIds, MIN_EXAMPLES);
     } catch (err) {
-      console.warn("[StyleProfiler] Gmail recipient search failed:", err);
+      log.warn({ err: err }, "[StyleProfiler] Gmail recipient search failed");
     }
   }
 
@@ -283,7 +286,7 @@ async function selectExamples(
         );
         addRowsToExamples(gmailRows, `@${domain}`, examples, seenIds, MIN_EXAMPLES);
       } catch (err) {
-        console.warn("[StyleProfiler] Gmail domain search failed:", err);
+        log.warn({ err: err }, "[StyleProfiler] Gmail domain search failed");
       }
     }
   }
