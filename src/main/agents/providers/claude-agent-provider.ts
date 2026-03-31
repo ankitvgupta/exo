@@ -430,6 +430,19 @@ function buildBashPreToolUseHook(
       | undefined;
     const command = toolInput?.command ?? "";
 
+    // Reject commands containing shell operators that could chain additional commands
+    // e.g. "ls && rm -rf /" or "ls; cat /etc/passwd" or "ls | xargs rm"
+    if (/[;&|`$><]/.test(command)) {
+      return {
+        hookSpecificOutput: {
+          hookEventName: "PreToolUse" as const,
+          permissionDecision: "deny" as const,
+          permissionDecisionReason:
+            "Shell operators (;, &, |, `, $, >, <) are not allowed in CLI tool commands.",
+        },
+      };
+    }
+
     // Extract the base command (first token, stripping any path prefix)
     const firstToken = command.trim().split(/\s+/)[0] ?? "";
     const baseCommand = firstToken.split("/").pop() ?? firstToken;
