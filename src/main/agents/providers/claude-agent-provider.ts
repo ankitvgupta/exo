@@ -9,6 +9,7 @@ import {
   type Query,
   type McpServerConfig,
   type SpawnOptions as SdkSpawnOptions,
+  type HookCallback,
 } from "@anthropic-ai/claude-agent-sdk";
 import type {
   AgentProvider,
@@ -21,6 +22,7 @@ import type {
   AgentFrameworkConfig,
   ToolExecutorFn,
 } from "../types";
+import type { CliToolConfig } from "../../../shared/types";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
 /**
@@ -61,14 +63,8 @@ export class ClaudeAgentProvider implements AgentProvider {
       buildMcpToolWithTracking(spec, toolExecutor, completedToolCalls),
     );
 
-    // Create in-process MCP server with our tools
-    const mcpServer = createSdkMcpServer({
-      name: "mail-app-tools",
-      version: "1.0.0",
-      tools: mcpTools,
-    });
-
-    const systemPrompt = buildSystemPrompt(context, tools, context.memoryContext);
+    const cliTools = this.frameworkConfig.cliTools ?? [];
+    const systemPrompt = buildSystemPrompt(context, tools, context.memoryContext, cliTools);
     const abortController = new AbortController();
 
     // Link the external signal to our internal controller
@@ -78,14 +74,18 @@ export class ClaudeAgentProvider implements AgentProvider {
     // Built-in SDK tools handled internally by the SDK process.
     // Used for: tools list, allowedTools whitelist, and filtering
     // tool_call_start events (built-in tools never get tool_call_end).
-    const builtInTools = ["Glob", "Grep", "WebSearch", "AskUserQuestion"] as const;
+    // Bash is included only when CLI tools are configured — a PreToolUse hook
+    // gates which commands are allowed based on the user's CLI tool config.
+    const hasCliTools = cliTools.some((t) => t.command.trim());
+    const builtInTools: string[] = [
+      "Glob", "Grep", "WebSearch", "AskUserQuestion",
+      ...(hasCliTools ? ["Bash"] : []),
+    ];
     const builtInToolSet = new Set<string>(builtInTools);
 
     // Build MCP server map — always include our tool server,
     // conditionally include Chrome DevTools for browser automation
-    const mcpServerMap: Record<string, McpServerConfig> = {
-      "mail-app-tools": mcpServer,
-    };
+    const mcpServerMap: Record<string, McpServerConfig> = {};
     const allowedToolPatterns = tools.map((t) => `mcp__mail-app-tools__${t.name}`);
 
     const browserConfig = this.frameworkConfig.browserConfig;
@@ -144,6 +144,18 @@ export class ClaudeAgentProvider implements AgentProvider {
       allowedToolPatterns.push(`mcp__${name}__*`);
     }
 
+    // Build the PreToolUse hook for Bash command filtering.
+    // When CLI tools are configured, we allow Bash but gate each invocation:
+    // only commands matching a configured CLI tool are permitted.
+    const bashPreToolUseHook = buildBashPreToolUseHook(cliTools);
+
+    const mcpServer = createSdkMcpServer({
+      name: "mail-app-tools",
+      version: "1.0.0",
+      tools: mcpTools,
+    });
+    mcpServerMap["mail-app-tools"] = mcpServer;
+
     const q = query({
       prompt,
       options: {
@@ -152,18 +164,14 @@ export class ClaudeAgentProvider implements AgentProvider {
         abortController,
         mcpServers: mcpServerMap,
         tools: [...builtInTools],
-        // Auto-approve built-in tools + our configured MCP tools.
-        // With dontAsk, anything NOT in this list is silently denied —
-        // this blocks system-inherited MCPs (PostHog, Circleback, etc.)
-        // from ~/.claude.json without needing fragile glob patterns.
-        allowedTools: [...builtInTools, ...allowedToolPatterns],
+        allowedTools: [
+          ...builtInTools,
+          ...allowedToolPatterns,
+        ],
         includePartialMessages: true,
         maxTurns: 25,
-        // dontAsk: only allowedTools can execute, everything else is denied.
-        // This replaces bypassPermissions — we don't need blanket bypass since
-        // we explicitly list every tool we want.
         permissionMode: "dontAsk",
-        // Don't load any filesystem settings, we provide everything
+        ...(bashPreToolUseHook ? { hooks: { PreToolUse: [bashPreToolUseHook] } } : {}),
         settingSources: [],
         // Don't persist sessions for SDK calls from within the app
         persistSession: false,
@@ -208,6 +216,22 @@ export class ClaudeAgentProvider implements AgentProvider {
               if (block.type === "tool_result") {
                 const preview = JSON.stringify(block).slice(0, 500);
                 console.log(`[ClaudeAgent:tool_result] ${preview}`);
+
+                // Emit tool_call_end for Bash tool results so the UI can display them.
+                // Built-in tools are handled by the SDK subprocess, so their results
+                // come back as tool_result blocks in user messages rather than through
+                // our MCP handler's completedToolCalls queue.
+                const toolUseId = block.tool_use_id as string | undefined;
+                if (toolUseId) {
+                  const ids = pendingToolCallIds.get("Bash");
+                  if (ids?.includes(toolUseId)) {
+                    ids.splice(ids.indexOf(toolUseId), 1);
+                    const resultText = Array.isArray(block.content)
+                      ? block.content.map((c: Record<string, unknown>) => c.text ?? "").join("")
+                      : typeof block.content === "string" ? block.content : JSON.stringify(block.content);
+                    yield { type: "tool_call_end" as const, toolCallId: toolUseId, result: resultText };
+                  }
+                }
               }
             }
           }
@@ -231,7 +255,8 @@ export class ClaudeAgentProvider implements AgentProvider {
         for (const event of mapSdkMessage(message)) {
           // Skip built-in tool events — they're handled internally by the SDK
           // and never produce tool_call_end, which would leave orphaned spinners.
-          if (event.type === "tool_call_start" && builtInToolSet.has(event.toolName)) {
+          // Exception: Bash events are forwarded so CLI tool results are visible.
+          if (event.type === "tool_call_start" && builtInToolSet.has(event.toolName) && event.toolName !== "Bash") {
             continue;
           }
           if (event.type === "tool_call_start") {
@@ -384,6 +409,68 @@ function buildMcpToolWithTracking(
 }
 
 /**
+ * Build a PreToolUse hook that gates Bash commands against the CLI tool allowlist.
+ *
+ * Returns null if no CLI tools are configured (Bash won't be in the tools list).
+ * When active, each Bash invocation is checked: the base command (first token)
+ * must match one of the configured CLI tool commands. Non-matching commands
+ * are denied with an explanation.
+ */
+function buildBashPreToolUseHook(
+  cliTools: CliToolConfig[],
+): { matcher: string; hooks: HookCallback[] } | null {
+  const activeCli = cliTools.filter((t) => t.command.trim());
+  if (activeCli.length === 0) return null;
+
+  const allowedCommands = new Set(activeCli.map((t) => t.command.trim()));
+
+  const hook: HookCallback = async (input) => {
+    const toolInput = (input as Record<string, unknown>).tool_input as
+      | { command?: string }
+      | undefined;
+    const command = toolInput?.command ?? "";
+
+    // Reject commands containing shell operators or newlines that could chain additional commands
+    // e.g. "ls && rm -rf /" or "ls; cat /etc/passwd" or "ls\nrm -rf /"
+    if (/[;&|`$><\n\r]/.test(command)) {
+      return {
+        hookSpecificOutput: {
+          hookEventName: "PreToolUse" as const,
+          permissionDecision: "deny" as const,
+          permissionDecisionReason:
+            "Shell operators (;, &, |, `, $, >, <) are not allowed in CLI tool commands.",
+        },
+      };
+    }
+
+    // Extract the base command (first token, stripping any path prefix)
+    const firstToken = command.trim().split(/\s+/)[0] ?? "";
+    const baseCommand = firstToken.split("/").pop() ?? firstToken;
+
+    if (allowedCommands.has(baseCommand)) {
+      return {
+        hookSpecificOutput: {
+          hookEventName: "PreToolUse" as const,
+          permissionDecision: "allow" as const,
+        },
+      };
+    }
+
+    return {
+      hookSpecificOutput: {
+        hookEventName: "PreToolUse" as const,
+        permissionDecision: "deny" as const,
+        permissionDecisionReason:
+          `Command "${baseCommand}" is not in the allowed CLI tools list. ` +
+          `Allowed commands: ${[...allowedCommands].join(", ")}`,
+      },
+    };
+  };
+
+  return { matcher: "Bash", hooks: [hook] };
+}
+
+/**
  * Strip the MCP server prefix from a tool name.
  * "mcp__mail-app-tools__read_email" → "read_email"
  */
@@ -396,7 +483,7 @@ function baseToolName(name: string): string {
   return name;
 }
 
-function buildSystemPrompt(context: AgentContext, tools: AgentToolSpec[], memoryContext?: string): string {
+function buildSystemPrompt(context: AgentContext, tools: AgentToolSpec[], memoryContext?: string, cliTools?: CliToolConfig[]): string {
   const parts: string[] = [
     "You are an AI assistant embedded in a Gmail client application.",
     "You help users manage their email efficiently by reading, analyzing, drafting, and organizing messages.",
@@ -483,6 +570,20 @@ function buildSystemPrompt(context: AgentContext, tools: AgentToolSpec[], memory
       parts.push("");
       parts.push(guidance);
     }
+  }
+
+  // Add CLI tool guidance
+  const activeCli = cliTools?.filter(t => t.command.trim()) ?? [];
+  if (activeCli.length > 0) {
+    parts.push("");
+    parts.push("## CLI Tools");
+    parts.push("You have access to the Bash tool, but ONLY for the following commands:");
+    for (const t of activeCli) {
+      parts.push(`- **${t.command}**${t.instructions.trim() ? `: ${t.instructions.trim()}` : ""}`);
+    }
+    parts.push("");
+    parts.push("Any other commands will be rejected. Use the Bash tool with the allowed commands only.");
+    parts.push("After running a command, briefly summarize the outcome in your response. The user can see the full tool output in the tool panel, so focus on highlighting the key result rather than repeating the raw output.");
   }
 
   return parts.join("\n");

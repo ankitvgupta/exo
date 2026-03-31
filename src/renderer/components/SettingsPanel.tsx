@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import DOMPurify from "dompurify";
-import { DEFAULT_ANALYSIS_PROMPT, DEFAULT_DRAFT_PROMPT, DEFAULT_ARCHIVE_READY_PROMPT, DEFAULT_STYLE_PROMPT, DEFAULT_AGENT_DRAFTER_PROMPT, DEFAULT_MODEL_CONFIG, MODEL_TIERS, MODEL_TIER_LABELS, type EAConfig, type Config, type InboxDensity, type Signature, type McpServerConfig, type ModelConfig, type ModelTier } from "../../shared/types";
+import { DEFAULT_ANALYSIS_PROMPT, DEFAULT_DRAFT_PROMPT, DEFAULT_ARCHIVE_READY_PROMPT, DEFAULT_STYLE_PROMPT, DEFAULT_AGENT_DRAFTER_PROMPT, DEFAULT_MODEL_CONFIG, MODEL_TIERS, MODEL_TIER_LABELS, type EAConfig, type Config, type InboxDensity, type Signature, type McpServerConfig, type ModelConfig, type ModelTier, type CliToolConfig } from "../../shared/types";
 import { useAppStore, type Account, type PrefetchProgress, type SettingsTab } from "../store";
 import { reconfigurePostHog, trackEvent } from "../services/posthog";
 import { SplitConfigEditor } from "./SplitConfigEditor";
@@ -96,6 +96,13 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
   const [isSavingMcp, setIsSavingMcp] = useState(false);
   const [mcpFormError, setMcpFormError] = useState<string | null>(null);
 
+  // CLI tools state — each item gets a stable _key for React reconciliation
+  const cliToolKeyRef = useRef(0);
+  const nextCliToolKey = () => ++cliToolKeyRef.current;
+  const [cliTools, setCliTools] = useState<(CliToolConfig & { _key: number })[]>([]);
+  const [isSavingCliTools, setIsSavingCliTools] = useState(false);
+  const [cliToolsSaved, setCliToolsSaved] = useState(false);
+
   // Signature management state
   const [signatures, setSignatures] = useState<Signature[]>([]);
   const [editingSignature, setEditingSignature] = useState<Signature | null>(null);
@@ -176,6 +183,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
         setChromeProfilePath(browser.chromeProfilePath ?? "");
       }
       setMcpServers(generalConfig.mcpServers ?? {});
+      setCliTools((generalConfig.cliTools ?? []).map(t => ({ ...t, _key: nextCliToolKey() })));
       // PostHog analytics config — only set once to avoid clobbering unsaved edits on refetch
       if (!analyticsInitialized.current) {
         analyticsInitialized.current = true;
@@ -2390,6 +2398,97 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
               )}
             </div>
 
+            {/* CLI Tools */}
+            <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600 p-6">
+              <div className="mb-4">
+                <h4 className="text-base font-medium text-gray-900 dark:text-gray-100">
+                  CLI Tools
+                </h4>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                  Allow the agent to run specific CLI commands.
+                  Each command becomes a dedicated tool the agent can call.
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                {cliTools.map((tool, idx) => (
+                  <div key={tool._key} className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg space-y-2">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={tool.command}
+                        onChange={(e) => {
+                          const updated = [...cliTools];
+                          updated[idx] = { ...updated[idx], command: e.target.value };
+                          setCliTools(updated);
+                        }}
+                        placeholder="e.g. curl, python3, jq"
+                        className="flex-1 px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 font-mono"
+                      />
+                      <button
+                        onClick={() => {
+                          setCliTools(cliTools.filter((_, i) => i !== idx));
+                        }}
+                        className="p-1.5 text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors"
+                        title="Remove tool"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                    <textarea
+                      value={tool.instructions}
+                      onChange={(e) => {
+                        const updated = [...cliTools];
+                        updated[idx] = { ...updated[idx], instructions: e.target.value };
+                        setCliTools(updated);
+                      }}
+                      placeholder="Instructions for when to use this tool (optional)"
+                      rows={2}
+                      className="w-full px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500"
+                    />
+                  </div>
+                ))}
+
+                <button
+                  onClick={() => setCliTools([...cliTools, { command: "", instructions: "", _key: nextCliToolKey() }])}
+                  className="text-sm text-purple-600 dark:text-purple-400 hover:underline"
+                >
+                  + Add CLI Tool
+                </button>
+              </div>
+
+              <div className="mt-4 flex justify-end">
+                <button
+                  onClick={async () => {
+                    setIsSavingCliTools(true);
+                    setCliToolsSaved(false);
+                    try {
+                      // Filter out empty commands and strip internal _key before saving
+                      const validTools = cliTools.filter(t => t.command.trim());
+                      const toSave = validTools.map(({ _key, ...rest }) => rest);
+                      await window.api.settings.set({ cliTools: toSave.length > 0 ? toSave : undefined });
+                      queryClient.invalidateQueries({ queryKey: ["general-config"] });
+                      setCliTools(validTools);
+                      setCliToolsSaved(true);
+                      setTimeout(() => setCliToolsSaved(false), 2000);
+                    } finally {
+                      setIsSavingCliTools(false);
+                    }
+                  }}
+                  disabled={isSavingCliTools}
+                  className={`px-4 py-2 text-white text-sm font-medium rounded-lg disabled:opacity-50 transition-colors ${
+                    cliToolsSaved
+                      ? "bg-green-600 dark:bg-green-500"
+                      : "bg-purple-600 hover:bg-purple-700"
+                  }`}
+                >
+                  {isSavingCliTools ? "Saving..." : cliToolsSaved ? "Saved" : "Save"}
+                </button>
+              </div>
+            </div>
+
             {/* Agent Capabilities Info */}
             <div className="bg-gray-50 dark:bg-gray-800/50 p-4 rounded-lg text-sm text-gray-700 dark:text-gray-300">
               <p className="font-medium mb-2">Available agent capabilities:</p>
@@ -2399,6 +2498,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                 <li><strong>Web search:</strong> Search the web for context</li>
                 <li><strong>Browser:</strong> Navigate and extract from web pages (requires Chrome debugging)</li>
                 <li><strong>Custom MCP:</strong> Any tools provided by your configured MCP servers</li>
+                <li><strong>CLI tools:</strong> Run configured CLI commands</li>
                 <li><strong>Batch operations:</strong> Modify labels on multiple emails at once</li>
               </ul>
             </div>

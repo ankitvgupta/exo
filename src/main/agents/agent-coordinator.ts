@@ -182,6 +182,7 @@ export class AgentCoordinator {
         chromeProfilePath: browser.chromeProfilePath,
       } : undefined,
       mcpServers: appConfig.mcpServers,
+      cliTools: appConfig.cliTools,
       providers: {
         "openclaw-agent": {
           enabled: appConfig.openclaw?.enabled ?? false,

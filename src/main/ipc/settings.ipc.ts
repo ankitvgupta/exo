@@ -223,6 +223,13 @@ export function registerSettingsIpc(): void {
           });
         }
 
+        // Propagate CLI tool config changes
+        if ("cliTools" in config) {
+          agentCoordinator.updateConfig({
+            cliTools: newConfig.cliTools,
+          });
+        }
+
         // Propagate OpenClaw config to agent providers.
         // Each provider's updateConfig() picks out what it needs from the partial config.
         if ("openclaw" in config) {
