@@ -2564,7 +2564,7 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
     }
   };
 
-  const handleNewEmailCancel = async (formState: { to: string[]; cc: string[]; bcc: string[]; subject: string; bodyHtml: string; bodyText: string }) => {
+  const handleNewEmailCancel = async (formState: ComposeFormState) => {
     const hasContent = formState.to.length > 0 || formState.subject.trim() || formState.bodyText.trim() || formState.bodyHtml.replace(/<[^>]*>/g, "").trim();
     const existingDraftId = composeState?.restoredDraft?.localDraftId;
 
@@ -2572,6 +2572,7 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
       if (existingDraftId) {
         // Update existing draft with current form state
         await window.api.compose.updateLocalDraft(existingDraftId, {
+          from: formState.from,
           to: formState.to,
           cc: formState.cc.length > 0 ? formState.cc : undefined,
           bcc: formState.bcc.length > 0 ? formState.bcc : undefined,
@@ -2581,6 +2582,7 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
         } as Record<string, unknown>);
         // Update in store too
         useAppStore.getState().updateLocalDraft(existingDraftId, {
+          from: formState.from,
           to: formState.to,
           cc: formState.cc.length > 0 ? formState.cc : undefined,
           bcc: formState.bcc.length > 0 ? formState.bcc : undefined,
@@ -2593,6 +2595,7 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
         // Save new draft
         const result = await window.api.compose.saveLocalDraft({
           accountId: currentAccountId,
+          from: formState.from,
           to: formState.to,
           cc: formState.cc.length > 0 ? formState.cc : undefined,
           bcc: formState.bcc.length > 0 ? formState.bcc : undefined,
