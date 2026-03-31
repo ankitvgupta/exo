@@ -23,7 +23,20 @@ interface AddressInputProps {
   onSuggestionSelected?: (suggestion: ContactSuggestion) => void;
 }
 
-export function AddressInput({ label, value, onChange, placeholder, autoFocus, nameMap, onTab, inputRef: externalRef, fieldId, onChipDrop, onChipDragStart, onSuggestionSelected }: AddressInputProps) {
+export function AddressInput({
+  label,
+  value,
+  onChange,
+  placeholder,
+  autoFocus,
+  nameMap,
+  onTab,
+  inputRef: externalRef,
+  fieldId,
+  onChipDrop,
+  onChipDragStart,
+  onSuggestionSelected,
+}: AddressInputProps) {
   const [inputValue, setInputValue] = useState("");
   const [suggestions, setSuggestions] = useState<ContactSuggestion[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(-1);
@@ -49,11 +62,13 @@ export function AddressInput({ label, value, onChange, placeholder, autoFocus, n
 
     const timer = setTimeout(async () => {
       try {
-        const response = (await window.api.contacts.suggest(trimmed, 8)) as IpcResponse<ContactSuggestion[]>;
+        const response = (await window.api.contacts.suggest(trimmed, 8)) as IpcResponse<
+          ContactSuggestion[]
+        >;
         if (response.success) {
           // Filter out already-added addresses
           const filtered = response.data.filter(
-            (s) => !value.some((v) => v.toLowerCase() === s.email.toLowerCase())
+            (s) => !value.some((v) => v.toLowerCase() === s.email.toLowerCase()),
           );
           setSuggestions(filtered);
           setShowSuggestions(filtered.length > 0);
@@ -89,7 +104,7 @@ export function AddressInput({ label, value, onChange, placeholder, autoFocus, n
         inputRef.current?.focus();
       }
     },
-    [value, onChange, inputRef, onSuggestionSelected]
+    [value, onChange, inputRef, onSuggestionSelected],
   );
 
   const addTypedValue = useCallback(() => {
@@ -183,12 +198,15 @@ export function AddressInput({ label, value, onChange, placeholder, autoFocus, n
     return { text: name, hasName: true };
   };
 
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    if (!fieldId || !e.dataTransfer.types.includes("application/x-address-chip")) return;
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-    setIsDragOver(true);
-  }, [fieldId]);
+  const handleDragOver = useCallback(
+    (e: React.DragEvent) => {
+      if (!fieldId || !e.dataTransfer.types.includes("application/x-address-chip")) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      setIsDragOver(true);
+    },
+    [fieldId],
+  );
 
   const handleDragLeave = useCallback((e: React.DragEvent) => {
     // Only reset when leaving the container (not when entering a child)
@@ -197,17 +215,22 @@ export function AddressInput({ label, value, onChange, placeholder, autoFocus, n
     }
   }, []);
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(false);
-    if (!fieldId || !onChipDrop) return;
-    try {
-      const data = JSON.parse(e.dataTransfer.getData("application/x-address-chip"));
-      if (data.sourceField !== fieldId) {
-        onChipDrop(data.email, data.sourceField);
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      setIsDragOver(false);
+      if (!fieldId || !onChipDrop) return;
+      try {
+        const data = JSON.parse(e.dataTransfer.getData("application/x-address-chip"));
+        if (data.sourceField !== fieldId) {
+          onChipDrop(data.email, data.sourceField);
+        }
+      } catch {
+        /* invalid drag data */
       }
-    } catch { /* invalid drag data */ }
-  }, [fieldId, onChipDrop]);
+    },
+    [fieldId, onChipDrop],
+  );
 
   return (
     <div
@@ -221,9 +244,7 @@ export function AddressInput({ label, value, onChange, placeholder, autoFocus, n
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      <label className="w-10 text-sm text-gray-500 dark:text-gray-400 flex-shrink-0">
-        {label}
-      </label>
+      <label className="w-10 text-sm text-gray-500 dark:text-gray-400 flex-shrink-0">{label}</label>
       <div className="flex-1 flex flex-wrap items-center">
         {value.map((email, i) => {
           const { text, hasName } = chipDisplay(email);
@@ -231,31 +252,65 @@ export function AddressInput({ label, value, onChange, placeholder, autoFocus, n
             <span
               key={email}
               draggable={!!fieldId}
-              onDragStart={fieldId ? (e) => {
-                e.dataTransfer.setData("application/x-address-chip", JSON.stringify({ email, sourceField: fieldId }));
-                e.dataTransfer.effectAllowed = "move";
-                onChipDragStart?.();
-              } : undefined}
+              onDragStart={
+                fieldId
+                  ? (e) => {
+                      e.dataTransfer.setData(
+                        "application/x-address-chip",
+                        JSON.stringify({ email, sourceField: fieldId }),
+                      );
+                      e.dataTransfer.effectAllowed = "move";
+                      onChipDragStart?.();
+                    }
+                  : undefined
+              }
               className={`group/chip relative inline-flex items-center text-sm text-gray-900 dark:text-gray-100 whitespace-nowrap rounded-full pl-1.5 pr-5 py-0.5 -my-0.5 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors ${hasName ? "cursor-pointer" : ""} ${fieldId ? "cursor-grab active:cursor-grabbing" : ""}`}
               data-testid="address-chip"
               role={hasName ? "button" : undefined}
               tabIndex={hasName ? 0 : undefined}
               onDoubleClick={hasName ? () => toggleChipReveal(email) : undefined}
-              onKeyDown={hasName ? (e: React.KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleChipReveal(email); } } : undefined}
-              title={fieldId ? "Drag to move between To, Cc, Bcc" : (hasName ? (revealedChips.has(email) ? "Double-click to hide email" : "Double-click to show email") : undefined)}
+              onKeyDown={
+                hasName
+                  ? (e: React.KeyboardEvent) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        toggleChipReveal(email);
+                      }
+                    }
+                  : undefined
+              }
+              title={
+                fieldId
+                  ? "Drag to move between To, Cc, Bcc"
+                  : hasName
+                    ? revealedChips.has(email)
+                      ? "Double-click to hide email"
+                      : "Double-click to show email"
+                    : undefined
+              }
             >
               {text}
               <button
                 type="button"
-                onClick={(e) => { e.stopPropagation(); handleRemove(email); }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleRemove(email);
+                }}
                 className="absolute right-1 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 opacity-0 group-hover/chip:opacity-100 z-10"
               >
                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
                 </svg>
               </button>
               {(i < value.length - 1 || inputValue !== "") && (
-                <span className="ml-0.5 text-gray-400 dark:text-gray-500 select-none group-hover/chip:invisible">·</span>
+                <span className="ml-0.5 text-gray-400 dark:text-gray-500 select-none group-hover/chip:invisible">
+                  ·
+                </span>
               )}
             </span>
           );
@@ -286,9 +341,7 @@ export function AddressInput({ label, value, onChange, placeholder, autoFocus, n
             <div
               key={suggestion.email}
               className={`px-4 py-2.5 cursor-pointer text-sm flex items-center justify-between gap-4 ${
-                index === selectedIndex
-                  ? "bg-gray-700"
-                  : "hover:bg-gray-700/50"
+                index === selectedIndex ? "bg-gray-700" : "hover:bg-gray-700/50"
               }`}
               onMouseDown={(e) => {
                 e.preventDefault();
@@ -297,9 +350,7 @@ export function AddressInput({ label, value, onChange, placeholder, autoFocus, n
               onMouseEnter={() => setSelectedIndex(index)}
               data-testid="autocomplete-suggestion"
             >
-              <span className="text-gray-100 truncate">
-                {suggestion.name || suggestion.email}
-              </span>
+              <span className="text-gray-100 truncate">{suggestion.name || suggestion.email}</span>
               {suggestion.name && (
                 <span className="text-gray-500 text-sm truncate flex-shrink-0">
                   {suggestion.email}

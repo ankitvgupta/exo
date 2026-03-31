@@ -10,9 +10,11 @@ const isDemoMode = process.env.EXO_DEMO_MODE === "true";
 const useFakeData = isTestMode || isDemoMode;
 
 // Placeholder base64 data for demo mode previews
-const DEMO_PREVIEW_PNG = "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";
+const DEMO_PREVIEW_PNG =
+  "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";
 
-const DEMO_PREVIEW_PDF = "JVBERi0xLjQKMSAwIG9iaiA8PCAvVHlwZSAvQ2F0YWxvZyAvUGFnZXMgMiAwIFIgPj4gZW5kb2JqCjIgMCBvYmogPDwgL1R5cGUgL1BhZ2VzIC9LaWRzIFszIDAgUl0gL0NvdW50IDEgPj4gZW5kb2JqCjMgMCBvYmogPDwgL1R5cGUgL1BhZ2UgL1BhcmVudCAyIDAgUiAvTWVkaWFCb3ggWzAgMCA2MTIgNzkyXSAvQ29udGVudHMgNCAwIFIgL1Jlc291cmNlcyA8PCAvRm9udCA8PCAvRjEgNSAwIFIgPj4gPj4gPj4gZW5kb2JqCjQgMCBvYmogPDwgL0xlbmd0aCAyMjAgPj4gc3RyZWFtCkJUIC9GMSAyNCBUZiA3MiA3MDAgVGQgKFEzIFF1YXJ0ZXJseSBSZXBvcnQgMjAyNSkgVGogMCAtNDAgVGQgL0YxIDE0IFRmIChUZWNoQ29ycCBJbmMuIC0gQ29uZmlkZW50aWFsKSBUaiAwIC0zMCBUZCAoUmV2ZW51ZTogJDEuMk0gfCBVc2VyczogNDUsMDAwIHwgUmV0ZW50aW9uOiA3MiUpIFRqIDAgLTMwIFRkIChUaGlzIGlzIGEgZGVtbyBwcmV2aWV3IHBsYWNlaG9sZGVyLikgVGogRVQKZW5kc3RyZWFtIGVuZG9iago1IDAgb2JqIDw8IC9UeXBlIC9Gb250IC9TdWJ0eXBlIC9UeXBlMSAvQmFzZUZvbnQgL0hlbHZldGljYSA+PiBlbmRvYmoKeHJlZgowIDYKMDAwMDAwMDAwMCA2NTUzNSBmIAowMDAwMDAwMDA5IDAwMDAwIG4gCjAwMDAwMDAwNTggMDAwMDAgbiAKMDAwMDAwMDExNSAwMDAwMCBuIAowMDAwMDAwMjQxIDAwMDAwIG4gCjAwMDAwMDA1MTIgMDAwMDAgbiAKdHJhaWxlciA8PCAvU2l6ZSA2IC9Sb290IDEgMCBSID4+CnN0YXJ0eHJlZgo1ODIKJSVFT0Y=";
+const DEMO_PREVIEW_PDF =
+  "JVBERi0xLjQKMSAwIG9iaiA8PCAvVHlwZSAvQ2F0YWxvZyAvUGFnZXMgMiAwIFIgPj4gZW5kb2JqCjIgMCBvYmogPDwgL1R5cGUgL1BhZ2VzIC9LaWRzIFszIDAgUl0gL0NvdW50IDEgPj4gZW5kb2JqCjMgMCBvYmogPDwgL1R5cGUgL1BhZ2UgL1BhcmVudCAyIDAgUiAvTWVkaWFCb3ggWzAgMCA2MTIgNzkyXSAvQ29udGVudHMgNCAwIFIgL1Jlc291cmNlcyA8PCAvRm9udCA8PCAvRjEgNSAwIFIgPj4gPj4gPj4gZW5kb2JqCjQgMCBvYmogPDwgL0xlbmd0aCAyMjAgPj4gc3RyZWFtCkJUIC9GMSAyNCBUZiA3MiA3MDAgVGQgKFEzIFF1YXJ0ZXJseSBSZXBvcnQgMjAyNSkgVGogMCAtNDAgVGQgL0YxIDE0IFRmIChUZWNoQ29ycCBJbmMuIC0gQ29uZmlkZW50aWFsKSBUaiAwIC0zMCBUZCAoUmV2ZW51ZTogJDEuMk0gfCBVc2VyczogNDUsMDAwIHwgUmV0ZW50aW9uOiA3MiUpIFRqIDAgLTMwIFRkIChUaGlzIGlzIGEgZGVtbyBwcmV2aWV3IHBsYWNlaG9sZGVyLikgVGogRVQKZW5kc3RyZWFtIGVuZG9iago1IDAgb2JqIDw8IC9UeXBlIC9Gb250IC9TdWJ0eXBlIC9UeXBlMSAvQmFzZUZvbnQgL0hlbHZldGljYSA+PiBlbmRvYmoKeHJlZgowIDYKMDAwMDAwMDAwMCA2NTUzNSBmIAowMDAwMDAwMDA5IDAwMDAwIG4gCjAwMDAwMDAwNTggMDAwMDAgbiAKMDAwMDAwMDExNSAwMDAwMCBuIAowMDAwMDAwMjQxIDAwMDAwIG4gCjAwMDAwMDA1MTIgMDAwMDAgbiAKdHJhaWxlciA8PCAvU2l6ZSA2IC9Sb290IDEgMCBSID4+CnN0YXJ0eHJlZgo1ODIKJSVFT0Y=";
 
 /**
  * Convert Gmail's base64url data to a standard base64 string
@@ -54,12 +56,17 @@ export function registerAttachmentsIpc(): void {
     "attachments:download",
     async (
       _,
-      { emailId, attachmentId, filename, accountId }: {
+      {
+        emailId,
+        attachmentId,
+        filename,
+        accountId,
+      }: {
         emailId: string;
         attachmentId: string;
         filename: string;
         accountId: string;
-      }
+      },
     ): Promise<IpcResponse<{ filePath: string }>> => {
       try {
         const downloadsDir = join(app.getPath("userData"), "downloads");
@@ -72,7 +79,9 @@ export function registerAttachmentsIpc(): void {
 
         if (useFakeData) {
           const email = getEmail(emailId);
-          const att = email?.attachments?.find((a: AttachmentMeta) => a.attachmentId === attachmentId);
+          const att = email?.attachments?.find(
+            (a: AttachmentMeta) => a.attachmentId === attachmentId,
+          );
           if (att?.mimeType.startsWith("image/")) {
             buffer = Buffer.from(DEMO_PREVIEW_PNG, "base64");
           } else if (att?.mimeType === "application/pdf") {
@@ -101,7 +110,7 @@ export function registerAttachmentsIpc(): void {
           error: error instanceof Error ? error.message : "Failed to download attachment",
         };
       }
-    }
+    },
   );
 
   // Get attachment data for preview (returns base64)
@@ -109,16 +118,22 @@ export function registerAttachmentsIpc(): void {
     "attachments:preview",
     async (
       _,
-      { emailId, attachmentId, accountId }: {
+      {
+        emailId,
+        attachmentId,
+        accountId,
+      }: {
         emailId: string;
         attachmentId: string;
         accountId: string;
-      }
+      },
     ): Promise<IpcResponse<{ data: string }>> => {
       if (useFakeData) {
         // Return placeholder preview data for demo previewable types
         const email = getEmail(emailId);
-        const att = email?.attachments?.find((a: AttachmentMeta) => a.attachmentId === attachmentId);
+        const att = email?.attachments?.find(
+          (a: AttachmentMeta) => a.attachmentId === attachmentId,
+        );
         if (att) {
           if (att.mimeType.startsWith("image/")) {
             return { success: true, data: { data: DEMO_PREVIEW_PNG } };
@@ -148,13 +163,15 @@ export function registerAttachmentsIpc(): void {
           error: error instanceof Error ? error.message : "Failed to get attachment preview",
         };
       }
-    }
+    },
   );
 
   // Open file picker dialog for attaching files
   ipcMain.handle(
     "attachments:pick-files",
-    async (): Promise<IpcResponse<Array<{ filename: string; path: string; mimeType: string; size: number }>>> => {
+    async (): Promise<
+      IpcResponse<Array<{ filename: string; path: string; mimeType: string; size: number }>>
+    > => {
       try {
         const result = await dialog.showOpenDialog({
           properties: ["openFile", "multiSelections"],
@@ -179,7 +196,7 @@ export function registerAttachmentsIpc(): void {
               mimeType,
               size: stats.size,
             };
-          })
+          }),
         );
 
         return { success: true, data: files };
@@ -189,7 +206,7 @@ export function registerAttachmentsIpc(): void {
           error: error instanceof Error ? error.message : "Failed to pick files",
         };
       }
-    }
+    },
   );
 
   // Get attachment data for forwarding (returns base64 content for each attachment)
@@ -197,7 +214,7 @@ export function registerAttachmentsIpc(): void {
     "attachments:get-for-forward",
     async (
       _,
-      { emailId, accountId }: { emailId: string; accountId: string }
+      { emailId, accountId }: { emailId: string; accountId: string },
     ): Promise<IpcResponse<Array<{ filename: string; mimeType: string; content: string }>>> => {
       if (useFakeData) {
         return { success: true, data: [] };
@@ -225,7 +242,7 @@ export function registerAttachmentsIpc(): void {
                 mimeType: att.mimeType,
                 content: base64urlToBase64(data),
               };
-            })
+            }),
         );
 
         return { success: true, data: attachmentData };
@@ -235,6 +252,6 @@ export function registerAttachmentsIpc(): void {
           error: error instanceof Error ? error.message : "Failed to get attachments for forward",
         };
       }
-    }
+    },
   );
 }

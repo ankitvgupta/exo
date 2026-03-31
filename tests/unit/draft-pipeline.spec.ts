@@ -201,9 +201,7 @@ test.describe("assemblePrompt", () => {
       memoryContext: "User prefers short emails.",
     });
     // Order: memory → style → draft
-    expect(result).toBe(
-      "User prefers short emails.\n\nUse casual tone.\n\nWrite a reply.",
-    );
+    expect(result).toBe("User prefers short emails.\n\nUse casual tone.\n\nWrite a reply.");
   });
 
   test("appends instructions after draft prompt", () => {
@@ -213,9 +211,7 @@ test.describe("assemblePrompt", () => {
       memoryContext: "",
       instructions: "Make it more formal.",
     });
-    expect(result).toBe(
-      "Write a reply.\n\nADDITIONAL INSTRUCTIONS:\nMake it more formal.",
-    );
+    expect(result).toBe("Write a reply.\n\nADDITIONAL INSTRUCTIONS:\nMake it more formal.");
   });
 
   test("assembles all parts in correct order", () => {
@@ -343,11 +339,11 @@ test.describe("resolveEnableSenderLookup", () => {
 
 test.describe("analysis result shaping", () => {
   // Mirrors lines 98-102: converting stored analysis to AnalysisResult
-  function shapeAnalysis(stored: {
-    needsReply: boolean;
+  function shapeAnalysis(stored: { needsReply: boolean; reason: string; priority?: string }): {
+    needs_reply: boolean;
     reason: string;
     priority?: string;
-  }): { needs_reply: boolean; reason: string; priority?: string } {
+  } {
     return {
       needs_reply: stored.needsReply,
       reason: stored.reason,
@@ -383,4 +379,3 @@ test.describe("analysis result shaping", () => {
     expect(result.priority).toBeUndefined();
   });
 });
-

@@ -57,7 +57,7 @@ function generateEventsForDate(dateStr: string): CalendarEvent[] {
  */
 export function generateDemoCalendarData(
   emailBody: string,
-  emailDate: string
+  emailDate: string,
 ): CalendarEnrichmentData | null {
   const dates = extractDatesFromEmail(emailBody, emailDate);
 

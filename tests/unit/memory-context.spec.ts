@@ -16,18 +16,20 @@ const DRAFTING_CAP = 1000;
 const ANALYSIS_CAP = 50;
 
 function formatMemories(memories: Memory[]): string {
-  return memories.map(m => `- ${m.content}`).join("\n");
+  return memories.map((m) => `- ${m.content}`).join("\n");
 }
 
 function formatCategoryMemories(memories: Memory[]): string {
-  return memories.map(m => `- ${m.scopeValue ? `[${m.scopeValue}] ` : ""}${m.content}`).join("\n");
+  return memories
+    .map((m) => `- ${m.scopeValue ? `[${m.scopeValue}] ` : ""}${m.content}`)
+    .join("\n");
 }
 
 function buildScopedSections(memories: Memory[], cap: number, senderEmail?: string): string[] {
-  const person = memories.filter(m => m.scope === "person").slice(0, cap);
-  const domain = memories.filter(m => m.scope === "domain").slice(0, cap);
-  const category = memories.filter(m => m.scope === "category").slice(0, cap);
-  const global = memories.filter(m => m.scope === "global").slice(0, cap);
+  const person = memories.filter((m) => m.scope === "person").slice(0, cap);
+  const domain = memories.filter((m) => m.scope === "domain").slice(0, cap);
+  const category = memories.filter((m) => m.scope === "category").slice(0, cap);
+  const global = memories.filter((m) => m.scope === "global").slice(0, cap);
 
   const sections: string[] = [];
 
@@ -42,7 +44,9 @@ function buildScopedSections(memories: Memory[], cap: number, senderEmail?: stri
   }
 
   if (category.length > 0) {
-    sections.push(`For certain types of emails (apply only if relevant):\n${formatCategoryMemories(category)}`);
+    sections.push(
+      `For certain types of emails (apply only if relevant):\n${formatCategoryMemories(category)}`,
+    );
   }
 
   if (global.length > 0) {
@@ -103,9 +107,19 @@ const makeMemory = (overrides: Partial<Memory> = {}): Memory => ({
 test.describe("buildScopedSections", () => {
   test("separates memories into scope sections", () => {
     const memories = [
-      makeMemory({ id: "1", scope: "person", scopeValue: "bob@example.com", content: "Person memory" }),
+      makeMemory({
+        id: "1",
+        scope: "person",
+        scopeValue: "bob@example.com",
+        content: "Person memory",
+      }),
       makeMemory({ id: "2", scope: "domain", scopeValue: "example.com", content: "Domain memory" }),
-      makeMemory({ id: "3", scope: "category", scopeValue: "newsletters", content: "Category memory" }),
+      makeMemory({
+        id: "3",
+        scope: "category",
+        scopeValue: "newsletters",
+        content: "Category memory",
+      }),
       makeMemory({ id: "4", scope: "global", content: "Global memory" }),
     ];
 
@@ -119,7 +133,7 @@ test.describe("buildScopedSections", () => {
 
   test("caps each scope independently", () => {
     const memories = Array.from({ length: 1002 }, (_, i) =>
-      makeMemory({ id: `g-${i}`, scope: "global", content: `Global rule ${i}` })
+      makeMemory({ id: `g-${i}`, scope: "global", content: `Global rule ${i}` }),
     );
 
     const sections = buildScopedSections(memories, 1000);
@@ -141,18 +155,14 @@ test.describe("buildScopedSections", () => {
   });
 
   test("uses senderEmail as fallback when person scopeValue is null", () => {
-    const memories = [
-      makeMemory({ scope: "person", scopeValue: null, content: "Important" }),
-    ];
+    const memories = [makeMemory({ scope: "person", scopeValue: null, content: "Important" })];
 
     const sections = buildScopedSections(memories, DRAFTING_CAP, "alice@example.com");
     expect(sections[0]).toContain("For alice@example.com specifically:");
   });
 
   test("uses 'this person' as final fallback when no senderEmail provided", () => {
-    const memories = [
-      makeMemory({ scope: "person", scopeValue: null, content: "Important" }),
-    ];
+    const memories = [makeMemory({ scope: "person", scopeValue: null, content: "Important" })];
 
     const sections = buildScopedSections(memories, DRAFTING_CAP);
     expect(sections[0]).toContain("For this person specifically:");
@@ -160,7 +170,7 @@ test.describe("buildScopedSections", () => {
 
   test("caps at 50 per scope for analysis", () => {
     const memories = Array.from({ length: 60 }, (_, i) =>
-      makeMemory({ id: `g-${i}`, scope: "global", content: `Rule ${i}` })
+      makeMemory({ id: `g-${i}`, scope: "global", content: `Rule ${i}` }),
     );
 
     const sections = buildScopedSections(memories, ANALYSIS_CAP);
@@ -171,13 +181,22 @@ test.describe("buildScopedSections", () => {
 
   test("caps each scope separately with mixed scopes", () => {
     const personMemories = Array.from({ length: 60 }, (_, i) =>
-      makeMemory({ id: `p-${i}`, scope: "person", scopeValue: "bob@example.com", content: `Person ${i}` })
+      makeMemory({
+        id: `p-${i}`,
+        scope: "person",
+        scopeValue: "bob@example.com",
+        content: `Person ${i}`,
+      }),
     );
     const globalMemories = Array.from({ length: 60 }, (_, i) =>
-      makeMemory({ id: `g-${i}`, scope: "global", content: `Global ${i}` })
+      makeMemory({ id: `g-${i}`, scope: "global", content: `Global ${i}` }),
     );
 
-    const sections = buildScopedSections([...personMemories, ...globalMemories], 50, "bob@example.com");
+    const sections = buildScopedSections(
+      [...personMemories, ...globalMemories],
+      50,
+      "bob@example.com",
+    );
     expect(sections).toHaveLength(2);
     // Person section should have 50 entries
     expect(sections[0]).toContain("Person 49");
@@ -236,7 +255,11 @@ test.describe("buildMemoryContextFromMemories", () => {
 
   test("includes person section with scopeValue label", () => {
     const memories = [
-      makeMemory({ scope: "person", scopeValue: "bob@example.com", content: "Always CC his assistant" }),
+      makeMemory({
+        scope: "person",
+        scopeValue: "bob@example.com",
+        content: "Always CC his assistant",
+      }),
     ];
 
     const result = buildMemoryContextFromMemories(memories, "bob@example.com");
@@ -256,7 +279,11 @@ test.describe("buildMemoryContextFromMemories", () => {
 
   test("includes domain section", () => {
     const memories = [
-      makeMemory({ scope: "domain", scopeValue: "acme.com", content: "Formal tone for this company" }),
+      makeMemory({
+        scope: "domain",
+        scopeValue: "acme.com",
+        content: "Formal tone for this company",
+      }),
     ];
 
     const result = buildMemoryContextFromMemories(memories, "bob@acme.com");
@@ -275,9 +302,7 @@ test.describe("buildMemoryContextFromMemories", () => {
   });
 
   test("includes global section", () => {
-    const memories = [
-      makeMemory({ scope: "global", content: "Keep replies under 3 sentences" }),
-    ];
+    const memories = [makeMemory({ scope: "global", content: "Keep replies under 3 sentences" })];
 
     const result = buildMemoryContextFromMemories(memories, "bob@example.com");
     expect(result).toContain("General preferences:");
@@ -287,7 +312,12 @@ test.describe("buildMemoryContextFromMemories", () => {
   test("includes all sections in correct order", () => {
     const memories = [
       makeMemory({ id: "1", scope: "global", content: "Global rule" }),
-      makeMemory({ id: "2", scope: "person", scopeValue: "bob@example.com", content: "Person rule" }),
+      makeMemory({
+        id: "2",
+        scope: "person",
+        scopeValue: "bob@example.com",
+        content: "Person rule",
+      }),
       makeMemory({ id: "3", scope: "domain", scopeValue: "example.com", content: "Domain rule" }),
       makeMemory({ id: "4", scope: "category", scopeValue: "billing", content: "Category rule" }),
     ];
@@ -334,9 +364,7 @@ test.describe("buildAgentMemoryContextFromMemories", () => {
   });
 
   test("person section uses senderEmail parameter as fallback", () => {
-    const memories = [
-      makeMemory({ scope: "person", scopeValue: null, content: "Important" }),
-    ];
+    const memories = [makeMemory({ scope: "person", scopeValue: null, content: "Important" })];
 
     const result = buildAgentMemoryContextFromMemories(memories, "alice@example.com");
     expect(result).toContain("For alice@example.com specifically:");
@@ -375,7 +403,7 @@ test.describe("buildAnalysisMemoryContextFromMemories", () => {
 
   test("uses ANALYSIS_CAP (50) instead of DRAFTING_CAP", () => {
     const memories = Array.from({ length: 60 }, (_, i) =>
-      makeMemory({ id: `g-${i}`, scope: "global", content: `Analysis rule ${i}` })
+      makeMemory({ id: `g-${i}`, scope: "global", content: `Analysis rule ${i}` }),
     );
 
     const result = buildAnalysisMemoryContextFromMemories(memories, "bob@example.com");

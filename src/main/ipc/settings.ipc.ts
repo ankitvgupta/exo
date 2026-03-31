@@ -18,13 +18,23 @@ import {
 } from "../../shared/types";
 import { resetAnalyzer } from "./analysis.ipc";
 import { resetArchiveReadyAnalyzer } from "./archive-ready.ipc";
+import { resetClient } from "../services/anthropic-service";
 import { prefetchService } from "../services/prefetch-service";
 import { agentCoordinator } from "../agents/agent-coordinator";
-import { getSenderProfile, clearInboxAnalyses, clearInboxPendingDraftsAndTraces, clearInboxArchiveReady, type SenderProfile } from "../db";
+import {
+  getSenderProfile,
+  clearInboxAnalyses,
+  clearInboxPendingDraftsAndTraces,
+  clearInboxArchiveReady,
+  type SenderProfile,
+} from "../db";
 import { getEnrichmentBySender } from "../extensions/enrichment-store";
 import { autoUpdateService } from "../services/auto-updater";
 
 import { getDataDir } from "../data-dir";
+import { createLogger } from "../services/logger";
+
+const log = createLogger("settings-ipc");
 
 // Lazy-initialized to avoid running before initDevData() — ES module import
 // hoisting would otherwise cause the Store constructor to create files in
@@ -87,8 +97,10 @@ export function getConfig(): Config {
   // One-time migration: if user had a custom legacy `model` but no `modelConfig`,
   // map it to a per-feature config so the previous choice isn't silently dropped.
   if (!config.modelConfig && config.model && config.model !== "claude-sonnet-4-20250514") {
-    const legacyTier = (Object.entries(MODEL_TIER_IDS) as [ModelTier, string][])
-      .find(([, id]) => id === config.model)?.[0] ?? "sonnet";
+    const legacyTier =
+      (Object.entries(MODEL_TIER_IDS) as [ModelTier, string][]).find(
+        ([, id]) => id === config.model,
+      )?.[0] ?? "sonnet";
     const migrated: ModelConfig = { ...DEFAULT_MODEL_CONFIG };
     for (const key of Object.keys(migrated) as (keyof ModelConfig)[]) {
       // Only migrate features that previously used config.model.
@@ -147,13 +159,17 @@ export function registerSettingsIpc(): void {
         }
         // Rate limiting, overload (529), and permission denied (403) all happen after
         // auth succeeds — the key is valid even if this specific request was rejected
-        if (error instanceof Anthropic.RateLimitError || error instanceof Anthropic.PermissionDeniedError || (error instanceof Anthropic.APIError && error.status === 529)) {
+        if (
+          error instanceof Anthropic.RateLimitError ||
+          error instanceof Anthropic.PermissionDeniedError ||
+          (error instanceof Anthropic.APIError && error.status === 529)
+        ) {
           return { success: true, data: undefined };
         }
         const msg = error instanceof Error ? error.message : "Unknown error";
         return { success: false, error: `API key validation failed: ${msg}` };
       }
-    }
+    },
   );
 
   // Get current config
@@ -169,108 +185,108 @@ export function registerSettingsIpc(): void {
   });
 
   // Update config
-  ipcMain.handle(
-    "settings:set",
-    async (_, config: Partial<Config>): Promise<IpcResponse<void>> => {
-      try {
-        const currentConfig = getConfig();
-        const newConfig = { ...currentConfig, ...config };
-        getStore().set("config", newConfig);
+  ipcMain.handle("settings:set", async (_, config: Partial<Config>): Promise<IpcResponse<void>> => {
+    try {
+      const currentConfig = getConfig();
+      const newConfig = { ...currentConfig, ...config };
+      getStore().set("config", newConfig);
 
-        // If githubToken changed, propagate to auto-updater immediately
-        if ("githubToken" in config) {
-          autoUpdateService.setGitHubToken(newConfig.githubToken);
-        }
-
-        // If pre-release preference actually changed, propagate to auto-updater.
-        // Coerce with !! so undefined and false are treated as equivalent.
-        if (
-          "allowPrereleaseUpdates" in config &&
-          !!newConfig.allowPrereleaseUpdates !== !!currentConfig.allowPrereleaseUpdates
-        ) {
-          autoUpdateService.setAllowPrerelease(!!newConfig.allowPrereleaseUpdates);
-        }
-
-        // If anthropicApiKey changed, propagate to process.env (for Anthropic SDK)
-        // and to the agent worker (for Claude Agent SDK)
-        if ("anthropicApiKey" in config) {
-          if (newConfig.anthropicApiKey) {
-            process.env.ANTHROPIC_API_KEY = newConfig.anthropicApiKey;
-          } else {
-            delete process.env.ANTHROPIC_API_KEY;
-          }
-          agentCoordinator.updateConfig({
-            anthropicApiKey: newConfig.anthropicApiKey || undefined,
-          });
-        }
-
-        // Propagate agent browser config changes
-        if ("agentBrowser" in config) {
-          const browser = newConfig.agentBrowser;
-          agentCoordinator.updateConfig({
-            browserConfig: browser ? {
-              enabled: browser.enabled,
-              chromeDebugPort: browser.chromeDebugPort,
-              chromeProfilePath: browser.chromeProfilePath,
-            } : undefined,
-          });
-        }
-
-        // Propagate custom MCP server config changes
-        if ("mcpServers" in config) {
-          agentCoordinator.updateConfig({
-            mcpServers: newConfig.mcpServers,
-          });
-        }
-
-        // Propagate CLI tool config changes
-        if ("cliTools" in config) {
-          agentCoordinator.updateConfig({
-            cliTools: newConfig.cliTools,
-          });
-        }
-
-        // Propagate OpenClaw config to agent providers.
-        // Each provider's updateConfig() picks out what it needs from the partial config.
-        if ("openclaw" in config) {
-          agentCoordinator.updateConfig({
-            providers: {
-              "openclaw-agent": {
-                enabled: newConfig.openclaw?.enabled ?? false,
-                gatewayUrl: newConfig.openclaw?.gatewayUrl ?? "",
-                gatewayToken: newConfig.openclaw?.gatewayToken ?? "",
-              },
-            },
-          });
-        }
-
-        // Propagate model config changes to the agent worker.
-        // Only agentDrafter needs propagation here — it's the worker's default model for
-        // auto-draft tasks that don't pass a per-task override. The agentChat model is
-        // resolved fresh per-invocation in agent.ipc.ts via getModelIdForFeature("agentChat").
-        if ("modelConfig" in config) {
-          agentCoordinator.updateConfig({
-            model: getModelIdForFeature("agentDrafter"),
-          });
-        }
-
-        // Reset cached analyzer/service instances when model config or API key changes,
-        // since they hold Anthropic client instances that capture the key at construction.
-        if ("modelConfig" in config || "anthropicApiKey" in config) {
-          resetAnalyzer();
-          resetArchiveReadyAnalyzer();
-          prefetchService.reset();
-        }
-
-        return { success: true, data: undefined };
-      } catch (error) {
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : "Unknown error",
-        };
+      // If githubToken changed, propagate to auto-updater immediately
+      if ("githubToken" in config) {
+        autoUpdateService.setGitHubToken(newConfig.githubToken);
       }
+
+      // If pre-release preference actually changed, propagate to auto-updater.
+      // Coerce with !! so undefined and false are treated as equivalent.
+      if (
+        "allowPrereleaseUpdates" in config &&
+        !!newConfig.allowPrereleaseUpdates !== !!currentConfig.allowPrereleaseUpdates
+      ) {
+        autoUpdateService.setAllowPrerelease(!!newConfig.allowPrereleaseUpdates);
+      }
+
+      // If anthropicApiKey changed, propagate to process.env (for Anthropic SDK)
+      // and to the agent worker (for Claude Agent SDK)
+      if ("anthropicApiKey" in config) {
+        if (newConfig.anthropicApiKey) {
+          process.env.ANTHROPIC_API_KEY = newConfig.anthropicApiKey;
+        } else {
+          delete process.env.ANTHROPIC_API_KEY;
+        }
+        agentCoordinator.updateConfig({
+          anthropicApiKey: newConfig.anthropicApiKey || undefined,
+        });
+      }
+
+      // Propagate agent browser config changes
+      if ("agentBrowser" in config) {
+        const browser = newConfig.agentBrowser;
+        agentCoordinator.updateConfig({
+          browserConfig: browser
+            ? {
+                enabled: browser.enabled,
+                chromeDebugPort: browser.chromeDebugPort,
+                chromeProfilePath: browser.chromeProfilePath,
+              }
+            : undefined,
+        });
+      }
+
+      // Propagate custom MCP server config changes
+      if ("mcpServers" in config) {
+        agentCoordinator.updateConfig({
+          mcpServers: newConfig.mcpServers,
+        });
+      }
+
+      // Propagate CLI tool config changes
+      if ("cliTools" in config) {
+        agentCoordinator.updateConfig({
+          cliTools: newConfig.cliTools,
+        });
+      }
+
+      // Propagate OpenClaw config to agent providers.
+      // Each provider's updateConfig() picks out what it needs from the partial config.
+      if ("openclaw" in config) {
+        agentCoordinator.updateConfig({
+          providers: {
+            "openclaw-agent": {
+              enabled: newConfig.openclaw?.enabled ?? false,
+              gatewayUrl: newConfig.openclaw?.gatewayUrl ?? "",
+              gatewayToken: newConfig.openclaw?.gatewayToken ?? "",
+            },
+          },
+        });
+      }
+
+      // Propagate model config changes to the agent worker.
+      // Only agentDrafter needs propagation here — it's the worker's default model for
+      // auto-draft tasks that don't pass a per-task override. The agentChat model is
+      // resolved fresh per-invocation in agent.ipc.ts via getModelIdForFeature("agentChat").
+      if ("modelConfig" in config) {
+        agentCoordinator.updateConfig({
+          model: getModelIdForFeature("agentDrafter"),
+        });
+      }
+
+      // Reset cached analyzer/service instances when model config or API key changes,
+      // since they hold Anthropic client instances that capture the key at construction.
+      if ("modelConfig" in config || "anthropicApiKey" in config) {
+        resetClient();
+        resetAnalyzer();
+        resetArchiveReadyAnalyzer();
+        prefetchService.reset();
+      }
+
+      return { success: true, data: undefined };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
     }
-  );
+  });
 
   // Validate a GitHub PAT from the main process (renderer CSP blocks direct fetch)
   ipcMain.handle(
@@ -287,7 +303,10 @@ export function registerSettingsIpc(): void {
           // 401 = bad token. 403 can be rate limiting OR bad token — check the
           // x-ratelimit-remaining header to distinguish.
           if (resp.status === 401) {
-            return { success: false, error: "Invalid GitHub token — please check that it hasn't expired or been revoked." };
+            return {
+              success: false,
+              error: "Invalid GitHub token — please check that it hasn't expired or been revoked.",
+            };
           }
           if (resp.status === 403) {
             const remaining = resp.headers.get("x-ratelimit-remaining");
@@ -295,7 +314,10 @@ export function registerSettingsIpc(): void {
               // Rate limited — allow saving, token may be valid
               return { success: true, data: undefined };
             }
-            return { success: false, error: "This token doesn't have access — please check the permissions." };
+            return {
+              success: false,
+              error: "This token doesn't have access — please check the permissions.",
+            };
           }
           // Other non-2xx (5xx, 429, etc.) — allow saving, don't blame the token
           return { success: true, data: undefined };
@@ -304,9 +326,16 @@ export function registerSettingsIpc(): void {
         // Only enforce repo scope for classic PATs where we can check.
         const scopes = resp.headers.get("x-oauth-scopes");
         if (scopes !== null) {
-          const hasRepo = scopes.split(",").map((s) => s.trim()).includes("repo");
+          const hasRepo = scopes
+            .split(",")
+            .map((s) => s.trim())
+            .includes("repo");
           if (!hasRepo) {
-            return { success: false, error: "This token is missing the required 'repo' scope. Please create a new token with 'repo' selected." };
+            return {
+              success: false,
+              error:
+                "This token is missing the required 'repo' scope. Please create a new token with 'repo' selected.",
+            };
           }
         }
         return { success: true, data: undefined };
@@ -316,13 +345,21 @@ export function registerSettingsIpc(): void {
       } finally {
         clearTimeout(timeout);
       }
-    }
+    },
   );
 
   // Get prompts — getConfig() already strips old format suffixes
   ipcMain.handle(
     "settings:get-prompts",
-    async (): Promise<IpcResponse<{ analysisPrompt: string; draftPrompt: string; archiveReadyPrompt: string; stylePrompt: string; agentDrafterPrompt: string }>> => {
+    async (): Promise<
+      IpcResponse<{
+        analysisPrompt: string;
+        draftPrompt: string;
+        archiveReadyPrompt: string;
+        stylePrompt: string;
+        agentDrafterPrompt: string;
+      }>
+    > => {
       try {
         const config = getConfig();
         return {
@@ -341,7 +378,7 @@ export function registerSettingsIpc(): void {
           error: error instanceof Error ? error.message : "Unknown error",
         };
       }
-    }
+    },
   );
 
   // Update prompts — detect changes, clear stale data, and re-trigger processing
@@ -349,8 +386,27 @@ export function registerSettingsIpc(): void {
     "settings:set-prompts",
     async (
       _,
-      { analysisPrompt, draftPrompt, archiveReadyPrompt, stylePrompt, agentDrafterPrompt }: { analysisPrompt?: string; draftPrompt?: string; archiveReadyPrompt?: string; stylePrompt?: string; agentDrafterPrompt?: string }
-    ): Promise<IpcResponse<{ analysisChanged: boolean; draftChanged: boolean; archiveReadyChanged: boolean; agentDrafterChanged: boolean }>> => {
+      {
+        analysisPrompt,
+        draftPrompt,
+        archiveReadyPrompt,
+        stylePrompt,
+        agentDrafterPrompt,
+      }: {
+        analysisPrompt?: string;
+        draftPrompt?: string;
+        archiveReadyPrompt?: string;
+        stylePrompt?: string;
+        agentDrafterPrompt?: string;
+      },
+    ): Promise<
+      IpcResponse<{
+        analysisChanged: boolean;
+        draftChanged: boolean;
+        archiveReadyChanged: boolean;
+        agentDrafterChanged: boolean;
+      }>
+    > => {
       try {
         // getConfig() already strips old baked-in format suffixes
         const currentConfig = getConfig();
@@ -358,14 +414,26 @@ export function registerSettingsIpc(): void {
 
         const currentAnalysis = currentConfig.analysisPrompt || DEFAULT_ANALYSIS_PROMPT;
         const currentDraft = currentConfig.draftPrompt || DEFAULT_DRAFT_PROMPT;
-        const currentArchiveReady = currentConfig.archiveReadyPrompt || DEFAULT_ARCHIVE_READY_PROMPT;
-        const currentAgentDrafter = currentConfig.agentDrafterPrompt || DEFAULT_AGENT_DRAFTER_PROMPT;
+        const currentArchiveReady =
+          currentConfig.archiveReadyPrompt || DEFAULT_ARCHIVE_READY_PROMPT;
+        const currentAgentDrafter =
+          currentConfig.agentDrafterPrompt || DEFAULT_AGENT_DRAFTER_PROMPT;
 
         // Determine new values (from UI, which never includes format suffixes)
-        const newAnalysis = analysisPrompt !== undefined ? (analysisPrompt || DEFAULT_ANALYSIS_PROMPT) : currentAnalysis;
-        const newDraft = draftPrompt !== undefined ? (draftPrompt || DEFAULT_DRAFT_PROMPT) : currentDraft;
-        const newArchiveReady = archiveReadyPrompt !== undefined ? (archiveReadyPrompt || DEFAULT_ARCHIVE_READY_PROMPT) : currentArchiveReady;
-        const newAgentDrafter = agentDrafterPrompt !== undefined ? (agentDrafterPrompt || DEFAULT_AGENT_DRAFTER_PROMPT) : currentAgentDrafter;
+        const newAnalysis =
+          analysisPrompt !== undefined
+            ? analysisPrompt || DEFAULT_ANALYSIS_PROMPT
+            : currentAnalysis;
+        const newDraft =
+          draftPrompt !== undefined ? draftPrompt || DEFAULT_DRAFT_PROMPT : currentDraft;
+        const newArchiveReady =
+          archiveReadyPrompt !== undefined
+            ? archiveReadyPrompt || DEFAULT_ARCHIVE_READY_PROMPT
+            : currentArchiveReady;
+        const newAgentDrafter =
+          agentDrafterPrompt !== undefined
+            ? agentDrafterPrompt || DEFAULT_AGENT_DRAFTER_PROMPT
+            : currentAgentDrafter;
 
         // Detect which prompts actually changed
         const analysisChanged = newAnalysis !== currentAnalysis;
@@ -395,21 +463,28 @@ export function registerSettingsIpc(): void {
         // Clear stale data for changed prompts (inbox only — archived emails don't need re-processing)
         if (analysisChanged) {
           const cleared = clearInboxAnalyses();
-          console.log(`[Settings] Analysis prompt changed — cleared ${cleared} inbox analyses`);
+          log.info(`[Settings] Analysis prompt changed — cleared ${cleared} inbox analyses`);
           // Drafts depend on analysis context, so clear them too (with their agent traces)
-          const { draftsCleared: clearedDrafts, tracesCleared: clearedTraces } = clearInboxPendingDraftsAndTraces();
-          console.log(`[Settings] Also cleared ${clearedDrafts} pending drafts, ${clearedTraces} agent traces (depend on analysis)`);
+          const { draftsCleared: clearedDrafts, tracesCleared: clearedTraces } =
+            clearInboxPendingDraftsAndTraces();
+          log.info(
+            `[Settings] Also cleared ${clearedDrafts} pending drafts, ${clearedTraces} agent traces (depend on analysis)`,
+          );
           // Archive-ready depends on analysis too
           const clearedArchive = clearInboxArchiveReady();
-          console.log(`[Settings] Also cleared ${clearedArchive} inbox archive-ready results`);
+          log.info(`[Settings] Also cleared ${clearedArchive} inbox archive-ready results`);
         } else {
           if (draftChanged || agentDrafterChanged) {
             const { draftsCleared: cleared, tracesCleared } = clearInboxPendingDraftsAndTraces();
-            console.log(`[Settings] ${agentDrafterChanged ? "Agent drafter" : "Draft"} prompt changed — cleared ${cleared} pending drafts, ${tracesCleared} agent traces`);
+            log.info(
+              `[Settings] ${agentDrafterChanged ? "Agent drafter" : "Draft"} prompt changed — cleared ${cleared} pending drafts, ${tracesCleared} agent traces`,
+            );
           }
           if (archiveReadyChanged) {
             const cleared = clearInboxArchiveReady();
-            console.log(`[Settings] Archive-ready prompt changed — cleared ${cleared} inbox archive-ready results`);
+            log.info(
+              `[Settings] Archive-ready prompt changed — cleared ${cleared} inbox archive-ready results`,
+            );
           }
         }
 
@@ -417,47 +492,63 @@ export function registerSettingsIpc(): void {
         resetAnalyzer();
         resetArchiveReadyAnalyzer();
 
-        const anyChanged = analysisChanged || draftChanged || archiveReadyChanged || agentDrafterChanged;
+        const anyChanged =
+          analysisChanged || draftChanged || archiveReadyChanged || agentDrafterChanged;
 
         if (anyChanged) {
-
           // Full clear to reset all tracking sets, then re-process
           prefetchService.clear();
 
           // Notify renderer to refresh emails (stale analysis/draft data is gone)
           for (const win of BrowserWindow.getAllWindows()) {
-            win.webContents.send("prompts:changed", { analysisChanged, draftChanged, archiveReadyChanged, agentDrafterChanged });
+            win.webContents.send("prompts:changed", {
+              analysisChanged,
+              draftChanged,
+              archiveReadyChanged,
+              agentDrafterChanged,
+            });
           }
 
           // Re-trigger background processing
           prefetchService.processAllPending().catch((error) => {
-            console.error("[Settings] Error re-processing after prompt change:", error);
+            log.error({ err: error }, "[Settings] Error re-processing after prompt change");
           });
         } else {
           prefetchService.reset();
         }
 
-        return { success: true, data: { analysisChanged, draftChanged, archiveReadyChanged, agentDrafterChanged } };
+        return {
+          success: true,
+          data: { analysisChanged, draftChanged, archiveReadyChanged, agentDrafterChanged },
+        };
       } catch (error) {
         return {
           success: false,
           error: error instanceof Error ? error.message : "Unknown error",
         };
       }
-    }
+    },
   );
 
   // Get style context (uses new style-profiler with few-shot examples)
   ipcMain.handle(
     "style:get-context",
-    async (_, { toAddress, accountId }: { toAddress: string; accountId?: string }): Promise<IpcResponse<string>> => {
+    async (
+      _,
+      { toAddress, accountId }: { toAddress: string; accountId?: string },
+    ): Promise<IpcResponse<string>> => {
       try {
         const { buildStyleContext } = await import("../services/style-profiler");
         const { getEmailSyncService } = await import("./sync.ipc");
         const config = getConfig();
         const resolvedAccountId = accountId ?? "default";
         const gmailClient = getEmailSyncService().getClientForAccount(resolvedAccountId);
-        const context = await buildStyleContext(toAddress, resolvedAccountId, config.stylePrompt || DEFAULT_STYLE_PROMPT, gmailClient);
+        const context = await buildStyleContext(
+          toAddress,
+          resolvedAccountId,
+          config.stylePrompt || DEFAULT_STYLE_PROMPT,
+          gmailClient,
+        );
         return { success: true, data: context };
       } catch (error) {
         return {
@@ -465,47 +556,41 @@ export function registerSettingsIpc(): void {
           error: error instanceof Error ? error.message : "Unknown error",
         };
       }
-    }
+    },
   );
 
   // Get EA config
-  ipcMain.handle(
-    "settings:get-ea",
-    async (): Promise<IpcResponse<EAConfig>> => {
-      try {
-        const config = getConfig();
-        return {
-          success: true,
-          data: config.ea || { enabled: false },
-        };
-      } catch (error) {
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : "Unknown error",
-        };
-      }
+  ipcMain.handle("settings:get-ea", async (): Promise<IpcResponse<EAConfig>> => {
+    try {
+      const config = getConfig();
+      return {
+        success: true,
+        data: config.ea || { enabled: false },
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
     }
-  );
+  });
 
   // Set EA config
-  ipcMain.handle(
-    "settings:set-ea",
-    async (_, eaConfig: EAConfig): Promise<IpcResponse<void>> => {
-      try {
-        const currentConfig = getConfig();
-        getStore().set("config", { ...currentConfig, ea: eaConfig });
+  ipcMain.handle("settings:set-ea", async (_, eaConfig: EAConfig): Promise<IpcResponse<void>> => {
+    try {
+      const currentConfig = getConfig();
+      getStore().set("config", { ...currentConfig, ea: eaConfig });
 
-        // Reset generator to use new config
+      // Reset generator to use new config
 
-        return { success: true, data: undefined };
-      } catch (error) {
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : "Unknown error",
-        };
-      }
+      return { success: true, data: undefined };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
     }
-  );
+  });
 
   // Get sender profile from database cache
   ipcMain.handle(
@@ -520,7 +605,7 @@ export function registerSettingsIpc(): void {
           error: error instanceof Error ? error.message : "Unknown error",
         };
       }
-    }
+    },
   );
 
   // Get theme preference and resolved value
@@ -532,7 +617,9 @@ export function registerSettingsIpc(): void {
         const preference: ThemePreference = config.theme || "system";
         const resolved: "light" | "dark" =
           preference === "system"
-            ? nativeTheme.shouldUseDarkColors ? "dark" : "light"
+            ? nativeTheme.shouldUseDarkColors
+              ? "dark"
+              : "light"
             : preference;
         return { success: true, data: { preference, resolved } };
       } catch (error) {
@@ -541,7 +628,7 @@ export function registerSettingsIpc(): void {
           error: error instanceof Error ? error.message : "Unknown error",
         };
       }
-    }
+    },
   );
 
   // Set theme preference
@@ -553,9 +640,7 @@ export function registerSettingsIpc(): void {
         getStore().set("config", { ...currentConfig, theme });
 
         const resolved: "light" | "dark" =
-          theme === "system"
-            ? nativeTheme.shouldUseDarkColors ? "dark" : "light"
-            : theme;
+          theme === "system" ? (nativeTheme.shouldUseDarkColors ? "dark" : "light") : theme;
 
         // Broadcast to all windows
         for (const win of BrowserWindow.getAllWindows()) {
@@ -569,59 +654,60 @@ export function registerSettingsIpc(): void {
           error: error instanceof Error ? error.message : "Unknown error",
         };
       }
-    }
+    },
   );
 
   // Test OpenClaw connection by running `openclaw health`
-  ipcMain.handle(
-    "settings:test-openclaw-connection",
-    async (): Promise<IpcResponse<void>> => {
-      const { execFile } = await import("node:child_process");
-      const appConfig = getConfig();
-      const env: Record<string, string> = { ...process.env, NO_COLOR: "1" } as Record<string, string>;
-      if (appConfig.openclaw?.gatewayUrl) {
-        env.OPENCLAW_GATEWAY_URL = appConfig.openclaw.gatewayUrl;
-      }
-      if (appConfig.openclaw?.gatewayToken) {
-        env.OPENCLAW_GATEWAY_TOKEN = appConfig.openclaw.gatewayToken;
-      }
-      return new Promise((resolve) => {
-        execFile(
-          "openclaw",
-          ["health"],
-          { timeout: 10_000, env },
-          (error, stdout, stderr) => {
-            if (error) {
-              // execFile sets error.code to "ENOENT" when the binary isn't found
-              if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-                resolve({ success: false, error: "OpenClaw CLI not found — install with `npm install -g openclaw`" });
-                return;
-              }
-              const combined = (stderr || "") + (stdout || "");
-              if (combined.includes("ECONNREFUSED") || combined.includes("not reachable")) {
-                resolve({ success: false, error: "OpenClaw gateway not running — start it with `openclaw gateway run`" });
-                return;
-              }
-              resolve({ success: false, error: error.message });
-              return;
-            }
-            // `openclaw health` outputs "Agents:" when the gateway is healthy
-            if (stdout.includes("Agents:")) {
-              resolve({ success: true, data: undefined });
-            } else {
-              resolve({ success: false, error: "Unexpected response from OpenClaw" });
-            }
-          },
-        );
-      });
+  ipcMain.handle("settings:test-openclaw-connection", async (): Promise<IpcResponse<void>> => {
+    const { execFile } = await import("node:child_process");
+    const appConfig = getConfig();
+    const env: Record<string, string> = { ...process.env, NO_COLOR: "1" } as Record<string, string>;
+    if (appConfig.openclaw?.gatewayUrl) {
+      env.OPENCLAW_GATEWAY_URL = appConfig.openclaw.gatewayUrl;
     }
-  );
+    if (appConfig.openclaw?.gatewayToken) {
+      env.OPENCLAW_GATEWAY_TOKEN = appConfig.openclaw.gatewayToken;
+    }
+    return new Promise((resolve) => {
+      execFile("openclaw", ["health"], { timeout: 10_000, env }, (error, stdout, stderr) => {
+        if (error) {
+          // execFile sets error.code to "ENOENT" when the binary isn't found
+          if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+            resolve({
+              success: false,
+              error: "OpenClaw CLI not found — install with `npm install -g openclaw`",
+            });
+            return;
+          }
+          const combined = (stderr || "") + (stdout || "");
+          if (combined.includes("ECONNREFUSED") || combined.includes("not reachable")) {
+            resolve({
+              success: false,
+              error: "OpenClaw gateway not running — start it with `openclaw gateway run`",
+            });
+            return;
+          }
+          resolve({ success: false, error: error.message });
+          return;
+        }
+        // `openclaw health` outputs "Agents:" when the gateway is healthy
+        if (stdout.includes("Agents:")) {
+          resolve({ success: true, data: undefined });
+        } else {
+          resolve({ success: false, error: "Unexpected response from OpenClaw" });
+        }
+      });
+    });
+  });
 
   // Get sender profile from extension cache or legacy DB
   // New lookups are triggered by the background prefetch service
   ipcMain.handle(
     "sender:lookup",
-    async (_, { from, email: emailAddr }: { from: string; email: string }): Promise<IpcResponse<SenderProfile | null>> => {
+    async (
+      _,
+      { from, email: emailAddr }: { from: string; email: string },
+    ): Promise<IpcResponse<SenderProfile | null>> => {
       const isTestMode = process.env.EXO_TEST_MODE === "true";
       const isDemoMode = process.env.EXO_DEMO_MODE === "true";
 
@@ -640,8 +726,13 @@ export function registerSettingsIpc(): void {
         // Check extension enrichment cache first (new system)
         const enrichment = getEnrichmentBySender(emailAddr.toLowerCase(), "web-search");
         if (enrichment?.data) {
-          const data = enrichment.data as { name: string; summary: string; email: string; lookupAt?: number };
-          console.log(`[SenderProfile] Using extension cache for ${emailAddr}`);
+          const data = enrichment.data as {
+            name: string;
+            summary: string;
+            email: string;
+            lookupAt?: number;
+          };
+          log.info(`[SenderProfile] Using extension cache for ${emailAddr}`);
           return {
             success: true,
             data: {
@@ -656,7 +747,7 @@ export function registerSettingsIpc(): void {
         // Fall back to legacy sender_profiles table
         const existingProfile = getSenderProfile(emailAddr);
         if (existingProfile) {
-          console.log(`[SenderProfile] Using legacy cache for ${emailAddr}`);
+          log.info(`[SenderProfile] Using legacy cache for ${emailAddr}`);
           return { success: true, data: existingProfile };
         }
 
@@ -668,6 +759,6 @@ export function registerSettingsIpc(): void {
           error: error instanceof Error ? error.message : "Unknown error",
         };
       }
-    }
+    },
   );
 }

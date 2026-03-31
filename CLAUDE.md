@@ -299,6 +299,9 @@ npm run test:unit       # Run unit tests only
 npm run test:e2e        # Run e2e tests only
 npm run test:problematic # Run flaky/incomplete tests (not in main suite)
 npx tsc --noEmit # Type check
+npm run lint            # ESLint on src/
+npm run format:check    # Prettier check on src/**/*.{ts,tsx}
+npm run eval            # Run email analysis evals (see docs/EVALS.md)
 ```
 
 ## Testing Environment
@@ -327,6 +330,26 @@ Tests in `tests/problematic/` are excluded from the main test suite:
 - **Incomplete features**: Tests for features not fully implemented in demo mode
 
 Run them with `npm run test:problematic` for debugging.
+
+## Infrastructure
+
+### AnthropicService (`src/main/services/anthropic-service.ts`)
+All LLM calls go through `createMessage()`. Handles retry with exponential backoff on rate limits / server errors, records every call to `llm_calls` table for cost tracking (model-aware pricing), and supports caller attribution. For testing, use `_setClientForTesting()` to inject a mock client.
+
+### Logger (`src/main/services/logger.ts`)
+Use `createLogger("namespace")` — never raw `console.log`. Outputs JSON lines to daily log files with 7-day retention, plus pretty console output in dev. Redaction policy: email body, subject, snippet, and prompt fields are automatically redacted. Only log IDs (email_id, account_id, thread_id).
+
+### Migrations
+Add new migrations to `NUMBERED_MIGRATIONS` in `src/main/db/index.ts`. Each migration has a version number, name, and `up()` function. Migrations run in a transaction with version bookkeeping in the `schema_version` table.
+
+### Evals
+Run `npm run eval` before any prompt change. The eval harness (`tests/evals/`) runs email fixtures through the analyzer and checks for regressions against a stored baseline. Update baseline with `npm run eval -- --update-baseline`.
+
+## Documentation
+
+- [Architecture](docs/ARCHITECTURE.md) — system diagram, data flows, IPC inventory, extension/agent systems
+- [Testing](docs/TESTING.md) — test framework, projects, mocking patterns, worker isolation
+- [Evals](docs/EVALS.md) — eval harness, fixtures, scoring, baseline management
 
 ## Environment Variables
 

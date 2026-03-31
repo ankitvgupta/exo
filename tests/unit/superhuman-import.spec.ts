@@ -4,16 +4,14 @@ import { parseSuperhumanQuery } from "../../src/main/services/superhuman-import"
 test.describe("parseSuperhumanQuery", () => {
   test("parses single from: clause", () => {
     const result = parseSuperhumanQuery("from:apply@ycombinator.com");
-    expect(result.conditions).toEqual([
-      { type: "from", value: "apply@ycombinator.com" },
-    ]);
+    expect(result.conditions).toEqual([{ type: "from", value: "apply@ycombinator.com" }]);
     expect(result.conditionLogic).toBe("and");
     expect(result.skippedClauses).toEqual([]);
   });
 
   test("parses two from: clauses joined by OR", () => {
     const result = parseSuperhumanQuery(
-      "from:randomemail@ycombinator.com OR from:calendar@ycombinator.com"
+      "from:randomemail@ycombinator.com OR from:calendar@ycombinator.com",
     );
     expect(result.conditions).toEqual([
       { type: "from", value: "randomemail@ycombinator.com" },
@@ -25,7 +23,7 @@ test.describe("parseSuperhumanQuery", () => {
 
   test("parses mixed from: and filename: with OR", () => {
     const result = parseSuperhumanQuery(
-      "from:notifications@calendly.com OR from:calendar-notification@google.com OR from:calendar@superhuman.com OR filename:ics"
+      "from:notifications@calendly.com OR from:calendar-notification@google.com OR from:calendar@superhuman.com OR filename:ics",
     );
     expect(result.conditions).toEqual([
       { type: "from", value: "notifications@calendly.com" },
@@ -39,15 +37,13 @@ test.describe("parseSuperhumanQuery", () => {
 
   test("parses subject: with quotes", () => {
     const result = parseSuperhumanQuery('subject:"YC Updates"');
-    expect(result.conditions).toEqual([
-      { type: "subject", value: "*YC Updates*" },
-    ]);
+    expect(result.conditions).toEqual([{ type: "subject", value: "*YC Updates*" }]);
     expect(result.conditionLogic).toBe("and");
   });
 
   test("parses from: with domain-only (no @)", () => {
     const result = parseSuperhumanQuery(
-      "from:docs.google.com OR from:drive-shares-noreply@google.com OR from:drive-shares-dm-noreply@google.com"
+      "from:docs.google.com OR from:drive-shares-noreply@google.com OR from:drive-shares-dm-noreply@google.com",
     );
     expect(result.conditions).toEqual([
       { type: "from", value: "*@docs.google.com" },
@@ -87,18 +83,12 @@ test.describe("parseSuperhumanQuery", () => {
 
   test("parses to: clause", () => {
     const result = parseSuperhumanQuery("to:team@company.com");
-    expect(result.conditions).toEqual([
-      { type: "to", value: "team@company.com" },
-    ]);
+    expect(result.conditions).toEqual([{ type: "to", value: "team@company.com" }]);
   });
 
   test("handles mixed parseable and silently-skipped clauses", () => {
-    const result = parseSuperhumanQuery(
-      "from:user@test.com OR (autolabel:autoLabel_123)"
-    );
-    expect(result.conditions).toEqual([
-      { type: "from", value: "user@test.com" },
-    ]);
+    const result = parseSuperhumanQuery("from:user@test.com OR (autolabel:autoLabel_123)");
+    expect(result.conditions).toEqual([{ type: "from", value: "user@test.com" }]);
     expect(result.conditionLogic).toBe("or");
     expect(result.skippedClauses).toEqual([]);
   });

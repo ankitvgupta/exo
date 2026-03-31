@@ -167,7 +167,7 @@ const SUPERHUMAN_APP_DIR = join(
     ? "AppData/Roaming/Superhuman"
     : process.platform === "linux"
       ? ".config/Superhuman"
-      : "Library/Application Support/Superhuman"
+      : "Library/Application Support/Superhuman",
 );
 
 const HEADER_SIZE = 4096;
@@ -202,7 +202,7 @@ async function findFiles(dir: string): Promise<string[]> {
  */
 async function scanDirForAccounts(
   dir: string,
-  seen: Set<string>
+  seen: Set<string>,
 ): Promise<Array<{ email: string; filePath: string }>> {
   let entries: string[];
   try {
@@ -290,9 +290,7 @@ export async function discoverSuperhumanAccounts(): Promise<
  * then queries with better-sqlite3. Uses streaming to avoid loading
  * the full file (can be 100MB+) into memory.
  */
-export async function readSuperhumanSplits(
-  filePath: string
-): Promise<SuperhumanSplit[]> {
+export async function readSuperhumanSplits(filePath: string): Promise<SuperhumanSplit[]> {
   const tmpDir = await mkdtemp(join(tmpdir(), "sh-import-"));
   const tmpFile = join(tmpDir, "superhuman.db");
 
@@ -316,9 +314,9 @@ export async function readSuperhumanSplits(
 
     const db = new Database(tmpFile, { readonly: true });
     try {
-      const row = db
-        .prepare("SELECT json FROM general WHERE key = 'settings'")
-        .get() as { json: string } | undefined;
+      const row = db.prepare("SELECT json FROM general WHERE key = 'settings'").get() as
+        | { json: string }
+        | undefined;
 
       if (!row) return [];
 
@@ -341,7 +339,7 @@ export async function readSuperhumanSplits(
 export function convertSuperhumanSplits(
   shSplits: SuperhumanSplit[],
   accountId: string,
-  startingOrder: number
+  startingOrder: number,
 ): { splits: InboxSplit[]; warnings: string[] } {
   const splits: InboxSplit[] = [];
   const warnings: string[] = [];
@@ -357,8 +355,7 @@ export function convertSuperhumanSplits(
     // Skip shared splits (Superhuman-specific)
     if (sh.type === "shared") continue;
 
-    const { conditions, conditionLogic, skippedClauses } =
-      parseSuperhumanQuery(sh.matcher.query);
+    const { conditions, conditionLogic, skippedClauses } = parseSuperhumanQuery(sh.matcher.query);
 
     const queryConditionCount = conditions.length;
 
@@ -378,17 +375,13 @@ export function convertSuperhumanSplits(
     if (conditions.length === 0) {
       warnings.push(
         `Skipped "${sh.matcher.name}": no parseable conditions` +
-          (skippedClauses.length > 0
-            ? ` (unparseable: ${skippedClauses.join(", ")})`
-            : "")
+          (skippedClauses.length > 0 ? ` (unparseable: ${skippedClauses.join(", ")})` : ""),
       );
       continue;
     }
 
     if (skippedClauses.length > 0) {
-      warnings.push(
-        `"${sh.matcher.name}": skipped conditions: ${skippedClauses.join(", ")}`
-      );
+      warnings.push(`"${sh.matcher.name}": skipped conditions: ${skippedClauses.join(", ")}`);
     }
 
     // Use "or" when labels are mixed with query conditions (alternative paths),

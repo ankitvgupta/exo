@@ -9,7 +9,7 @@ import { test, expect, Page, ElectronApplication } from "@playwright/test";
 import { launchElectronApp } from "../e2e/launch-helpers";
 
 test.describe("Body @mention Autocomplete → CC", () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: "serial" });
 
   let electronApp: ElectronApplication;
   let page: Page;
@@ -35,7 +35,10 @@ test.describe("Body @mention Autocomplete → CC", () => {
   /** Navigate to an email with a pending draft so DraftEditor textarea is visible */
   async function navigateToDraftEditor() {
     // Click a HIGH priority email that has a pre-generated draft
-    const emailItem = page.locator("button").filter({ hasText: /Sarah.*Chen|Project Alpha/i }).first();
+    const emailItem = page
+      .locator("button")
+      .filter({ hasText: /Sarah.*Chen|Project Alpha/i })
+      .first();
     await expect(emailItem).toBeVisible({ timeout: 10000 });
     await emailItem.click();
     await page.waitForTimeout(500);
@@ -76,7 +79,9 @@ test.describe("Body @mention Autocomplete → CC", () => {
     const ccSection = page.locator("[data-testid='address-input-cc']");
     await expect(ccSection).toBeVisible({ timeout: 3000 });
 
-    const ccChip = page.locator("[data-testid='address-input-cc'] [data-testid='address-chip']").filter({ hasText: "alice@example.com" });
+    const ccChip = page
+      .locator("[data-testid='address-input-cc'] [data-testid='address-chip']")
+      .filter({ hasText: "alice@example.com" });
     await expect(ccChip).toBeVisible({ timeout: 2000 });
 
     // The body text should contain Alice's first name (not @ali or full name)
@@ -101,7 +106,9 @@ test.describe("Body @mention Autocomplete → CC", () => {
     await expect(mentionDropdown).toBeVisible({ timeout: 3000 });
 
     // Click on Bob's suggestion
-    const suggestion = page.locator("[data-testid='mention-suggestion']").filter({ hasText: "Bob Smith" });
+    const suggestion = page
+      .locator("[data-testid='mention-suggestion']")
+      .filter({ hasText: "Bob Smith" });
     await expect(suggestion).toBeVisible({ timeout: 2000 });
     await suggestion.click();
 
@@ -109,7 +116,9 @@ test.describe("Body @mention Autocomplete → CC", () => {
     await expect(mentionDropdown).not.toBeVisible({ timeout: 2000 });
 
     // Bob should be added to CC
-    const bobChip = page.locator("[data-testid='address-input-cc'] [data-testid='address-chip']").filter({ hasText: "bob@example.com" });
+    const bobChip = page
+      .locator("[data-testid='address-input-cc'] [data-testid='address-chip']")
+      .filter({ hasText: "bob@example.com" });
     await expect(bobChip).toBeVisible({ timeout: 2000 });
 
     // Body should contain Bob's first name only

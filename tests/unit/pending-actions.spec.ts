@@ -186,7 +186,9 @@ test.describe("PendingActionsQueue - Process Queue (Success)", () => {
   test("processQueue calls archiveMessage for archive actions", async () => {
     const archived: string[] = [];
     const client = createMockClient({
-      archiveMessage: async (id) => { archived.push(id); },
+      archiveMessage: async (id) => {
+        archived.push(id);
+      },
     });
 
     const queue = new TestPendingActionsQueue();
@@ -203,7 +205,9 @@ test.describe("PendingActionsQueue - Process Queue (Success)", () => {
   test("processQueue calls trashMessage for trash actions", async () => {
     const trashed: string[] = [];
     const client = createMockClient({
-      trashMessage: async (id) => { trashed.push(id); },
+      trashMessage: async (id) => {
+        trashed.push(id);
+      },
     });
 
     const queue = new TestPendingActionsQueue();
@@ -220,8 +224,12 @@ test.describe("PendingActionsQueue - Process Queue (Success)", () => {
     const archived: string[] = [];
     const trashed: string[] = [];
     const client = createMockClient({
-      archiveMessage: async (id) => { archived.push(id); },
-      trashMessage: async (id) => { trashed.push(id); },
+      archiveMessage: async (id) => {
+        archived.push(id);
+      },
+      trashMessage: async (id) => {
+        trashed.push(id);
+      },
     });
 
     const queue = new TestPendingActionsQueue();
@@ -303,7 +311,9 @@ test.describe("PendingActionsQueue - Network Errors", () => {
 
     for (const errMsg of networkErrors) {
       const client = createMockClient({
-        archiveMessage: async () => { throw new Error(errMsg); },
+        archiveMessage: async () => {
+          throw new Error(errMsg);
+        },
       });
 
       const queue = new TestPendingActionsQueue();
@@ -417,10 +427,14 @@ test.describe("PendingActionsQueue - Client Not Connected", () => {
     const archivedB: string[] = [];
 
     const clientA = createMockClient({
-      archiveMessage: async (id) => { archivedA.push(id); },
+      archiveMessage: async (id) => {
+        archivedA.push(id);
+      },
     });
     const clientB = createMockClient({
-      archiveMessage: async (id) => { archivedB.push(id); },
+      archiveMessage: async (id) => {
+        archivedB.push(id);
+      },
     });
 
     const queue = new TestPendingActionsQueue();

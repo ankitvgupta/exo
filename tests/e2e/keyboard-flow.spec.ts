@@ -48,7 +48,9 @@ test.describe("Keyboard Navigation - j/k Movement", () => {
     await page.keyboard.press("j");
 
     // Wait for selection to appear (CI can be slow to process keyboard events)
-    await expect(page.locator("div[data-thread-id][data-selected='true']")).toBeVisible({ timeout: 10000 });
+    await expect(page.locator("div[data-thread-id][data-selected='true']")).toBeVisible({
+      timeout: 10000,
+    });
   });
 
   test("j moves selection down to next email", async () => {
@@ -140,13 +142,19 @@ test.describe("Keyboard Navigation - Enter and Escape", () => {
   test("Enter opens email in full view", async () => {
     await expect(page.locator("text=Inbox").first()).toBeVisible({ timeout: 10000 });
     // Wait for email list to fully render before keyboard nav
-    await page.locator("[data-testid='email-list-item'], button").filter({ hasText: /Garry|HR Team/ }).first().waitFor({ timeout: 10000 });
+    await page
+      .locator("[data-testid='email-list-item'], button")
+      .filter({ hasText: /Garry|HR Team/ })
+      .first()
+      .waitFor({ timeout: 10000 });
     await page.waitForTimeout(500);
 
     // Select first thread
     await page.keyboard.press("j");
     // Wait for selection before pressing Enter
-    await expect(page.locator("div[data-thread-id][data-selected='true']")).toBeVisible({ timeout: 10000 });
+    await expect(page.locator("div[data-thread-id][data-selected='true']")).toBeVisible({
+      timeout: 10000,
+    });
 
     // Open full view
     await page.keyboard.press("Enter");
@@ -167,7 +175,10 @@ test.describe("Keyboard Navigation - Enter and Escape", () => {
   test("Escape deselects the selected email", async () => {
     // Select an email
     await page.keyboard.press("j");
-    await page.waitForTimeout(300);
+    // Wait for selection to appear (CI can be slow to process keyboard events)
+    await expect(page.locator("div[data-thread-id][data-selected='true']")).toBeVisible({
+      timeout: 10000,
+    });
 
     const selected = await getSelectedThreadId(page);
     expect(selected).not.toBeNull();
@@ -198,7 +209,9 @@ test.describe("Keyboard Compose - Reply, Reply-All, Forward", () => {
 
     // Navigate to first email and enter full view
     await page.keyboard.press("j");
-    await expect(page.locator("div[data-thread-id][data-selected='true']")).toBeVisible({ timeout: 10000 });
+    await expect(page.locator("div[data-thread-id][data-selected='true']")).toBeVisible({
+      timeout: 10000,
+    });
     await page.keyboard.press("Enter");
     await expect(page.locator("button[title='Reply All']").first()).toBeVisible({ timeout: 10000 });
 
@@ -375,7 +388,10 @@ test.describe("Keyboard Go-To - g i (Go to Inbox)", () => {
     await expect(page.locator("text=Inbox").first()).toBeVisible({ timeout: 10000 });
 
     // Switch away from priority view first (go to "All" tab)
-    const allTab = page.locator("button").filter({ hasText: /^All\s*\d*$/ }).first();
+    const allTab = page
+      .locator("button")
+      .filter({ hasText: /^All\s*\d*$/ })
+      .first();
     if (await allTab.isVisible().catch(() => false)) {
       await allTab.click();
       await page.waitForTimeout(300);
@@ -388,10 +404,16 @@ test.describe("Keyboard Go-To - g i (Go to Inbox)", () => {
     await page.waitForTimeout(500);
 
     // Priority tab should be active
-    const priorityTab = page.locator("button").filter({ hasText: /^Priority\s*\d*$/ }).first();
-    const isActive = await priorityTab.evaluate((el) =>
-      el.classList.contains("border-blue-500") || el.classList.contains("dark:border-blue-400")
-    ).catch(() => false);
+    const priorityTab = page
+      .locator("button")
+      .filter({ hasText: /^Priority\s*\d*$/ })
+      .first();
+    const isActive = await priorityTab
+      .evaluate(
+        (el) =>
+          el.classList.contains("border-blue-500") || el.classList.contains("dark:border-blue-400"),
+      )
+      .catch(() => false);
     expect(isActive).toBe(true);
   });
 
@@ -445,7 +467,11 @@ test.describe("Keyboard - Command Palette and Search", () => {
     await page.waitForTimeout(500);
 
     // Command palette should be visible with a search/input field
-    const paletteInput = page.locator("input[placeholder*='command'], input[placeholder*='Command'], input[placeholder*='Search'], input[placeholder*='Type']").first();
+    const paletteInput = page
+      .locator(
+        "input[placeholder*='command'], input[placeholder*='Command'], input[placeholder*='Search'], input[placeholder*='Type']",
+      )
+      .first();
     const paletteVisible = await paletteInput.isVisible().catch(() => false);
     expect(paletteVisible).toBe(true);
 
@@ -473,7 +499,11 @@ test.describe("Keyboard - Command Palette and Search", () => {
     await page.waitForTimeout(500);
 
     // Verify it's open
-    const paletteInput = page.locator("input[placeholder*='command'], input[placeholder*='Command'], input[placeholder*='Search'], input[placeholder*='Type']").first();
+    const paletteInput = page
+      .locator(
+        "input[placeholder*='command'], input[placeholder*='Command'], input[placeholder*='Search'], input[placeholder*='Type']",
+      )
+      .first();
     await expect(paletteInput).toBeVisible({ timeout: 3000 });
 
     // Close with Escape
@@ -544,7 +574,7 @@ test.describe("Keyboard - Compose New Email (c)", () => {
 
     // Recipient chip should appear
     await expect(
-      page.locator("[data-testid='address-chip']").filter({ hasText: "keyboard-test@example.com" })
+      page.locator("[data-testid='address-chip']").filter({ hasText: "keyboard-test@example.com" }),
     ).toBeVisible({ timeout: 3000 });
 
     // Fill in subject
@@ -612,7 +642,9 @@ test.describe("Keyboard - Escape Closes All Modals", () => {
   test("Escape exits full view", async () => {
     // Enter full view
     await page.keyboard.press("j");
-    await expect(page.locator("div[data-thread-id][data-selected='true']")).toBeVisible({ timeout: 5000 });
+    await expect(page.locator("div[data-thread-id][data-selected='true']")).toBeVisible({
+      timeout: 5000,
+    });
     await page.keyboard.press("Enter");
 
     await expect(page.locator("button[title='Reply All']").first()).toBeVisible({ timeout: 10000 });
@@ -715,12 +747,16 @@ test.describe("Keyboard - Agent Palette (Cmd+J)", () => {
     // Open agent palette
     await page.keyboard.press("Meta+j");
     await page.waitForTimeout(500);
-    await expect(page.locator("input[placeholder*='Ask agent']").first()).toBeVisible({ timeout: 3000 });
+    await expect(page.locator("input[placeholder*='Ask agent']").first()).toBeVisible({
+      timeout: 3000,
+    });
 
     // Close agent palette with Escape
     await page.keyboard.press("Escape");
     await page.waitForTimeout(300);
-    await expect(page.locator("input[placeholder*='Ask agent']").first()).not.toBeVisible({ timeout: 3000 });
+    await expect(page.locator("input[placeholder*='Ask agent']").first()).not.toBeVisible({
+      timeout: 3000,
+    });
 
     // Escape should exit full view (not get stuck)
     await page.keyboard.press("Escape");
@@ -880,7 +916,11 @@ test.describe("Keyboard - Agent Palette (Cmd+J)", () => {
     // Open command palette — should work, not stuck
     await page.keyboard.press("Meta+k");
     await page.waitForTimeout(300);
-    const cmdInput = page.locator("input[placeholder*='command'], input[placeholder*='Command'], input[placeholder*='Search'], input[placeholder*='Type']").first();
+    const cmdInput = page
+      .locator(
+        "input[placeholder*='command'], input[placeholder*='Command'], input[placeholder*='Search'], input[placeholder*='Type']",
+      )
+      .first();
     await expect(cmdInput).toBeVisible({ timeout: 3000 });
 
     // Close command palette
@@ -890,7 +930,9 @@ test.describe("Keyboard - Agent Palette (Cmd+J)", () => {
     // Agent palette should also still work
     await page.keyboard.press("Meta+j");
     await page.waitForTimeout(300);
-    await expect(page.locator("input[placeholder*='Ask agent']").first()).toBeVisible({ timeout: 3000 });
+    await expect(page.locator("input[placeholder*='Ask agent']").first()).toBeVisible({
+      timeout: 3000,
+    });
 
     // Close
     await page.keyboard.press("Escape");
@@ -902,8 +944,16 @@ test.describe("Keyboard - Agent Palette (Cmd+J)", () => {
 
     // Verify we're not stuck in a modal — the thread list should respond
     // to navigation (either a thread gets selected or we enter full view)
-    const threadVisible = await page.locator("div[data-thread-id]").first().isVisible().catch(() => false);
-    const replyButton = await page.locator("button[title='Reply All']").first().isVisible().catch(() => false);
+    const threadVisible = await page
+      .locator("div[data-thread-id]")
+      .first()
+      .isVisible()
+      .catch(() => false);
+    const replyButton = await page
+      .locator("button[title='Reply All']")
+      .first()
+      .isVisible()
+      .catch(() => false);
     expect(threadVisible || replyButton).toBe(true);
   });
 });

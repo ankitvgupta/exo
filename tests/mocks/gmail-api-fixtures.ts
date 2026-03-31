@@ -79,8 +79,14 @@ export interface GmailApiHistoryResponse {
     messages?: Array<{ id: string; threadId: string }>;
     messagesAdded?: Array<{ message: { id: string; threadId: string; labelIds: string[] } }>;
     messagesDeleted?: Array<{ message: { id: string; threadId: string } }>;
-    labelsAdded?: Array<{ message: { id: string; threadId: string; labelIds: string[] }; labelIds: string[] }>;
-    labelsRemoved?: Array<{ message: { id: string; threadId: string; labelIds: string[] }; labelIds: string[] }>;
+    labelsAdded?: Array<{
+      message: { id: string; threadId: string; labelIds: string[] };
+      labelIds: string[];
+    }>;
+    labelsRemoved?: Array<{
+      message: { id: string; threadId: string; labelIds: string[] };
+      labelIds: string[];
+    }>;
   }>;
   historyId: string;
   nextPageToken?: string;

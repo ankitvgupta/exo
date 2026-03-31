@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { createMessage } from "./anthropic-service";
 import { stripJsonFences } from "../../shared/strip-json-fences";
 import {
   DEFAULT_CALENDARING_PROMPT,
@@ -7,26 +7,28 @@ import {
   type EAConfig,
   type Email,
 } from "../../shared/types";
+import { createLogger } from "./logger";
+
+const log = createLogger("calendaring");
 
 export class CalendaringAgent {
-  private anthropic: Anthropic;
   private model: string;
   private prompt: string;
 
   constructor(model: string = "claude-sonnet-4-20250514", prompt?: string) {
-    this.anthropic = new Anthropic();
     this.model = model;
     this.prompt = prompt || DEFAULT_CALENDARING_PROMPT;
   }
 
   async analyze(email: Email): Promise<CalendaringResult> {
-    const response = await this.anthropic.messages.create({
-      model: this.model,
-      max_tokens: 512,
-      messages: [
-        {
-          role: "user",
-          content: `${this.prompt}
+    const response = await createMessage(
+      {
+        model: this.model,
+        max_tokens: 512,
+        messages: [
+          {
+            role: "user",
+            content: `${this.prompt}
 
 ---
 EMAIL TO ANALYZE:
@@ -37,9 +39,11 @@ Subject: ${email.subject}
 Date: ${email.date}
 
 ${email.body}`,
-        },
-      ],
-    });
+          },
+        ],
+      },
+      { caller: "calendaring-agent", emailId: email.id },
+    );
 
     const textBlock = response.content.find((block) => block.type === "text");
     if (!textBlock || textBlock.type !== "text") {
@@ -55,7 +59,7 @@ ${email.body}`,
       };
     } catch {
       // If JSON parsing fails, return a default
-      console.error("Failed to parse calendaring response:", textBlock.text);
+      log.error({ err: textBlock.text }, "Failed to parse calendaring response");
       return {
         hasSchedulingContext: false,
         action: "none",

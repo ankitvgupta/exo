@@ -72,9 +72,11 @@ export const AgentProviderManifestSchema = z.object({
   description: z.string().optional(),
   version: z.string().default("1.0.0"),
   authType: z.enum(["browser", "token", "none"]).default("none"),
-  contributes: z.object({
-    settings: z.array(SettingDefinitionSchema).optional(),
-  }).optional(),
+  contributes: z
+    .object({
+      settings: z.array(SettingDefinitionSchema).optional(),
+    })
+    .optional(),
   engines: EnginesSchema.optional(),
 });
 
@@ -287,7 +289,10 @@ export interface ExtensionAPI {
    * - checkAuth: Return true if the extension is already authenticated.
    *   Used during onboarding to determine if auth is needed proactively.
    */
-  registerAuthHandler(handler: () => Promise<void>, options?: { checkAuth?: () => Promise<boolean> }): void;
+  registerAuthHandler(
+    handler: () => Promise<void>,
+    options?: { checkAuth?: () => Promise<boolean> },
+  ): void;
 }
 
 // =============================================================================

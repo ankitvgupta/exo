@@ -50,12 +50,8 @@ export function AgentConfirmationDialog({
           />
         </svg>
         <div className="flex-1 min-w-0">
-          <div className="text-sm font-medium text-amber-800 dark:text-amber-300">
-            {toolName}
-          </div>
-          <div className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">
-            {description}
-          </div>
+          <div className="text-sm font-medium text-amber-800 dark:text-amber-300">{toolName}</div>
+          <div className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">{description}</div>
         </div>
       </div>
 

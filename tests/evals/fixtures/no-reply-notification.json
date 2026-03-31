@@ -1,0 +1,17 @@
+{
+  "id": "no-reply-notification-001",
+  "description": "GitHub pull request merged notification — automated CI notification",
+  "email": {
+    "id": "fixture-004",
+    "threadId": "thread-004",
+    "from": "notifications@github.com",
+    "to": "user@company.com",
+    "subject": "[company/repo] Pull request #456: Fix authentication bug was merged",
+    "body": "Merged #456 into main.\n\nFix authentication bug\n- Resolved race condition in OAuth flow\n- Added retry logic for token refresh\n- Updated tests for edge cases\n\n3 files changed, 47 insertions(+), 12 deletions(-)\n\nView on GitHub: https://github.com/company/repo/pull/456\n\n—\nYou are receiving this because you are subscribed to this thread.\nReply to this email directly, view it on GitHub, or unsubscribe.",
+    "date": "2025-01-15T11:15:00Z",
+    "snippet": "Merged #456 into main. Fix authentication bug..."
+  },
+  "expected": {
+    "needs_reply": false
+  }
+}

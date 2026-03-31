@@ -1,5 +1,8 @@
 import { EventEmitter } from "events";
 import { net, powerMonitor } from "electron";
+import { createLogger } from "./logger";
+
+const log = createLogger("network");
 
 type NetworkEvent = "online" | "offline";
 
@@ -16,7 +19,7 @@ class NetworkMonitor extends EventEmitter {
 
     // Get initial state from Electron's net module
     this._isOnline = net.isOnline();
-    console.log(`[NetworkMonitor] Initial state: ${this._isOnline ? "online" : "offline"}`);
+    log.info(`[NetworkMonitor] Initial state: ${this._isOnline ? "online" : "offline"}`);
 
     // Listen for system wake from sleep - check connectivity
     powerMonitor.on("resume", () => {
@@ -24,7 +27,9 @@ class NetworkMonitor extends EventEmitter {
       setTimeout(() => {
         const wasOnline = this._isOnline;
         this._isOnline = net.isOnline();
-        console.log(`[NetworkMonitor] Wake from sleep, network: ${this._isOnline ? "online" : "offline"}`);
+        log.info(
+          `[NetworkMonitor] Wake from sleep, network: ${this._isOnline ? "online" : "offline"}`,
+        );
 
         if (!wasOnline && this._isOnline) {
           this.emit("online");
@@ -52,7 +57,7 @@ class NetworkMonitor extends EventEmitter {
     if (this._isOnline !== online) {
       const wasOnline = this._isOnline;
       this._isOnline = online;
-      console.log(`[NetworkMonitor] Status changed from renderer: ${online ? "online" : "offline"}`);
+      log.info(`[NetworkMonitor] Status changed from renderer: ${online ? "online" : "offline"}`);
 
       if (!wasOnline && online) {
         this.emit("online");
@@ -68,7 +73,7 @@ class NetworkMonitor extends EventEmitter {
   setOffline(): void {
     if (this._isOnline) {
       this._isOnline = false;
-      console.log("[NetworkMonitor] Forced offline due to network error");
+      log.info("[NetworkMonitor] Forced offline due to network error");
       this.emit("offline");
     }
   }
@@ -81,7 +86,7 @@ class NetworkMonitor extends EventEmitter {
     if (current !== this._isOnline) {
       const wasOnline = this._isOnline;
       this._isOnline = current;
-      console.log(`[NetworkMonitor] Status check: ${current ? "online" : "offline"}`);
+      log.info(`[NetworkMonitor] Status check: ${current ? "online" : "offline"}`);
 
       if (!wasOnline && current) {
         this.emit("online");

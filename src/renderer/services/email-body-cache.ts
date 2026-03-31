@@ -32,10 +32,17 @@ function isPlainTextInHtml(html: string): boolean {
 export function hasRichBackground(html: string): boolean {
   const isDefaultBg = (value: string): boolean => {
     const v = value.trim().toLowerCase();
-    return v === "white" || v === "#fff" || v === "#ffffff" ||
-           v === "transparent" || v === "none" || v === "inherit" ||
-           v === "initial" || v === "unset" ||
-           /^rgba?\s*\(\s*255\s*,\s*255\s*,\s*255\s*(?:,\s*[\d.]+)?\s*\)$/.test(v);
+    return (
+      v === "white" ||
+      v === "#fff" ||
+      v === "#ffffff" ||
+      v === "transparent" ||
+      v === "none" ||
+      v === "inherit" ||
+      v === "initial" ||
+      v === "unset" ||
+      /^rgba?\s*\(\s*255\s*,\s*255\s*,\s*255\s*(?:,\s*[\d.]+)?\s*\)$/.test(v)
+    );
   };
 
   // Check bgcolor HTML attributes for non-white colors
@@ -77,11 +84,12 @@ export function stripLargeDataUris(body: string, useLightMode = true): string {
       if (dataUri.length < MAX_DATA_URI_LEN) return _match;
       const mimeMatch = dataUri.match(/^data:([^;,]+)/);
       const mime = mimeMatch?.[1] ?? "image";
-      const sizeKB = Math.round(dataUri.length * 3 / 4 / 1024);
+      const sizeKB = Math.round((dataUri.length * 3) / 4 / 1024);
       const sizeLabel = sizeKB >= 1024 ? `${(sizeKB / 1024).toFixed(1)} MB` : `${sizeKB} KB`;
       const fill = useLightMode ? "#f3f4f6" : "#374151";
       const textFill = useLightMode ? "#6b7280" : "#9ca3af";
-      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="60">` +
+      const svg =
+        `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="60">` +
         `<rect width="400" height="60" rx="8" fill="${fill}"/>` +
         `<text x="200" y="35" text-anchor="middle" fill="${textFill}" font-family="system-ui" font-size="13">` +
         `Inline ${mime} (${sizeLabel}) — too large to display inline` +
@@ -94,23 +102,79 @@ export function stripLargeDataUris(body: string, useLightMode = true): string {
 const SANITIZE_CONFIG = {
   WHOLE_DOCUMENT: false,
   ALLOWED_TAGS: [
-    "p", "br", "div", "span", "a", "b", "strong", "i", "em", "u",
-    "h1", "h2", "h3", "h4", "h5", "h6",
-    "ul", "ol", "li", "table", "tr", "td", "th", "thead", "tbody", "tfoot",
-    "img", "blockquote", "pre", "code", "hr", "center", "font",
-    "section", "article", "header", "footer", "nav", "aside", "style",
+    "p",
+    "br",
+    "div",
+    "span",
+    "a",
+    "b",
+    "strong",
+    "i",
+    "em",
+    "u",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "ul",
+    "ol",
+    "li",
+    "table",
+    "tr",
+    "td",
+    "th",
+    "thead",
+    "tbody",
+    "tfoot",
+    "img",
+    "blockquote",
+    "pre",
+    "code",
+    "hr",
+    "center",
+    "font",
+    "section",
+    "article",
+    "header",
+    "footer",
+    "nav",
+    "aside",
+    "style",
   ],
   ALLOWED_ATTR: [
-    "href", "src", "alt", "title", "style", "class", "id", "target",
-    "width", "height", "border", "cellpadding", "cellspacing",
-    "align", "valign", "bgcolor", "color", "face", "size", "type",
+    "href",
+    "src",
+    "alt",
+    "title",
+    "style",
+    "class",
+    "id",
+    "target",
+    "width",
+    "height",
+    "border",
+    "cellpadding",
+    "cellspacing",
+    "align",
+    "valign",
+    "bgcolor",
+    "color",
+    "face",
+    "size",
+    "type",
   ],
   ALLOW_DATA_ATTR: false,
   ADD_ATTR: ["target"],
   ALLOWED_URI_REGEXP: /^(?:(?:https?|data|cid):)/i,
 };
 
-function buildIframeHtml(sanitizedBody: string, useLightMode: boolean, needsPreLine: boolean): string {
+function buildIframeHtml(
+  sanitizedBody: string,
+  useLightMode: boolean,
+  needsPreLine: boolean,
+): string {
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -133,7 +197,9 @@ function buildIframeHtml(sanitizedBody: string, useLightMode: boolean, needsPreL
     table { max-width: 100%; border-collapse: collapse; }
     td, th { vertical-align: top; }
     blockquote { margin: 0; padding-left: 12px; border-left: 2px solid ${useLightMode ? "#e5e7eb" : "#4b5563"}; color: ${useLightMode ? "#6b7280" : "#9ca3af"}; }
-    ${!useLightMode ? `
+    ${
+      !useLightMode
+        ? `
     /* Override inline styles that assume a white background.
        Only applied in dark-content mode (non-rich HTML emails). */
     body, div, p, span, td, th, li, font, h1, h2, h3, h4, h5, h6 {
@@ -145,20 +211,24 @@ function buildIframeHtml(sanitizedBody: string, useLightMode: boolean, needsPreL
     }
     blockquote, blockquote * { color: #9ca3af !important; background-color: transparent !important; }
     a { color: #60a5fa !important; }
-    ` : ""}
+    `
+        : ""
+    }
   </style>
 </head>
 <body>${sanitizedBody}</body>
 </html>`;
 }
 
-export type SanitizedResult = {
-  isHtml: true;
-  htmlContent: string;
-} | {
-  isHtml: false;
-  htmlContent: null;
-};
+export type SanitizedResult =
+  | {
+      isHtml: true;
+      htmlContent: string;
+    }
+  | {
+      isHtml: false;
+      htmlContent: null;
+    };
 
 /**
  * LRU cache for pre-sanitized email body HTML. Stores the complete iframe HTML
@@ -219,10 +289,9 @@ class EmailBodyCache {
     const key = this.makeKey(emailId, useLightMode);
     if (this.cache.has(key)) return () => {};
 
-    let handle: number;
     const useIdleCallback = typeof requestIdleCallback === "function";
 
-    handle = useIdleCallback
+    const handle: number = useIdleCallback
       ? requestIdleCallback(() => {
           if (this.cache.has(key)) return;
           const result = this.compute(body, useLightMode);

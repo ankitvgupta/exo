@@ -81,7 +81,7 @@ async function launchElectronApp(): Promise<{ app: ElectronApplication; page: Pa
 // state isolation issues. The HTML quoting feature is tested manually.
 // To run these tests: npx playwright test tests/problematic/compose-html-quoting.spec.ts
 test.describe("Rich HTML Email Quoting", () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: "serial" });
 
   test.beforeAll(async () => {
     const result = await launchElectronApp();
@@ -149,27 +149,27 @@ test.describe("Rich HTML Email Quoting", () => {
       if (frame) {
         // Verify table is rendered (the quarterly report has a table)
         const table = frame.locator("table");
-        const tableExists = await table.count() > 0;
+        const tableExists = (await table.count()) > 0;
         expect(tableExists).toBe(true);
 
         // Verify the table has data (Revenue row)
         const revenueCell = frame.locator("text=Revenue");
-        const hasRevenue = await revenueCell.count() > 0;
+        const hasRevenue = (await revenueCell.count()) > 0;
         expect(hasRevenue).toBe(true);
 
         // Verify styled content exists (bold text)
         const boldText = frame.locator("strong");
-        const hasBold = await boldText.count() > 0;
+        const hasBold = (await boldText.count()) > 0;
         expect(hasBold).toBe(true);
 
         // Verify image tag is present
         const img = frame.locator("img");
-        const hasImage = await img.count() > 0;
+        const hasImage = (await img.count()) > 0;
         expect(hasImage).toBe(true);
 
         // Verify link is present
         const link = frame.locator("a");
-        const hasLink = await link.count() > 0;
+        const hasLink = (await link.count()) > 0;
         expect(hasLink).toBe(true);
       }
     }
@@ -215,12 +215,12 @@ test.describe("Rich HTML Email Quoting", () => {
       if (frame) {
         // Should contain "wrote:" attribution
         const wroteText = frame.locator("text=wrote:");
-        const hasWrote = await wroteText.count() > 0;
+        const hasWrote = (await wroteText.count()) > 0;
         expect(hasWrote).toBe(true);
 
         // Should contain the sender name
         const senderText = frame.locator("text=Emily Watson");
-        const hasSender = await senderText.count() > 0;
+        const hasSender = (await senderText.count()) > 0;
         expect(hasSender).toBe(true);
       }
     }
@@ -270,12 +270,12 @@ test.describe("Rich HTML Email Quoting", () => {
       if (frame) {
         // Should contain "Forwarded message" text
         const forwardedText = frame.locator("text=Forwarded message");
-        const hasForwarded = await forwardedText.count() > 0;
+        const hasForwarded = (await forwardedText.count()) > 0;
         expect(hasForwarded).toBe(true);
 
         // Should still contain the table from the original email
         const table = frame.locator("table");
-        const tableExists = await table.count() > 0;
+        const tableExists = (await table.count()) > 0;
         expect(tableExists).toBe(true);
       }
     }
@@ -330,12 +330,12 @@ test.describe("Rich HTML Email Quoting", () => {
       if (frame) {
         // Original table should still be there
         const table = frame.locator("table");
-        const tableExists = await table.count() > 0;
+        const tableExists = (await table.count()) > 0;
         expect(tableExists).toBe(true);
 
         // Our new reply text should NOT be in the iframe
         const ourText = frame.locator("text=This is my reply about the quarterly report");
-        const hasOurText = await ourText.count() > 0;
+        const hasOurText = (await ourText.count()) > 0;
         expect(hasOurText).toBe(false);
       }
     }

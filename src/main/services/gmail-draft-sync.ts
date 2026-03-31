@@ -3,8 +3,18 @@
  * All operations are best-effort — failures are logged but never thrown,
  * so the local draft flow is never blocked by Gmail API issues.
  */
-import { getEmail, getEmailMessageIdHeader, updateDraftGmailId, getThreadDrafts, deleteDraft, saveDraft } from "../db";
+import {
+  getEmail,
+  getEmailMessageIdHeader,
+  updateDraftGmailId,
+  getThreadDrafts,
+  deleteDraft,
+  saveDraft,
+} from "../db";
 import { getClient } from "../ipc/gmail.ipc";
+import { createLogger } from "./logger";
+
+const log = createLogger("gmail-draft-sync");
 
 const isTestMode = process.env.EXO_TEST_MODE === "true";
 const isDemoMode = process.env.EXO_DEMO_MODE === "true";
@@ -34,7 +44,7 @@ export async function syncDraftToGmail(
   try {
     const email = getEmail(emailId);
     if (!email) {
-      console.warn(`[GmailDraftSync] Email not found: ${emailId}`);
+      log.warn(`[GmailDraftSync] Email not found: ${emailId}`);
       return;
     }
 
@@ -64,9 +74,7 @@ export async function syncDraftToGmail(
     } else {
       const fromMatch = email.from.match(/<([^>]+)>/);
       to = fromMatch ? fromMatch[1] : email.from;
-      subject = email.subject.startsWith("Re:")
-        ? email.subject
-        : `Re: ${email.subject}`;
+      subject = email.subject.startsWith("Re:") ? email.subject : `Re: ${email.subject}`;
     }
 
     // Reply threading headers — only for replies, not forwards.
@@ -89,9 +97,11 @@ export async function syncDraftToGmail(
 
     // Only store the Gmail draft ID — preserve whatever status the caller set
     updateDraftGmailId(emailId, result.id);
-    console.log(`[GmailDraftSync] Synced ${isForward ? "forward" : "reply"} draft to Gmail for ${emailId} (gmailDraftId=${result.id})`);
+    log.info(
+      `[GmailDraftSync] Synced ${isForward ? "forward" : "reply"} draft to Gmail for ${emailId} (gmailDraftId=${result.id})`,
+    );
   } catch (err) {
-    console.error(`[GmailDraftSync] Failed to sync draft for ${emailId}:`, err);
+    log.error({ err: err }, `[GmailDraftSync] Failed to sync draft for ${emailId}`);
   }
 }
 
@@ -118,7 +128,8 @@ export function saveDraftAndSync(
   // Build options with only explicitly provided fields so that saveDraft's
   // COALESCE logic preserves DB values for omitted fields (e.g. cc/bcc when
   // only composeMode/to are provided).
-  const hasOptions = to !== undefined || cc !== undefined || bcc !== undefined || composeMode !== undefined;
+  const hasOptions =
+    to !== undefined || cc !== undefined || bcc !== undefined || composeMode !== undefined;
   const draftOptions = hasOptions
     ? {
         ...(to !== undefined ? { to } : {}),
@@ -138,7 +149,9 @@ export function saveDraftAndSync(
   const syncTo = to ?? savedDraft?.to;
 
   // Fire-and-forget Gmail sync
-  syncDraftToGmail(emailId, body, syncCc, syncBcc, oldGmailDraftId, syncComposeMode, syncTo).catch(() => {});
+  syncDraftToGmail(emailId, body, syncCc, syncBcc, oldGmailDraftId, syncComposeMode, syncTo).catch(
+    () => {},
+  );
 }
 
 /**
@@ -148,18 +161,15 @@ export function saveDraftAndSync(
  *
  * Fire-and-forget safe — never throws.
  */
-export async function deleteGmailDraftById(
-  accountId: string,
-  gmailDraftId: string,
-): Promise<void> {
+export async function deleteGmailDraftById(accountId: string, gmailDraftId: string): Promise<void> {
   if (useFakeData) return;
 
   try {
     const client = await getClient(accountId || "default");
     await client.deleteDraft(gmailDraftId);
-    console.log(`[GmailDraftSync] Deleted Gmail draft ${gmailDraftId}`);
+    log.info(`[GmailDraftSync] Deleted Gmail draft ${gmailDraftId}`);
   } catch (err) {
-    console.error(`[GmailDraftSync] Failed to delete Gmail draft ${gmailDraftId}:`, err);
+    log.error({ err: err }, `[GmailDraftSync] Failed to delete Gmail draft ${gmailDraftId}`);
   }
 }
 
@@ -172,9 +182,7 @@ export async function deleteGmailDraftsBatch(
 ): Promise<void> {
   if (useFakeData) return;
 
-  await Promise.allSettled(
-    drafts.map((d) => deleteGmailDraftById(d.accountId, d.gmailDraftId)),
-  );
+  await Promise.allSettled(drafts.map((d) => deleteGmailDraftById(d.accountId, d.gmailDraftId)));
 }
 
 /**
@@ -198,7 +206,7 @@ export function cleanupStaleDraftsForThread(
   // Only clean up AI-generated drafts (status='pending'), not user-edited ones.
   // This matches the convention in clearInboxPendingDrafts.
   const staleDrafts = threadDrafts.filter(
-    d => !excludeEmailIds.has(d.emailId) && d.status === "pending",
+    (d) => !excludeEmailIds.has(d.emailId) && d.status === "pending",
   );
   if (staleDrafts.length === 0) return [];
 
@@ -213,7 +221,9 @@ export function cleanupStaleDraftsForThread(
     }
     deleteDraft(stale.emailId);
     removedIds.push(stale.emailId);
-    console.log(`[DraftSync] Deleted stale draft for ${stale.emailId} — ${reason} (thread ${threadId})`);
+    log.info(
+      `[DraftSync] Deleted stale draft for ${stale.emailId} — ${reason} (thread ${threadId})`,
+    );
   }
   return removedIds;
 }

@@ -55,9 +55,7 @@ function buildDraftSyncParams(
   } else {
     const fromMatch = email.from.match(/<([^>]+)>/);
     to = fromMatch ? fromMatch[1] : email.from;
-    subject = email.subject.startsWith("Re:")
-      ? email.subject
-      : `Re: ${email.subject}`;
+    subject = email.subject.startsWith("Re:") ? email.subject : `Re: ${email.subject}`;
   }
 
   const inReplyTo = !isForward ? parentMessageId : undefined;
@@ -143,7 +141,12 @@ test.describe("Gmail draft sync: forward mode", () => {
   });
 
   test("handles multiple forward recipients", () => {
-    const result = buildDraftSyncParams(email, "forward", ["bob@example.com", "carol@example.com"], undefined);
+    const result = buildDraftSyncParams(
+      email,
+      "forward",
+      ["bob@example.com", "carol@example.com"],
+      undefined,
+    );
     expect(result.to).toBe("bob@example.com, carol@example.com");
   });
 
@@ -313,7 +316,9 @@ test.describe("onDraftSaved propagation: composeMode and to", () => {
   test("useComposeForm initializes nameMap from formatted initialTo addresses", () => {
     const code = readFileSync(path.join(srcDir, "renderer/hooks/useComposeForm.ts"), "utf-8");
     // Should call buildNameMapFromAddresses with all initial address fields
-    expect(code).toContain("buildNameMapFromAddresses([...initialTo, ...initialCc, ...initialBcc])");
+    expect(code).toContain(
+      "buildNameMapFromAddresses([...initialTo, ...initialCc, ...initialBcc])",
+    );
     // Should extract bare emails for form state
     expect(code).toContain("initialTo.map(extractBareEmail)");
   });
@@ -324,6 +329,8 @@ test.describe("onDraftSaved propagation: composeMode and to", () => {
     expect(code).toMatch(/function saveDraftAndSync\([^)]*composeMode/);
     expect(code).toMatch(/function saveDraftAndSync\([^)]*to\?\s*:\s*string\[\]/);
     // And pass them to syncDraftToGmail (re-read from DB to survive refine calls)
-    expect(code).toContain("syncDraftToGmail(emailId, body, syncCc, syncBcc, oldGmailDraftId, syncComposeMode, syncTo)");
+    expect(code).toContain(
+      "syncDraftToGmail(emailId, body, syncCc, syncBcc, oldGmailDraftId, syncComposeMode, syncTo)",
+    );
   });
 });

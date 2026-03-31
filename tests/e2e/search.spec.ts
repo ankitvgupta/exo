@@ -14,7 +14,7 @@ import { launchElectronApp } from "./launch-helpers";
  */
 
 test.describe("Search - Opening and Closing", () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: "serial" });
   let electronApp: ElectronApplication;
   let page: Page;
 
@@ -93,7 +93,7 @@ test.describe("Search - Opening and Closing", () => {
 });
 
 test.describe("Search - Query Input", () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: "serial" });
   let electronApp: ElectronApplication;
   let page: Page;
 
@@ -142,7 +142,10 @@ test.describe("Search - Query Input", () => {
 
     // Should show results - demo data has "Project update meeting"
     const results = page.locator("text=Project");
-    const hasResults = await results.first().isVisible().catch(() => false);
+    const hasResults = await results
+      .first()
+      .isVisible()
+      .catch(() => false);
     expect(hasResults).toBe(true);
 
     // Close
@@ -198,7 +201,7 @@ test.describe("Search - Query Input", () => {
 });
 
 test.describe("Search - Result Navigation", () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: "serial" });
   let electronApp: ElectronApplication;
   let page: Page;
 
@@ -255,7 +258,10 @@ test.describe("Search - Result Navigation", () => {
 
     // Check if we have results
     const results = page.locator("text=Project");
-    const hasResults = await results.first().isVisible().catch(() => false);
+    const hasResults = await results
+      .first()
+      .isVisible()
+      .catch(() => false);
 
     if (hasResults) {
       // Press Enter to select
@@ -300,7 +306,7 @@ test.describe("Search - Result Navigation", () => {
 });
 
 test.describe("Search - Search Operators", () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: "serial" });
   let electronApp: ElectronApplication;
   let page: Page;
 
@@ -327,9 +333,18 @@ test.describe("Search - Search Operators", () => {
     const toHint = page.locator("code:has-text('to:')");
     const subjectHint = page.locator("code:has-text('subject:')");
 
-    const hasFromHint = await fromHint.first().isVisible().catch(() => false);
-    const hasToHint = await toHint.first().isVisible().catch(() => false);
-    const hasSubjectHint = await subjectHint.first().isVisible().catch(() => false);
+    const hasFromHint = await fromHint
+      .first()
+      .isVisible()
+      .catch(() => false);
+    const hasToHint = await toHint
+      .first()
+      .isVisible()
+      .catch(() => false);
+    const hasSubjectHint = await subjectHint
+      .first()
+      .isVisible()
+      .catch(() => false);
 
     // At least one operator hint should be visible
     expect(hasFromHint || hasToHint || hasSubjectHint).toBe(true);
@@ -353,7 +368,10 @@ test.describe("Search - Search Operators", () => {
 
     // Should show result from alice (demo data)
     const aliceResult = page.locator("text=alice");
-    const hasAlice = await aliceResult.first().isVisible().catch(() => false);
+    const hasAlice = await aliceResult
+      .first()
+      .isVisible()
+      .catch(() => false);
     // Note: demo mode does simple string matching, so this might work differently
 
     // Close
@@ -362,7 +380,7 @@ test.describe("Search - Search Operators", () => {
 });
 
 test.describe("Search - UI Elements", () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: "serial" });
   let electronApp: ElectronApplication;
   let page: Page;
 
@@ -385,7 +403,10 @@ test.describe("Search - UI Elements", () => {
     await page.waitForTimeout(300);
 
     // Check for search icon
-    const searchIcon = page.locator("svg").filter({ has: page.locator("path[d*='M21 21l-6-6']") }).first();
+    const searchIcon = page
+      .locator("svg")
+      .filter({ has: page.locator("path[d*='M21 21l-6-6']") })
+      .first();
     const hasSearchIcon = await searchIcon.isVisible().catch(() => false);
 
     // Check for Escape hint
@@ -439,7 +460,10 @@ test.describe("Search - UI Elements", () => {
     // Results should show formatted dates (e.g., "Yesterday", "3:45 PM", "Jan 15")
     // Demo data uses current date, so we might see "Today" or time
     const results = page.locator("text=Project");
-    const hasResults = await results.first().isVisible().catch(() => false);
+    const hasResults = await results
+      .first()
+      .isVisible()
+      .catch(() => false);
 
     if (hasResults) {
       // Just verify results loaded correctly
@@ -452,7 +476,7 @@ test.describe("Search - UI Elements", () => {
 });
 
 test.describe("Search - Quick Search Click Loads Email", () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: "serial" });
   let electronApp: ElectronApplication;
   let page: Page;
 
@@ -523,7 +547,7 @@ test.describe("Search - Quick Search Click Loads Email", () => {
 });
 
 test.describe("Search - Full Search Results View", () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: "serial" });
   let electronApp: ElectronApplication;
   let page: Page;
 
@@ -590,7 +614,7 @@ test.describe("Search - Full Search Results View", () => {
 });
 
 test.describe("Search - Keyboard Navigation in Results", () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: "serial" });
   let electronApp: ElectronApplication;
   let page: Page;
 
@@ -616,7 +640,9 @@ test.describe("Search - Keyboard Navigation in Results", () => {
     await page.keyboard.press("Enter");
     await page.waitForTimeout(1000);
     // Verify search results are visible
-    await expect(page.locator('[data-testid="search-results-header"]')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('[data-testid="search-results-header"]')).toBeVisible({
+      timeout: 5000,
+    });
   }
 
   test("j/k navigates search results", async () => {
@@ -707,7 +733,10 @@ test.describe("Search - Keyboard Navigation in Results", () => {
       await expect(emailDetail).toBeVisible({ timeout: 5000 });
 
       // Click the Back button (arrow-left icon button in email detail)
-      const backButton = page.locator("button").filter({ hasText: /Back|←/ }).first();
+      const backButton = page
+        .locator("button")
+        .filter({ hasText: /Back|←/ })
+        .first();
       // Alternative: look for the back arrow SVG button
       const backArrow = page.locator('button:has(svg path[d*="M10 19l-7-7"])').first();
       if (await backArrow.isVisible().catch(() => false)) {
@@ -751,7 +780,7 @@ test.describe("Search - Keyboard Navigation in Results", () => {
 });
 
 test.describe("Search - Search All Mail Affordance", () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: "serial" });
   let electronApp: ElectronApplication;
   let page: Page;
 

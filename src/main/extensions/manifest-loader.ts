@@ -1,6 +1,9 @@
 import { readFileSync, existsSync } from "fs";
 import { join } from "path";
 import { ExtensionManifestSchema, type ExtensionManifest } from "../../shared/extension-types";
+import { createLogger } from "../services/logger";
+
+const log = createLogger("manifest-loader");
 
 /**
  * Load and validate an extension manifest from a package.json file
@@ -9,7 +12,7 @@ export function loadManifest(extensionPath: string): ExtensionManifest | null {
   const packageJsonPath = join(extensionPath, "package.json");
 
   if (!existsSync(packageJsonPath)) {
-    console.error(`[Extensions] No package.json found at ${extensionPath}`);
+    log.error(`[Extensions] No package.json found at ${extensionPath}`);
     return null;
   }
 
@@ -17,16 +20,16 @@ export function loadManifest(extensionPath: string): ExtensionManifest | null {
     const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf-8"));
 
     if (!packageJson.mailExtension) {
-      console.error(`[Extensions] No mailExtension field in ${packageJsonPath}`);
+      log.error(`[Extensions] No mailExtension field in ${packageJsonPath}`);
       return null;
     }
 
     const manifest = ExtensionManifestSchema.parse(packageJson.mailExtension);
-    console.log(`[Extensions] Loaded manifest for ${manifest.id} (${manifest.displayName})`);
+    log.info(`[Extensions] Loaded manifest for ${manifest.id} (${manifest.displayName})`);
 
     return manifest;
   } catch (error) {
-    console.error(`[Extensions] Failed to load manifest from ${packageJsonPath}:`, error);
+    log.error({ err: error }, `[Extensions] Failed to load manifest from ${packageJsonPath}`);
     return null;
   }
 }
@@ -42,6 +45,7 @@ function scanExtensionDirectory(dirPath: string): string[] {
   }
 
   try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { readdirSync, statSync } = require("fs");
     const entries = readdirSync(dirPath);
 
@@ -55,7 +59,7 @@ function scanExtensionDirectory(dirPath: string): string[] {
       }
     }
   } catch (error) {
-    console.error(`[Extensions] Failed to scan extensions at ${dirPath}:`, error);
+    log.error({ err: error }, `[Extensions] Failed to scan extensions at ${dirPath}`);
   }
 
   return paths;

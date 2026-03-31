@@ -1,11 +1,17 @@
 import { ipcMain, BrowserWindow } from "electron";
 import { EmailAnalyzer } from "../services/email-analyzer";
-import { getEmail, saveAnalysis, getAllEmails, getInboxEmails, getAccounts } from "../db";
+import { getEmail, saveAnalysis, getInboxEmails, getAccounts } from "../db";
 import { getConfig, getModelIdForFeature } from "./settings.ipc";
 import type { IpcResponse, DashboardEmail, Email } from "../../shared/types";
 import { DEMO_INBOX_EMAILS, DEMO_EXPECTED_ANALYSIS } from "../demo/fake-inbox";
-import { learnFromPriorityOverrideWithReason, learnFromPriorityOverrideInferred } from "../services/analysis-edit-learner";
+import {
+  learnFromPriorityOverrideWithReason,
+  learnFromPriorityOverrideInferred,
+} from "../services/analysis-edit-learner";
 import { stripQuotedContent } from "../services/strip-quoted-content";
+import { createLogger } from "../services/logger";
+
+const log = createLogger("analysis-ipc");
 
 const isTestMode = process.env.EXO_TEST_MODE === "true";
 const isDemoMode = process.env.EXO_DEMO_MODE === "true";
@@ -16,7 +22,9 @@ const learningQueues = new Map<string, Promise<void>>();
 
 function enqueueLearn(accountId: string, fn: () => Promise<unknown>): void {
   const prev = learningQueues.get(accountId) ?? Promise.resolve();
-  const next: Promise<void> = prev.then(async () => { await fn().catch(err => console.error("[Analysis] Learning failed:", err)); });
+  const next: Promise<void> = prev.then(async () => {
+    await fn().catch((err) => log.error({ err: err }, "[Analysis] Learning failed"));
+  });
   learningQueues.set(accountId, next);
   // Clean up completed promises to prevent memory leak
   next.then(() => {
@@ -55,7 +63,7 @@ export function registerAnalysisIpc(): void {
     async (_, { emailId }: { emailId: string }): Promise<IpcResponse<DashboardEmail>> => {
       // In demo mode, return pre-computed analysis
       if (useFakeData) {
-        const email = DEMO_INBOX_EMAILS.find(e => e.id === emailId);
+        const email = DEMO_INBOX_EMAILS.find((e) => e.id === emailId);
         if (!email) {
           return { success: false, error: "Email not found in demo data" };
         }
@@ -66,7 +74,7 @@ export function registerAnalysisIpc(): void {
         }
 
         // Simulate a slight delay like real analysis would have
-        await new Promise(resolve => setTimeout(resolve, 500));
+        await new Promise((resolve) => setTimeout(resolve, 500));
 
         const dashboardEmail: DashboardEmail = {
           ...email,
@@ -118,32 +126,31 @@ export function registerAnalysisIpc(): void {
           error: error instanceof Error ? error.message : "Unknown error",
         };
       }
-    }
+    },
   );
 
   // Analyze multiple emails
   ipcMain.handle(
     "analysis:analyze-batch",
-    async (
-      _,
-      { emailIds }: { emailIds: string[] }
-    ): Promise<IpcResponse<DashboardEmail[]>> => {
+    async (_, { emailIds }: { emailIds: string[] }): Promise<IpcResponse<DashboardEmail[]>> => {
       // In demo mode, return pre-computed analysis for all
       if (useFakeData) {
         const results: DashboardEmail[] = [];
         for (const emailId of emailIds) {
-          const email = DEMO_INBOX_EMAILS.find(e => e.id === emailId);
+          const email = DEMO_INBOX_EMAILS.find((e) => e.id === emailId);
           if (!email) continue;
 
           const expectedAnalysis = DEMO_EXPECTED_ANALYSIS[emailId];
           results.push({
             ...email,
-            analysis: expectedAnalysis ? {
-              needsReply: expectedAnalysis.needsReply,
-              reason: expectedAnalysis.reason,
-              priority: expectedAnalysis.priority,
-              analyzedAt: Date.now(),
-            } : undefined,
+            analysis: expectedAnalysis
+              ? {
+                  needsReply: expectedAnalysis.needsReply,
+                  reason: expectedAnalysis.reason,
+                  priority: expectedAnalysis.priority,
+                  analyzedAt: Date.now(),
+                }
+              : undefined,
           });
         }
         return { success: true, data: results };
@@ -176,7 +183,11 @@ export function registerAnalysisIpc(): void {
           };
 
           try {
-            const result = await analyzerInstance.analyze(emailForAnalysis, userEmail, email.accountId);
+            const result = await analyzerInstance.analyze(
+              emailForAnalysis,
+              userEmail,
+              email.accountId,
+            );
             saveAnalysis(emailId, result.needs_reply, result.reason, result.priority);
 
             const updatedEmail = getEmail(emailId);
@@ -184,7 +195,7 @@ export function registerAnalysisIpc(): void {
               results.push(updatedEmail);
             }
           } catch (analyzeError) {
-            console.error(`Failed to analyze email ${emailId}:`, analyzeError);
+            log.error({ err: analyzeError }, `Failed to analyze email ${emailId}`);
             // Continue with other emails
           }
         }
@@ -197,7 +208,7 @@ export function registerAnalysisIpc(): void {
           error: error instanceof Error ? error.message : "Unknown error",
         };
       }
-    }
+    },
   );
 
   // Override an email's priority classification and learn from the correction
@@ -205,12 +216,17 @@ export function registerAnalysisIpc(): void {
     "analysis:override-priority",
     async (
       _,
-      { emailId, newNeedsReply, newPriority, reason }: {
+      {
+        emailId,
+        newNeedsReply,
+        newPriority,
+        reason,
+      }: {
         emailId: string;
         newNeedsReply: boolean;
         newPriority: string | null;
         reason?: string;
-      }
+      },
     ): Promise<IpcResponse<{ analysisUpdated: boolean }>> => {
       try {
         const email = getEmail(emailId);
@@ -224,9 +240,16 @@ export function registerAnalysisIpc(): void {
         const originalPriority = originalAnalysis?.priority ?? null;
 
         // Update the analysis in DB
-        saveAnalysis(emailId, newNeedsReply, originalAnalysis?.reason ?? "User override", newPriority ?? undefined);
+        saveAnalysis(
+          emailId,
+          newNeedsReply,
+          originalAnalysis?.reason ?? "User override",
+          newPriority ?? undefined,
+        );
 
-        console.log(`[Analysis] Priority overridden for ${emailId}: ${originalPriority ?? "skip"} → ${newPriority ?? "skip"}`);
+        log.info(
+          `[Analysis] Priority overridden for ${emailId}: ${originalPriority ?? "skip"} → ${newPriority ?? "skip"}`,
+        );
 
         // Learn from the override in the background (don't block the UI)
         const accountId = email.accountId ?? "default";
@@ -238,7 +261,12 @@ export function registerAnalysisIpc(): void {
         const bodySnippet = stripQuotedContent(email.body ?? "").slice(0, 500);
 
         const sendLearnedEvent = (payload: {
-          promoted: Array<{ id: string; content: string; scope: string; scopeValue: string | null }>;
+          promoted: Array<{
+            id: string;
+            content: string;
+            scope: string;
+            scopeValue: string | null;
+          }>;
           draftMemoriesCreated: number;
         }) => {
           const win = BrowserWindow.getAllWindows()[0];
@@ -257,7 +285,14 @@ export function registerAnalysisIpc(): void {
             });
             if (saved) {
               sendLearnedEvent({
-                promoted: [{ id: memory.id, content: memory.content, scope: memory.scope, scopeValue: memory.scopeValue ?? null }],
+                promoted: [
+                  {
+                    id: memory.id,
+                    content: memory.content,
+                    scope: memory.scope,
+                    scopeValue: memory.scopeValue ?? null,
+                  },
+                ],
                 draftMemoriesCreated: 0,
               });
             }
@@ -290,6 +325,6 @@ export function registerAnalysisIpc(): void {
           error: error instanceof Error ? error.message : "Unknown error",
         };
       }
-    }
+    },
   );
 }

@@ -116,7 +116,11 @@ function collectPerformanceSnapshot(): Record<string, unknown> {
   const perf: Record<string, unknown> = {};
   try {
     // Memory (Chrome/Electron only)
-    const mem = (performance as unknown as { memory?: { usedJSHeapSize: number; totalJSHeapSize: number; jsHeapSizeLimit: number } }).memory;
+    const mem = (
+      performance as unknown as {
+        memory?: { usedJSHeapSize: number; totalJSHeapSize: number; jsHeapSizeLimit: number };
+      }
+    ).memory;
     if (mem) {
       perf.memory_used_mb = Math.round(mem.usedJSHeapSize / 1024 / 1024);
       perf.memory_total_mb = Math.round(mem.totalJSHeapSize / 1024 / 1024);
@@ -125,7 +129,9 @@ function collectPerformanceSnapshot(): Record<string, unknown> {
     }
 
     // Navigation timing
-    const nav = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
+    const nav = performance.getEntriesByType("navigation")[0] as
+      | PerformanceNavigationTiming
+      | undefined;
     if (nav) {
       perf.page_load_ms = Math.round(nav.loadEventEnd - nav.startTime);
       perf.dom_interactive_ms = Math.round(nav.domInteractive - nav.startTime);
@@ -148,12 +154,20 @@ function collectPerformanceSnapshot(): Record<string, unknown> {
     // Resource count
     const resources = performance.getEntriesByType("resource");
     perf.resource_count = resources.length;
-    const failedResources = resources.filter((r) => (r as PerformanceResourceTiming).transferSize === 0 && (r as PerformanceResourceTiming).decodedBodySize === 0);
+    const failedResources = resources.filter(
+      (r) =>
+        (r as PerformanceResourceTiming).transferSize === 0 &&
+        (r as PerformanceResourceTiming).decodedBodySize === 0,
+    );
     if (failedResources.length > 0) {
       perf.failed_resource_count = failedResources.length;
       // Only send pathname to avoid leaking full URLs (which may contain tokens/query params)
       perf.failed_resources = failedResources.slice(-10).map((r) => {
-        try { return new URL(r.name).pathname; } catch { return "[unparseable]"; }
+        try {
+          return new URL(r.name).pathname;
+        } catch {
+          return "[unparseable]";
+        }
       });
     }
   } catch {
@@ -167,7 +181,9 @@ function collectDOMSnapshot(): Record<string, unknown> {
   try {
     dom.element_count = document.querySelectorAll("*").length;
     dom.visible_modals = document.querySelectorAll("[role=dialog], .modal, [class*=modal]").length;
-    dom.visible_toasts = document.querySelectorAll("[class*=toast], [class*=Toast], [role=alert]").length;
+    dom.visible_toasts = document.querySelectorAll(
+      "[class*=toast], [class*=Toast], [role=alert]",
+    ).length;
 
     const active = document.activeElement;
     if (active && active !== document.body) {
@@ -184,7 +200,8 @@ function collectDOMSnapshot(): Record<string, unknown> {
     dom.device_pixel_ratio = window.devicePixelRatio;
     dom.scroll_y = window.scrollY;
     dom.scroll_x = window.scrollX;
-    dom.settings_panel_open = document.querySelector("[class*=SettingsPanel], [class*=settings]") !== null;
+    dom.settings_panel_open =
+      document.querySelector("[class*=SettingsPanel], [class*=settings]") !== null;
 
     const emailItems = document.querySelectorAll("[data-email-id]");
     dom.visible_email_items = emailItems.length;
@@ -207,7 +224,16 @@ function collectNetworkSnapshot(): Record<string, unknown> {
   try {
     net.online = navigator.onLine;
 
-    const conn = (navigator as unknown as { connection?: { effectiveType?: string; downlink?: number; rtt?: number; saveData?: boolean } }).connection;
+    const conn = (
+      navigator as unknown as {
+        connection?: {
+          effectiveType?: string;
+          downlink?: number;
+          rtt?: number;
+          saveData?: boolean;
+        };
+      }
+    ).connection;
     if (conn) {
       net.effective_type = conn.effectiveType;
       net.downlink_mbps = conn.downlink;
@@ -227,10 +253,7 @@ function collectNetworkSnapshot(): Record<string, unknown> {
  */
 let capturing = false;
 
-export function captureException(
-  error: Error | string,
-  extra?: Record<string, unknown>,
-): void {
+export function captureException(error: Error | string, extra?: Record<string, unknown>): void {
   if (!initialized) return;
   if (capturing) return; // prevent recursion
   capturing = true;
@@ -298,9 +321,10 @@ function installGlobalHandlers(): void {
   });
 
   window.addEventListener("unhandledrejection", (event) => {
-    const reason = event.reason instanceof Error
-      ? event.reason
-      : String(event.reason ?? "Unhandled promise rejection");
+    const reason =
+      event.reason instanceof Error
+        ? event.reason
+        : String(event.reason ?? "Unhandled promise rejection");
     captureException(reason, { source: "unhandledrejection" });
   });
 
@@ -321,8 +345,12 @@ export function initPostHog(config: PostHogConfig): void {
     return;
   }
 
-  console.log("[PostHog] Initializing with host:", config.host || "https://us.i.posthog.com",
-    "| session replay:", config.sessionReplay ?? false);
+  console.log(
+    "[PostHog] Initializing with host:",
+    config.host || "https://us.i.posthog.com",
+    "| session replay:",
+    config.sessionReplay ?? false,
+  );
 
   posthog.init(config.apiKey, {
     api_host: config.host || "https://us.i.posthog.com",
@@ -377,12 +405,14 @@ export function identifyUser(
   lastIdentifiedEmail = email;
   lastIdentifiedProps = properties;
   console.log("[PostHog] Identifying user: [hashed]");
-  hashEmail(email).then((hashedId) => {
-    if (!initialized) return; // may have been shut down while hashing
-    posthog.identify(hashedId, { email, ...properties });
-  }).catch((err) => {
-    console.warn("[PostHog] Failed to hash email for identify:", err);
-  });
+  hashEmail(email)
+    .then((hashedId) => {
+      if (!initialized) return; // may have been shut down while hashing
+      posthog.identify(hashedId, { email, ...properties });
+    })
+    .catch((err) => {
+      console.warn("[PostHog] Failed to hash email for identify:", err);
+    });
 }
 
 /**
@@ -448,12 +478,14 @@ export function reconfigurePostHog(config: PostHogConfig): void {
 
   // Re-identify user (reset() may have cleared distinct_id on prior shutdown)
   if (lastIdentifiedEmail) {
-    hashEmail(lastIdentifiedEmail).then((hashedId) => {
-      if (!initialized) return; // may have been shut down while hashing
-      posthog.identify(hashedId, { email: lastIdentifiedEmail, ...lastIdentifiedProps });
-    }).catch((err) => {
-      console.warn("[PostHog] Failed to hash email for re-identify:", err);
-    });
+    hashEmail(lastIdentifiedEmail)
+      .then((hashedId) => {
+        if (!initialized) return; // may have been shut down while hashing
+        posthog.identify(hashedId, { email: lastIdentifiedEmail, ...lastIdentifiedProps });
+      })
+      .catch((err) => {
+        console.warn("[PostHog] Failed to hash email for re-identify:", err);
+      });
   }
 }
 

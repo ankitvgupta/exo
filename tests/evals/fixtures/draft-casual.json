@@ -1,0 +1,18 @@
+{
+  "id": "draft-casual-001",
+  "description": "Casual team email — coworker asking about lunch plans, low stakes",
+  "email": {
+    "id": "fixture-007",
+    "threadId": "thread-007",
+    "from": "teammate@company.com",
+    "to": "user@company.com",
+    "subject": "lunch today?",
+    "body": "hey! a few of us are heading to that new ramen place on 3rd street around noon. wanna come? lmk!",
+    "date": "2025-01-15T10:30:00Z",
+    "snippet": "hey! a few of us are heading to that new ramen place..."
+  },
+  "expected": {
+    "needs_reply": true,
+    "priority": "low"
+  }
+}

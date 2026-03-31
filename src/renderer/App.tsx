@@ -1,6 +1,13 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useAppStore, useThreadedEmails, type Account, type SyncStatus, type PrefetchProgress, type BackgroundSyncProgress } from "./store";
+import {
+  useAppStore,
+  useThreadedEmails,
+  type Account,
+  type SyncStatus,
+  type PrefetchProgress,
+  type BackgroundSyncProgress,
+} from "./store";
 import { EmailList } from "./components/EmailList";
 import { EmailDetail } from "./components/EmailDetail";
 import { EmailPreviewSidebar } from "./components/EmailPreviewSidebar";
@@ -21,11 +28,32 @@ import { AnalysisOverrideLearnedToast } from "./components/AnalysisOverrideLearn
 import { SnoozeMenu } from "./components/SnoozeMenu";
 import { registerBundledExtensions } from "./extensions";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
-import { bufferAddEmails, bufferRemoveEmails, bufferUpdateEmails, cancelPendingFlush } from "./hooks/useSyncBuffer";
+import {
+  bufferAddEmails,
+  bufferRemoveEmails,
+  bufferUpdateEmails,
+  cancelPendingFlush,
+} from "./hooks/useSyncBuffer";
 import { confirmOptimisticReads } from "./optimistic-reads";
-import { initPostHog, identifyUser, trackEvent, addBreadcrumb, captureException } from "./services/posthog";
+import {
+  initPostHog,
+  identifyUser,
+  trackEvent,
+  addBreadcrumb,
+  captureException,
+} from "./services/posthog";
 import { LocalDraftSchema } from "../shared/types";
-import type { DashboardEmail, OutboxStats, ThemePreference, InboxDensity, ScheduledMessage, SnoozedEmail, IpcResponse, InboxSplit } from "../shared/types";
+import type {
+  DashboardEmail,
+  OutboxStats,
+  ScheduledMessageStats,
+  ThemePreference,
+  InboxDensity,
+  ScheduledMessage,
+  SnoozedEmail,
+  IpcResponse,
+  InboxSplit,
+} from "../shared/types";
 import type { ScopedAgentEvent, AgentProviderConfig } from "../shared/agent-types";
 import { mergeAndThreadSearchResults } from "./utils/searchResults";
 import type { EmailThread } from "./store";
@@ -53,7 +81,15 @@ function formatSearchDate(dateStr: string): string {
   return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-function SearchResultThreadRow({ thread, isSelected, onClick }: { thread: EmailThread; isSelected: boolean; onClick: () => void }) {
+function SearchResultThreadRow({
+  thread,
+  isSelected,
+  onClick,
+}: {
+  thread: EmailThread;
+  isSelected: boolean;
+  onClick: () => void;
+}) {
   const senderName = thread.displaySender.split("<")[0].trim() || thread.displaySender;
   const latestEmail = thread.latestEmail;
   const snippet = latestEmail.snippet ? decodeHtmlEntities(latestEmail.snippet) : "";
@@ -74,51 +110,84 @@ function SearchResultThreadRow({ thread, isSelected, onClick }: { thread: EmailT
       <div className="w-5 flex-shrink-0 flex items-center justify-center">
         <div className="w-2 flex items-center justify-center">
           {thread.isUnread && (
-            <div className={`w-1.5 h-1.5 rounded-full ${isSelected ? "bg-white" : "bg-blue-500"}`} />
+            <div
+              className={`w-1.5 h-1.5 rounded-full ${isSelected ? "bg-white" : "bg-blue-500"}`}
+            />
           )}
         </div>
       </div>
 
       {/* Content area */}
-      <div
-        className="flex-1 flex items-center gap-1.5 min-w-0 h-full text-left"
-      >
+      <div className="flex-1 flex items-center gap-1.5 min-w-0 h-full text-left">
         {/* Sender name */}
-        <span className={`w-28 truncate font-medium flex-shrink-0 ${
-          isSelected ? "text-white" : thread.isUnread ? "text-gray-900 dark:text-gray-100" : "text-gray-600 dark:text-gray-400"
-        }`}>
+        <span
+          className={`w-28 truncate font-medium flex-shrink-0 ${
+            isSelected
+              ? "text-white"
+              : thread.isUnread
+                ? "text-gray-900 dark:text-gray-100"
+                : "text-gray-600 dark:text-gray-400"
+          }`}
+        >
           {senderName}
         </span>
 
         {/* Sent badge - show if user replied (latest email is from user) */}
         {thread.userReplied && (
-          <span className={`text-[9px] px-1 py-px rounded flex-shrink-0 uppercase font-medium ${
-            isSelected ? "bg-white/20 text-white" : "bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400"
-          }`}>
+          <span
+            className={`text-[9px] px-1 py-px rounded flex-shrink-0 uppercase font-medium ${
+              isSelected
+                ? "bg-white/20 text-white"
+                : "bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400"
+            }`}
+          >
             Sent
           </span>
         )}
 
         {/* Subject + Snippet */}
         <div className="flex-1 min-w-0 flex items-center gap-1.5">
-          <span className={`font-medium truncate ${
-            isSelected ? "text-white" : thread.isUnread ? "text-gray-900 dark:text-gray-100" : "text-gray-700 dark:text-gray-300"
-          }`}>
+          <span
+            className={`font-medium truncate ${
+              isSelected
+                ? "text-white"
+                : thread.isUnread
+                  ? "text-gray-900 dark:text-gray-100"
+                  : "text-gray-700 dark:text-gray-300"
+            }`}
+          >
             {decodeHtmlEntities(thread.subject)}
           </span>
-          <span className={`flex-shrink-0 ${isSelected ? "text-white/40" : "text-gray-300 dark:text-gray-600"}`}>
+          <span
+            className={`flex-shrink-0 ${isSelected ? "text-white/40" : "text-gray-300 dark:text-gray-600"}`}
+          >
             —
           </span>
           {thread.draft ? (
             <>
-              <span className={`flex-shrink-0 ${isSelected ? "text-green-200" : "text-green-600 dark:text-green-400"}`}>
-                <svg className="w-3 h-3 inline-block mr-0.5 -mt-px" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              <span
+                className={`flex-shrink-0 ${isSelected ? "text-green-200" : "text-green-600 dark:text-green-400"}`}
+              >
+                <svg
+                  className="w-3 h-3 inline-block mr-0.5 -mt-px"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                  />
                 </svg>
                 Draft
               </span>
               <span className={`truncate ${isSelected ? "text-white/60" : "text-gray-400"}`}>
-                {(thread.draft.body ?? "").replace(/<[^>]*>/g, "").replace(/\n/g, " ").substring(0, 100)}
+                {(thread.draft.body ?? "")
+                  .replace(/<[^>]*>/g, "")
+                  .replace(/\n/g, " ")
+                  .substring(0, 100)}
               </span>
             </>
           ) : (
@@ -129,17 +198,23 @@ function SearchResultThreadRow({ thread, isSelected, onClick }: { thread: EmailT
         </div>
 
         {/* Time */}
-        <span className={`w-9 text-[10px] text-right flex-shrink-0 tabular-nums ${
-          isSelected ? "text-white/60" : "text-gray-400"
-        }`}>
+        <span
+          className={`w-9 text-[10px] text-right flex-shrink-0 tabular-nums ${
+            isSelected ? "text-white/60" : "text-gray-400"
+          }`}
+        >
           {formatSearchDate(latestEmail.date)}
         </span>
 
         {/* Thread count badge */}
         {thread.hasMultipleEmails && (
-          <span className={`text-[9px] min-w-[1rem] h-4 px-1 rounded-full flex items-center justify-center flex-shrink-0 ${
-            isSelected ? "bg-white/20 text-white" : "bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400"
-          }`}>
+          <span
+            className={`text-[9px] min-w-[1rem] h-4 px-1 rounded-full flex items-center justify-center flex-shrink-0 ${
+              isSelected
+                ? "bg-white/20 text-white"
+                : "bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400"
+            }`}
+          >
             {thread.emails.length}
           </span>
         )}
@@ -154,7 +229,7 @@ function SearchResultsView() {
     activeSearchResults,
     remoteSearchResults,
     remoteSearchStatus,
-    remoteSearchError,
+    remoteSearchError: _remoteSearchError,
     clearActiveSearch,
     addEmails,
     setSelectedEmailId,
@@ -170,7 +245,7 @@ function SearchResultsView() {
     remoteSearchLoadingMore,
   } = useAppStore();
 
-  const currentUserEmail = accounts.find(a => a.id === currentAccountId)?.email;
+  const currentUserEmail = accounts.find((a) => a.id === currentAccountId)?.email;
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
 
@@ -183,13 +258,16 @@ function SearchResultsView() {
     }
   }, [selectedThreadId]);
 
-  const handleThreadClick = useCallback((thread: EmailThread) => {
-    // Add all emails in the thread so the thread view works properly
-    addEmails(thread.emails);
-    setSelectedEmailId(thread.latestEmail.id);
-    setSelectedThreadId(thread.threadId);
-    setViewMode("full");
-  }, [addEmails, setSelectedEmailId, setSelectedThreadId, setViewMode]);
+  const handleThreadClick = useCallback(
+    (thread: EmailThread) => {
+      // Add all emails in the thread so the thread view works properly
+      addEmails(thread.emails);
+      setSelectedEmailId(thread.latestEmail.id);
+      setSelectedThreadId(thread.threadId);
+      setViewMode("full");
+    },
+    [addEmails, setSelectedEmailId, setSelectedThreadId, setViewMode],
+  );
 
   const retryRemoteSearch = useCallback(() => {
     if (!activeSearchQuery || !currentAccountId || !isOnline) return;
@@ -198,16 +276,25 @@ function SearchResultsView() {
     // Reset to searching state
     useAppStore.getState().setRemoteSearching();
 
-    window.api.emails.searchRemote(query, currentAccountId, 500)
-      .then((response: { success: boolean; data?: { emails: DashboardEmail[]; nextPageToken?: string }; error?: string }) => {
-        if (useAppStore.getState().activeSearchQuery !== query) return;
-        if (response.success && response.data) {
-          setRemoteSearchResults(response.data.emails);
-          useAppStore.getState().setRemoteSearchNextPageToken(response.data.nextPageToken ?? null);
-        } else {
-          setRemoteSearchError(response.error || "Gmail search failed");
-        }
-      })
+    window.api.emails
+      .searchRemote(query, currentAccountId, 500)
+      .then(
+        (response: {
+          success: boolean;
+          data?: { emails: DashboardEmail[]; nextPageToken?: string };
+          error?: string;
+        }) => {
+          if (useAppStore.getState().activeSearchQuery !== query) return;
+          if (response.success && response.data) {
+            setRemoteSearchResults(response.data.emails);
+            useAppStore
+              .getState()
+              .setRemoteSearchNextPageToken(response.data.nextPageToken ?? null);
+          } else {
+            setRemoteSearchError(response.error || "Gmail search failed");
+          }
+        },
+      )
       .catch((err: Error) => {
         if (useAppStore.getState().activeSearchQuery !== query) return;
         setRemoteSearchError(err.message || "Gmail search failed");
@@ -217,18 +304,32 @@ function SearchResultsView() {
   // Load more results from Gmail when scrolled to bottom
   const loadMoreResults = useCallback(() => {
     const state = useAppStore.getState();
-    const { activeSearchQuery: query, remoteSearchNextPageToken: pageToken, remoteSearchLoadingMore: loading, currentAccountId: accountId } = state;
+    const {
+      activeSearchQuery: query,
+      remoteSearchNextPageToken: pageToken,
+      remoteSearchLoadingMore: loading,
+      currentAccountId: accountId,
+    } = state;
     if (!query || !pageToken || loading || !accountId) return;
     useAppStore.getState().setRemoteSearchLoadingMore(true);
 
-    window.api.emails.searchRemote(query, accountId, 500, pageToken)
-      .then((response: { success: boolean; data?: { emails: DashboardEmail[]; nextPageToken?: string }; error?: string }) => {
-        if (useAppStore.getState().activeSearchQuery !== query) return;
-        if (response.success && response.data) {
-          useAppStore.getState().appendRemoteSearchResults(response.data.emails);
-          useAppStore.getState().setRemoteSearchNextPageToken(response.data.nextPageToken ?? null);
-        }
-      })
+    window.api.emails
+      .searchRemote(query, accountId, 500, pageToken)
+      .then(
+        (response: {
+          success: boolean;
+          data?: { emails: DashboardEmail[]; nextPageToken?: string };
+          error?: string;
+        }) => {
+          if (useAppStore.getState().activeSearchQuery !== query) return;
+          if (response.success && response.data) {
+            useAppStore.getState().appendRemoteSearchResults(response.data.emails);
+            useAppStore
+              .getState()
+              .setRemoteSearchNextPageToken(response.data.nextPageToken ?? null);
+          }
+        },
+      )
       .catch(() => {
         // Silently fail load-more — user can scroll down again to retry
       })
@@ -256,7 +357,6 @@ function SearchResultsView() {
     return () => observer.disconnect();
   }, [loadMoreResults, remoteSearchNextPageToken, remoteSearchLoadingMore]);
 
-
   // Merge local and remote results, deduplicate, and group into threads
   const searchThreads = useMemo(
     () => mergeAndThreadSearchResults(activeSearchResults, remoteSearchResults, currentUserEmail),
@@ -276,18 +376,37 @@ function SearchResultsView() {
             className="p-1 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M10 19l-7-7m0 0l7-7m-7 7h18"
+              />
             </svg>
           </button>
-          <span data-testid="search-results-header" className="text-sm font-medium text-gray-900 dark:text-gray-100">
+          <span
+            data-testid="search-results-header"
+            className="text-sm font-medium text-gray-900 dark:text-gray-100"
+          >
             Search results for &quot;{activeSearchQuery}&quot;
           </span>
           <span className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1.5">
             {searchThreads.length} result{searchThreads.length !== 1 ? "s" : ""}
             {(remoteSearchStatus === "searching" || remoteSearchLoadingMore) && (
               <svg className="w-3 h-3 text-blue-500 animate-spin" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                />
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                />
               </svg>
             )}
           </span>
@@ -301,8 +420,19 @@ function SearchResultsView() {
           <div className="flex items-center justify-center h-64 text-gray-500 dark:text-gray-400">
             <div className="flex items-center gap-2">
               <svg className="w-5 h-5 text-blue-500 animate-spin" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                />
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                />
               </svg>
               <span className="text-sm">Searching Gmail...</span>
             </div>
@@ -326,9 +456,24 @@ function SearchResultsView() {
         {/* Still searching indicator (shown below results) */}
         {remoteSearchStatus === "searching" && searchThreads.length > 0 && (
           <div className="px-3 py-3 text-xs text-gray-500 dark:text-gray-400 flex items-center justify-center gap-2 border-t border-gray-200 dark:border-gray-700">
-            <svg className="w-3.5 h-3.5 text-blue-500 animate-spin flex-shrink-0" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            <svg
+              className="w-3.5 h-3.5 text-blue-500 animate-spin flex-shrink-0"
+              fill="none"
+              viewBox="0 0 24 24"
+            >
+              <circle
+                className="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth="4"
+              />
+              <path
+                className="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+              />
             </svg>
             <span>Searching Gmail for more results...</span>
           </div>
@@ -349,9 +494,24 @@ function SearchResultsView() {
         {/* Loading more from Gmail indicator */}
         {remoteSearchLoadingMore && (
           <div className="px-3 py-3 text-xs text-gray-500 dark:text-gray-400 flex items-center justify-center gap-2 border-t border-gray-200 dark:border-gray-700">
-            <svg className="w-3.5 h-3.5 text-blue-500 animate-spin flex-shrink-0" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            <svg
+              className="w-3.5 h-3.5 text-blue-500 animate-spin flex-shrink-0"
+              fill="none"
+              viewBox="0 0 24 24"
+            >
+              <circle
+                className="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth="4"
+              />
+              <path
+                className="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+              />
             </svg>
             <span>Loading more from Gmail...</span>
           </div>
@@ -366,8 +526,18 @@ function SearchResultsView() {
               onClick={loadMoreResults}
               className="w-full px-3 py-3 text-xs text-blue-600 dark:text-blue-400 flex items-center justify-center gap-2 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
             >
-              <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+              <svg
+                className="w-3.5 h-3.5 flex-shrink-0"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M19 14l-7 7m0 0l-7-7m7 7V3"
+                />
               </svg>
               <span>Load more results from Gmail</span>
             </button>
@@ -407,15 +577,13 @@ async function prefetchEmailBodies(emailIds: string[]): Promise<void> {
   for (let i = 0; i < emailIds.length; i += BATCH_SIZE) {
     if (controller.signal.aborted) return;
     const batch = emailIds.slice(i, i + BATCH_SIZE);
-    const result = await window.api.sync.prefetchBodies(batch) as {
+    const result = (await window.api.sync.prefetchBodies(batch)) as {
       success: boolean;
       data?: Array<{ id: string; body: string }>;
     };
     if (controller.signal.aborted) return;
     if (result.success && result.data) {
-      bufferUpdateEmails(
-        result.data.map(({ id, body }) => ({ emailId: id, changes: { body } }))
-      );
+      bufferUpdateEmails(result.data.map(({ id, body }) => ({ emailId: id, changes: { body } })));
     }
     // Yield to the event loop between batches to keep the UI responsive
     if (i + BATCH_SIZE < emailIds.length) {
@@ -463,9 +631,9 @@ export default function App() {
     viewMode,
     setViewMode,
     activeSearchQuery,
-    activeSearchResults,
-    clearActiveSearch,
-    setSelectedEmailId,
+    activeSearchResults: _activeSearchResults,
+    clearActiveSearch: _clearActiveSearch,
+    setSelectedEmailId: _setSelectedEmailId,
     expiredAccountIds,
     extensionAuthRequired,
     agentAuthRequired,
@@ -511,43 +679,60 @@ export default function App() {
   // Initialize theme and density from main process and listen for OS theme changes
   useEffect(() => {
     // Fetch persisted theme preference
-    window.api.theme.get().then((result: { success: boolean; data?: { preference: ThemePreference; resolved: "light" | "dark" } }) => {
-      if (result.success && result.data) {
-        setThemePreference(result.data.preference);
-        setResolvedTheme(result.data.resolved);
-      }
-    });
+    window.api.theme
+      .get()
+      .then(
+        (result: {
+          success: boolean;
+          data?: { preference: ThemePreference; resolved: "light" | "dark" };
+        }) => {
+          if (result.success && result.data) {
+            setThemePreference(result.data.preference);
+            setResolvedTheme(result.data.resolved);
+          }
+        },
+      );
 
     // Fetch persisted inbox density, undo send delay, and PostHog config
-    window.api.settings.get().then((result: { success: boolean; data?: { inboxDensity?: InboxDensity; undoSendDelay?: number; keyboardBindings?: "superhuman" | "gmail"; posthog?: { enabled: boolean; sessionReplay?: boolean } } }) => {
-      if (result.success && result.data) {
-        if (result.data.inboxDensity) {
-          setInboxDensity(result.data.inboxDensity);
+    window.api.settings.get().then(
+      (result: {
+        success: boolean;
+        data?: {
+          inboxDensity?: InboxDensity;
+          undoSendDelay?: number;
+          keyboardBindings?: "superhuman" | "gmail";
+          posthog?: { enabled: boolean; sessionReplay?: boolean };
+        };
+      }) => {
+        if (result.success && result.data) {
+          if (result.data.inboxDensity) {
+            setInboxDensity(result.data.inboxDensity);
+          }
+          if (result.data.keyboardBindings) {
+            setKeyboardBindings(result.data.keyboardBindings);
+          }
+          if (result.data.undoSendDelay !== undefined) {
+            setUndoSendDelay(result.data.undoSendDelay);
+          }
+          // Initialize PostHog analytics — API key is baked in at build time,
+          // user can only toggle enabled/sessionReplay in settings
+          const phConfig = result.data.posthog;
+          const apiKey = import.meta.env.VITE_POSTHOG_API_KEY;
+          const host = import.meta.env.VITE_POSTHOG_HOST || "https://us.i.posthog.com";
+          // Default to disabled for existing users upgrading (no persisted config).
+          // New users opt in during onboarding (SetupWizard defaults to enabled).
+          const enabled = phConfig?.enabled ?? false;
+          if (apiKey) {
+            initPostHog({
+              enabled,
+              apiKey,
+              host,
+              sessionReplay: phConfig?.sessionReplay ?? false,
+            });
+          }
         }
-        if (result.data.keyboardBindings) {
-          setKeyboardBindings(result.data.keyboardBindings);
-        }
-        if (result.data.undoSendDelay !== undefined) {
-          setUndoSendDelay(result.data.undoSendDelay);
-        }
-        // Initialize PostHog analytics — API key is baked in at build time,
-        // user can only toggle enabled/sessionReplay in settings
-        const phConfig = result.data.posthog;
-        const apiKey = import.meta.env.VITE_POSTHOG_API_KEY;
-        const host = import.meta.env.VITE_POSTHOG_HOST || "https://us.i.posthog.com";
-        // Default to disabled for existing users upgrading (no persisted config).
-        // New users opt in during onboarding (SetupWizard defaults to enabled).
-        const enabled = phConfig?.enabled ?? false;
-        if (apiKey) {
-          initPostHog({
-            enabled,
-            apiKey,
-            host,
-            sessionReplay: phConfig?.sessionReplay ?? false,
-          });
-        }
-      }
-    });
+      },
+    );
 
     // Listen for theme changes (OS change when preference is "system", or explicit set)
     window.api.theme.onChange((data: { preference: string; resolved: string }) => {
@@ -558,7 +743,13 @@ export default function App() {
     return () => {
       window.api.theme.removeAllListeners();
     };
-  }, [setThemePreference, setResolvedTheme, setInboxDensity, setKeyboardBindings, setUndoSendDelay]);
+  }, [
+    setThemePreference,
+    setResolvedTheme,
+    setInboxDensity,
+    setKeyboardBindings,
+    setUndoSendDelay,
+  ]);
 
   // Toggle dark class on document.documentElement when resolvedTheme changes
   useEffect(() => {
@@ -571,13 +762,16 @@ export default function App() {
 
   // Load inbox splits on mount (stored in electron-store, independent of sync)
   useEffect(() => {
-    window.api.splits.getAll().then((result: { success: boolean; data?: InboxSplit[] }) => {
-      if (result.success && result.data) {
-        setSplits(result.data);
-      }
-    }).catch((err: unknown) => {
-      console.error("Failed to load splits on mount:", err);
-    });
+    window.api.splits
+      .getAll()
+      .then((result: { success: boolean; data?: InboxSplit[] }) => {
+        if (result.success && result.data) {
+          setSplits(result.data);
+        }
+      })
+      .catch((err: unknown) => {
+        console.error("Failed to load splits on mount:", err);
+      });
   }, [setSplits]);
 
   // Initialize sync and accounts
@@ -585,26 +779,30 @@ export default function App() {
     try {
       const result = await window.api.sync.init();
       if (result.success && result.data) {
-        const accountList: Account[] = result.data.map((acc: { accountId: string; email: string; isConnected: boolean }) => ({
-          id: acc.accountId,
-          email: acc.email,
-          isPrimary: false, // Will be set from accounts:list
-          isConnected: acc.isConnected,
-        }));
+        const accountList: Account[] = result.data.map(
+          (acc: { accountId: string; email: string; isConnected: boolean }) => ({
+            id: acc.accountId,
+            email: acc.email,
+            isPrimary: false, // Will be set from accounts:list
+            isConnected: acc.isConnected,
+          }),
+        );
 
         // Fetch full account info
         const accountsResult = await window.api.accounts.list();
         if (accountsResult.success && accountsResult.data) {
-          const fullAccounts: Account[] = accountsResult.data.map((acc: { id: string; email: string; isPrimary: boolean }) => ({
-            id: acc.id,
-            email: acc.email,
-            isPrimary: acc.isPrimary,
-            isConnected: accountList.find((a) => a.id === acc.id)?.isConnected ?? false,
-          }));
+          const fullAccounts: Account[] = accountsResult.data.map(
+            (acc: { id: string; email: string; isPrimary: boolean }) => ({
+              id: acc.id,
+              email: acc.email,
+              isPrimary: acc.isPrimary,
+              isConnected: accountList.find((a) => a.id === acc.id)?.isConnected ?? false,
+            }),
+          );
           setAccounts(fullAccounts);
 
           // Set current account to primary or first available
-          const primaryAccount = fullAccounts.find(a => a.isPrimary) || fullAccounts[0];
+          const primaryAccount = fullAccounts.find((a) => a.isPrimary) || fullAccounts[0];
           if (primaryAccount) {
             setCurrentAccountId(primaryAccount.id);
             // Identify user in PostHog using primary email
@@ -642,7 +840,7 @@ export default function App() {
           // Backfill bodies in the background — emails were loaded without
           // body content to avoid blocking the main thread on SQLite overflow reads.
           prefetchEmailBodies(allEmails.map((e) => e.id)).catch((err) =>
-            console.error("Body prefetch failed:", err)
+            console.error("Body prefetch failed:", err),
           );
         }
         if (allSentEmails.length > 0) {
@@ -650,16 +848,20 @@ export default function App() {
         }
 
         // Load local drafts (new emails composed by agent or user)
-        const draftsResult = await window.api.compose.listLocalDrafts() as { success: boolean; data?: unknown[] };
+        const draftsResult = (await window.api.compose.listLocalDrafts()) as {
+          success: boolean;
+          data?: unknown[];
+        };
         if (draftsResult.success && draftsResult.data) {
           const drafts = draftsResult.data.map((d) => LocalDraftSchema.parse(d));
           useAppStore.getState().setLocalDrafts(drafts);
         }
-
       }
     } catch (err) {
       console.error("Failed to initialize sync:", err);
-      captureException(err instanceof Error ? err : new Error(String(err)), { context: "initializeSync" });
+      captureException(err instanceof Error ? err : new Error(String(err)), {
+        context: "initializeSync",
+      });
     }
   }, [setAccounts, setCurrentAccountId, addEmails, setSentEmails]);
 
@@ -670,7 +872,7 @@ export default function App() {
       addBreadcrumb("info", "New emails synced", { count: data.emails.length });
       bufferAddEmails(data.emails);
       // Also add sent emails to the sent view (no buffering needed — not in inbox navigation path)
-      const sentInBatch = data.emails.filter(e => e.labelIds?.includes("SENT"));
+      const sentInBatch = data.emails.filter((e) => e.labelIds?.includes("SENT"));
       if (sentInBatch.length > 0) {
         addSentEmails(sentInBatch);
       }
@@ -689,7 +891,11 @@ export default function App() {
     });
 
     // Listen for initial sync progress (fetched/total during first full sync)
-    const syncApi = window.api.sync as { onSyncProgress?: (cb: (data: { accountId: string; fetched: number; total: number }) => void) => void };
+    const syncApi = window.api.sync as {
+      onSyncProgress?: (
+        cb: (data: { accountId: string; fetched: number; total: number }) => void,
+      ) => void;
+    };
     syncApi.onSyncProgress?.((data) => {
       setSyncProgress(data.accountId, { fetched: data.fetched, total: data.total });
       if (data.fetched >= data.total) {
@@ -704,17 +910,19 @@ export default function App() {
 
     // Listen for label updates (read/unread changes from Gmail web, mobile, etc.)
     // Buffered as a single batch instead of N individual updateEmail calls.
-    window.api.sync.onEmailsUpdated((data: { accountId: string; updates: { emailId: string; labelIds: string[] }[] }) => {
-      console.log(`[Sync] Label updates from ${data.accountId}:`, data.updates.length);
-      // Clear optimistic read guards for emails that sync confirms are now read
-      const confirmedRead = data.updates
-        .filter((u) => !u.labelIds.includes("UNREAD"))
-        .map((u) => u.emailId);
-      if (confirmedRead.length > 0) confirmOptimisticReads(confirmedRead);
-      bufferUpdateEmails(
-        data.updates.map((u) => ({ emailId: u.emailId, changes: { labelIds: u.labelIds } })),
-      );
-    });
+    window.api.sync.onEmailsUpdated(
+      (data: { accountId: string; updates: { emailId: string; labelIds: string[] }[] }) => {
+        console.log(`[Sync] Label updates from ${data.accountId}:`, data.updates.length);
+        // Clear optimistic read guards for emails that sync confirms are now read
+        const confirmedRead = data.updates
+          .filter((u) => !u.labelIds.includes("UNREAD"))
+          .map((u) => u.emailId);
+        if (confirmedRead.length > 0) confirmOptimisticReads(confirmedRead);
+        bufferUpdateEmails(
+          data.updates.map((u) => ({ emailId: u.emailId, changes: { labelIds: u.labelIds } })),
+        );
+      },
+    );
 
     // Listen for drafts removed during sync (user replied elsewhere or third-party reply).
     // Update store immediately (not buffered) so the draft editor reflects the change
@@ -744,8 +952,16 @@ export default function App() {
     // Listen for prompt changes — clear stale analysis/draft data from UI.
     // Batched via buffer to avoid N individual re-renders.
     window.api.settings.onPromptsChanged((data: unknown) => {
-      const { analysisChanged, draftChanged, archiveReadyChanged: _archiveReadyChanged, agentDrafterChanged } = data as {
-        analysisChanged: boolean; draftChanged: boolean; archiveReadyChanged: boolean; agentDrafterChanged: boolean;
+      const {
+        analysisChanged,
+        draftChanged,
+        archiveReadyChanged: _archiveReadyChanged,
+        agentDrafterChanged,
+      } = data as {
+        analysisChanged: boolean;
+        draftChanged: boolean;
+        archiveReadyChanged: boolean;
+        agentDrafterChanged: boolean;
       };
       const emails = useAppStore.getState().emails;
       const batch: { emailId: string; changes: Partial<DashboardEmail> }[] = [];
@@ -771,23 +987,36 @@ export default function App() {
 
     // Listen for drafts saved by the agent — update the email in our list.
     // The auto-open effect in EmailDetail handles opening the editor when a draft appears.
-    window.api.agent.onDraftSaved((data: { emailId: string; draft: { body: string; status: string; createdAt: number; composeMode?: string; to?: string[]; cc?: string[]; bcc?: string[] } }) => {
-      const store = useAppStore.getState();
-      // Preserve existing draft fields (e.g. agentTaskId) by merging with existing draft
-      const existingDraft = store.emails.find((e) => e.id === data.emailId)?.draft;
-      store.updateEmail(data.emailId, {
+    window.api.agent.onDraftSaved(
+      (data: {
+        emailId: string;
         draft: {
-          ...existingDraft,
-          body: data.draft.body,
-          status: data.draft.status as "pending" | "created" | "edited",
-          createdAt: data.draft.createdAt,
-          composeMode: data.draft.composeMode as "forward" | "reply" | "reply-all" | undefined,
-          to: data.draft.to?.length ? data.draft.to : undefined,
-          cc: data.draft.cc?.length ? data.draft.cc : undefined,
-          bcc: data.draft.bcc?.length ? data.draft.bcc : undefined,
-        },
-      });
-    });
+          body: string;
+          status: string;
+          createdAt: number;
+          composeMode?: string;
+          to?: string[];
+          cc?: string[];
+          bcc?: string[];
+        };
+      }) => {
+        const store = useAppStore.getState();
+        // Preserve existing draft fields (e.g. agentTaskId) by merging with existing draft
+        const existingDraft = store.emails.find((e) => e.id === data.emailId)?.draft;
+        store.updateEmail(data.emailId, {
+          draft: {
+            ...existingDraft,
+            body: data.draft.body,
+            status: data.draft.status as "pending" | "created" | "edited",
+            createdAt: data.draft.createdAt,
+            composeMode: data.draft.composeMode as "forward" | "reply" | "reply-all" | undefined,
+            to: data.draft.to?.length ? data.draft.to : undefined,
+            cc: data.draft.cc?.length ? data.draft.cc : undefined,
+            bcc: data.draft.bcc?.length ? data.draft.bcc : undefined,
+          },
+        });
+      },
+    );
 
     // Listen for local drafts created or updated by the agent (compose_new_email / update_draft / forward_email tools)
     window.api.agent.onLocalDraftSaved?.((data: { draft: Record<string, unknown> }) => {
@@ -833,7 +1062,11 @@ export default function App() {
     // Listen for streaming agent events — route to correct per-email task via taskId
     window.api.agent.onEvent((data: unknown) => {
       const parsed = data as { taskId?: string; event?: ScopedAgentEvent };
-      if (typeof parsed?.taskId !== "string" || !parsed.event || typeof parsed.event.type !== "string") {
+      if (
+        typeof parsed?.taskId !== "string" ||
+        !parsed.event ||
+        typeof parsed.event.type !== "string"
+      ) {
         console.warn("[AgentEvent] Malformed payload, ignoring:", data);
         return;
       }
@@ -899,7 +1132,9 @@ export default function App() {
         console.log(`[BackgroundSync] ${progress.accountId}: ${progress.synced}/${progress.total}`);
       }
       if (progress.status === "completed") {
-        console.log(`[BackgroundSync] ${progress.accountId}: Completed - ${progress.synced} emails synced`);
+        console.log(
+          `[BackgroundSync] ${progress.accountId}: Completed - ${progress.synced} emails synced`,
+        );
       }
     });
 
@@ -909,10 +1144,12 @@ export default function App() {
       addExpiredAccount(data.accountId);
     });
 
-    window.api.auth.onExtensionAuthRequired((data: { extensionId: string; displayName: string; message?: string }) => {
-      console.log(`[Auth] Extension auth required: ${data.displayName}`);
-      addExtensionAuthRequired(data.extensionId, data.displayName, data.message);
-    });
+    window.api.auth.onExtensionAuthRequired(
+      (data: { extensionId: string; displayName: string; message?: string }) => {
+        console.log(`[Auth] Extension auth required: ${data.displayName}`);
+        addExtensionAuthRequired(data.extensionId, data.displayName, data.message);
+      },
+    );
 
     // Listen for network status changes
     window.api.network.onOnline(() => {
@@ -942,17 +1179,21 @@ export default function App() {
 
     // Listen for permanently failed offline actions (archive/trash)
     // Restores the email back to the inbox when a queued action fails after retries
-    window.api.sync.onActionFailed((data: { emailId: string; accountId: string; action: string; error: string }) => {
-      console.error(`[Sync] Action failed: ${data.action}`);
-      addBreadcrumb("error", `Sync action failed: ${data.action}`);
-      restorePendingRemoval(data.emailId);
-      setError(`Failed to ${data.action} email: ${data.error}`);
-    });
+    window.api.sync.onActionFailed(
+      (data: { emailId: string; accountId: string; action: string; error: string }) => {
+        console.error(`[Sync] Action failed: ${data.action}`);
+        addBreadcrumb("error", `Sync action failed: ${data.action}`);
+        restorePendingRemoval(data.emailId);
+        setError(`Failed to ${data.action} email: ${data.error}`);
+      },
+    );
 
     // When a queued action succeeds, clear the pending removal data
-    window.api.sync.onActionSucceeded((data: { emailId: string; accountId: string; action: string }) => {
-      clearPendingRemoval(data.emailId);
-    });
+    window.api.sync.onActionSucceeded(
+      (data: { emailId: string; accountId: string; action: string }) => {
+        clearPendingRemoval(data.emailId);
+      },
+    );
 
     // Listen for scheduled send events
     window.api.scheduledSend.onStatsChanged((stats: { scheduled: number; total: number }) => {
@@ -980,17 +1221,41 @@ export default function App() {
       window.api.agent.removeAllListeners();
       window.api.settings.removePromptsChangedListener();
     };
-  }, [setSyncStatus, setSyncProgress, setPrefetchProgress, setBackgroundSyncProgress, addExpiredAccount, addExtensionAuthRequired, addAgentAuthRequired, setOnline, setOutboxStats, setScheduledMessageStats, setError, restorePendingRemoval, clearPendingRemoval, addSentEmails]);
+  }, [
+    setSyncStatus,
+    setSyncProgress,
+    setPrefetchProgress,
+    setBackgroundSyncProgress,
+    addExpiredAccount,
+    addExtensionAuthRequired,
+    addAgentAuthRequired,
+    setOnline,
+    setOutboxStats,
+    setScheduledMessageStats,
+    setError,
+    restorePendingRemoval,
+    clearPendingRemoval,
+    addSentEmails,
+  ]);
 
   // Listen for mailto: URLs from the main process (default mail app handler)
   useEffect(() => {
     const escapeHtml = (s: string) =>
       s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
-    const handleMailto = (data: { to: string[]; cc: string[]; bcc: string[]; subject: string; body: string }) => {
+    const handleMailto = (data: {
+      to: string[];
+      cc: string[];
+      bcc: string[];
+      subject: string;
+      body: string;
+    }) => {
       // Convert plain-text body to escaped HTML for the compose editor
       const bodyHtml = data.body
-        ? data.body.split("\n").map(line => `<p>${line ? escapeHtml(line) : "<br>"}</p>`).join("")
+        ? data.body
+            .split("\n")
+            .map((line) => `<p>${line ? escapeHtml(line) : "<br>"}</p>`)
+            .join("")
         : "";
       openCompose("new", undefined, {
         bodyHtml,
@@ -1006,23 +1271,38 @@ export default function App() {
     const unsub = window.api.defaultMailApp.onMailtoOpen(handleMailto);
 
     // Check for a pending mailto URL from cold start (pull-based to avoid race)
-    window.api.defaultMailApp.getPending().then((data: { to: string[]; cc: string[]; bcc: string[]; subject: string; body: string } | null) => {
-      if (data) handleMailto(data);
-    }).catch(() => {});
+    window.api.defaultMailApp
+      .getPending()
+      .then(
+        (
+          data: { to: string[]; cc: string[]; bcc: string[]; subject: string; body: string } | null,
+        ) => {
+          if (data) handleMailto(data);
+        },
+      )
+      .catch(() => {});
 
     return unsub;
   }, [openCompose, setViewMode]);
 
   // Check auth status on mount
   useEffect(() => {
-    window.api.gmail.checkAuth().then((result: IpcResponse<{ hasCredentials: boolean; hasTokens: boolean; hasAnthropicKey: boolean }>) => {
-      if (result.success) {
-        // Credentials are always bundled at build time — only check API key and tokens
-        setNeedsSetup(!result.data.hasAnthropicKey || !result.data.hasTokens);
-      } else {
-        setNeedsSetup(true);
-      }
-    });
+    window.api.gmail.checkAuth().then(
+      (
+        result: IpcResponse<{
+          hasCredentials: boolean;
+          hasTokens: boolean;
+          hasAnthropicKey: boolean;
+        }>,
+      ) => {
+        if (result.success) {
+          // Credentials are always bundled at build time — only check API key and tokens
+          setNeedsSetup(!result.data.hasAnthropicKey || !result.data.hasTokens);
+        } else {
+          setNeedsSetup(true);
+        }
+      },
+    );
   }, []);
 
   // Set up navigator.onLine relay and fetch initial network/outbox status
@@ -1042,7 +1322,7 @@ export default function App() {
     });
 
     // Fetch initial scheduled send stats
-    window.api.scheduledSend.stats().then((result: any) => {
+    window.api.scheduledSend.stats().then((result: IpcResponse<ScheduledMessageStats>) => {
       if (result.success) {
         setScheduledMessageStats(result.data);
       }
@@ -1078,7 +1358,7 @@ export default function App() {
   // Fetch emails query — disabled during progressive sync to prevent
   // setEmails (full replace) from wiping incrementally-loaded emails.
   const hasActiveProgressiveSync = Object.values(syncProgress).some(
-    (p) => p !== null && p.fetched < p.total
+    (p) => p !== null && p.fetched < p.total,
   );
   const { refetch: fetchEmails, isFetching } = useQuery({
     queryKey: ["emails", currentAccountId],
@@ -1105,7 +1385,7 @@ export default function App() {
 
   // Fetch scheduled messages list for the dropdown
   const fetchScheduledMessages = useCallback(async () => {
-    const result = await window.api.scheduledSend.list(currentAccountId ?? undefined) as {
+    const result = (await window.api.scheduledSend.list(currentAccountId ?? undefined)) as {
       success: boolean;
       data?: ScheduledMessage[];
     };
@@ -1136,9 +1416,9 @@ export default function App() {
   const reloadSentEmailsForAccount = async (accountId: string) => {
     const sentResult = await window.api.sync.getSentEmails(accountId);
     if (sentResult.success && sentResult.data) {
-      const otherAccountSent = useAppStore.getState().sentEmails.filter(
-        (e) => e.accountId !== accountId
-      );
+      const otherAccountSent = useAppStore
+        .getState()
+        .sentEmails.filter((e) => e.accountId !== accountId);
       setSentEmails([...otherAccountSent, ...sentResult.data]);
     }
   };
@@ -1152,9 +1432,9 @@ export default function App() {
         // Reload emails from database after sync
         const result = await window.api.sync.getEmails(currentAccountId);
         if (result.success && result.data) {
-          const otherAccountEmails = useAppStore.getState().emails.filter(
-            (e) => e.accountId !== currentAccountId
-          );
+          const otherAccountEmails = useAppStore
+            .getState()
+            .emails.filter((e) => e.accountId !== currentAccountId);
           setEmails([...otherAccountEmails, ...result.data]);
           prefetchEmailBodies(result.data.map((e: DashboardEmail) => e.id)).catch(console.error);
         }
@@ -1176,9 +1456,9 @@ export default function App() {
         removeExpiredAccount(accountId);
 
         // Mark account as connected in the store
-        const updatedAccounts = useAppStore.getState().accounts.map((a) =>
-          a.id === accountId ? { ...a, isConnected: true } : a
-        );
+        const updatedAccounts = useAppStore
+          .getState()
+          .accounts.map((a) => (a.id === accountId ? { ...a, isConnected: true } : a));
         setAccounts(updatedAccounts);
 
         setCurrentAccountId(accountId);
@@ -1187,9 +1467,9 @@ export default function App() {
         const emailsResult = await window.api.sync.getEmails(accountId);
         const er = emailsResult as Record<string, unknown>;
         if (er.success && er.data) {
-          const otherAccountEmails = useAppStore.getState().emails.filter(
-            (e) => e.accountId !== accountId
-          );
+          const otherAccountEmails = useAppStore
+            .getState()
+            .emails.filter((e) => e.accountId !== accountId);
           const loadedEmails = er.data as DashboardEmail[];
           setEmails([...otherAccountEmails, ...loadedEmails]);
           prefetchEmailBodies(loadedEmails.map((e) => e.id)).catch(console.error);
@@ -1232,7 +1512,8 @@ export default function App() {
   const currentAccount = accounts.find((a) => a.id === currentAccountId);
   const currentSyncStatus = currentAccountId ? getSyncStatus(currentAccountId) : "idle";
   const isSyncing = currentSyncStatus === "syncing";
-  const isCurrentAccountExpired = currentAccountId != null && expiredAccountIds.has(currentAccountId);
+  const isCurrentAccountExpired =
+    currentAccountId != null && expiredAccountIds.has(currentAccountId);
 
   // Build list of expired accounts with their email addresses for the banner
   const expiredAccounts = accounts.filter((a) => expiredAccountIds.has(a.id));
@@ -1250,19 +1531,25 @@ export default function App() {
     // Backfill inbox/sent emails independently if missing for this account.
     const storeState = useAppStore.getState();
     if (!storeState.emails.some((e) => e.accountId === accountId)) {
-      window.api.sync.getEmails(accountId).then((result: IpcResponse<DashboardEmail[]>) => {
-        if (result.success && result.data && result.data.length > 0) {
-          addEmails(result.data);
-          prefetchEmailBodies(result.data.map((e: DashboardEmail) => e.id)).catch(console.error);
-        }
-      }).catch(console.error);
+      window.api.sync
+        .getEmails(accountId)
+        .then((result: IpcResponse<DashboardEmail[]>) => {
+          if (result.success && result.data && result.data.length > 0) {
+            addEmails(result.data);
+            prefetchEmailBodies(result.data.map((e: DashboardEmail) => e.id)).catch(console.error);
+          }
+        })
+        .catch(console.error);
     }
     if (!storeState.sentEmails.some((e) => e.accountId === accountId)) {
-      window.api.sync.getSentEmails(accountId).then((sentResult: IpcResponse<DashboardEmail[]>) => {
-        if (sentResult.success && sentResult.data) {
-          addSentEmails(sentResult.data);
-        }
-      }).catch(console.error);
+      window.api.sync
+        .getSentEmails(accountId)
+        .then((sentResult: IpcResponse<DashboardEmail[]>) => {
+          if (sentResult.success && sentResult.data) {
+            addSentEmails(sentResult.data);
+          }
+        })
+        .catch(console.error);
     }
 
     // Trigger background sync to pick up any new emails (non-blocking)
@@ -1270,7 +1557,7 @@ export default function App() {
   };
 
   const handleCancelScheduled = async (id: string) => {
-    const result = await window.api.scheduledSend.cancel(id) as {
+    const result = (await window.api.scheduledSend.cancel(id)) as {
       success: boolean;
       data?: { draftId?: string };
       error?: string;
@@ -1298,7 +1585,6 @@ export default function App() {
         <div className="flex items-center space-x-4">
           <div className="w-20" /> {/* Space for traffic lights */}
           <h1 className="text-lg font-semibold text-gray-800 dark:text-gray-200">Exo</h1>
-
           {/* Account Selector */}
           {accounts.length > 0 && (
             <div className="titlebar-no-drag relative">
@@ -1311,9 +1597,24 @@ export default function App() {
                 </span>
                 {/* Sync status indicator */}
                 {isSyncing && (
-                  <svg className="w-4 h-4 text-blue-500 animate-spin" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  <svg
+                    className="w-4 h-4 text-blue-500 animate-spin"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    />
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    />
                   </svg>
                 )}
                 {!isSyncing && !isCurrentAccountExpired && currentSyncStatus === "idle" && (
@@ -1325,8 +1626,18 @@ export default function App() {
                 {!isCurrentAccountExpired && currentSyncStatus === "error" && (
                   <span className="w-2 h-2 rounded-full bg-red-500" title="Sync error" />
                 )}
-                <svg className="w-4 h-4 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                <svg
+                  className="w-4 h-4 text-gray-500 dark:text-gray-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M19 9l-7 7-7-7"
+                  />
                 </svg>
               </button>
 
@@ -1343,10 +1654,15 @@ export default function App() {
                         }`}
                       >
                         <div className="flex items-center space-x-2">
-                          <span className={`w-2 h-2 rounded-full ${
-                            expiredAccountIds.has(account.id) ? "bg-amber-500" :
-                            account.isConnected ? "bg-green-500" : "bg-gray-400 dark:bg-gray-500"
-                          }`} />
+                          <span
+                            className={`w-2 h-2 rounded-full ${
+                              expiredAccountIds.has(account.id)
+                                ? "bg-amber-500"
+                                : account.isConnected
+                                  ? "bg-green-500"
+                                  : "bg-gray-400 dark:bg-gray-500"
+                            }`}
+                          />
                           <span className="truncate">{account.email}</span>
                         </div>
                         {account.isPrimary && (
@@ -1370,7 +1686,6 @@ export default function App() {
               )}
             </div>
           )}
-
           {/* Update indicator — inline next to account picker */}
           <UpdateBanner />
         </div>
@@ -1382,14 +1697,29 @@ export default function App() {
             title="Search (/)"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+              />
             </svg>
           </button>
           {/* Outbox badge (show when there are pending messages and online) */}
           {isOnline && outboxStats.pending > 0 && (
             <div className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 rounded-lg text-sm">
-              <svg className="w-4 h-4 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+              <svg
+                className="w-4 h-4 animate-pulse"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
+                />
               </svg>
               <span>{outboxStats.pending} sending</span>
             </div>
@@ -1398,7 +1728,12 @@ export default function App() {
           {outboxStats.failed > 0 && (
             <div className="flex items-center gap-1.5 px-2.5 py-1 bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 rounded-lg text-sm">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                />
               </svg>
               <span>{outboxStats.failed} failed</span>
             </div>
@@ -1412,11 +1747,26 @@ export default function App() {
                 title="View scheduled messages"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
                 </svg>
                 <span>{scheduledMessageStats.scheduled} scheduled</span>
-                <svg className={`w-3 h-3 transition-transform ${scheduledPanelOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                <svg
+                  className={`w-3 h-3 transition-transform ${scheduledPanelOpen ? "rotate-180" : ""}`}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M19 9l-7 7-7-7"
+                  />
                 </svg>
               </button>
 
@@ -1424,7 +1774,9 @@ export default function App() {
               {scheduledPanelOpen && (
                 <div className="absolute top-full right-0 mt-1 w-80 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg dark:shadow-black/40 z-50">
                   <div className="px-4 py-2.5 border-b border-gray-200 dark:border-gray-700">
-                    <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">Scheduled Messages</h3>
+                    <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                      Scheduled Messages
+                    </h3>
                   </div>
                   {scheduledMessages.length === 0 ? (
                     <div className="px-4 py-6 text-center text-sm text-gray-500 dark:text-gray-400">
@@ -1433,7 +1785,10 @@ export default function App() {
                   ) : (
                     <div className="max-h-72 overflow-y-auto divide-y divide-gray-100 dark:divide-gray-700/50">
                       {scheduledMessages.map((msg) => (
-                        <div key={msg.id} className="px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                        <div
+                          key={msg.id}
+                          className="px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                        >
                           <div className="flex items-start justify-between gap-2">
                             <div className="flex-1 min-w-0">
                               <div className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
@@ -1477,7 +1832,12 @@ export default function App() {
             title="Compose (C)"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 4v16m8-8H4"
+              />
             </svg>
             Compose
           </button>
@@ -1531,8 +1891,18 @@ export default function App() {
           className="flex items-center justify-between px-4 py-2 bg-amber-50 dark:bg-amber-900/30 border-b border-amber-200 dark:border-amber-800 text-sm"
         >
           <div className="flex items-center gap-2 text-amber-800 dark:text-amber-300">
-            <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" />
+            <svg
+              className="w-4 h-4 flex-shrink-0"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z"
+              />
             </svg>
             <span>
               <strong>{account.email}</strong> session expired
@@ -1552,8 +1922,18 @@ export default function App() {
           className="flex items-center justify-between px-4 py-2 bg-amber-50 dark:bg-amber-900/30 border-b border-amber-200 dark:border-amber-800 text-sm"
         >
           <div className="flex items-center gap-2 text-amber-800 dark:text-amber-300">
-            <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" />
+            <svg
+              className="w-4 h-4 flex-shrink-0"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z"
+              />
             </svg>
             <span>
               <strong>{displayName}</strong> needs authentication{message ? `: ${message}` : ""}
@@ -1579,7 +1959,12 @@ export default function App() {
               title="Dismiss"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12"
+                />
               </svg>
             </button>
           </div>
@@ -1591,8 +1976,18 @@ export default function App() {
           className="flex items-center justify-between px-4 py-2 bg-amber-50 dark:bg-amber-900/30 border-b border-amber-200 dark:border-amber-800 text-sm"
         >
           <div className="flex items-center gap-2 text-amber-800 dark:text-amber-300">
-            <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" />
+            <svg
+              className="w-4 h-4 flex-shrink-0"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z"
+              />
             </svg>
             <span>
               <strong>{displayName}</strong> needs authentication{message ? `: ${message}` : ""}
@@ -1602,8 +1997,9 @@ export default function App() {
             <button
               onClick={async () => {
                 try {
-                  const result = await window.api.agent.authenticate(providerId) as
-                    { success: boolean; data?: { success: boolean } } | undefined;
+                  const result = (await window.api.agent.authenticate(providerId)) as
+                    | { success: boolean; data?: { success: boolean } }
+                    | undefined;
                   if (result?.success && result?.data?.success) {
                     removeAgentAuthRequired(providerId);
                   }
@@ -1621,7 +2017,12 @@ export default function App() {
               title="Dismiss"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12"
+                />
               </svg>
             </button>
           </div>
@@ -1634,9 +2035,7 @@ export default function App() {
         {isAgentsSidebarOpen && <AgentsSidebar />}
 
         {/* Search results view (shown when search is active and not viewing a specific email) */}
-        {activeSearchQuery && viewMode !== "full" && (
-          <SearchResultsView />
-        )}
+        {activeSearchQuery && viewMode !== "full" && <SearchResultsView />}
 
         {/* Split mode: dense email list — kept mounted (hidden) in full mode AND
            during search to preserve useMemo caches (useThreadedEmails,
@@ -1651,16 +2050,11 @@ export default function App() {
         </div>
 
         {/* Full mode: full email detail view */}
-        {viewMode === "full" && (
-          <EmailDetail isFullView />
-        )}
+        {viewMode === "full" && <EmailDetail isFullView />}
 
         {/* Preview sidebar — kept mounted across view mode transitions to avoid
             expensive unmount/remount of agent trace timelines */}
-        {(!activeSearchQuery || viewMode === "full") && (
-          <EmailPreviewSidebar />
-        )}
-
+        {(!activeSearchQuery || viewMode === "full") && <EmailPreviewSidebar />}
       </div>
 
       {/* Keyboard hints bar */}
@@ -1670,23 +2064,29 @@ export default function App() {
       <SearchBar isOpen={isSearchOpen} onClose={closeSearch} />
 
       {/* Command Palette */}
-      <CommandPalette isOpen={isCommandPaletteOpen} onClose={() => {
-        closeCommandPalette();
-        // When closing a palette while compose is open, the palette's input is
-        // removed and focus falls to <body>. Restore focus to the compose editor
-        // so the next Escape properly closes compose via its container handler.
-        if (composeState?.isOpen) {
-          setTimeout(() => document.querySelector<HTMLElement>(".ProseMirror")?.focus(), 0);
-        }
-      }} />
+      <CommandPalette
+        isOpen={isCommandPaletteOpen}
+        onClose={() => {
+          closeCommandPalette();
+          // When closing a palette while compose is open, the palette's input is
+          // removed and focus falls to <body>. Restore focus to the compose editor
+          // so the next Escape properly closes compose via its container handler.
+          if (composeState?.isOpen) {
+            setTimeout(() => document.querySelector<HTMLElement>(".ProseMirror")?.focus(), 0);
+          }
+        }}
+      />
 
       {/* Agent Command Palette */}
-      <AgentCommandPalette isOpen={isAgentPaletteOpen} onClose={() => {
-        setAgentPaletteOpen(false);
-        if (composeState?.isOpen) {
-          setTimeout(() => document.querySelector<HTMLElement>(".ProseMirror")?.focus(), 0);
-        }
-      }} />
+      <AgentCommandPalette
+        isOpen={isAgentPaletteOpen}
+        onClose={() => {
+          setAgentPaletteOpen(false);
+          if (composeState?.isOpen) {
+            setTimeout(() => document.querySelector<HTMLElement>(".ProseMirror")?.focus(), 0);
+          }
+        }}
+      />
 
       {/* Keyboard Shortcuts Help */}
       <ShortcutHelp isOpen={showShortcuts} onClose={() => setShowShortcuts(false)} />
@@ -1706,9 +2106,18 @@ export default function App() {
 }
 
 function SnoozeOverlay() {
-  const { selectedEmailId, selectedThreadId, currentAccountId, emails,
-    setSelectedEmailId, setSelectedThreadId, setViewMode,
-    selectedThreadIds, clearSelectedThreads, addUndoAction } = useAppStore();
+  const {
+    selectedEmailId,
+    selectedThreadId,
+    currentAccountId,
+    emails,
+    setSelectedEmailId: _setSelectedEmailId2,
+    setSelectedThreadId: _setSelectedThreadId2,
+    setViewMode: _setViewMode2,
+    selectedThreadIds,
+    clearSelectedThreads,
+    addUndoAction,
+  } = useAppStore();
   const showSnoozeMenu = useAppStore((s) => s.showSnoozeMenu);
   const setShowSnoozeMenu = useAppStore((s) => s.setShowSnoozeMenu);
   const { threads: currentThreads } = useThreadedEmails();
@@ -1752,7 +2161,9 @@ function SnoozeOverlay() {
               clearSelectedThreads();
 
               // Snooze remaining threads (the first one was already snoozed by SnoozeMenu)
-              const otherThreadIds = threadIdsToSnooze.filter((tid) => tid !== snoozedEmail.threadId);
+              const otherThreadIds = threadIdsToSnooze.filter(
+                (tid) => tid !== snoozedEmail.threadId,
+              );
 
               // Optimistically update snoozed state synchronously so undo can
               // immediately find and remove it (rAF would race with fast undo).
@@ -1799,12 +2210,11 @@ function SnoozeOverlay() {
               for (const tid of otherThreadIds) {
                 const thread = currentThreads.find((t) => t.threadId === tid);
                 if (thread) {
-                  (window as any).api.snooze.snooze(
-                    thread.latestEmail.id,
-                    tid,
-                    currentAccountId,
-                    snoozeUntil,
-                  ).catch((err: unknown) => console.error("Batch snooze failed for thread", tid, err));
+                  window.api.snooze
+                    .snooze(thread.latestEmail.id, tid, currentAccountId, snoozeUntil)
+                    .catch((err: unknown) =>
+                      console.error("Batch snooze failed for thread", tid, err),
+                    );
                 }
               }
             } else {
@@ -1816,7 +2226,9 @@ function SnoozeOverlay() {
               let nextEmailId: string | null = null;
               if (currentIndex >= 0 && currentThreads.length > 1) {
                 const nextIndex = Math.min(currentIndex, currentThreads.length - 2);
-                const nextThread = currentThreads.filter((t) => t.threadId !== selectedThreadId)[nextIndex];
+                const nextThread = currentThreads.filter((t) => t.threadId !== selectedThreadId)[
+                  nextIndex
+                ];
                 if (nextThread) {
                   nextThreadId = nextThread.threadId;
                   nextEmailId = nextThread.latestEmail.id;

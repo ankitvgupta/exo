@@ -61,7 +61,14 @@ function HintItem({ hint }: { hint: Hint }) {
 }
 
 export function KeyboardHints() {
-  const { viewMode, composeState, isSearchOpen, isCommandPaletteOpen, activeSearchQuery, selectedThreadIds } = useAppStore();
+  const {
+    viewMode,
+    composeState,
+    isSearchOpen,
+    isCommandPaletteOpen,
+    activeSearchQuery,
+    selectedThreadIds,
+  } = useAppStore();
 
   // Don't show hints when search or command palette is open
   if (isSearchOpen || isCommandPaletteOpen) {
@@ -80,13 +87,14 @@ export function KeyboardHints() {
   }
 
   // Select hints based on context
-  const hints = selectedThreadIds.size > 0
-    ? BATCH_HINTS
-    : activeSearchQuery && viewMode !== "full"
-      ? SEARCH_RESULTS_HINTS
-      : viewMode === "full"
-        ? FULL_VIEW_HINTS
-        : DEFAULT_HINTS;
+  const hints =
+    selectedThreadIds.size > 0
+      ? BATCH_HINTS
+      : activeSearchQuery && viewMode !== "full"
+        ? SEARCH_RESULTS_HINTS
+        : viewMode === "full"
+          ? FULL_VIEW_HINTS
+          : DEFAULT_HINTS;
 
   return (
     <div className="h-8 bg-gray-100 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 flex items-center justify-center gap-6 text-xs">

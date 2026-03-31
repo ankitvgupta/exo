@@ -12,28 +12,32 @@ function getMainWindow(): BrowserWindow | null {
 
 export function registerOutboxIpc(): void {
   // Set up outbox service event listeners
-  outboxService.on("statsChanged", (stats: OutboxStats) => {
+  outboxService.on("statsChanged", (...args: unknown[]) => {
+    const stats = args[0] as OutboxStats;
     const window = getMainWindow();
     if (window) {
       window.webContents.send("outbox:stats-changed", stats);
     }
   });
 
-  outboxService.on("sent", (data: { id: string; gmailId?: string; threadId?: string }) => {
+  outboxService.on("sent", (...args: unknown[]) => {
+    const data = args[0] as { id: string; gmailId?: string; threadId?: string };
     const window = getMainWindow();
     if (window) {
       window.webContents.send("outbox:sent", data);
     }
   });
 
-  outboxService.on("failed", (data: { id: string; error: string; permanent: boolean; retryCount?: number }) => {
+  outboxService.on("failed", (...args: unknown[]) => {
+    const data = args[0] as { id: string; error: string; permanent: boolean; retryCount?: number };
     const window = getMainWindow();
     if (window) {
       window.webContents.send("outbox:failed", data);
     }
   });
 
-  outboxService.on("authRequired", (data: { accountId: string; itemId: string }) => {
+  outboxService.on("authRequired", (...args: unknown[]) => {
+    const data = args[0] as { accountId: string; itemId: string };
     const window = getMainWindow();
     if (window) {
       window.webContents.send("outbox:auth-required", data);
@@ -53,7 +57,7 @@ export function registerOutboxIpc(): void {
           error: error instanceof Error ? error.message : "Failed to get outbox stats",
         };
       }
-    }
+    },
   );
 
   // List outbox items
@@ -69,7 +73,7 @@ export function registerOutboxIpc(): void {
           error: error instanceof Error ? error.message : "Failed to list outbox items",
         };
       }
-    }
+    },
   );
 
   // Get single outbox item
@@ -85,7 +89,7 @@ export function registerOutboxIpc(): void {
           error: error instanceof Error ? error.message : "Failed to get outbox item",
         };
       }
-    }
+    },
   );
 
   // Retry a failed message
@@ -101,7 +105,7 @@ export function registerOutboxIpc(): void {
           error: error instanceof Error ? error.message : "Failed to retry message",
         };
       }
-    }
+    },
   );
 
   // Remove/cancel a queued message
@@ -117,24 +121,21 @@ export function registerOutboxIpc(): void {
           error: error instanceof Error ? error.message : "Failed to remove message",
         };
       }
-    }
+    },
   );
 
   // Trigger queue processing manually
-  ipcMain.handle(
-    "outbox:process",
-    async (): Promise<IpcResponse<void>> => {
-      try {
-        await outboxService.processQueue();
-        return { success: true, data: undefined };
-      } catch (error) {
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : "Failed to process outbox",
-        };
-      }
+  ipcMain.handle("outbox:process", async (): Promise<IpcResponse<void>> => {
+    try {
+      await outboxService.processQueue();
+      return { success: true, data: undefined };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Failed to process outbox",
+      };
     }
-  );
+  });
 }
 
 // Also register network status IPC handlers here since they're related
@@ -156,12 +157,9 @@ export function registerNetworkIpc(): void {
   });
 
   // Get current network status
-  ipcMain.handle(
-    "network:status",
-    async (): Promise<IpcResponse<boolean>> => {
-      return { success: true, data: networkMonitor.isOnline };
-    }
-  );
+  ipcMain.handle("network:status", async (): Promise<IpcResponse<boolean>> => {
+    return { success: true, data: networkMonitor.isOnline };
+  });
 
   // Update network status from renderer (navigator.onLine)
   ipcMain.handle(
@@ -169,6 +167,6 @@ export function registerNetworkIpc(): void {
     async (_, { online }: { online: boolean }): Promise<IpcResponse<void>> => {
       networkMonitor.updateFromRenderer(online);
       return { success: true, data: undefined };
-    }
+    },
   );
 }

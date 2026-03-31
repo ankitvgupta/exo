@@ -78,7 +78,7 @@ test.describe("Sender Profile - Display", () => {
 
     // Assert full view actually opened
     const replyButton = page.locator("button[title='Reply All']").first();
-    if (!await replyButton.isVisible().catch(() => false)) {
+    if (!(await replyButton.isVisible().catch(() => false))) {
       test.skip();
       return;
     }
@@ -229,7 +229,9 @@ test.describe("Sender Profile - Full View", () => {
     // Navigate to first email and enter full view
     await page.keyboard.press("j");
     // Wait for selection before pressing Enter
-    await expect(page.locator("div[data-thread-id][data-selected='true']")).toBeVisible({ timeout: 5000 });
+    await expect(page.locator("div[data-thread-id][data-selected='true']")).toBeVisible({
+      timeout: 5000,
+    });
     await page.keyboard.press("Enter");
 
     // Should be in full view
@@ -241,7 +243,17 @@ test.describe("Sender Profile - Full View", () => {
     expect(bodyText).toBeTruthy();
 
     // At least one known demo sender should be visible
-    const knownSenders = ["Garry", "Jared", "Michael", "GitHub", "Gustaf", "Diana", "Tom", "Nicolas", "Dalton"];
+    const knownSenders = [
+      "Garry",
+      "Jared",
+      "Michael",
+      "GitHub",
+      "Gustaf",
+      "Diana",
+      "Tom",
+      "Nicolas",
+      "Dalton",
+    ];
     let found = false;
     for (const sender of knownSenders) {
       if (bodyText?.includes(sender)) {

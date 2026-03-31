@@ -1,0 +1,18 @@
+{
+  "id": "needs-reply-low-001",
+  "description": "Networking outreach from mutual connection — polite but not time-sensitive",
+  "email": {
+    "id": "fixture-002",
+    "threadId": "thread-002",
+    "from": "alex.rivera@startup.io",
+    "to": "user@company.com",
+    "subject": "Introduction from Sarah Chen",
+    "body": "Hi! I hope this email finds you well. Sarah Chen mentioned that you're working on some interesting AI-powered productivity tools, and I'd love to learn more about your work. I'm currently leading product at a startup in the same space, and it seems like there could be some interesting synergies. Would you be open to a brief call sometime next week? No rush on this — just wanted to reach out and introduce myself.",
+    "date": "2025-01-15T14:00:00Z",
+    "snippet": "Hi! I hope this email finds you well. Sarah Chen mentioned..."
+  },
+  "expected": {
+    "needs_reply": true,
+    "priority": "low"
+  }
+}

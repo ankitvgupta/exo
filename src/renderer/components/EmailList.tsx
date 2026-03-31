@@ -5,7 +5,12 @@ import { EmailRow } from "./EmailRow";
 import { DraftRow } from "./DraftRow";
 import { BatchActionBar } from "./BatchActionBar";
 import { SplitTabs } from "./SplitTabs";
-import { batchArchive, batchTrash, batchMarkUnread, batchToggleStar } from "../hooks/useBatchActions";
+import {
+  batchArchive,
+  batchTrash,
+  batchMarkUnread,
+  batchToggleStar,
+} from "../hooks/useBatchActions";
 import { draftBodyToHtml } from "../../shared/draft-utils";
 import { useVirtualizer } from "@tanstack/react-virtual";
 
@@ -23,7 +28,7 @@ const densityLabels: Record<InboxDensity, string> = {
 
 export function EmailList() {
   const {
-    selectedEmailId,
+    selectedEmailId: _selectedEmailId,
     setSelectedEmailId,
     setSelectedThreadId,
     setViewMode,
@@ -59,58 +64,65 @@ export function EmailList() {
   const isArchiveReadyView = currentSplitId === "__archive-ready__";
   const isDraftsView = currentSplitId === "__drafts__";
   const isSnoozedView = currentSplitId === "__snoozed__";
-  const isPriorityView = currentSplitId === "__priority__";
+  const _isPriorityView = currentSplitId === "__priority__";
   const isSentView = currentSplitId === "__sent__";
 
   // Filter local drafts for the current account
   const localDrafts = useMemo(
     () => allLocalDrafts.filter((d) => !currentAccountId || d.accountId === currentAccountId),
-    [allLocalDrafts, currentAccountId]
+    [allLocalDrafts, currentAccountId],
   );
 
-  const handleDraftClick = useCallback((draft: LocalDraft) => {
-    const restoredDraft = {
-      bodyHtml: hasRichFormatting(draft.bodyHtml) ? draft.bodyHtml : draftBodyToHtml(draft.bodyText || draft.bodyHtml),
-      bodyText: draft.bodyText ?? "",
-      to: draft.to,
-      cc: draft.cc,
-      bcc: draft.bcc,
-      subject: draft.subject,
-      localDraftId: draft.id,
-    };
+  const handleDraftClick = useCallback(
+    (draft: LocalDraft) => {
+      const restoredDraft = {
+        bodyHtml: hasRichFormatting(draft.bodyHtml)
+          ? draft.bodyHtml
+          : draftBodyToHtml(draft.bodyText || draft.bodyHtml),
+        bodyText: draft.bodyText ?? "",
+        to: draft.to,
+        cc: draft.cc,
+        bcc: draft.bcc,
+        subject: draft.subject,
+        localDraftId: draft.id,
+      };
 
-    // Forward drafts belong inline in their thread
-    if (draft.isForward && draft.inReplyTo) {
-      setSelectedDraftId(null);
-      setSelectedEmailId(draft.inReplyTo);
-      setSelectedThreadId(draft.threadId ?? null);
-      openCompose("forward", draft.inReplyTo, restoredDraft);
-    } else {
-      setSelectedDraftId(draft.id);
-      setSelectedEmailId(null);
-      setSelectedThreadId(null);
-      openCompose("new", undefined, restoredDraft);
-    }
-    setViewMode("full");
-  }, [openCompose, setSelectedEmailId, setSelectedThreadId, setSelectedDraftId, setViewMode]);
+      // Forward drafts belong inline in their thread
+      if (draft.isForward && draft.inReplyTo) {
+        setSelectedDraftId(null);
+        setSelectedEmailId(draft.inReplyTo);
+        setSelectedThreadId(draft.threadId ?? null);
+        openCompose("forward", draft.inReplyTo, restoredDraft);
+      } else {
+        setSelectedDraftId(draft.id);
+        setSelectedEmailId(null);
+        setSelectedThreadId(null);
+        openCompose("new", undefined, restoredDraft);
+      }
+      setViewMode("full");
+    },
+    [openCompose, setSelectedEmailId, setSelectedThreadId, setSelectedDraftId, setViewMode],
+  );
 
   // Load snoozed emails on mount / account switch.
   // Also processes any snoozes that expired while the app was closed.
   useEffect(() => {
     if (!currentAccountId) return;
-    (window as any).api.snooze.list(currentAccountId).then((response: any) => {
-      if (response.success && response.data) {
-        setSnoozedThreads(response.data);
-      }
-      // Process snoozes that expired while the app was closed —
-      // adds them to recentlyUnsnoozedThreadIds so they sort correctly
-      if (response.expired?.length > 0) {
-        const store = useAppStore.getState();
-        for (const email of response.expired) {
-          store.handleThreadUnsnoozed(email.threadId, email.snoozeUntil);
+    window.api.snooze
+      .list(currentAccountId)
+      .then((response: { success: boolean; data?: SnoozedEmail[]; expired?: SnoozedEmail[] }) => {
+        if (response.success && response.data) {
+          setSnoozedThreads(response.data);
         }
-      }
-    });
+        // Process snoozes that expired while the app was closed —
+        // adds them to recentlyUnsnoozedThreadIds so they sort correctly
+        if (response.expired && response.expired.length > 0) {
+          const store = useAppStore.getState();
+          for (const email of response.expired) {
+            store.handleThreadUnsnoozed(email.threadId, email.snoozeUntil);
+          }
+        }
+      });
   }, [currentAccountId, setSnoozedThreads]);
 
   // Listen for snooze events from main process, filtered by current account.
@@ -120,41 +132,44 @@ export function EmailList() {
   currentAccountRef.current = currentAccountId;
 
   useEffect(() => {
-    (window as any).api.snooze.onUnsnoozed((data: { emails: SnoozedEmail[] }) => {
+    window.api.snooze.onUnsnoozed((data: { emails: SnoozedEmail[] }) => {
       for (const email of data.emails) {
         if (email.accountId === currentAccountRef.current) {
           useAppStore.getState().handleThreadUnsnoozed(email.threadId, email.snoozeUntil);
         }
       }
     });
-    (window as any).api.snooze.onSnoozed((data: { snoozedEmail: SnoozedEmail }) => {
+    window.api.snooze.onSnoozed((data: { snoozedEmail: SnoozedEmail }) => {
       if (data.snoozedEmail.accountId === currentAccountRef.current) {
         useAppStore.getState().addSnoozedThread(data.snoozedEmail);
       }
     });
-    (window as any).api.snooze.onManuallyUnsnoozed((data: { threadId: string; accountId: string; snoozeUntil: number }) => {
-      if (data.accountId === currentAccountRef.current) {
-        useAppStore.getState().handleThreadUnsnoozed(data.threadId, data.snoozeUntil);
-      }
-    });
+    window.api.snooze.onManuallyUnsnoozed(
+      (data: { threadId: string; accountId: string; snoozeUntil: number }) => {
+        if (data.accountId === currentAccountRef.current) {
+          useAppStore.getState().handleThreadUnsnoozed(data.threadId, data.snoozeUntil);
+        }
+      },
+    );
     return () => {
-      (window as any).api.snooze.removeAllListeners();
+      window.api.snooze.removeAllListeners();
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Load archive-ready threads on mount / account switch
   useEffect(() => {
     if (!currentAccountId) return;
-    (window as any).api.archiveReady.getThreads(currentAccountId).then((result: any) => {
-      if (result.success && result.data) {
-        const items = result.data.map((t: { threadId: string; reason: string }) => ({
-          threadId: t.threadId,
-          reason: t.reason,
-        }));
-        setArchiveReadyThreads(items);
-      }
-    });
+    window.api.archiveReady
+      .getThreads(currentAccountId)
+      .then((result: { success: boolean; data?: Array<{ threadId: string; reason: string }> }) => {
+        if (result.success && result.data) {
+          const items = result.data.map((t: { threadId: string; reason: string }) => ({
+            threadId: t.threadId,
+            reason: t.reason,
+          }));
+          setArchiveReadyThreads(items);
+        }
+      });
   }, [currentAccountId, setArchiveReadyThreads]);
 
   // Listen for new archive-ready results from background prefetch
@@ -162,7 +177,7 @@ export function EmailList() {
   currentAccountRef2.current = currentAccountId;
 
   useEffect(() => {
-    (window as any).api.archiveReady.onResult(
+    window.api.archiveReady.onResult(
       (data: { threadId: string; accountId: string; isReady: boolean; reason: string }) => {
         if (data.accountId !== currentAccountRef2.current) return;
         if (data.isReady) {
@@ -185,11 +200,11 @@ export function EmailList() {
             return { archiveReadyThreadIds: newIds, archiveReadyReasons: newReasons };
           });
         }
-      }
+      },
     );
 
     return () => {
-      (window as any).api.archiveReady.removeAllListeners();
+      window.api.archiveReady.removeAllListeners();
     };
   }, []);
 
@@ -213,7 +228,6 @@ export function EmailList() {
     return () => {
       for (const t of timers) clearTimeout(t);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recentlyRepliedThreadIds]);
 
   const handleArchiveAll = useCallback(() => {
@@ -264,7 +278,9 @@ export function EmailList() {
   // from getting a new reference when threads change, which matters because
   // the EmailRow memo comparator intentionally skips onClick.
   const threadsRef = useRef(threads);
-  useEffect(() => { threadsRef.current = threads; });
+  useEffect(() => {
+    threadsRef.current = threads;
+  });
 
   // Shift+click range selection helper — stable ref avoids stale closure
   const getThreadRange = useCallback((fromId: string, toId: string): string[] => {
@@ -277,51 +293,69 @@ export function EmailList() {
     return ts.slice(start, end + 1).map((t) => t.threadId);
   }, []);
 
-  const handleThreadClick = useCallback((thread: EmailThread, e: React.MouseEvent) => {
-    const isMeta = e.metaKey || e.ctrlKey;
-    const isShift = e.shiftKey;
+  const handleThreadClick = useCallback(
+    (thread: EmailThread, e: React.MouseEvent) => {
+      const isMeta = e.metaKey || e.ctrlKey;
+      const isShift = e.shiftKey;
 
-    if (isMeta) {
-      toggleThreadSelected(thread.threadId);
-      return;
-    }
-
-    if (isShift) {
-      const { lastSelectedThreadId: anchor_, selectedThreadId: currentThreadId, selectedThreadIds: currentSelected } = useAppStore.getState();
-      const anchor = anchor_ || currentThreadId;
-      if (anchor) {
-        const range = getThreadRange(anchor, thread.threadId);
-        const merged = new Set([...currentSelected, ...range]);
-        setThreadsSelected(Array.from(merged));
-        useAppStore.getState().setLastSelectedThreadId(thread.threadId);
-      } else {
+      if (isMeta) {
         toggleThreadSelected(thread.threadId);
+        return;
       }
-      return;
-    }
 
-    if (useAppStore.getState().selectedThreadIds.size > 0) {
-      clearSelectedThreads();
-    }
-    setSelectedDraftId(null);
-    setSelectedThreadId(thread.threadId);
-    setSelectedEmailId(thread.latestEmail.id);
-    markThreadAsRead(thread.threadId);
-    setViewMode("full");
-    removeRecentlyUnsnoozedThread(thread.threadId);
-  }, [toggleThreadSelected, getThreadRange, setThreadsSelected, clearSelectedThreads, setSelectedThreadId, setSelectedEmailId, setViewMode, removeRecentlyUnsnoozedThread, markThreadAsRead]);
+      if (isShift) {
+        const {
+          lastSelectedThreadId: anchor_,
+          selectedThreadId: currentThreadId,
+          selectedThreadIds: currentSelected,
+        } = useAppStore.getState();
+        const anchor = anchor_ || currentThreadId;
+        if (anchor) {
+          const range = getThreadRange(anchor, thread.threadId);
+          const merged = new Set([...currentSelected, ...range]);
+          setThreadsSelected(Array.from(merged));
+          useAppStore.getState().setLastSelectedThreadId(thread.threadId);
+        } else {
+          toggleThreadSelected(thread.threadId);
+        }
+        return;
+      }
 
-  const handleCheckboxToggle = useCallback((threadId: string) => {
-    toggleThreadSelected(threadId);
-  }, [toggleThreadSelected]);
+      if (useAppStore.getState().selectedThreadIds.size > 0) {
+        clearSelectedThreads();
+      }
+      setSelectedDraftId(null);
+      setSelectedThreadId(thread.threadId);
+      setSelectedEmailId(thread.latestEmail.id);
+      markThreadAsRead(thread.threadId);
+      setViewMode("full");
+      removeRecentlyUnsnoozedThread(thread.threadId);
+    },
+    [
+      toggleThreadSelected,
+      getThreadRange,
+      setThreadsSelected,
+      clearSelectedThreads,
+      setSelectedThreadId,
+      setSelectedEmailId,
+      setViewMode,
+      removeRecentlyUnsnoozedThread,
+      markThreadAsRead,
+    ],
+  );
+
+  const handleCheckboxToggle = useCallback(
+    (threadId: string) => {
+      toggleThreadSelected(threadId);
+    },
+    [toggleThreadSelected],
+  );
 
   // Row height depends on density
   const rowHeight = inboxDensity === "compact" ? 32 : 40;
 
   // Build a flat items array for the virtualizer: drafts at top + thread items
-  type ListItem =
-    | { type: "draft"; draft: LocalDraft }
-    | { type: "thread"; thread: EmailThread };
+  type ListItem = { type: "draft"; draft: LocalDraft } | { type: "thread"; thread: EmailThread };
 
   const items = useMemo((): ListItem[] => {
     if (isDraftsView) return []; // Drafts view is non-virtualized
@@ -339,14 +373,22 @@ export function EmailList() {
       result.push({ type: "thread", thread });
     }
     return result;
-  }, [threads, localDrafts, isDraftsView, isArchiveReadyView, isSentView, isSnoozedView, snoozedThreads]);
+  }, [
+    threads,
+    localDrafts,
+    isDraftsView,
+    isArchiveReadyView,
+    isSentView,
+    isSnoozedView,
+    snoozedThreads,
+  ]);
 
   // Calculate initial scroll offset so the virtualizer renders the correct
   // rows on the very first frame (avoids a flash + re-render on mount).
   const initialSelectedIdx = useMemo(() => {
     if (!selectedThreadId) return -1;
     return items.findIndex(
-      (item) => item.type === "thread" && item.thread.threadId === selectedThreadId
+      (item) => item.type === "thread" && item.thread.threadId === selectedThreadId,
     );
   }, []); // intentionally empty — only compute once on mount for initialOffset.
   // On first render items may be empty (sync still loading), so initialOffset
@@ -358,7 +400,8 @@ export function EmailList() {
     getScrollElement: () => listRef.current,
     estimateSize: () => rowHeight,
     overscan: 20,
-    initialOffset: initialSelectedIdx > 0 ? Math.max(0, initialSelectedIdx * rowHeight - 300) : undefined,
+    initialOffset:
+      initialSelectedIdx > 0 ? Math.max(0, initialSelectedIdx * rowHeight - 300) : undefined,
   });
 
   // Scroll selected thread into view when selection changes (not on mount —
@@ -367,14 +410,14 @@ export function EmailList() {
   useEffect(() => {
     if (!selectedThreadId) return;
     const idx = items.findIndex(
-      (item) => item.type === "thread" && item.thread.threadId === selectedThreadId
+      (item) => item.type === "thread" && item.thread.threadId === selectedThreadId,
     );
     if (idx === -1) return;
     // align: "auto" is a no-op when the item is already visible, and scrolls
     // minimally when it's not. This avoids the overscan-inclusive range bug
     // where virtualizer.range includes rendered-but-not-visible overscan rows.
     virtualizer.scrollToIndex(idx, { align: "auto" });
-  }, [selectedThreadId]); // eslint-disable-line react-hooks/exhaustive-deps -- items/virtualizer from same render
+  }, [selectedThreadId]);
 
   const cycleDensity = () => {
     const currentIndex = densityOrder.indexOf(inboxDensity);
@@ -407,7 +450,9 @@ export function EmailList() {
       <div className="h-10 px-4 flex items-center justify-between border-b border-gray-200 dark:border-gray-700">
         <div className="flex items-center gap-1">
           <button
-            onClick={() => { if (isSentView) setCurrentSplitId("__priority__"); }}
+            onClick={() => {
+              if (isSentView) setCurrentSplitId("__priority__");
+            }}
             className={`px-2 py-1 text-sm font-medium rounded transition-colors focus:outline-none ${
               !isSentView
                 ? "text-gray-900 dark:text-gray-100"
@@ -425,7 +470,12 @@ export function EmailList() {
             }`}
           >
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
+              />
             </svg>
             Sent
           </button>
@@ -437,7 +487,12 @@ export function EmailList() {
               className="px-2.5 py-1 text-xs font-medium text-white bg-green-600 dark:bg-green-500 hover:bg-green-700 dark:hover:bg-green-600 rounded transition-colors flex items-center gap-1"
             >
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M5 13l4 4L19 7"
+                />
               </svg>
               Archive All
             </button>
@@ -445,17 +500,42 @@ export function EmailList() {
           {isAnalyzingTask && (
             <span className="flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400">
               <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                />
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                />
               </svg>
               Analyzing
             </span>
           )}
           {hasActiveAgentDrafts && (
-            <span className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400" title={`${agentDrafts.running} drafting, ${agentDrafts.queued} queued`}>
+            <span
+              className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400"
+              title={`${agentDrafts.running} drafting, ${agentDrafts.queued} queued`}
+            >
               <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                />
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                />
               </svg>
               Drafting {agentDrafts.running}/{agentDrafts.running + agentDrafts.queued}
             </span>
@@ -466,7 +546,14 @@ export function EmailList() {
             title={`Density: ${densityLabels[inboxDensity]}`}
             className="p-1 rounded text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
           >
-            <svg className="w-4 h-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+            <svg
+              className="w-4 h-4"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+            >
               {inboxDensity === "compact" ? (
                 <>
                   <line x1="2" y1="4" x2="14" y2="4" />
@@ -494,13 +581,16 @@ export function EmailList() {
         <div className="px-4 py-1.5 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-750">
           <div className="flex items-center justify-between mb-1">
             <span className="text-xs text-gray-500 dark:text-gray-400">
-              Loading inbox: {currentProgress.fetched.toLocaleString()} / {currentProgress.total.toLocaleString()}
+              Loading inbox: {currentProgress.fetched.toLocaleString()} /{" "}
+              {currentProgress.total.toLocaleString()}
             </span>
           </div>
           <div className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
             <div
               className="h-full bg-blue-500 dark:bg-blue-400 rounded-full transition-all duration-300"
-              style={{ width: `${Math.round((currentProgress.fetched / currentProgress.total) * 100)}%` }}
+              style={{
+                width: `${Math.round((currentProgress.fetched / currentProgress.total) * 100)}%`,
+              }}
             />
           </div>
         </div>
@@ -526,8 +616,18 @@ export function EmailList() {
           <>
             {localDrafts.length === 0 && !isLoading && (
               <div className="flex flex-col items-center justify-center py-12 text-gray-400 dark:text-gray-500">
-                <svg className="w-12 h-12 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                <svg
+                  className="w-12 h-12 mb-3"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={1.5}
+                    d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                  />
                 </svg>
                 <p className="text-sm">No drafts</p>
               </div>
@@ -610,14 +710,31 @@ export function EmailList() {
             <div className="flex flex-col items-center justify-center py-12 text-gray-400 dark:text-gray-500">
               <svg className="w-12 h-12 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 {isSnoozedView ? (
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={1.5}
+                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
                 ) : isSentView ? (
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={1.5}
+                    d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
+                  />
                 ) : (
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={1.5}
+                    d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"
+                  />
                 )}
               </svg>
-              <p className="text-sm">{isSnoozedView ? "No snoozed emails" : isSentView ? "No sent emails" : "Inbox zero"}</p>
+              <p className="text-sm">
+                {isSnoozedView ? "No snoozed emails" : isSentView ? "No sent emails" : "Inbox zero"}
+              </p>
             </div>
           )
         )}

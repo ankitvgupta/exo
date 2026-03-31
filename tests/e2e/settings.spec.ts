@@ -54,7 +54,10 @@ test.describe("Settings Panel - Open and Close", () => {
     await expect(page.locator("h1:has-text('Settings')")).toBeVisible({ timeout: 5000 });
 
     // Click the close button (X icon with M6 18L18 6 path)
-    const closeButton = page.locator("button").filter({ has: page.locator("svg path[d*='M6 18L18 6']") }).first();
+    const closeButton = page
+      .locator("button")
+      .filter({ has: page.locator("svg path[d*='M6 18L18 6']") })
+      .first();
     await expect(closeButton).toBeVisible();
     await closeButton.click();
     await page.waitForTimeout(300);
@@ -166,7 +169,9 @@ test.describe("Settings Panel - Tab Navigation", () => {
     await page.waitForTimeout(300);
 
     await expect(eaTab).toHaveAttribute("data-active", "true");
-    await expect(page.locator("text=Executive Assistant Integration")).toBeVisible({ timeout: 5000 });
+    await expect(page.locator("text=Executive Assistant Integration")).toBeVisible({
+      timeout: 5000,
+    });
   });
 
   test("can navigate to AI Memories tab", async () => {
@@ -234,7 +239,7 @@ test.describe("Settings Panel - Theme Switching", () => {
 
     // The document should have dark class
     const hasDarkClass = await page.evaluate(() =>
-      document.documentElement.classList.contains("dark")
+      document.documentElement.classList.contains("dark"),
     );
     expect(hasDarkClass).toBe(true);
   });
@@ -247,7 +252,7 @@ test.describe("Settings Panel - Theme Switching", () => {
     await expect(lightButton).toHaveAttribute("data-active", "true");
 
     const hasDarkClass = await page.evaluate(() =>
-      document.documentElement.classList.contains("dark")
+      document.documentElement.classList.contains("dark"),
     );
     expect(hasDarkClass).toBe(false);
   });
@@ -346,7 +351,10 @@ test.describe("Settings Panel - Persistence", () => {
     await expect(fifteenSecButton).toHaveAttribute("data-active", "true");
 
     // Close settings
-    const closeButton = page.locator("button").filter({ has: page.locator("svg path[d*='M6 18L18 6']") }).first();
+    const closeButton = page
+      .locator("button")
+      .filter({ has: page.locator("svg path[d*='M6 18L18 6']") })
+      .first();
     await closeButton.click();
     await page.waitForTimeout(300);
 
@@ -378,7 +386,7 @@ test.describe("Settings Panel - Persistence", () => {
 
     // The document should still have dark class
     const hasDarkClass = await page.evaluate(() =>
-      document.documentElement.classList.contains("dark")
+      document.documentElement.classList.contains("dark"),
     );
     expect(hasDarkClass).toBe(true);
 

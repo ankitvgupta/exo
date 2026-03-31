@@ -1,17 +1,16 @@
 import { ipcMain } from "electron";
 import Store from "electron-store";
 import { randomUUID } from "crypto";
-import {
-  type InboxSplit,
-  type IpcResponse,
-  InboxSplitSchema,
-} from "../../shared/types";
+import { type InboxSplit, type IpcResponse, InboxSplitSchema } from "../../shared/types";
 import { getDataDir } from "../data-dir";
 import {
   discoverSuperhumanAccounts,
   readSuperhumanSplits,
   convertSuperhumanSplits,
 } from "../services/superhuman-import";
+import { createLogger } from "../services/logger";
+
+const log = createLogger("splits-ipc");
 
 // Cache discovered Superhuman account paths to avoid double filesystem scan
 const discoveredPaths = new Map<string, string>();
@@ -58,24 +57,21 @@ export function registerSplitsIpc(): void {
   });
 
   // Save all splits (replaces existing)
-  ipcMain.handle(
-    "splits:save",
-    async (_, splits: InboxSplit[]): Promise<IpcResponse<void>> => {
-      try {
-        // Validate each split
-        for (const split of splits) {
-          InboxSplitSchema.parse(split);
-        }
-        saveSplits(splits);
-        return { success: true, data: undefined };
-      } catch (error) {
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : "Unknown error",
-        };
+  ipcMain.handle("splits:save", async (_, splits: InboxSplit[]): Promise<IpcResponse<void>> => {
+    try {
+      // Validate each split
+      for (const split of splits) {
+        InboxSplitSchema.parse(split);
       }
+      saveSplits(splits);
+      return { success: true, data: undefined };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
     }
-  );
+  });
 
   // Create a new split
   ipcMain.handle(
@@ -99,7 +95,7 @@ export function registerSplitsIpc(): void {
           error: error instanceof Error ? error.message : "Unknown error",
         };
       }
-    }
+    },
   );
 
   // Update an existing split
@@ -107,7 +103,7 @@ export function registerSplitsIpc(): void {
     "splits:update",
     async (
       _,
-      { id, updates }: { id: string; updates: Partial<Omit<InboxSplit, "id">> }
+      { id, updates }: { id: string; updates: Partial<Omit<InboxSplit, "id">> },
     ): Promise<IpcResponse<InboxSplit>> => {
       try {
         const splits = getSplits();
@@ -133,38 +129,33 @@ export function registerSplitsIpc(): void {
           error: error instanceof Error ? error.message : "Unknown error",
         };
       }
-    }
+    },
   );
 
   // Delete a split
-  ipcMain.handle(
-    "splits:delete",
-    async (_, { id }: { id: string }): Promise<IpcResponse<void>> => {
-      try {
-        const splits = getSplits();
-        const newSplits = splits.filter((s) => s.id !== id);
+  ipcMain.handle("splits:delete", async (_, { id }: { id: string }): Promise<IpcResponse<void>> => {
+    try {
+      const splits = getSplits();
+      const newSplits = splits.filter((s) => s.id !== id);
 
-        if (newSplits.length === splits.length) {
-          return { success: false, error: `Split with id ${id} not found` };
-        }
-
-        saveSplits(newSplits);
-        return { success: true, data: undefined };
-      } catch (error) {
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : "Unknown error",
-        };
+      if (newSplits.length === splits.length) {
+        return { success: false, error: `Split with id ${id} not found` };
       }
+
+      saveSplits(newSplits);
+      return { success: true, data: undefined };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
     }
-  );
+  });
 
   // Discover Superhuman accounts available for import
   ipcMain.handle(
     "splits:discover-superhuman",
-    async (): Promise<
-      IpcResponse<{ accounts: Array<{ email: string; splitCount: number }> }>
-    > => {
+    async (): Promise<IpcResponse<{ accounts: Array<{ email: string; splitCount: number }> }>> => {
       try {
         const rawAccounts = await discoverSuperhumanAccounts();
         discoveredPaths.clear();
@@ -176,10 +167,12 @@ export function registerSplitsIpc(): void {
             const shSplits = await readSuperhumanSplits(filePath);
             // Run conversion to get the actual importable count (skips disabled/shared)
             const { splits: converted } = convertSuperhumanSplits(shSplits, "", 0);
-            console.log(`[SuperhumanImport] ${email}: ${converted.length} importable of ${shSplits.length} total`);
+            log.info(
+              `[SuperhumanImport] ${email}: ${converted.length} importable of ${shSplits.length} total`,
+            );
             accounts.push({ email, splitCount: converted.length });
           } catch (e) {
-            console.error(`[SuperhumanImport] Failed to read splits for ${email}:`, e);
+            log.error({ err: e }, `[SuperhumanImport] Failed to read splits for ${email}`);
             accounts.push({ email, splitCount: 0 });
           }
         }
@@ -191,7 +184,7 @@ export function registerSplitsIpc(): void {
           error: error instanceof Error ? error.message : "Unknown error",
         };
       }
-    }
+    },
   );
 
   // Import splits from Superhuman for a given email
@@ -199,10 +192,7 @@ export function registerSplitsIpc(): void {
     "splits:import-superhuman",
     async (
       _,
-      {
-        superhumanEmail,
-        targetAccountId,
-      }: { superhumanEmail: string; targetAccountId: string }
+      { superhumanEmail, targetAccountId }: { superhumanEmail: string; targetAccountId: string },
     ): Promise<IpcResponse<{ imported: number; warnings: string[] }>> => {
       try {
         // Use cached path from discovery to avoid a second filesystem scan
@@ -222,30 +212,22 @@ export function registerSplitsIpc(): void {
 
         const shSplits = await readSuperhumanSplits(filePath);
         const existingSplits = getSplits();
-        const startingOrder = existingSplits.filter(
-          (s) => s.accountId === targetAccountId
-        ).length;
+        const startingOrder = existingSplits.filter((s) => s.accountId === targetAccountId).length;
 
         const { splits: newSplits, warnings } = convertSuperhumanSplits(
           shSplits,
           targetAccountId,
-          startingOrder
+          startingOrder,
         );
 
         // Deduplicate against existing splits by name (for the same account)
         const existingNames = new Set(
-          existingSplits
-            .filter((s) => s.accountId === targetAccountId)
-            .map((s) => s.name)
+          existingSplits.filter((s) => s.accountId === targetAccountId).map((s) => s.name),
         );
-        const uniqueNewSplits = newSplits.filter(
-          (s) => !existingNames.has(s.name)
-        );
+        const uniqueNewSplits = newSplits.filter((s) => !existingNames.has(s.name));
         const skippedCount = newSplits.length - uniqueNewSplits.length;
         if (skippedCount > 0) {
-          warnings.push(
-            `Skipped ${skippedCount} split(s) that already exist.`
-          );
+          warnings.push(`Skipped ${skippedCount} split(s) that already exist.`);
         }
 
         // Validate each split against our schema before saving
@@ -254,9 +236,7 @@ export function registerSplitsIpc(): void {
           try {
             validSplits.push(InboxSplitSchema.parse(split));
           } catch {
-            warnings.push(
-              `Skipped "${split.name}": failed schema validation`
-            );
+            warnings.push(`Skipped "${split.name}": failed schema validation`);
           }
         }
 
@@ -273,6 +253,6 @@ export function registerSplitsIpc(): void {
           error: error instanceof Error ? error.message : "Unknown error",
         };
       }
-    }
+    },
   );
 }

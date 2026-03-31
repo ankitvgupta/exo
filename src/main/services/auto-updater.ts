@@ -2,6 +2,9 @@ import { EventEmitter } from "events";
 import { app } from "electron";
 import { autoUpdater, type UpdateInfo } from "electron-updater";
 import { closeDatabase } from "../db";
+import { createLogger } from "./logger";
+
+const log = createLogger("auto-updater");
 
 export type UpdateStatus =
   | { state: "idle" }
@@ -51,7 +54,7 @@ class AutoUpdateService extends EventEmitter {
     });
 
     autoUpdater.on("error", (err: Error) => {
-      console.error("[AutoUpdater] Error:", err.message);
+      log.error({ err }, "Error");
       this.setStatus({ state: "error", message: err.message });
     });
   }
@@ -112,7 +115,7 @@ class AutoUpdateService extends EventEmitter {
    */
   start(): void {
     if (!app.isPackaged) {
-      console.log("[AutoUpdater] Skipping -- app is not packaged");
+      log.info("Skipping -- app is not packaged");
       return;
     }
 
@@ -122,15 +125,18 @@ class AutoUpdateService extends EventEmitter {
     // Delay first check
     this.startupTimer = setTimeout(() => {
       this.checkForUpdates().catch((err) => {
-        console.error("[AutoUpdater] Periodic check failed:", err.message);
+        log.error({ err }, "Periodic check failed");
       });
 
       // Check once per day
-      this.checkInterval = setInterval(() => {
-        this.checkForUpdates().catch((err) => {
-          console.error("[AutoUpdater] Periodic check failed:", err.message);
-        });
-      }, 24 * 60 * 60 * 1000);
+      this.checkInterval = setInterval(
+        () => {
+          this.checkForUpdates().catch((err) => {
+            log.error({ err }, "Periodic check failed");
+          });
+        },
+        24 * 60 * 60 * 1000,
+      );
     }, 30_000);
   }
 

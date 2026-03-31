@@ -19,39 +19,60 @@ const SCREENSHOTS_DIR = path.join(__dirname, "../screenshots");
 // Demo data matching what the real demo mode would produce
 const DEMO_EMAILS = [
   {
-    id: "demo-001", threadId: "thread-project-alpha",
+    id: "demo-001",
+    threadId: "thread-project-alpha",
     subject: "Project Alpha - Timeline Discussion",
-    from: "Sarah Chen <sarah.chen@acmecorp.com>", to: "me@example.com",
+    from: "Sarah Chen <sarah.chen@acmecorp.com>",
+    to: "me@example.com",
     date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
     body: "I wanted to kick off the discussion about Project Alpha's timeline...",
     snippet: "I wanted to kick off the discussion about Project Alpha's timeline...",
     accountId: "default",
-    analysis: { needsReply: false, reason: "Initial email in thread, already has follow-ups", analyzedAt: Date.now() },
+    analysis: {
+      needsReply: false,
+      reason: "Initial email in thread, already has follow-ups",
+      analyzedAt: Date.now(),
+    },
   },
   {
-    id: "demo-002", threadId: "thread-project-alpha",
+    id: "demo-002",
+    threadId: "thread-project-alpha",
     subject: "Re: Project Alpha - Timeline Discussion",
-    from: "Mike Johnson <mike.j@acmecorp.com>", to: "me@example.com, sarah.chen@acmecorp.com",
+    from: "Mike Johnson <mike.j@acmecorp.com>",
+    to: "me@example.com, sarah.chen@acmecorp.com",
     date: new Date(Date.now() - 1.5 * 24 * 60 * 60 * 1000).toISOString(),
     body: "The timeline looks reasonable...",
     snippet: "The timeline looks reasonable. I'd suggest we add a buffer week...",
     accountId: "default",
-    analysis: { needsReply: false, reason: "Middle of thread, not the latest message", analyzedAt: Date.now() },
+    analysis: {
+      needsReply: false,
+      reason: "Middle of thread, not the latest message",
+      analyzedAt: Date.now(),
+    },
   },
   {
-    id: "demo-003", threadId: "thread-project-alpha",
+    id: "demo-003",
+    threadId: "thread-project-alpha",
     subject: "Re: Project Alpha - Timeline Discussion",
-    from: "Sarah Chen <sarah.chen@acmecorp.com>", to: "me@example.com, mike.j@acmecorp.com",
+    from: "Sarah Chen <sarah.chen@acmecorp.com>",
+    to: "me@example.com, mike.j@acmecorp.com",
     date: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
     body: "Good point Mike. Let's plan for 7 weeks then.",
     snippet: "Good point Mike. Let's plan for 7 weeks then. Can you confirm your availability...",
     accountId: "default",
-    analysis: { needsReply: true, priority: "high", reason: "Direct question about availability", analyzedAt: Date.now() },
+    analysis: {
+      needsReply: true,
+      priority: "high",
+      reason: "Direct question about availability",
+      analyzedAt: Date.now(),
+    },
   },
   {
-    id: "demo-sent-reply-001", threadId: "thread-project-alpha",
+    id: "demo-sent-reply-001",
+    threadId: "thread-project-alpha",
     subject: "Re: Project Alpha - Timeline Discussion",
-    from: "me@example.com", to: "sarah.chen@acmecorp.com, mike.j@acmecorp.com",
+    from: "me@example.com",
+    to: "sarah.chen@acmecorp.com, mike.j@acmecorp.com",
     date: new Date(Date.now() - 25 * 60 * 1000).toISOString(),
     body: "Monday at 10am PT works perfectly for the kickoff.",
     snippet: "Monday at 10am PT works perfectly for the kickoff...",
@@ -60,29 +81,44 @@ const DEMO_EMAILS = [
     analysis: { needsReply: false, reason: "Sent by user", analyzedAt: Date.now() },
   },
   {
-    id: "demo-005", threadId: "thread-q4-planning",
+    id: "demo-005",
+    threadId: "thread-q4-planning",
     subject: "Meeting Follow-up: Q4 Planning - Action Items",
-    from: "Jennifer Park <j.park@techcorp.com>", to: "me@example.com",
+    from: "Jennifer Park <j.park@techcorp.com>",
+    to: "me@example.com",
     date: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
     body: "Great discussion in today's Q4 planning meeting!",
     snippet: "Great discussion in today's Q4 planning meeting! Action items for you...",
     accountId: "default",
-    analysis: { needsReply: true, priority: "high", reason: "Action items with deadline", analyzedAt: Date.now() },
+    analysis: {
+      needsReply: true,
+      priority: "high",
+      reason: "Action items with deadline",
+      analyzedAt: Date.now(),
+    },
   },
   {
-    id: "demo-006", threadId: "thread-github-ci",
+    id: "demo-006",
+    threadId: "thread-github-ci",
     subject: "[myorg/myrepo] CI workflow failed on main",
-    from: "GitHub <noreply@github.com>", to: "me@example.com",
+    from: "GitHub <noreply@github.com>",
+    to: "me@example.com",
     date: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
     body: "The workflow CI in repository myorg/myrepo has failed.",
     snippet: "The workflow CI in repository myorg/myrepo has failed...",
     accountId: "default",
-    analysis: { needsReply: false, reason: "Automated GitHub CI notification", analyzedAt: Date.now() },
+    analysis: {
+      needsReply: false,
+      reason: "Automated GitHub CI notification",
+      analyzedAt: Date.now(),
+    },
   },
   {
-    id: "demo-007", threadId: "thread-newsletter",
+    id: "demo-007",
+    threadId: "thread-newsletter",
     subject: "This Week in Tech: AI Developments, Cloud Trends & More",
-    from: "Tech Weekly <newsletter@techweekly.com>", to: "me@example.com",
+    from: "Tech Weekly <newsletter@techweekly.com>",
+    to: "me@example.com",
     date: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
     body: "TOP STORIES THIS WEEK: Major AI Breakthrough in Reasoning...",
     snippet: "TOP STORIES THIS WEEK: Major AI Breakthrough in Reasoning...",
@@ -90,24 +126,37 @@ const DEMO_EMAILS = [
     analysis: { needsReply: false, reason: "Newsletter/marketing email", analyzedAt: Date.now() },
   },
   {
-    id: "demo-008", threadId: "thread-amazon-ship",
+    id: "demo-008",
+    threadId: "thread-amazon-ship",
     subject: "Your Amazon order has shipped!",
-    from: "Amazon.com <ship-confirm@amazon.com>", to: "me@example.com",
+    from: "Amazon.com <ship-confirm@amazon.com>",
+    to: "me@example.com",
     date: new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString(),
     body: "Your Amazon.com order has shipped!",
     snippet: "Your Amazon.com order has shipped! Estimated delivery Friday...",
     accountId: "default",
-    analysis: { needsReply: false, reason: "Automated shipping notification", analyzedAt: Date.now() },
+    analysis: {
+      needsReply: false,
+      reason: "Automated shipping notification",
+      analyzedAt: Date.now(),
+    },
   },
   {
-    id: "demo-012", threadId: "thread-bug-report",
+    id: "demo-012",
+    threadId: "thread-bug-report",
     subject: "URGENT: Production issue affecting checkout flow",
-    from: "On-Call <oncall@acmecorp.com>", to: "me@example.com",
+    from: "On-Call <oncall@acmecorp.com>",
+    to: "me@example.com",
     date: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
     body: "INCIDENT ALERT - Severity: P1",
     snippet: "URGENT: Production issue affecting checkout flow. P1 severity...",
     accountId: "default",
-    analysis: { needsReply: true, priority: "high", reason: "Production incident requiring immediate attention", analyzedAt: Date.now() },
+    analysis: {
+      needsReply: true,
+      priority: "high",
+      reason: "Production incident requiring immediate attention",
+      analyzedAt: Date.now(),
+    },
   },
 ];
 
@@ -120,7 +169,7 @@ const ARCHIVE_READY_THREADS = [
     subject: "Project Alpha - Timeline Discussion",
     latestDate: new Date(Date.now() - 25 * 60 * 1000).toISOString(),
     from: "Sarah Chen <sarah.chen@acmecorp.com>",
-    emails: DEMO_EMAILS.filter(e => e.threadId === "thread-project-alpha"),
+    emails: DEMO_EMAILS.filter((e) => e.threadId === "thread-project-alpha"),
   },
   {
     threadId: "thread-github-ci",
@@ -129,7 +178,7 @@ const ARCHIVE_READY_THREADS = [
     subject: "[myorg/myrepo] CI workflow failed on main",
     latestDate: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
     from: "GitHub <noreply@github.com>",
-    emails: DEMO_EMAILS.filter(e => e.threadId === "thread-github-ci"),
+    emails: DEMO_EMAILS.filter((e) => e.threadId === "thread-github-ci"),
   },
   {
     threadId: "thread-newsletter",
@@ -138,7 +187,7 @@ const ARCHIVE_READY_THREADS = [
     subject: "This Week in Tech: AI Developments, Cloud Trends & More",
     latestDate: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
     from: "Tech Weekly <newsletter@techweekly.com>",
-    emails: DEMO_EMAILS.filter(e => e.threadId === "thread-newsletter"),
+    emails: DEMO_EMAILS.filter((e) => e.threadId === "thread-newsletter"),
   },
   {
     threadId: "thread-amazon-ship",
@@ -147,7 +196,7 @@ const ARCHIVE_READY_THREADS = [
     subject: "Your Amazon order has shipped!",
     latestDate: new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString(),
     from: "Amazon.com <ship-confirm@amazon.com>",
-    emails: DEMO_EMAILS.filter(e => e.threadId === "thread-amazon-ship"),
+    emails: DEMO_EMAILS.filter((e) => e.threadId === "thread-amazon-ship"),
   },
 ];
 
@@ -170,10 +219,7 @@ function startServer(dir: string, port: number): Promise<http.Server> {
       if (url === "/" || url === "/index.html") {
         let html = fs.readFileSync(path.join(dir, "index.html"), "utf-8");
         // Relax CSP to allow inline scripts (for our mock injection)
-        html = html.replace(
-          /script-src 'self'/,
-          "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
-        );
+        html = html.replace(/script-src 'self'/, "script-src 'self' 'unsafe-inline' 'unsafe-eval'");
         res.writeHead(200, { "Content-Type": "text/html" });
         res.end(html);
         return;
@@ -436,9 +482,12 @@ test.describe("Archive Ready - Screenshots", () => {
     await expect(page.locator("h2:has-text('Archive Ready')")).toBeVisible();
 
     // Click back arrow
-    const backButton = page.locator("button").filter({
-      has: page.locator("svg path[d*='M10 19l-7-7']"),
-    }).first();
+    const backButton = page
+      .locator("button")
+      .filter({
+        has: page.locator("svg path[d*='M10 19l-7-7']"),
+      })
+      .first();
     await backButton.click();
     await page.waitForTimeout(500);
 

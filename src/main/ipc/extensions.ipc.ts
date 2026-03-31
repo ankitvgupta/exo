@@ -1,12 +1,18 @@
 import { ipcMain, BrowserWindow, dialog } from "electron";
-import { readFileSync, existsSync } from "fs";
-import { join } from "path";
+import { readFileSync } from "fs";
 import { getExtensionHost } from "../extensions";
 import { checkExtensionAuth, hasCheckAuth } from "../extensions/extension-api";
 import { prefetchService } from "../services/prefetch-service";
 import { deleteNeedsAuthEnrichments, getEmail, getEmailsByThread } from "../db";
 import { getProvidersNeedingAuth } from "../agents/private-providers-main";
-import type { ExtensionPanelInfo, ExtensionEnrichmentResult, InstalledExtensionInfo } from "../../shared/extension-types";
+import type {
+  ExtensionPanelInfo,
+  ExtensionEnrichmentResult,
+  InstalledExtensionInfo,
+} from "../../shared/extension-types";
+import { createLogger } from "../services/logger";
+
+const log = createLogger("extensions-ipc");
 
 /**
  * Register IPC handlers for extension system
@@ -19,20 +25,26 @@ export function registerExtensionsIpc(): void {
     const t0 = performance.now();
     const result = { success: true, data: extensionHost.getSidebarPanels() };
     const elapsed = performance.now() - t0;
-    if (elapsed > 5) console.log(`[PERF] extensions:get-panels took ${elapsed.toFixed(1)}ms`);
+    if (elapsed > 5) log.info(`[PERF] extensions:get-panels took ${elapsed.toFixed(1)}ms`);
     return result;
   });
 
   // Get cached enrichments for an email
   ipcMain.handle(
     "extensions:get-enrichments",
-    (_, { emailId }: { emailId: string }): { success: boolean; data: ExtensionEnrichmentResult[] } => {
+    (
+      _,
+      { emailId }: { emailId: string },
+    ): { success: boolean; data: ExtensionEnrichmentResult[] } => {
       const t0 = performance.now();
       const result = { success: true, data: extensionHost.getCachedEnrichments(emailId) };
       const elapsed = performance.now() - t0;
-      if (elapsed > 5) console.log(`[PERF] extensions:get-enrichments ${emailId.slice(0,8)} took ${elapsed.toFixed(1)}ms`);
+      if (elapsed > 5)
+        log.info(
+          `[PERF] extensions:get-enrichments ${emailId.slice(0, 8)} took ${elapsed.toFixed(1)}ms`,
+        );
       return result;
-    }
+    },
   );
 
   // Trigger enrichment for an email
@@ -43,20 +55,30 @@ export function registerExtensionsIpc(): void {
     "extensions:enrich-email",
     async (
       _,
-      { emailId }: { emailId: string }
-    ): Promise<{ success: boolean; data?: ExtensionEnrichmentResult[]; pending?: boolean; error?: string }> => {
+      { emailId }: { emailId: string },
+    ): Promise<{
+      success: boolean;
+      data?: ExtensionEnrichmentResult[];
+      pending?: boolean;
+      error?: string;
+    }> => {
       const t0 = performance.now();
       try {
         const enrichments = extensionHost.getCachedEnrichments(emailId);
 
         // Check if all panels have cached data
         const panels = extensionHost.getSidebarPanels();
-        const allCached = panels.length > 0 && panels.every(p =>
-          enrichments.some(e => e.extensionId === p.extensionId && e.panelId === p.id)
-        );
+        const allCached =
+          panels.length > 0 &&
+          panels.every((p) =>
+            enrichments.some((e) => e.extensionId === p.extensionId && e.panelId === p.id),
+          );
 
         const elapsed = performance.now() - t0;
-        if (elapsed > 5) console.log(`[PERF] extensions:enrich-email ${emailId.slice(0,8)} took ${elapsed.toFixed(1)}ms`);
+        if (elapsed > 5)
+          log.info(
+            `[PERF] extensions:enrich-email ${emailId.slice(0, 8)} took ${elapsed.toFixed(1)}ms`,
+          );
 
         if (!allCached) {
           // Trigger on-demand enrichment in the background.
@@ -64,18 +86,20 @@ export function registerExtensionsIpc(): void {
           const email = getEmail(emailId);
           if (email) {
             const threadEmails = getEmailsByThread(email.threadId, email.accountId);
-            extensionHost.enrichEmail(email, threadEmails, { allowNewLookups: true }).catch(err => {
-              console.error("[Extensions IPC] Background enrichment failed:", err);
-            });
+            extensionHost
+              .enrichEmail(email, threadEmails, { allowNewLookups: true })
+              .catch((err) => {
+                log.error({ err: err }, "[Extensions IPC] Background enrichment failed");
+              });
           }
         }
 
         return { success: true, data: enrichments, pending: !allCached };
       } catch (error) {
-        console.error("[Extensions IPC] enrich-email error:", error);
+        log.error({ err: error }, "[Extensions IPC] enrich-email error");
         return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
       }
-    }
+    },
   );
 
   // Get extension setting
@@ -83,7 +107,7 @@ export function registerExtensionsIpc(): void {
     "extensions:get-setting",
     async <T>(
       _: unknown,
-      { extensionId, key }: { extensionId: string; key: string }
+      { extensionId, key }: { extensionId: string; key: string },
     ): Promise<{ success: boolean; data?: T; error?: string }> => {
       try {
         const value = await extensionHost.getExtensionSetting<T>(extensionId, key);
@@ -91,7 +115,7 @@ export function registerExtensionsIpc(): void {
       } catch (error) {
         return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
       }
-    }
+    },
   );
 
   // Set extension setting
@@ -99,7 +123,7 @@ export function registerExtensionsIpc(): void {
     "extensions:set-setting",
     async (
       _,
-      { extensionId, key, value }: { extensionId: string; key: string; value: unknown }
+      { extensionId, key, value }: { extensionId: string; key: string; value: unknown },
     ): Promise<{ success: boolean; error?: string }> => {
       try {
         await extensionHost.setExtensionSetting(extensionId, key, value);
@@ -107,7 +131,7 @@ export function registerExtensionsIpc(): void {
       } catch (error) {
         return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
       }
-    }
+    },
   );
 
   // Get loaded extensions
@@ -119,7 +143,15 @@ export function registerExtensionsIpc(): void {
   ipcMain.handle(
     "extensions:get-pending-auths",
     async (): Promise<
-      | { success: true; data: Array<{ extensionId: string; displayName: string; needsAuth: boolean; authType: "extension" | "agent" }> }
+      | {
+          success: true;
+          data: Array<{
+            extensionId: string;
+            displayName: string;
+            needsAuth: boolean;
+            authType: "extension" | "agent";
+          }>;
+        }
       | { success: false; error: string }
     > => {
       try {
@@ -140,10 +172,10 @@ export function registerExtensionsIpc(): void {
 
         return { success: true, data: combined };
       } catch (error) {
-        console.error("[Extensions IPC] get-pending-auths error:", error);
+        log.error({ err: error }, "[Extensions IPC] get-pending-auths error");
         return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
       }
-    }
+    },
   );
 
   // Trigger authentication for an extension (called from banner "Authenticate" button)
@@ -151,7 +183,7 @@ export function registerExtensionsIpc(): void {
     "extensions:authenticate",
     async (
       _,
-      { extensionId }: { extensionId: string }
+      { extensionId }: { extensionId: string },
     ): Promise<{ success: boolean; error?: string }> => {
       try {
         await extensionHost.triggerAuth(extensionId);
@@ -167,16 +199,18 @@ export function registerExtensionsIpc(): void {
 
         // Auth succeeded - clear stale needsAuth placeholders from enrichments cache, then re-queue
         const clearedEnrichments = deleteNeedsAuthEnrichments(extensionId);
-        console.log(`[Extensions IPC] Auth succeeded for ${extensionId}, cleared ${clearedEnrichments} needsAuth enrichments, re-queuing`);
+        log.info(
+          `[Extensions IPC] Auth succeeded for ${extensionId}, cleared ${clearedEnrichments} needsAuth enrichments, re-queuing`,
+        );
         prefetchService.resetExtensionEnrichments();
         prefetchService.processAllPending();
 
         return { success: true };
       } catch (error) {
-        console.error(`[Extensions IPC] authenticate error for ${extensionId}:`, error);
+        log.error({ err: error }, `[Extensions IPC] authenticate error for ${extensionId}`);
         return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
       }
-    }
+    },
   );
 
   // Install extension from .zip file
@@ -184,7 +218,7 @@ export function registerExtensionsIpc(): void {
     "extensions:install",
     async (
       _,
-      { filePath }: { filePath?: string }
+      { filePath }: { filePath?: string },
     ): Promise<{ success: boolean; data?: InstalledExtensionInfo; error?: string }> => {
       try {
         let targetPath = filePath;
@@ -192,11 +226,14 @@ export function registerExtensionsIpc(): void {
         // If no path provided, open a file picker
         if (!targetPath) {
           const focusedWindow = BrowserWindow.getFocusedWindow();
-          const result = await dialog.showOpenDialog(focusedWindow ?? BrowserWindow.getAllWindows()[0], {
-            title: "Install Extension",
-            filters: [{ name: "Mail Extensions", extensions: ["zip"] }],
-            properties: ["openFile"],
-          });
+          const result = await dialog.showOpenDialog(
+            focusedWindow ?? BrowserWindow.getAllWindows()[0],
+            {
+              title: "Install Extension",
+              filters: [{ name: "Mail Extensions", extensions: ["zip"] }],
+              properties: ["openFile"],
+            },
+          );
 
           if (result.canceled || result.filePaths.length === 0) {
             return { success: false, error: "Installation cancelled" };
@@ -213,10 +250,10 @@ export function registerExtensionsIpc(): void {
 
         return { success: true, data: info };
       } catch (error) {
-        console.error("[Extensions IPC] install error:", error);
+        log.error({ err: error }, "[Extensions IPC] install error");
         return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
       }
-    }
+    },
   );
 
   // Uninstall an installed extension
@@ -224,7 +261,7 @@ export function registerExtensionsIpc(): void {
     "extensions:uninstall",
     async (
       _,
-      { extensionId }: { extensionId: string }
+      { extensionId }: { extensionId: string },
     ): Promise<{ success: boolean; error?: string }> => {
       try {
         const removed = await extensionHost.uninstallExtension(extensionId);
@@ -239,10 +276,10 @@ export function registerExtensionsIpc(): void {
 
         return { success: true };
       } catch (error) {
-        console.error(`[Extensions IPC] uninstall error for ${extensionId}:`, error);
+        log.error({ err: error }, `[Extensions IPC] uninstall error for ${extensionId}`);
         return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
       }
-    }
+    },
   );
 
   // List installed (non-bundled) extensions
@@ -250,13 +287,16 @@ export function registerExtensionsIpc(): void {
     "extensions:list-installed",
     (): { success: boolean; data: InstalledExtensionInfo[] } => {
       return { success: true, data: extensionHost.getInstalledExtensions() };
-    }
+    },
   );
 
   // Get renderer bundle for an installed extension (used by renderer to dynamically load panels)
   ipcMain.handle(
     "extensions:get-renderer-bundle",
-    (_, { extensionId }: { extensionId: string }): { success: boolean; data?: string; error?: string } => {
+    (
+      _,
+      { extensionId }: { extensionId: string },
+    ): { success: boolean; data?: string; error?: string } => {
       try {
         const bundlePath = extensionHost.getRendererBundlePath(extensionId);
         if (!bundlePath) {
@@ -267,7 +307,7 @@ export function registerExtensionsIpc(): void {
       } catch (error) {
         return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
       }
-    }
+    },
   );
 
   // Check health of an installed agent provider
@@ -275,8 +315,12 @@ export function registerExtensionsIpc(): void {
     "extensions:check-provider-health",
     async (
       _,
-      { providerId }: { providerId: string }
-    ): Promise<{ success: boolean; data?: { status: "connected" | "not_configured" | "error"; message?: string }; error?: string }> => {
+      { providerId }: { providerId: string },
+    ): Promise<{
+      success: boolean;
+      data?: { status: "connected" | "not_configured" | "error"; message?: string };
+      error?: string;
+    }> => {
       try {
         const { agentCoordinator } = await import("../agents/agent-coordinator");
         const result = await agentCoordinator.checkProviderHealth(providerId);
@@ -284,7 +328,7 @@ export function registerExtensionsIpc(): void {
       } catch (error) {
         return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
       }
-    }
+    },
   );
 
   // Save settings for an installed agent provider
@@ -292,7 +336,7 @@ export function registerExtensionsIpc(): void {
     "extensions:save-provider-settings",
     async (
       _,
-      { providerId, settings }: { providerId: string; settings: Record<string, unknown> }
+      { providerId, settings }: { providerId: string; settings: Record<string, unknown> },
     ): Promise<{ success: boolean; error?: string }> => {
       try {
         // Save each setting via the extension host's storage
@@ -314,7 +358,7 @@ export function registerExtensionsIpc(): void {
       } catch (error) {
         return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
       }
-    }
+    },
   );
 
   // Get settings for an installed agent provider
@@ -322,7 +366,7 @@ export function registerExtensionsIpc(): void {
     "extensions:get-provider-settings",
     async (
       _,
-      { providerId, settingIds }: { providerId: string; settingIds: string[] }
+      { providerId, settingIds }: { providerId: string; settingIds: string[] },
     ): Promise<{ success: boolean; data?: Record<string, unknown>; error?: string }> => {
       try {
         if (!Array.isArray(settingIds)) {
@@ -336,7 +380,7 @@ export function registerExtensionsIpc(): void {
       } catch (error) {
         return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
       }
-    }
+    },
   );
 
   // Setup event forwarding to renderer

@@ -41,9 +41,10 @@ export function redactPayload(payload: unknown): unknown {
     const result: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(payload as Record<string, unknown>)) {
       if (key === "body" || key === "bodyHtml" || key === "bodyText" || key === "body_text") {
-        result[key] = typeof value === "string" && value.length > MAX_BODY_LENGTH
-          ? value.slice(0, MAX_BODY_LENGTH) + "...[redacted]"
-          : value;
+        result[key] =
+          typeof value === "string" && value.length > MAX_BODY_LENGTH
+            ? value.slice(0, MAX_BODY_LENGTH) + "...[redacted]"
+            : value;
       } else if (key === "content" && typeof value === "string" && value.length > MAX_BODY_LENGTH) {
         // Attachment content or large text blocks
         result[key] = "[redacted: content too large]";

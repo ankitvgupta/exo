@@ -14,7 +14,10 @@ declare global {
           source?: string;
           sourceEmailId?: string;
         }) => Promise<IpcResponse<Memory>>;
-        update: (id: string, updates: { content?: string; enabled?: boolean }) => Promise<IpcResponse<Memory | null>>;
+        update: (
+          id: string,
+          updates: { content?: string; enabled?: boolean },
+        ) => Promise<IpcResponse<Memory | null>>;
         delete: (id: string) => Promise<IpcResponse<void>>;
         categories: (accountId: string) => Promise<IpcResponse<string[]>>;
         draftMemories: {
@@ -50,7 +53,13 @@ const SCOPE_DESCRIPTIONS: Record<MemoryScope, string> = {
   category: "Applies when relevant (e.g. students, investors)",
 };
 
-export function MemoriesTab({ accountId, highlightMemoryIds }: { accountId: string; highlightMemoryIds?: string[] }) {
+export function MemoriesTab({
+  accountId,
+  highlightMemoryIds,
+}: {
+  accountId: string;
+  highlightMemoryIds?: string[];
+}) {
   const [memories, setMemories] = useState<Memory[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -81,8 +90,8 @@ export function MemoriesTab({ accountId, highlightMemoryIds }: { accountId: stri
   const draftHighlightRef = useRef<HTMLDivElement>(null);
   const highlightSet = useMemo(() => new Set(highlightMemoryIds ?? []), [highlightMemoryIds]);
   const firstHighlightedDraftId = useMemo(
-    () => draftMemories.find(dm => highlightSet.has(dm.id))?.id ?? null,
-    [draftMemories, highlightSet]
+    () => draftMemories.find((dm) => highlightSet.has(dm.id))?.id ?? null,
+    [draftMemories, highlightSet],
   );
   const promotedHighlightApplied = useRef(false);
   const draftHighlightApplied = useRef(false);
@@ -100,7 +109,7 @@ export function MemoriesTab({ accountId, highlightMemoryIds }: { accountId: stri
     if (promotedHighlightApplied.current) return;
     if (!highlightMemoryIds?.length || memories.length === 0) return;
     const firstId = highlightMemoryIds[0];
-    const target = memories.find(m => m.id === firstId);
+    const target = memories.find((m) => m.id === firstId);
     if (!target) return;
 
     promotedHighlightApplied.current = true;
@@ -115,7 +124,7 @@ export function MemoriesTab({ accountId, highlightMemoryIds }: { accountId: stri
   useEffect(() => {
     if (draftHighlightApplied.current) return;
     if (!highlightMemoryIds?.length || draftMemories.length === 0) return;
-    if (!draftMemories.some(dm => highlightSet.has(dm.id))) return;
+    if (!draftMemories.some((dm) => highlightSet.has(dm.id))) return;
 
     draftHighlightApplied.current = true;
     setShowDraftMemories(true);
@@ -206,7 +215,9 @@ export function MemoriesTab({ accountId, highlightMemoryIds }: { accountId: stri
     try {
       const raw = await window.api.memory.update(memory.id, { enabled: !memory.enabled });
       if (raw.success) {
-        setMemories(prev => prev.map(m => m.id === memory.id ? { ...m, enabled: !m.enabled } : m));
+        setMemories((prev) =>
+          prev.map((m) => (m.id === memory.id ? { ...m, enabled: !m.enabled } : m)),
+        );
       } else {
         setError(raw.error || "Failed to update memory");
       }
@@ -219,7 +230,7 @@ export function MemoriesTab({ accountId, highlightMemoryIds }: { accountId: stri
     try {
       const raw = await window.api.memory.delete(id);
       if (raw.success) {
-        setMemories(prev => prev.filter(m => m.id !== id));
+        setMemories((prev) => prev.filter((m) => m.id !== id));
       } else {
         setError(raw.error || "Failed to delete memory");
       }
@@ -233,7 +244,9 @@ export function MemoriesTab({ accountId, highlightMemoryIds }: { accountId: stri
     try {
       const raw = await window.api.memory.update(id, { content: editContent.trim() });
       if (raw.success) {
-        setMemories(prev => prev.map(m => m.id === id ? { ...m, content: editContent.trim() } : m));
+        setMemories((prev) =>
+          prev.map((m) => (m.id === id ? { ...m, content: editContent.trim() } : m)),
+        );
         setEditingId(null);
       } else {
         setError(raw.error || "Failed to update memory");
@@ -243,20 +256,29 @@ export function MemoriesTab({ accountId, highlightMemoryIds }: { accountId: stri
     }
   };
 
-  const filtered = filterScope === "all" ? memories : memories.filter(m => m.scope === filterScope);
+  const filtered =
+    filterScope === "all" ? memories : memories.filter((m) => m.scope === filterScope);
 
   // Group by scope for display
   const grouped = filtered.reduce<Record<string, Memory[]>>((acc, m) => {
-    const key = m.scope === "global" ? "Global"
-      : m.scope === "person" ? `Person: ${m.scopeValue}`
-      : m.scope === "domain" ? `Domain: @${m.scopeValue}`
-      : `Category: ${m.scopeValue ?? "(uncategorized)"}`;
+    const key =
+      m.scope === "global"
+        ? "Global"
+        : m.scope === "person"
+          ? `Person: ${m.scopeValue}`
+          : m.scope === "domain"
+            ? `Domain: @${m.scopeValue}`
+            : `Category: ${m.scopeValue ?? "(uncategorized)"}`;
     (acc[key] ??= []).push(m);
     return acc;
   }, {});
 
   if (isLoading) {
-    return <div className="max-w-3xl p-4 text-sm text-gray-500 dark:text-gray-400">Loading memories...</div>;
+    return (
+      <div className="max-w-3xl p-4 text-sm text-gray-500 dark:text-gray-400">
+        Loading memories...
+      </div>
+    );
   }
 
   return (
@@ -266,7 +288,8 @@ export function MemoriesTab({ accountId, highlightMemoryIds }: { accountId: stri
           <div>
             <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">AI Memories</h3>
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              Persistent preferences that influence how drafts are generated. Memories are automatically included in AI context when relevant.
+              Persistent preferences that influence how drafts are generated. Memories are
+              automatically included in AI context when relevant.
             </p>
           </div>
           <button
@@ -277,54 +300,71 @@ export function MemoriesTab({ accountId, highlightMemoryIds }: { accountId: stri
           </button>
         </div>
 
-        {error && (
-          <p className="text-sm text-red-600 dark:text-red-400 mb-3">{error}</p>
-        )}
+        {error && <p className="text-sm text-red-600 dark:text-red-400 mb-3">{error}</p>}
 
         {/* Add memory form */}
         {showAddForm && (
           <div className="p-4 mb-4 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg space-y-3">
             <div className="flex gap-3">
               <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Scope</label>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                  Scope
+                </label>
                 <select
                   value={newScope}
-                  onChange={(e) => { setNewScope(e.target.value as MemoryScope); setNewScopeValue(""); }}
+                  onChange={(e) => {
+                    setNewScope(e.target.value as MemoryScope);
+                    setNewScopeValue("");
+                  }}
                   className="px-2 py-1.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded text-sm"
                 >
-                  {(Object.keys(SCOPE_LABELS) as MemoryScope[]).map(s => (
-                    <option key={s} value={s}>{SCOPE_LABELS[s]}</option>
+                  {(Object.keys(SCOPE_LABELS) as MemoryScope[]).map((s) => (
+                    <option key={s} value={s}>
+                      {SCOPE_LABELS[s]}
+                    </option>
                   ))}
                 </select>
               </div>
               {newScope !== "global" && (
                 <div className="flex-1">
                   <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
-                    {newScope === "person" ? "Email address" : newScope === "domain" ? "Domain" : "Category name"}
+                    {newScope === "person"
+                      ? "Email address"
+                      : newScope === "domain"
+                        ? "Domain"
+                        : "Category name"}
                   </label>
                   <input
                     type="text"
                     value={newScopeValue}
                     onChange={(e) => setNewScopeValue(e.target.value)}
                     placeholder={
-                      newScope === "person" ? "alice@example.com"
-                      : newScope === "domain" ? "example.com"
-                      : "e.g. student, investor, recruiter"
+                      newScope === "person"
+                        ? "alice@example.com"
+                        : newScope === "domain"
+                          ? "example.com"
+                          : "e.g. student, investor, recruiter"
                     }
                     list={newScope === "category" ? "memory-categories" : undefined}
                     className="w-full px-2 py-1.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded text-sm"
                   />
                   {newScope === "category" && existingCategories.length > 0 && (
                     <datalist id="memory-categories">
-                      {existingCategories.map(c => <option key={c} value={c} />)}
+                      {existingCategories.map((c) => (
+                        <option key={c} value={c} />
+                      ))}
                     </datalist>
                   )}
                 </div>
               )}
             </div>
-            <p className="text-xs text-gray-400 dark:text-gray-500">{SCOPE_DESCRIPTIONS[newScope]}</p>
+            <p className="text-xs text-gray-400 dark:text-gray-500">
+              {SCOPE_DESCRIPTIONS[newScope]}
+            </p>
             <div>
-              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Memory</label>
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                Memory
+              </label>
               <textarea
                 value={newContent}
                 onChange={(e) => setNewContent(e.target.value)}
@@ -336,7 +376,9 @@ export function MemoriesTab({ accountId, highlightMemoryIds }: { accountId: stri
             <div className="flex justify-end">
               <button
                 onClick={handleAdd}
-                disabled={!newContent.trim() || (newScope !== "global" && !newScopeValue.trim()) || isSaving}
+                disabled={
+                  !newContent.trim() || (newScope !== "global" && !newScopeValue.trim()) || isSaving
+                }
                 className="px-3 py-1.5 bg-blue-600 dark:bg-blue-500 text-white text-sm font-medium rounded hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-50 transition-colors"
               >
                 {isSaving ? "Saving..." : "Save Memory"}
@@ -347,7 +389,7 @@ export function MemoriesTab({ accountId, highlightMemoryIds }: { accountId: stri
 
         {/* Filter bar */}
         <div className="flex gap-1 mb-3">
-          {(["all", "global", "person", "domain", "category"] as const).map(scope => (
+          {(["all", "global", "person", "domain", "category"] as const).map((scope) => (
             <button
               key={scope}
               onClick={() => setFilterScope(scope)}
@@ -360,7 +402,7 @@ export function MemoriesTab({ accountId, highlightMemoryIds }: { accountId: stri
               {scope === "all" ? "All" : SCOPE_LABELS[scope]}
               {scope !== "all" && (
                 <span className="ml-1 text-gray-400 dark:text-gray-500">
-                  {memories.filter(m => m.scope === scope).length}
+                  {memories.filter((m) => m.scope === scope).length}
                 </span>
               )}
             </button>
@@ -382,7 +424,7 @@ export function MemoriesTab({ accountId, highlightMemoryIds }: { accountId: stri
                   {groupLabel}
                 </h4>
                 <div className="space-y-1">
-                  {groupMemories.map(memory => (
+                  {groupMemories.map((memory) => (
                     <div
                       key={memory.id}
                       ref={memory.id === highlightMemoryIds?.[0] ? promotedHighlightRef : undefined}
@@ -404,7 +446,13 @@ export function MemoriesTab({ accountId, highlightMemoryIds }: { accountId: stri
                         title={memory.enabled ? "Disable" : "Enable"}
                       >
                         {memory.enabled && (
-                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                          <svg
+                            className="w-3 h-3"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                            strokeWidth={3}
+                          >
                             <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                           </svg>
                         )}
@@ -416,19 +464,40 @@ export function MemoriesTab({ accountId, highlightMemoryIds }: { accountId: stri
                               type="text"
                               value={editContent}
                               onChange={(e) => setEditContent(e.target.value)}
-                              onKeyDown={(e) => { if (e.key === "Enter") handleSaveEdit(memory.id); if (e.key === "Escape") setEditingId(null); }}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") handleSaveEdit(memory.id);
+                                if (e.key === "Escape") setEditingId(null);
+                              }}
                               className="flex-1 px-2 py-0.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded text-sm"
                               autoFocus
                             />
-                            <button onClick={() => handleSaveEdit(memory.id)} className="text-xs text-blue-600 dark:text-blue-400 hover:underline">Save</button>
-                            <button onClick={() => setEditingId(null)} className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">Cancel</button>
+                            <button
+                              onClick={() => handleSaveEdit(memory.id)}
+                              className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                            >
+                              Save
+                            </button>
+                            <button
+                              onClick={() => setEditingId(null)}
+                              className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                            >
+                              Cancel
+                            </button>
                           </div>
                         ) : (
-                          <p className="text-sm text-gray-800 dark:text-gray-200">{memory.content}</p>
+                          <p className="text-sm text-gray-800 dark:text-gray-200">
+                            {memory.content}
+                          </p>
                         )}
                         <div className="flex items-center gap-2 mt-0.5">
                           <span className="text-xs text-gray-400 dark:text-gray-500">
-                            {memory.source === "refinement" ? "From refinement" : memory.source === "draft-edit" ? "From draft edit" : memory.source === "priority-override" ? "From priority override" : "Manual"}
+                            {memory.source === "refinement"
+                              ? "From refinement"
+                              : memory.source === "draft-edit"
+                                ? "From draft edit"
+                                : memory.source === "priority-override"
+                                  ? "From priority override"
+                                  : "Manual"}
                           </span>
                           <span className="text-xs text-gray-300 dark:text-gray-600">·</span>
                           <span className="text-xs text-gray-400 dark:text-gray-500">
@@ -438,12 +507,25 @@ export function MemoriesTab({ accountId, highlightMemoryIds }: { accountId: stri
                       </div>
                       <div className="flex items-center gap-1 flex-shrink-0">
                         <button
-                          onClick={() => { setEditingId(memory.id); setEditContent(memory.content); }}
+                          onClick={() => {
+                            setEditingId(memory.id);
+                            setEditContent(memory.content);
+                          }}
                           className="p-1 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 rounded transition-colors"
                           title="Edit"
                         >
-                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          <svg
+                            className="w-3.5 h-3.5"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                            strokeWidth={2}
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                            />
                           </svg>
                         </button>
                         <button
@@ -451,8 +533,18 @@ export function MemoriesTab({ accountId, highlightMemoryIds }: { accountId: stri
                           className="p-1 text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 rounded transition-colors"
                           title="Delete"
                         >
-                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          <svg
+                            className="w-3.5 h-3.5"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                            strokeWidth={2}
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                            />
                           </svg>
                         </button>
                       </div>
@@ -483,7 +575,8 @@ export function MemoriesTab({ accountId, highlightMemoryIds }: { accountId: stri
               Draft Memories ({draftMemories.length})
             </button>
             <p className="text-xs text-gray-400 dark:text-gray-500 mt-1 ml-5">
-              Observations from your edits and priority overrides — promoted to active memories after repeated confirmations
+              Observations from your edits and priority overrides — promoted to active memories
+              after repeated confirmations
             </p>
 
             {showDraftMemories && (
@@ -502,18 +595,32 @@ export function MemoriesTab({ accountId, highlightMemoryIds }: { accountId: stri
                       <p className="text-sm text-gray-800 dark:text-gray-200">{dm.content}</p>
                       {dm.senderEmail && (
                         <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                          Observed in conversation with <span className="font-medium text-gray-600 dark:text-gray-300">{dm.senderEmail}</span>
-                          {dm.subject && <span className="text-gray-400 dark:text-gray-500"> — {dm.subject}</span>}
+                          Observed in conversation with{" "}
+                          <span className="font-medium text-gray-600 dark:text-gray-300">
+                            {dm.senderEmail}
+                          </span>
+                          {dm.subject && (
+                            <span className="text-gray-400 dark:text-gray-500">
+                              {" "}
+                              — {dm.subject}
+                            </span>
+                          )}
                         </p>
                       )}
                       <div className="flex items-center gap-2 mt-0.5">
-                        <span className={`text-xs px-1.5 py-0.5 rounded-full ${
-                          dm.scope === "global" ? "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400"
-                          : dm.scope === "person" ? "bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400"
-                          : dm.scope === "domain" ? "bg-green-50 dark:bg-green-900/40 text-green-600 dark:text-green-400"
-                          : "bg-amber-50 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400"
-                        }`}>
-                          {SCOPE_LABELS[dm.scope]}{dm.scopeValue ? `: ${dm.scopeValue}` : ""}
+                        <span
+                          className={`text-xs px-1.5 py-0.5 rounded-full ${
+                            dm.scope === "global"
+                              ? "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400"
+                              : dm.scope === "person"
+                                ? "bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400"
+                                : dm.scope === "domain"
+                                  ? "bg-green-50 dark:bg-green-900/40 text-green-600 dark:text-green-400"
+                                  : "bg-amber-50 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400"
+                          }`}
+                        >
+                          {SCOPE_LABELS[dm.scope]}
+                          {dm.scopeValue ? `: ${dm.scopeValue}` : ""}
                         </span>
                         <span className="text-xs text-gray-400 dark:text-gray-500">
                           {dm.voteCount}/{getPromotionThreshold(dm.memoryType)} confirmations
@@ -536,7 +643,10 @@ export function MemoriesTab({ accountId, highlightMemoryIds }: { accountId: stri
                       <button
                         onClick={async () => {
                           try {
-                            const raw = await window.api.memory.draftMemories.promote(dm.id, accountId);
+                            const raw = await window.api.memory.draftMemories.promote(
+                              dm.id,
+                              accountId,
+                            );
                             if (raw.success) {
                               loadMemories();
                               loadDraftMemories();
@@ -557,7 +667,7 @@ export function MemoriesTab({ accountId, highlightMemoryIds }: { accountId: stri
                           try {
                             const raw = await window.api.memory.draftMemories.delete(dm.id);
                             if (raw.success) {
-                              setDraftMemories(prev => prev.filter(d => d.id !== dm.id));
+                              setDraftMemories((prev) => prev.filter((d) => d.id !== dm.id));
                             } else {
                               setError(raw.error || "Failed to delete");
                             }
@@ -568,8 +678,18 @@ export function MemoriesTab({ accountId, highlightMemoryIds }: { accountId: stri
                         className="p-1 text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 rounded transition-colors"
                         title="Delete"
                       >
-                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        <svg
+                          className="w-3.5 h-3.5"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                          strokeWidth={2}
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                          />
                         </svg>
                       </button>
                     </div>

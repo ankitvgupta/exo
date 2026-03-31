@@ -89,7 +89,9 @@ export function SenderProfilePanel({
           {(profile.company || profile.title) && (
             <div className="bg-gray-50 dark:bg-gray-800/50 p-3 rounded-lg">
               {profile.title && (
-                <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{profile.title}</p>
+                <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                  {profile.title}
+                </p>
               )}
               {profile.company && (
                 <p className="text-sm text-gray-600 dark:text-gray-400">{profile.company}</p>
@@ -102,7 +104,9 @@ export function SenderProfilePanel({
             <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">
               About
             </h4>
-            <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{profile.summary}</p>
+            <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+              {profile.summary}
+            </p>
           </div>
 
           {/* LinkedIn Link */}
@@ -130,7 +134,9 @@ export function SenderProfilePanel({
       {/* No profile available */}
       {!isLoading && !profile && (
         <div className="text-center py-8">
-          <p className="text-sm text-gray-500 dark:text-gray-400">No profile information available</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            No profile information available
+          </p>
         </div>
       )}
     </div>

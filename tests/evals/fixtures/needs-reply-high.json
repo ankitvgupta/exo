@@ -1,0 +1,18 @@
+{
+  "id": "needs-reply-high-001",
+  "description": "Urgent production issue requiring approval — time-sensitive decision with customer impact",
+  "email": {
+    "id": "fixture-001",
+    "threadId": "thread-001",
+    "from": "ops@company.com",
+    "to": "user@company.com",
+    "subject": "URGENT: Production database issue",
+    "body": "Hi — we're seeing intermittent 500 errors on the production API. Initial investigation shows the primary database is hitting connection limits. I need your approval to scale up the database instance (will increase monthly costs by ~$200). Please respond ASAP as this is impacting customers.",
+    "date": "2025-01-15T10:30:00Z",
+    "snippet": "Hi — we're seeing intermittent 500 errors on the production API."
+  },
+  "expected": {
+    "needs_reply": true,
+    "priority": "high"
+  }
+}

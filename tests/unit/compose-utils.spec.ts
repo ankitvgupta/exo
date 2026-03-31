@@ -26,7 +26,7 @@ test.describe("escapeHtml", () => {
 
   test("escapes angle brackets", () => {
     expect(escapeHtml("<script>alert('xss')</script>")).toBe(
-      "&lt;script&gt;alert('xss')&lt;/script&gt;"
+      "&lt;script&gt;alert('xss')&lt;/script&gt;",
     );
   });
 
@@ -40,7 +40,7 @@ test.describe("escapeHtml", () => {
 
   test("handles multiple entities in one string", () => {
     expect(escapeHtml('Tom & "Jerry" <friends>')).toBe(
-      "Tom &amp; &quot;Jerry&quot; &lt;friends&gt;"
+      "Tom &amp; &quot;Jerry&quot; &lt;friends&gt;",
     );
   });
 
@@ -67,16 +67,14 @@ function parseAddressList(header: string): string[] {
 
 test.describe("parseAddressList", () => {
   test("parses bare email addresses", () => {
-    expect(parseAddressList("alice@a.com, bob@b.com")).toEqual([
-      "alice@a.com",
-      "bob@b.com",
-    ]);
+    expect(parseAddressList("alice@a.com, bob@b.com")).toEqual(["alice@a.com", "bob@b.com"]);
   });
 
   test("extracts email from Name <email> format", () => {
-    expect(
-      parseAddressList("Alice Smith <alice@a.com>, Bob <bob@b.com>")
-    ).toEqual(["alice@a.com", "bob@b.com"]);
+    expect(parseAddressList("Alice Smith <alice@a.com>, Bob <bob@b.com>")).toEqual([
+      "alice@a.com",
+      "bob@b.com",
+    ]);
   });
 
   test("handles single address", () => {
@@ -84,9 +82,11 @@ test.describe("parseAddressList", () => {
   });
 
   test("handles mixed formats", () => {
-    expect(
-      parseAddressList("Alice <alice@a.com>, bob@b.com, Carol C <carol@c.com>")
-    ).toEqual(["alice@a.com", "bob@b.com", "carol@c.com"]);
+    expect(parseAddressList("Alice <alice@a.com>, bob@b.com, Carol C <carol@c.com>")).toEqual([
+      "alice@a.com",
+      "bob@b.com",
+      "carol@c.com",
+    ]);
   });
 
   test("handles empty string", () => {
@@ -94,10 +94,7 @@ test.describe("parseAddressList", () => {
   });
 
   test("trims whitespace", () => {
-    expect(parseAddressList("  alice@a.com  ,  bob@b.com  ")).toEqual([
-      "alice@a.com",
-      "bob@b.com",
-    ]);
+    expect(parseAddressList("  alice@a.com  ,  bob@b.com  ")).toEqual(["alice@a.com", "bob@b.com"]);
   });
 });
 
@@ -135,7 +132,7 @@ interface ReplyInfo {
 function extractReplyInfo(
   email: MockEmail,
   mode: ComposeMode,
-  userEmail?: string
+  userEmail?: string,
 ): ReplyInfo | null {
   if (!email) return null;
 
@@ -327,10 +324,7 @@ test.describe("extractReplyInfo — forward mode", () => {
   test("includes attachment names in forwarded header", () => {
     const email = {
       ...sampleEmail,
-      attachments: [
-        { filename: "report.pdf" },
-        { filename: "budget.xlsx" },
-      ],
+      attachments: [{ filename: "report.pdf" }, { filename: "budget.xlsx" }],
     };
     const result = extractReplyInfo(email, "forward");
     expect(result!.attribution).toContain("Attachments: report.pdf, budget.xlsx");

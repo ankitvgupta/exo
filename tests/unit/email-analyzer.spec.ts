@@ -1,9 +1,9 @@
 /**
  * Unit tests for EmailAnalyzer service.
  *
- * Strategy: Construct the analyzer, then replace the internal `anthropic`
- * property with a MockAnthropic instance so we control Claude API responses
- * without hitting the real API.
+ * Strategy: Replace the module-level Anthropic client in anthropic-service.ts
+ * with a MockAnthropic instance via _setClientForTesting, so all services
+ * that call createMessage() go through the mock.
  */
 import { test, expect } from "@playwright/test";
 import { EmailAnalyzer } from "../../src/main/services/email-analyzer";
@@ -13,6 +13,7 @@ import {
   resetAnthropicMock,
   getCapturedRequests,
 } from "../mocks/anthropic-api-mock";
+import { _setClientForTesting } from "../../src/main/services/anthropic-service";
 import type { Email } from "../../src/shared/types";
 import { ANALYSIS_JSON_FORMAT } from "../../src/shared/types";
 
@@ -35,15 +36,8 @@ function makeEmail(overrides: Partial<Email> = {}): Email {
   };
 }
 
-function createAnalyzerWithMock(prompt?: string): {
-  analyzer: EmailAnalyzer;
-  mock: MockAnthropic;
-} {
-  const analyzer = new EmailAnalyzer("claude-sonnet-4-20250514", prompt);
-  const mock = new MockAnthropic();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test-only mock injection into private field
-  (analyzer as { anthropic: unknown }).anthropic = mock;
-  return { analyzer, mock };
+function createAnalyzerWithMock(prompt?: string): EmailAnalyzer {
+  return new EmailAnalyzer("claude-sonnet-4-20250514", prompt);
 }
 
 // ---------------------------------------------------------------------------
@@ -53,13 +47,18 @@ function createAnalyzerWithMock(prompt?: string): {
 test.describe("EmailAnalyzer", () => {
   test.beforeEach(() => {
     resetAnthropicMock();
+    _setClientForTesting(new MockAnthropic());
+  });
+
+  test.afterEach(() => {
+    _setClientForTesting(null as unknown);
   });
 
   test("analyze() returns correct AnalysisResult for a needs-reply email", async () => {
     mockAnthropicResponse({
       text: '{"needs_reply": true, "reason": "Direct question about document review", "priority": "high"}',
     });
-    const { analyzer } = createAnalyzerWithMock();
+    const analyzer = createAnalyzerWithMock();
     const email = makeEmail();
 
     const result = await analyzer.analyze(email);
@@ -73,7 +72,7 @@ test.describe("EmailAnalyzer", () => {
     mockAnthropicResponse({
       text: '{"needs_reply": false, "reason": "Newsletter/marketing content"}',
     });
-    const { analyzer } = createAnalyzerWithMock();
+    const analyzer = createAnalyzerWithMock();
     const email = makeEmail({
       from: "newsletter@techdigest.com",
       subject: "Weekly Tech Digest",
@@ -92,7 +91,7 @@ test.describe("EmailAnalyzer", () => {
       text: '{"needs_reply": true, "reason": "Custom prompt test", "priority": "medium"}',
     });
     const customPrompt = "You are a custom email analyzer. Analyze this email.";
-    const { analyzer } = createAnalyzerWithMock(customPrompt);
+    const analyzer = createAnalyzerWithMock(customPrompt);
     const email = makeEmail();
 
     await analyzer.analyze(email);
@@ -110,7 +109,7 @@ test.describe("EmailAnalyzer", () => {
     });
     // Pass the default prompt explicitly — should NOT be treated as custom
     const { DEFAULT_ANALYSIS_PROMPT } = await import("../../src/shared/types");
-    const { analyzer } = createAnalyzerWithMock(DEFAULT_ANALYSIS_PROMPT);
+    const analyzer = createAnalyzerWithMock(DEFAULT_ANALYSIS_PROMPT);
     const email = makeEmail();
 
     await analyzer.analyze(email);
@@ -127,7 +126,7 @@ test.describe("EmailAnalyzer", () => {
     mockAnthropicResponse({
       text: '```json\n{"needs_reply": true, "reason": "Fenced JSON", "priority": "low"}\n```',
     });
-    const { analyzer } = createAnalyzerWithMock();
+    const analyzer = createAnalyzerWithMock();
     const email = makeEmail();
 
     const result = await analyzer.analyze(email);
@@ -141,7 +140,7 @@ test.describe("EmailAnalyzer", () => {
     mockAnthropicResponse({
       text: "I'm not sure how to analyze this email, here are some thoughts...",
     });
-    const { analyzer } = createAnalyzerWithMock();
+    const analyzer = createAnalyzerWithMock();
     const email = makeEmail();
 
     const result = await analyzer.analyze(email);
@@ -155,7 +154,7 @@ test.describe("EmailAnalyzer", () => {
     mockAnthropicResponse({
       text: '{"needs_reply": false, "reason": "test"}',
     });
-    const { analyzer } = createAnalyzerWithMock();
+    const analyzer = createAnalyzerWithMock();
     const email = makeEmail();
 
     await analyzer.analyze(email, "user@company.com");
@@ -169,7 +168,7 @@ test.describe("EmailAnalyzer", () => {
     mockAnthropicResponse({
       text: '{"needs_reply": false, "reason": "test"}',
     });
-    const { analyzer } = createAnalyzerWithMock();
+    const analyzer = createAnalyzerWithMock();
     const email = makeEmail();
 
     await analyzer.analyze(email);
@@ -183,7 +182,7 @@ test.describe("EmailAnalyzer", () => {
     mockAnthropicResponse({
       text: '{"needs_reply": false, "reason": "test"}',
     });
-    const { analyzer } = createAnalyzerWithMock();
+    const analyzer = createAnalyzerWithMock();
     const longBody = "A".repeat(5000);
     const email = makeEmail({ body: longBody });
 
@@ -201,7 +200,7 @@ test.describe("EmailAnalyzer", () => {
     mockAnthropicResponse({
       text: '{"needs_reply": true, "reason": "Direct question", "priority": "medium"}',
     });
-    const { analyzer } = createAnalyzerWithMock();
+    const analyzer = createAnalyzerWithMock();
     const email = makeEmail({
       body: "Can you review the budget?\n\nOn Jan 10, 2025, Bob wrote:\n> Here is the budget doc\n> Please take a look",
     });

@@ -12,7 +12,7 @@ let electronApp: ElectronApplication;
 let page: Page;
 
 test.describe("Exo Integration Tests", () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: "serial" });
 
   test.beforeAll(async () => {
     // Launch the Electron app in test mode
@@ -54,7 +54,11 @@ test.describe("Exo Integration Tests", () => {
           }),
         ]);
       } catch {
-        try { if (pid) process.kill(pid, "SIGKILL"); } catch { /* already exited */ }
+        try {
+          if (pid) process.kill(pid, "SIGKILL");
+        } catch {
+          /* already exited */
+        }
       } finally {
         if (timer) clearTimeout(timer);
       }
@@ -358,13 +362,13 @@ test.describe("Mock Analyzer Tests", () => {
     const analyzer = new MockEmailAnalyzer();
 
     // Test high-priority email
-    const email1 = FAKE_INBOX_EMAILS.find(e => e.id === "msg-001")!;
+    const email1 = FAKE_INBOX_EMAILS.find((e) => e.id === "msg-001")!;
     const result1 = await analyzer.analyze(email1);
     expect(result1.needs_reply).toBe(true);
     expect(result1.priority).toBe("high");
 
     // Test newsletter (no reply needed)
-    const email4 = FAKE_INBOX_EMAILS.find(e => e.id === "msg-004")!;
+    const email4 = FAKE_INBOX_EMAILS.find((e) => e.id === "msg-004")!;
     const result4 = await analyzer.analyze(email4);
     expect(result4.needs_reply).toBe(false);
   });

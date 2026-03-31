@@ -27,18 +27,12 @@ test.describe("Dark Mode Coverage Gaps", () => {
   }
 
   // Helper: check a color is "dark" (all channels below threshold)
-  function isDark(
-    rgb: [number, number, number],
-    threshold: number = 80,
-  ): boolean {
+  function isDark(rgb: [number, number, number], threshold: number = 80): boolean {
     return rgb[0] < threshold && rgb[1] < threshold && rgb[2] < threshold;
   }
 
   // Helper: check a color is "light" (all channels above threshold)
-  function isLight(
-    rgb: [number, number, number],
-    threshold: number = 140,
-  ): boolean {
+  function isLight(rgb: [number, number, number], threshold: number = 140): boolean {
     return rgb[0] > threshold && rgb[1] > threshold && rgb[2] > threshold;
   }
 
@@ -93,11 +87,10 @@ test.describe("Dark Mode Coverage Gaps", () => {
   test("offline banner has dark amber styling", async () => {
     // Inject offline state via Zustand store
     await page.evaluate(() => {
-      const store = (window as Record<string, unknown>)
-        .__ZUSTAND_STORE__ as ReturnType<typeof import("zustand").create>;
-      (store.getState() as Record<string, (v: boolean) => void>).setOnline(
-        false,
-      );
+      const store = (window as Record<string, unknown>).__ZUSTAND_STORE__ as ReturnType<
+        typeof import("zustand").create
+      >;
+      (store.getState() as Record<string, (v: boolean) => void>).setOnline(false);
     });
     await page.waitForTimeout(300);
 
@@ -108,10 +101,7 @@ test.describe("Dark Mode Coverage Gaps", () => {
 
     // Check text color — should be light amber (dark:text-amber-300)
     const textColor = await page.evaluate(() => {
-      const walker = document.createTreeWalker(
-        document.body,
-        NodeFilter.SHOW_TEXT,
-      );
+      const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
       while (walker.nextNode()) {
         if (walker.currentNode.textContent?.includes("You're offline")) {
           const parent = walker.currentNode.parentElement;
@@ -144,11 +134,10 @@ test.describe("Dark Mode Coverage Gaps", () => {
 
     // Restore online state
     await page.evaluate(() => {
-      const store = (window as Record<string, unknown>)
-        .__ZUSTAND_STORE__ as ReturnType<typeof import("zustand").create>;
-      (store.getState() as Record<string, (v: boolean) => void>).setOnline(
-        true,
-      );
+      const store = (window as Record<string, unknown>).__ZUSTAND_STORE__ as ReturnType<
+        typeof import("zustand").create
+      >;
+      (store.getState() as Record<string, (v: boolean) => void>).setOnline(true);
     });
     await page.waitForTimeout(300);
 
@@ -159,18 +148,19 @@ test.describe("Dark Mode Coverage Gaps", () => {
   test("auth expired banner has dark amber styling", async () => {
     // Get current account ID
     const accountId = await page.evaluate(() => {
-      const store = (window as Record<string, unknown>)
-        .__ZUSTAND_STORE__ as ReturnType<typeof import("zustand").create>;
-      return (store.getState() as Record<string, string | null>)
-        .currentAccountId;
+      const store = (window as Record<string, unknown>).__ZUSTAND_STORE__ as ReturnType<
+        typeof import("zustand").create
+      >;
+      return (store.getState() as Record<string, string | null>).currentAccountId;
     });
 
     expect(accountId).not.toBeNull();
 
     // Inject expired account state
     await page.evaluate((id: string) => {
-      const store = (window as Record<string, unknown>)
-        .__ZUSTAND_STORE__ as ReturnType<typeof import("zustand").create>;
+      const store = (window as Record<string, unknown>).__ZUSTAND_STORE__ as ReturnType<
+        typeof import("zustand").create
+      >;
       (store.getState() as Record<string, (v: string) => void>).addExpiredAccount(id);
     }, accountId!);
     await page.waitForTimeout(300);
@@ -184,8 +174,8 @@ test.describe("Dark Mode Coverage Gaps", () => {
     const reauthButton = page.locator("button:has-text('Re-authenticate')");
     await expect(reauthButton).toBeVisible();
 
-    const buttonBg = await reauthButton.evaluate((el) =>
-      window.getComputedStyle(el).backgroundColor,
+    const buttonBg = await reauthButton.evaluate(
+      (el) => window.getComputedStyle(el).backgroundColor,
     );
     const buttonRgb = parseRgb(buttonBg);
     // dark:bg-amber-800 — should not be white/light
@@ -193,10 +183,7 @@ test.describe("Dark Mode Coverage Gaps", () => {
 
     // Check banner text color — dark:text-amber-300
     const bannerTextColor = await page.evaluate(() => {
-      const walker = document.createTreeWalker(
-        document.body,
-        NodeFilter.SHOW_TEXT,
-      );
+      const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
       while (walker.nextNode()) {
         if (walker.currentNode.textContent?.includes("session expired")) {
           const parent = walker.currentNode.parentElement;
@@ -213,8 +200,9 @@ test.describe("Dark Mode Coverage Gaps", () => {
 
     // Cleanup
     await page.evaluate((id: string) => {
-      const store = (window as Record<string, unknown>)
-        .__ZUSTAND_STORE__ as ReturnType<typeof import("zustand").create>;
+      const store = (window as Record<string, unknown>).__ZUSTAND_STORE__ as ReturnType<
+        typeof import("zustand").create
+      >;
       (store.getState() as Record<string, (v: string) => void>).removeExpiredAccount(id);
     }, accountId!);
     await page.waitForTimeout(300);
@@ -225,14 +213,14 @@ test.describe("Dark Mode Coverage Gaps", () => {
   test("batch action bar has dark blue styling", async () => {
     // Select two threads via store injection for reliability
     const threadIds = await page.evaluate(() => {
-      const store = (window as Record<string, unknown>)
-        .__ZUSTAND_STORE__ as ReturnType<typeof import("zustand").create>;
+      const store = (window as Record<string, unknown>).__ZUSTAND_STORE__ as ReturnType<
+        typeof import("zustand").create
+      >;
       const state = store.getState() as Record<string, unknown>;
       const emails = state.emails as Array<{ threadId: string }>;
       // Get first 2 unique threadIds
       const ids = [...new Set(emails.map((e) => e.threadId))].slice(0, 2);
-      const toggle = (state as Record<string, (v: string) => void>)
-        .toggleThreadSelected;
+      const toggle = (state as Record<string, (v: string) => void>).toggleThreadSelected;
       for (const id of ids) {
         toggle(id);
       }
@@ -249,9 +237,7 @@ test.describe("Dark Mode Coverage Gaps", () => {
     // Check the bar has dark blue background — dark:bg-blue-900/30
     // blue-900 is rgb(30, 58, 138) at 30% opacity — blue channel is high but it's
     // a dark color. Check R and G are low, and overall brightness is low.
-    const barBg = await batchBar.evaluate((el) =>
-      window.getComputedStyle(el).backgroundColor,
-    );
+    const barBg = await batchBar.evaluate((el) => window.getComputedStyle(el).backgroundColor);
     expect(barBg).not.toBeNull();
     const bgRgb = parseRgb(barBg);
     // R and G channels should be low (dark blue tint, not white/light)
@@ -262,16 +248,14 @@ test.describe("Dark Mode Coverage Gaps", () => {
 
     // Check selection text color — dark:text-blue-300
     const selText = batchBar.locator("text=selected");
-    const textColor = await selText.evaluate((el) =>
-      window.getComputedStyle(el).color,
-    );
+    const textColor = await selText.evaluate((el) => window.getComputedStyle(el).color);
     const textRgb = parseRgb(textColor);
     // blue-300 ≈ (147, 197, 253) — blue channel should be high
     expect(textRgb[2]).toBeGreaterThan(150);
 
     // Check border color — dark:border-blue-800
-    const borderColor = await batchBar.evaluate((el) =>
-      window.getComputedStyle(el).borderBottomColor,
+    const borderColor = await batchBar.evaluate(
+      (el) => window.getComputedStyle(el).borderBottomColor,
     );
     if (borderColor) {
       const borderRgb = parseRgb(borderColor);
@@ -281,11 +265,10 @@ test.describe("Dark Mode Coverage Gaps", () => {
 
     // Cleanup — clear selection
     await page.evaluate(() => {
-      const store = (window as Record<string, unknown>)
-        .__ZUSTAND_STORE__ as ReturnType<typeof import("zustand").create>;
-      (
-        store.getState() as Record<string, () => void>
-      ).clearSelectedThreads();
+      const store = (window as Record<string, unknown>).__ZUSTAND_STORE__ as ReturnType<
+        typeof import("zustand").create
+      >;
+      (store.getState() as Record<string, () => void>).clearSelectedThreads();
     });
     await page.waitForTimeout(300);
 
@@ -294,10 +277,7 @@ test.describe("Dark Mode Coverage Gaps", () => {
 
   test("attachment chips have dark borders and text", async () => {
     // Click the Q3 Quarterly Report email (has attachments in demo data)
-    const reportEmail = page
-      .locator("button")
-      .filter({ hasText: "Q3 Quarterly Report" })
-      .first();
+    const reportEmail = page.locator("button").filter({ hasText: "Q3 Quarterly Report" }).first();
     await expect(reportEmail).toBeVisible({ timeout: 5000 });
     await reportEmail.click();
     await page.waitForTimeout(500);
@@ -337,14 +317,9 @@ test.describe("Dark Mode Coverage Gaps", () => {
 
     // Check filename text color — dark:text-gray-300 ≈ (209, 213, 219)
     const filenameColor = await page.evaluate(() => {
-      const walker = document.createTreeWalker(
-        document.body,
-        NodeFilter.SHOW_TEXT,
-      );
+      const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
       while (walker.nextNode()) {
-        if (
-          walker.currentNode.textContent?.includes("Q3_Report_2025.pdf")
-        ) {
+        if (walker.currentNode.textContent?.includes("Q3_Report_2025.pdf")) {
           const parent = walker.currentNode.parentElement;
           if (parent) return window.getComputedStyle(parent).color;
         }
@@ -369,19 +344,12 @@ test.describe("Dark Mode Coverage Gaps", () => {
       const inputs = document.querySelectorAll("input[placeholder]");
       for (const input of inputs) {
         const ph = (input as HTMLInputElement).placeholder.toLowerCase();
-        if (
-          ph.includes("to") ||
-          ph.includes("recipient") ||
-          ph.includes("email")
-        ) {
+        if (ph.includes("to") || ph.includes("recipient") || ph.includes("email")) {
           return true;
         }
       }
       // Look for "Forward" text
-      const walker = document.createTreeWalker(
-        document.body,
-        NodeFilter.SHOW_TEXT,
-      );
+      const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
       while (walker.nextNode()) {
         if (walker.currentNode.textContent?.trim() === "Forward") return true;
       }
@@ -392,9 +360,7 @@ test.describe("Dark Mode Coverage Gaps", () => {
 
     // Check compose area has dark background
     const composeBg = await page.evaluate(() => {
-      const editables = document.querySelectorAll(
-        '[contenteditable="true"], textarea',
-      );
+      const editables = document.querySelectorAll('[contenteditable="true"], textarea');
       for (const ta of editables) {
         let el: Element | null = ta;
         while (el) {
@@ -416,11 +382,7 @@ test.describe("Dark Mode Coverage Gaps", () => {
       const inputs = document.querySelectorAll("input[placeholder]");
       for (const input of inputs) {
         const ph = (input as HTMLInputElement).placeholder.toLowerCase();
-        if (
-          ph.includes("to") ||
-          ph.includes("recipient") ||
-          ph.includes("email")
-        ) {
+        if (ph.includes("to") || ph.includes("recipient") || ph.includes("email")) {
           return window.getComputedStyle(input).backgroundColor;
         }
       }
@@ -449,7 +411,11 @@ test.describe("Dark Mode Coverage Gaps", () => {
     await page.waitForTimeout(500);
 
     // Fill in To field to enable the Schedule button
-    const toInput = page.locator("input[placeholder*='ecipient'], input[placeholder*='mail'], input[placeholder*='To']").first();
+    const toInput = page
+      .locator(
+        "input[placeholder*='ecipient'], input[placeholder*='mail'], input[placeholder*='To']",
+      )
+      .first();
     await expect(toInput).toBeVisible({ timeout: 5000 });
     await toInput.fill("test@example.com");
     await page.keyboard.press("Enter");
@@ -479,10 +445,7 @@ test.describe("Dark Mode Coverage Gaps", () => {
         "Pick date & time",
       ];
       for (const p of presets) {
-        const walker = document.createTreeWalker(
-          document.body,
-          NodeFilter.SHOW_TEXT,
-        );
+        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
         while (walker.nextNode()) {
           if (walker.currentNode.textContent?.includes(p)) return true;
         }
@@ -496,10 +459,7 @@ test.describe("Dark Mode Coverage Gaps", () => {
     const dropdownBg = await page.evaluate(() => {
       const dropdowns = document.querySelectorAll('[class*="shadow-lg"]');
       for (const dd of dropdowns) {
-        if (
-          dd.textContent?.includes("Tomorrow") ||
-          dd.textContent?.includes("Pick date")
-        ) {
+        if (dd.textContent?.includes("Tomorrow") || dd.textContent?.includes("Pick date")) {
           return window.getComputedStyle(dd).backgroundColor;
         }
       }
@@ -514,10 +474,7 @@ test.describe("Dark Mode Coverage Gaps", () => {
     const dropdownBorder = await page.evaluate(() => {
       const dropdowns = document.querySelectorAll('[class*="shadow-lg"]');
       for (const dd of dropdowns) {
-        if (
-          dd.textContent?.includes("Tomorrow") ||
-          dd.textContent?.includes("Pick date")
-        ) {
+        if (dd.textContent?.includes("Tomorrow") || dd.textContent?.includes("Pick date")) {
           return window.getComputedStyle(dd).borderColor;
         }
       }
@@ -531,10 +488,7 @@ test.describe("Dark Mode Coverage Gaps", () => {
 
     // Check preset text color — should be readable on dark bg
     const presetColor = await page.evaluate(() => {
-      const walker = document.createTreeWalker(
-        document.body,
-        NodeFilter.SHOW_TEXT,
-      );
+      const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
       while (walker.nextNode()) {
         if (walker.currentNode.textContent?.includes("Tomorrow morning")) {
           const parent = walker.currentNode.parentElement;
@@ -586,8 +540,7 @@ test.describe("Dark Mode Coverage Gaps", () => {
       const inputs = document.querySelectorAll("input");
       for (const input of inputs) {
         if ((input as HTMLInputElement).placeholder?.includes("Work")) {
-          let el: Element | null =
-            input.closest(".rounded-lg") || input.parentElement;
+          let el: Element | null = input.closest(".rounded-lg") || input.parentElement;
           while (el) {
             const bg = window.getComputedStyle(el).backgroundColor;
             if (bg && bg !== "rgba(0, 0, 0, 0)") return bg;
@@ -604,9 +557,7 @@ test.describe("Dark Mode Coverage Gaps", () => {
 
     // Check input field styling — dark:bg-gray-700, dark:border-gray-600, dark:text-gray-100
     const inputStyle = await page.evaluate(() => {
-      const input = document.querySelector(
-        "input[placeholder*='Work']",
-      ) as HTMLInputElement;
+      const input = document.querySelector("input[placeholder*='Work']") as HTMLInputElement;
       if (!input) return null;
       const style = window.getComputedStyle(input);
       return {

@@ -74,12 +74,16 @@ test.describe("Compose View - CC/BCC Toggle", () => {
     const ccInput = page.locator("[data-testid='address-input-cc'] input[type='text']");
     await ccInput.fill("cc@example.com");
     await ccInput.press("Enter");
-    await expect(page.locator("[data-testid='address-chip']").filter({ hasText: "cc@example.com" })).toBeVisible({ timeout: 3000 });
+    await expect(
+      page.locator("[data-testid='address-chip']").filter({ hasText: "cc@example.com" }),
+    ).toBeVisible({ timeout: 3000 });
 
     const bccInput = page.locator("[data-testid='address-input-bcc'] input[type='text']");
     await bccInput.fill("bcc@example.com");
     await bccInput.press("Enter");
-    await expect(page.locator("[data-testid='address-chip']").filter({ hasText: "bcc@example.com" })).toBeVisible({ timeout: 3000 });
+    await expect(
+      page.locator("[data-testid='address-chip']").filter({ hasText: "bcc@example.com" }),
+    ).toBeVisible({ timeout: 3000 });
   });
 
   test("send with CC/BCC works after expanding", async () => {

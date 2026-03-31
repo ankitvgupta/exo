@@ -14,7 +14,7 @@ type EmailSignals = {
 };
 
 function detectGreeting(text: string): string {
-  const firstLine = text.split("\n").find(l => l.trim().length > 0) ?? "";
+  const firstLine = text.split("\n").find((l) => l.trim().length > 0) ?? "";
   const lower = firstLine.toLowerCase().trim();
 
   if (/^dear\b/.test(lower)) return "dear";
@@ -36,7 +36,7 @@ function detectSignoff(text: string): string {
 }
 
 function countWords(text: string): number {
-  return text.split(/\s+/).filter(w => w.length > 0).length;
+  return text.split(/\s+/).filter((w) => w.length > 0).length;
 }
 
 function extractEmailSignals(bodyText: string): EmailSignals {
@@ -104,7 +104,9 @@ test.describe("signoff detection", () => {
   });
 
   test("detects 'regards' signoff", () => {
-    const signals = extractEmailSignals("Please let me know if you have questions.\n\nKind regards,\nCarol");
+    const signals = extractEmailSignals(
+      "Please let me know if you have questions.\n\nKind regards,\nCarol",
+    );
     expect(signals.signoff).toBe("regards");
   });
 

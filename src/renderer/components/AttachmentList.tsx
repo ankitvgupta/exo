@@ -5,10 +5,24 @@ declare global {
   interface Window {
     api: {
       attachments: {
-        download: (emailId: string, attachmentId: string, filename: string, accountId: string) => Promise<IpcResponse<{ filePath: string }>>;
-        preview: (emailId: string, attachmentId: string, accountId: string) => Promise<IpcResponse<{ data: string }>>;
-        pickFiles: () => Promise<IpcResponse<Array<{ filename: string; path: string; mimeType: string; size: number }>>>;
-        getForForward: (emailId: string, accountId: string) => Promise<IpcResponse<Array<{ filename: string; mimeType: string; content: string }>>>;
+        download: (
+          emailId: string,
+          attachmentId: string,
+          filename: string,
+          accountId: string,
+        ) => Promise<IpcResponse<{ filePath: string }>>;
+        preview: (
+          emailId: string,
+          attachmentId: string,
+          accountId: string,
+        ) => Promise<IpcResponse<{ data: string }>>;
+        pickFiles: () => Promise<
+          IpcResponse<Array<{ filename: string; path: string; mimeType: string; size: number }>>
+        >;
+        getForForward: (
+          emailId: string,
+          accountId: string,
+        ) => Promise<IpcResponse<Array<{ filename: string; mimeType: string; content: string }>>>;
       };
     };
   }
@@ -29,25 +43,35 @@ function getFileIcon(mimeType: string): string {
   if (mimeType.includes("sheet") || mimeType.includes("excel")) return "sheet";
   if (mimeType.includes("presentation") || mimeType.includes("powerpoint")) return "slides";
   if (mimeType.startsWith("text/")) return "text";
-  if (mimeType.includes("zip") || mimeType.includes("compress") || mimeType.includes("archive")) return "archive";
+  if (mimeType.includes("zip") || mimeType.includes("compress") || mimeType.includes("archive"))
+    return "archive";
   return "file";
 }
 
 function FileIcon({ type }: { type: string }) {
-  const colorClass = {
-    image: "text-purple-500",
-    pdf: "text-red-500",
-    doc: "text-blue-500",
-    sheet: "text-green-500",
-    slides: "text-orange-500",
-    text: "text-gray-500",
-    archive: "text-yellow-600",
-    file: "text-gray-400",
-  }[type] || "text-gray-400";
+  const colorClass =
+    {
+      image: "text-purple-500",
+      pdf: "text-red-500",
+      doc: "text-blue-500",
+      sheet: "text-green-500",
+      slides: "text-orange-500",
+      text: "text-gray-500",
+      archive: "text-yellow-600",
+      file: "text-gray-400",
+    }[type] || "text-gray-400";
 
   return (
-    <svg className={`w-4 h-4 ${colorClass} flex-shrink-0`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+    <svg
+      className={`w-4 h-4 ${colorClass} flex-shrink-0`}
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={1.5}
         d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"
       />
     </svg>
@@ -128,7 +152,7 @@ export function EmailAttachmentList({
           >
             <FileIcon type={iconType} />
             <button
-              onClick={() => canPreview ? handlePreview(att) : handleDownload(att)}
+              onClick={() => (canPreview ? handlePreview(att) : handleDownload(att))}
               disabled={isPreviewing || isDownloading}
               className="flex-1 min-w-0 text-left cursor-pointer"
               title={canPreview ? "Click to preview" : att.filename}
@@ -150,13 +174,35 @@ export function EmailAttachmentList({
                 >
                   {isPreviewing ? (
                     <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" opacity="0.25" />
-                      <path d="M4 12a8 8 0 018-8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                      <circle
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        opacity="0.25"
+                      />
+                      <path
+                        d="M4 12a8 8 0 018-8"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                      />
                     </svg>
                   ) : (
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={1.5}
+                        d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z"
+                      />
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={1.5}
+                        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                      />
                     </svg>
                   )}
                 </button>
@@ -170,12 +216,29 @@ export function EmailAttachmentList({
                 >
                   {isDownloading ? (
                     <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" opacity="0.25" />
-                      <path d="M4 12a8 8 0 018-8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                      <circle
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        opacity="0.25"
+                      />
+                      <path
+                        d="M4 12a8 8 0 018-8"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                      />
                     </svg>
                   ) : (
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={1.5}
+                        d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"
+                      />
                     </svg>
                   )}
                 </button>
@@ -196,8 +259,8 @@ export interface ComposeAttachmentItem {
   filename: string;
   mimeType: string;
   size: number;
-  path?: string;      // local file
-  content?: string;   // base64 content (forwarded)
+  path?: string; // local file
+  content?: string; // base64 content (forwarded)
 }
 
 export function ComposeAttachmentList({
@@ -220,7 +283,10 @@ export function ComposeAttachmentList({
           >
             <FileIcon type={iconType} />
             <div className="flex-1 min-w-0">
-              <div className="text-sm text-gray-700 dark:text-gray-300 truncate" title={att.filename}>
+              <div
+                className="text-sm text-gray-700 dark:text-gray-300 truncate"
+                title={att.filename}
+              >
                 {att.filename}
               </div>
               <div className="text-xs text-gray-400 dark:text-gray-500">
@@ -233,7 +299,12 @@ export function ComposeAttachmentList({
               title="Remove"
             >
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12"
+                />
               </svg>
             </button>
           </div>
@@ -287,7 +358,12 @@ export function AttachmentPreviewModal({
             className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
             </svg>
           </button>
         </div>
@@ -309,7 +385,9 @@ export function AttachmentPreviewModal({
             />
           )}
           {!isImage && !isPdf && (
-            <p className="text-gray-500 dark:text-gray-400">Preview not available for this file type</p>
+            <p className="text-gray-500 dark:text-gray-400">
+              Preview not available for this file type
+            </p>
           )}
         </div>
       </div>

@@ -17,9 +17,7 @@ function filterStaleDrafts(
   threadDrafts: ThreadDraft[],
   excludeEmailIds: Set<string>,
 ): ThreadDraft[] {
-  return threadDrafts.filter(
-    d => !excludeEmailIds.has(d.emailId) && d.status === "pending",
-  );
+  return threadDrafts.filter((d) => !excludeEmailIds.has(d.emailId) && d.status === "pending");
 }
 
 function shouldDeleteFromGmail(draft: ThreadDraft, userReplied: boolean): boolean {
@@ -48,7 +46,7 @@ test.describe("cleanupStaleDraftsForThread logic", () => {
     const excluded = new Set(["e2"]);
     const stale = filterStaleDrafts(drafts, excluded);
     expect(stale).toHaveLength(2);
-    expect(stale.map(d => d.emailId)).toEqual(["e1", "e3"]);
+    expect(stale.map((d) => d.emailId)).toEqual(["e1", "e3"]);
   });
 
   test("only includes drafts with status=pending", () => {
@@ -63,9 +61,7 @@ test.describe("cleanupStaleDraftsForThread logic", () => {
   });
 
   test("returns empty when all drafts are excluded", () => {
-    const drafts: ThreadDraft[] = [
-      { emailId: "e1", status: "pending", gmailDraftId: "gd1" },
-    ];
+    const drafts: ThreadDraft[] = [{ emailId: "e1", status: "pending", gmailDraftId: "gd1" }];
     const stale = filterStaleDrafts(drafts, new Set(["e1"]));
     expect(stale).toHaveLength(0);
   });

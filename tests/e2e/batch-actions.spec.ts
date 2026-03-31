@@ -36,7 +36,7 @@ async function getSelectedRowText(page: Page): Promise<string | null> {
 // Cmd/Ctrl+Click multi-select
 // ---------------------------------------------------------------------------
 test.describe("Batch Actions - Multi-Select", () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: "serial" });
   let electronApp: ElectronApplication;
   let page: Page;
 
@@ -137,7 +137,7 @@ test.describe("Batch Actions - Multi-Select", () => {
 // Keyboard multi-select with 'x'
 // ---------------------------------------------------------------------------
 test.describe("Batch Actions - Keyboard Select (x)", () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: "serial" });
   let electronApp: ElectronApplication;
   let page: Page;
 
@@ -203,7 +203,7 @@ test.describe("Batch Actions - Keyboard Select (x)", () => {
 // Cmd+A select all
 // ---------------------------------------------------------------------------
 test.describe("Batch Actions - Select All (Cmd+A)", () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: "serial" });
   let electronApp: ElectronApplication;
   let page: Page;
 
@@ -251,7 +251,7 @@ test.describe("Batch Actions - Select All (Cmd+A)", () => {
 // Batch archive
 // ---------------------------------------------------------------------------
 test.describe("Batch Actions - Archive Multiple", () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: "serial" });
   let electronApp: ElectronApplication;
   let page: Page;
 
@@ -338,7 +338,7 @@ test.describe("Batch Actions - Archive Multiple", () => {
 // Batch trash
 // ---------------------------------------------------------------------------
 test.describe("Batch Actions - Trash Multiple", () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: "serial" });
   let electronApp: ElectronApplication;
   let page: Page;
 
@@ -414,7 +414,7 @@ test.describe("Batch Actions - Trash Multiple", () => {
 // Batch mark unread
 // ---------------------------------------------------------------------------
 test.describe("Batch Actions - Mark Unread", () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: "serial" });
   let electronApp: ElectronApplication;
   let page: Page;
 
@@ -461,7 +461,7 @@ test.describe("Batch Actions - Mark Unread", () => {
 // Shift+click range select
 // ---------------------------------------------------------------------------
 test.describe("Batch Actions - Shift+Click Range Select", () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: "serial" });
   let electronApp: ElectronApplication;
   let page: Page;
 
@@ -509,7 +509,7 @@ test.describe("Batch Actions - Shift+Click Range Select", () => {
 // Checkbox direct click
 // ---------------------------------------------------------------------------
 test.describe("Batch Actions - Checkbox Click", () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: "serial" });
   let electronApp: ElectronApplication;
   let page: Page;
 
@@ -557,7 +557,7 @@ test.describe("Batch Actions - Checkbox Click", () => {
 // Select All button in batch bar
 // ---------------------------------------------------------------------------
 test.describe("Batch Actions - Select All Button", () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: "serial" });
   let electronApp: ElectronApplication;
   let page: Page;
 

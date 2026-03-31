@@ -3,7 +3,21 @@ import { join } from "path";
 import { mkdirSync, existsSync } from "fs";
 import { getDataDir } from "../data-dir";
 import { SCHEMA, FTS5_SCHEMA, FTS5_TRIGGERS } from "./schema";
-import type { DashboardEmail, SentEmail, StyleSample, Email, CorrespondentProfile, Memory, MemoryScope, MemorySource, MemoryType, DraftMemory } from "../../shared/types";
+import type {
+  DashboardEmail,
+  SentEmail,
+  StyleSample,
+  Email,
+  CorrespondentProfile,
+  Memory,
+  MemoryScope,
+  MemorySource,
+  MemoryType,
+  DraftMemory,
+} from "../../shared/types";
+import { createLogger } from "../services/logger";
+
+const log = createLogger("db");
 
 // Use createRequire to load native module at runtime
 const require = createRequire(import.meta.url);
@@ -18,10 +32,11 @@ export function initDatabase(): DatabaseInstance {
   const isDemoMode = process.env.EXO_DEMO_MODE === "true";
   const isTestMode = process.env.EXO_TEST_MODE === "true";
   // Per-worker database isolation for parallel E2E tests
-  const workerSuffix = (isDemoMode || isTestMode) && process.env.TEST_WORKER_INDEX
-    ? `-w${process.env.TEST_WORKER_INDEX}`
-    : "";
-  const dbFilename = (isDemoMode || isTestMode) ? `exo-demo${workerSuffix}.db` : "exo.db";
+  const workerSuffix =
+    (isDemoMode || isTestMode) && process.env.TEST_WORKER_INDEX
+      ? `-w${process.env.TEST_WORKER_INDEX}`
+      : "";
+  const dbFilename = isDemoMode || isTestMode ? `exo-demo${workerSuffix}.db` : "exo.db";
 
   const userDataPath = getDataDir();
   const dbDir = join(userDataPath, "data");
@@ -32,7 +47,7 @@ export function initDatabase(): DatabaseInstance {
   }
 
   const dbPath = join(dbDir, dbFilename);
-  console.log(`[DB] Using database: ${dbPath}${(isDemoMode || isTestMode) ? " (demo/test mode)" : ""}`);
+  log.info(`[DB] Using database: ${dbPath}${isDemoMode || isTestMode ? " (demo/test mode)" : ""}`);
   db = new Database(dbPath);
 
   // Enable WAL mode for better concurrent access
@@ -64,7 +79,7 @@ function initFTS5(db: DatabaseInstance): void {
         .get() as { sql: string } | undefined;
 
       if (ftsCreateSql?.sql && /porter/i.test(ftsCreateSql.sql)) {
-        console.log("[DB] Migrating FTS5 from porter tokenizer to unicode61");
+        log.info("[DB] Migrating FTS5 from porter tokenizer to unicode61");
 
         // Drop old triggers, FTS table, and recreate
         db.exec("DROP TRIGGER IF EXISTS emails_fts_insert");
@@ -79,31 +94,35 @@ function initFTS5(db: DatabaseInstance): void {
         backfillBodyText(db);
 
         // Populate FTS with body_text
-        console.log("[DB] Populating FTS5 index from existing emails (post-migration)");
+        log.info("[DB] Populating FTS5 index from existing emails (post-migration)");
         db.exec(`
           INSERT INTO emails_fts(rowid, subject, body_text, from_address, to_address)
           SELECT rowid, subject, COALESCE(body_text, body), from_address, to_address FROM emails
         `);
-        console.log("[DB] FTS5 migration complete");
+        log.info("[DB] FTS5 migration complete");
       } else {
         // Ensure triggers exist (may be missing if a previous migration was interrupted)
         db.exec(FTS5_TRIGGERS);
 
         // Check if FTS index is empty while emails exist — repopulate if so
-        const ftsCount = (db.prepare("SELECT COUNT(*) as cnt FROM emails_fts").get() as { cnt: number }).cnt;
-        const emailCount = (db.prepare("SELECT COUNT(*) as cnt FROM emails").get() as { cnt: number }).cnt;
+        const ftsCount = (
+          db.prepare("SELECT COUNT(*) as cnt FROM emails_fts").get() as { cnt: number }
+        ).cnt;
+        const emailCount = (
+          db.prepare("SELECT COUNT(*) as cnt FROM emails").get() as { cnt: number }
+        ).cnt;
         if (ftsCount === 0 && emailCount > 0) {
-          console.log(`[DB] FTS5 index is empty but ${emailCount} emails exist — repopulating`);
+          log.info(`[DB] FTS5 index is empty but ${emailCount} emails exist — repopulating`);
           backfillBodyText(db);
           db.exec(`
             INSERT INTO emails_fts(rowid, subject, body_text, from_address, to_address)
             SELECT rowid, subject, COALESCE(body_text, body), from_address, to_address FROM emails
           `);
-          console.log("[DB] FTS5 index repopulated");
+          log.info("[DB] FTS5 index repopulated");
         }
       }
     } else {
-      console.log("[DB] Creating FTS5 search index");
+      log.info("[DB] Creating FTS5 search index");
 
       // Create FTS5 virtual table
       db.exec(FTS5_SCHEMA);
@@ -115,15 +134,15 @@ function initFTS5(db: DatabaseInstance): void {
       backfillBodyText(db);
 
       // Populate FTS with existing emails
-      console.log("[DB] Populating FTS5 index from existing emails");
+      log.info("[DB] Populating FTS5 index from existing emails");
       db.exec(`
         INSERT INTO emails_fts(rowid, subject, body_text, from_address, to_address)
         SELECT rowid, subject, COALESCE(body_text, body), from_address, to_address FROM emails
       `);
-      console.log("[DB] FTS5 search index created and populated");
+      log.info("[DB] FTS5 search index created and populated");
     }
   } catch (error) {
-    console.error("[DB] Failed to initialize FTS5:", error);
+    log.error({ err: error }, "[DB] Failed to initialize FTS5");
   }
 }
 
@@ -132,10 +151,13 @@ function initFTS5(db: DatabaseInstance): void {
  * Reads HTML body, strips tags, and writes plain text.
  */
 function backfillBodyText(db: DatabaseInstance): void {
-  const rows = db.prepare("SELECT rowid, body FROM emails WHERE body_text IS NULL").all() as Array<{ rowid: number; body: string }>;
+  const rows = db.prepare("SELECT rowid, body FROM emails WHERE body_text IS NULL").all() as Array<{
+    rowid: number;
+    body: string;
+  }>;
   if (rows.length === 0) return;
 
-  console.log(`[DB] Backfilling body_text for ${rows.length} emails`);
+  log.info(`[DB] Backfilling body_text for ${rows.length} emails`);
   const updateStmt = db.prepare("UPDATE emails SET body_text = ? WHERE rowid = ?");
   const runAll = db.transaction(() => {
     for (const row of rows) {
@@ -143,7 +165,7 @@ function backfillBodyText(db: DatabaseInstance): void {
     }
   });
   runAll();
-  console.log("[DB] body_text backfill complete");
+  log.info("[DB] body_text backfill complete");
 }
 
 function runMigrations(db: DatabaseInstance): void {
@@ -153,7 +175,7 @@ function runMigrations(db: DatabaseInstance): void {
 
   if (tableInfo.length > 0 && !hasAccountId) {
     // Migration: Add account_id column to existing emails table
-    console.log("[DB] Running migration: Adding account_id column to emails table");
+    log.info("[DB] Running migration: Adding account_id column to emails table");
     db.exec("ALTER TABLE emails ADD COLUMN account_id TEXT DEFAULT 'default'");
   }
 
@@ -165,18 +187,22 @@ function runMigrations(db: DatabaseInstance): void {
   }
 
   // Check if extension_enrichments table exists and has sender_email column
-  const enrichmentsTableInfo = db.prepare("PRAGMA table_info(extension_enrichments)").all() as Array<{ name: string }>;
+  const enrichmentsTableInfo = db
+    .prepare("PRAGMA table_info(extension_enrichments)")
+    .all() as Array<{ name: string }>;
   const hasSenderEmail = enrichmentsTableInfo.some((col) => col.name === "sender_email");
 
   if (enrichmentsTableInfo.length > 0 && !hasSenderEmail) {
     // Migration: Add sender_email column to existing extension_enrichments table
-    console.log("[DB] Running migration: Adding sender_email column to extension_enrichments table");
+    log.info("[DB] Running migration: Adding sender_email column to extension_enrichments table");
     db.exec("ALTER TABLE extension_enrichments ADD COLUMN sender_email TEXT");
   }
 
   // Create index for sender_email lookups
   try {
-    db.exec("CREATE INDEX IF NOT EXISTS idx_extension_enrichments_sender ON extension_enrichments(sender_email, extension_id)");
+    db.exec(
+      "CREATE INDEX IF NOT EXISTS idx_extension_enrichments_sender ON extension_enrichments(sender_email, extension_id)",
+    );
   } catch {
     // Index might already exist, ignore
   }
@@ -185,28 +211,30 @@ function runMigrations(db: DatabaseInstance): void {
   const hasLabelIds = tableInfo.some((col) => col.name === "label_ids");
   if (tableInfo.length > 0 && !hasLabelIds) {
     // Migration: Add label_ids column to existing emails table
-    console.log("[DB] Running migration: Adding label_ids column to emails table");
+    log.info("[DB] Running migration: Adding label_ids column to emails table");
     db.exec("ALTER TABLE emails ADD COLUMN label_ids TEXT");
   }
 
   // Check if emails table has cc_address column
   const hasCcAddress = tableInfo.some((col) => col.name === "cc_address");
   if (tableInfo.length > 0 && !hasCcAddress) {
-    console.log("[DB] Running migration: Adding cc_address column to emails table");
+    log.info("[DB] Running migration: Adding cc_address column to emails table");
     db.exec("ALTER TABLE emails ADD COLUMN cc_address TEXT");
   }
 
   const hasBccAddress = tableInfo.some((col) => col.name === "bcc_address");
   if (tableInfo.length > 0 && !hasBccAddress) {
-    console.log("[DB] Running migration: Adding bcc_address column to emails table");
+    log.info("[DB] Running migration: Adding bcc_address column to emails table");
     db.exec("ALTER TABLE emails ADD COLUMN bcc_address TEXT");
   }
 
   // Check if calendar_sync_state table has visible column
-  const calSyncTableInfo = db.prepare("PRAGMA table_info(calendar_sync_state)").all() as Array<{ name: string }>;
+  const calSyncTableInfo = db.prepare("PRAGMA table_info(calendar_sync_state)").all() as Array<{
+    name: string;
+  }>;
   const hasCalSyncVisible = calSyncTableInfo.some((col) => col.name === "visible");
   if (calSyncTableInfo.length > 0 && !hasCalSyncVisible) {
-    console.log("[DB] Running migration: Adding visible column to calendar_sync_state table");
+    log.info("[DB] Running migration: Adding visible column to calendar_sync_state table");
     db.exec("ALTER TABLE calendar_sync_state ADD COLUMN visible INTEGER DEFAULT 1");
   }
 
@@ -215,15 +243,17 @@ function runMigrations(db: DatabaseInstance): void {
   const tableInfoRefresh = db.prepare("PRAGMA table_info(emails)").all() as Array<{ name: string }>;
   const hasBodyText = tableInfoRefresh.some((col) => col.name === "body_text");
   if (tableInfoRefresh.length > 0 && !hasBodyText) {
-    console.log("[DB] Running migration: Adding body_text column to emails table");
+    log.info("[DB] Running migration: Adding body_text column to emails table");
     db.exec("ALTER TABLE emails ADD COLUMN body_text TEXT");
   }
 
   // Check if emails table has attachments column
-  const tableInfoForAttachments = db.prepare("PRAGMA table_info(emails)").all() as Array<{ name: string }>;
+  const tableInfoForAttachments = db.prepare("PRAGMA table_info(emails)").all() as Array<{
+    name: string;
+  }>;
   const hasAttachments = tableInfoForAttachments.some((col) => col.name === "attachments");
   if (tableInfoForAttachments.length > 0 && !hasAttachments) {
-    console.log("[DB] Running migration: Adding attachments column to emails table");
+    log.info("[DB] Running migration: Adding attachments column to emails table");
     db.exec("ALTER TABLE emails ADD COLUMN attachments TEXT");
   }
 
@@ -231,7 +261,7 @@ function runMigrations(db: DatabaseInstance): void {
   const outboxTableInfo = db.prepare("PRAGMA table_info(outbox)").all() as Array<{ name: string }>;
   const outboxHasAttachments = outboxTableInfo.some((col) => col.name === "attachments");
   if (outboxTableInfo.length > 0 && !outboxHasAttachments) {
-    console.log("[DB] Running migration: Adding attachments column to outbox table");
+    log.info("[DB] Running migration: Adding attachments column to outbox table");
     db.exec("ALTER TABLE outbox ADD COLUMN attachments TEXT");
   }
 
@@ -239,71 +269,161 @@ function runMigrations(db: DatabaseInstance): void {
   const draftsTableInfo = db.prepare("PRAGMA table_info(drafts)").all() as Array<{ name: string }>;
   const hasAgentTaskId = draftsTableInfo.some((col) => col.name === "agent_task_id");
   if (draftsTableInfo.length > 0 && !hasAgentTaskId) {
-    console.log("[DB] Running migration: Adding agent_task_id column to drafts table");
+    log.info("[DB] Running migration: Adding agent_task_id column to drafts table");
     db.exec("ALTER TABLE drafts ADD COLUMN agent_task_id TEXT");
   }
 
   // Check if drafts table has cc/bcc columns
-  const draftsTableInfoRefresh = db.prepare("PRAGMA table_info(drafts)").all() as Array<{ name: string }>;
+  const draftsTableInfoRefresh = db.prepare("PRAGMA table_info(drafts)").all() as Array<{
+    name: string;
+  }>;
   const hasDraftCc = draftsTableInfoRefresh.some((col) => col.name === "cc");
   if (draftsTableInfoRefresh.length > 0 && !hasDraftCc) {
-    console.log("[DB] Running migration: Adding cc column to drafts table");
+    log.info("[DB] Running migration: Adding cc column to drafts table");
     db.exec("ALTER TABLE drafts ADD COLUMN cc TEXT");
   }
   const hasDraftBcc = draftsTableInfoRefresh.some((col) => col.name === "bcc");
   if (draftsTableInfoRefresh.length > 0 && !hasDraftBcc) {
-    console.log("[DB] Running migration: Adding bcc column to drafts table");
+    log.info("[DB] Running migration: Adding bcc column to drafts table");
     db.exec("ALTER TABLE drafts ADD COLUMN bcc TEXT");
   }
 
   // Check if drafts table has compose_mode column (to remember forward vs reply on Esc)
-  const draftsTableInfoForMode = db.prepare("PRAGMA table_info(drafts)").all() as Array<{ name: string }>;
+  const draftsTableInfoForMode = db.prepare("PRAGMA table_info(drafts)").all() as Array<{
+    name: string;
+  }>;
   const hasDraftComposeMode = draftsTableInfoForMode.some((col) => col.name === "compose_mode");
   if (draftsTableInfoForMode.length > 0 && !hasDraftComposeMode) {
-    console.log("[DB] Running migration: Adding compose_mode column to drafts table");
+    log.info("[DB] Running migration: Adding compose_mode column to drafts table");
     db.exec("ALTER TABLE drafts ADD COLUMN compose_mode TEXT");
   }
 
   // Check if drafts table has to_recipients column (for forward recipient persistence)
-  const draftsTableInfoForTo = db.prepare("PRAGMA table_info(drafts)").all() as Array<{ name: string }>;
+  const draftsTableInfoForTo = db.prepare("PRAGMA table_info(drafts)").all() as Array<{
+    name: string;
+  }>;
   const hasDraftToRecipients = draftsTableInfoForTo.some((col) => col.name === "to_recipients");
   if (draftsTableInfoForTo.length > 0 && !hasDraftToRecipients) {
-    console.log("[DB] Running migration: Adding to_recipients column to drafts table");
+    log.info("[DB] Running migration: Adding to_recipients column to drafts table");
     db.exec("ALTER TABLE drafts ADD COLUMN to_recipients TEXT");
   }
 
   // Check if emails table has message_id column (RFC 5322 Message-ID for draft cleanup)
-  const tableInfoForMessageId = db.prepare("PRAGMA table_info(emails)").all() as Array<{ name: string }>;
+  const tableInfoForMessageId = db.prepare("PRAGMA table_info(emails)").all() as Array<{
+    name: string;
+  }>;
   const hasMessageId = tableInfoForMessageId.some((col) => col.name === "message_id");
   if (tableInfoForMessageId.length > 0 && !hasMessageId) {
-    console.log("[DB] Running migration: Adding message_id column to emails table");
+    log.info("[DB] Running migration: Adding message_id column to emails table");
     db.exec("ALTER TABLE emails ADD COLUMN message_id TEXT");
     db.exec("CREATE INDEX IF NOT EXISTS idx_emails_message_id ON emails(message_id)");
   }
 
   // Check if emails table has in_reply_to column (RFC 5322 In-Reply-To for thread merging)
-  const tableInfoForInReplyTo = db.prepare("PRAGMA table_info(emails)").all() as Array<{ name: string }>;
+  const tableInfoForInReplyTo = db.prepare("PRAGMA table_info(emails)").all() as Array<{
+    name: string;
+  }>;
   const hasInReplyTo = tableInfoForInReplyTo.some((col) => col.name === "in_reply_to");
   if (tableInfoForInReplyTo.length > 0 && !hasInReplyTo) {
-    console.log("[DB] Running migration: Adding in_reply_to column to emails table");
+    log.info("[DB] Running migration: Adding in_reply_to column to emails table");
     db.exec("ALTER TABLE emails ADD COLUMN in_reply_to TEXT");
     db.exec("CREATE INDEX IF NOT EXISTS idx_emails_in_reply_to ON emails(in_reply_to)");
   }
 
   // Check if memories table has memory_type column (for distinguishing drafting vs analysis memories)
-  const memoriesTableInfo = db.prepare("PRAGMA table_info(memories)").all() as Array<{ name: string }>;
+  const memoriesTableInfo = db.prepare("PRAGMA table_info(memories)").all() as Array<{
+    name: string;
+  }>;
   const hasMemoryType = memoriesTableInfo.some((col) => col.name === "memory_type");
   if (memoriesTableInfo.length > 0 && !hasMemoryType) {
-    console.log("[DB] Running migration: Adding memory_type column to memories table");
+    log.info("[DB] Running migration: Adding memory_type column to memories table");
     db.exec("ALTER TABLE memories ADD COLUMN memory_type TEXT NOT NULL DEFAULT 'drafting'");
   }
 
   // Check if draft_memories table has memory_type column
-  const draftMemoriesTableInfo = db.prepare("PRAGMA table_info(draft_memories)").all() as Array<{ name: string }>;
+  const draftMemoriesTableInfo = db.prepare("PRAGMA table_info(draft_memories)").all() as Array<{
+    name: string;
+  }>;
   const hasDraftMemoryType = draftMemoriesTableInfo.some((col) => col.name === "memory_type");
   if (draftMemoriesTableInfo.length > 0 && !hasDraftMemoryType) {
-    console.log("[DB] Running migration: Adding memory_type column to draft_memories table");
+    log.info("[DB] Running migration: Adding memory_type column to draft_memories table");
     db.exec("ALTER TABLE draft_memories ADD COLUMN memory_type TEXT NOT NULL DEFAULT 'drafting'");
+  }
+
+  // === Forward-only numbered migration system ===
+  // Existing ad-hoc migrations above are the "baseline" (version 0).
+  // All NEW migrations go through the numbered system below.
+  runNumberedMigrations(db);
+}
+
+// --- Numbered migration system (forward-only, bootstrap baseline) ---
+
+interface Migration {
+  version: number;
+  name: string;
+  up: (db: DatabaseInstance) => void;
+}
+
+// Add new migrations here. Version numbers must be sequential.
+// Existing databases get version 0 (baseline) on first run.
+const NUMBERED_MIGRATIONS: Migration[] = [
+  {
+    version: 1,
+    name: "add_llm_calls_table",
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS llm_calls (
+          id TEXT PRIMARY KEY,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          model TEXT NOT NULL,
+          caller TEXT NOT NULL,
+          email_id TEXT,
+          account_id TEXT,
+          input_tokens INTEGER NOT NULL,
+          output_tokens INTEGER NOT NULL,
+          cache_read_tokens INTEGER DEFAULT 0,
+          cache_create_tokens INTEGER DEFAULT 0,
+          cost_cents REAL NOT NULL,
+          duration_ms INTEGER NOT NULL,
+          success INTEGER NOT NULL DEFAULT 1,
+          error_message TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_llm_calls_created ON llm_calls(created_at);
+        CREATE INDEX IF NOT EXISTS idx_llm_calls_caller ON llm_calls(caller);
+      `);
+    },
+  },
+];
+
+function runNumberedMigrations(db: DatabaseInstance): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS schema_version (
+      version INTEGER NOT NULL UNIQUE,
+      applied_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `);
+
+  const currentRow = db.prepare("SELECT MAX(version) as version FROM schema_version").get() as
+    | { version: number | null }
+    | undefined;
+  let currentVersion = currentRow?.version ?? -1;
+
+  if (currentVersion === -1) {
+    db.prepare("INSERT INTO schema_version (version) VALUES (?)").run(0);
+    currentVersion = 0;
+    log.info({ version: 0 }, "Migration system initialized at baseline");
+  }
+
+  for (const migration of NUMBERED_MIGRATIONS) {
+    if (migration.version > currentVersion) {
+      log.info({ version: migration.version, name: migration.name }, "Running numbered migration");
+      const runInTransaction = db.transaction(() => {
+        migration.up(db);
+        db.prepare("INSERT INTO schema_version (version) VALUES (?)").run(migration.version);
+      });
+      runInTransaction();
+      currentVersion = migration.version;
+    }
   }
 }
 
@@ -323,7 +443,7 @@ export function checkpointWal(): void {
   try {
     db.pragma("wal_checkpoint(PASSIVE)");
   } catch (e) {
-    console.error("[DB] WAL checkpoint failed:", e);
+    log.error({ err: e }, "[DB] WAL checkpoint failed");
   }
 }
 
@@ -336,12 +456,12 @@ export function closeDatabase(): void {
   try {
     db.pragma("wal_checkpoint(TRUNCATE)");
   } catch (e) {
-    console.error("[DB] WAL checkpoint failed during close:", e);
+    log.error({ err: e }, "[DB] WAL checkpoint failed during close");
   }
   try {
     db.close();
   } catch (e) {
-    console.error("[DB] Error closing database:", e);
+    log.error({ err: e }, "[DB] Error closing database");
   }
   db = null;
 }
@@ -363,16 +483,16 @@ export function _testSetDatabase(testDb: DatabaseInstance): void {
  */
 export function stripHtmlForSearch(html: string): string {
   return html
-    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, " ")  // remove style blocks
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, " ") // remove style blocks
     .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, " ") // remove script blocks
-    .replace(/<[^>]+>/g, " ")                            // strip all tags
+    .replace(/<[^>]+>/g, " ") // strip all tags
     .replace(/&nbsp;/gi, " ")
     .replace(/&amp;/gi, "&")
     .replace(/&lt;/gi, "<")
     .replace(/&gt;/gi, ">")
     .replace(/&quot;/gi, '"')
     .replace(/&#39;/gi, "'")
-    .replace(/&[#\w]+;/gi, " ")                          // remaining entities
+    .replace(/&[#\w]+;/gi, " ") // remaining entities
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -391,22 +511,24 @@ export function sanitizeFtsQuery(query: string): string {
   const ftsOperators = new Set(["AND", "OR", "NOT", "NEAR"]);
   const tokens = query.split(/\s+/).filter(Boolean);
 
-  return tokens.map(token => {
-    // Preserve boolean operators
-    if (ftsOperators.has(token.toUpperCase())) {
-      return token.toUpperCase();
-    }
-    // Column filter syntax (from_address:foo) — pass through
-    if (/^(subject|body_text|from_address|to_address):/.test(token)) {
+  return tokens
+    .map((token) => {
+      // Preserve boolean operators
+      if (ftsOperators.has(token.toUpperCase())) {
+        return token.toUpperCase();
+      }
+      // Column filter syntax (from_address:foo) — pass through
+      if (/^(subject|body_text|from_address|to_address):/.test(token)) {
+        return token;
+      }
+      // If token has FTS5 special chars, quote it
+      if (/[*"():^{}+\-]/.test(token)) {
+        // Escape internal double quotes
+        return `"${token.replace(/"/g, '""')}"`;
+      }
       return token;
-    }
-    // If token has FTS5 special chars, quote it
-    if (/[*"():^{}+\-]/.test(token)) {
-      // Escape internal double quotes
-      return `"${token.replace(/"/g, '""')}"`;
-    }
-    return token;
-  }).join(" ");
+    })
+    .join(" ");
 }
 
 // Email operations
@@ -444,7 +566,7 @@ export function saveEmail(email: Email, accountId: string = "default"): void {
     email.labelIds ? JSON.stringify(email.labelIds) : null,
     email.attachments?.length ? JSON.stringify(email.attachments) : null,
     email.messageIdHeader || null,
-    email.inReplyTo || null
+    email.inReplyTo || null,
   );
 
   // New email may create new In-Reply-To links that change thread merge groups
@@ -455,10 +577,7 @@ export function saveEmail(email: Email, accountId: string = "default"): void {
 
 export function updateEmailLabelIds(emailId: string, labelIds: string[]): void {
   const db = getDatabase();
-  db.prepare("UPDATE emails SET label_ids = ? WHERE id = ?").run(
-    JSON.stringify(labelIds),
-    emailId
-  );
+  db.prepare("UPDATE emails SET label_ids = ? WHERE id = ?").run(JSON.stringify(labelIds), emailId);
 }
 
 export function deleteEmail(emailId: string, accountId: string = "default"): void {
@@ -526,7 +645,9 @@ export function getAllEmails(accountId?: string): DashboardEmail[] {
   applyThreadMerge(emails);
 
   const totalTime = performance.now() - t0;
-  console.log(`[PERF] getAllEmails query=${queryTime.toFixed(1)}ms map=${mapTime.toFixed(1)}ms total=${totalTime.toFixed(1)}ms rows=${rows.length}`);
+  log.info(
+    `[PERF] getAllEmails query=${queryTime.toFixed(1)}ms map=${mapTime.toFixed(1)}ms total=${totalTime.toFixed(1)}ms rows=${rows.length}`,
+  );
   return emails;
 }
 
@@ -560,8 +681,8 @@ export function getInboxEmails(accountId?: string): DashboardEmail[] {
     ? `SELECT ${selectCols} ${fromJoins} WHERE (e.label_ids IS NULL OR e.label_ids LIKE '%"INBOX"%') AND e.account_id = ?`
     : `SELECT ${selectCols} ${fromJoins} WHERE (e.label_ids IS NULL OR e.label_ids LIKE '%"INBOX"%')`;
   const inboxRows = accountId
-    ? db.prepare(inboxQuery).all(accountId) as Record<string, unknown>[]
-    : db.prepare(inboxQuery).all() as Record<string, unknown>[];
+    ? (db.prepare(inboxQuery).all(accountId) as Record<string, unknown>[])
+    : (db.prepare(inboxQuery).all() as Record<string, unknown>[]);
 
   // Lightweight query for ALL emails: only thread/message linkage fields.
   // Includes archived emails so canonical thread selection is stable across
@@ -571,8 +692,24 @@ export function getInboxEmails(accountId?: string): DashboardEmail[] {
     ? `SELECT e.id, e.account_id as accountId, e.thread_id as threadId, e.message_id as messageId, e.in_reply_to as inReplyTo, e.date, e.label_ids as labelIds FROM emails e WHERE e.account_id = ?`
     : `SELECT e.id, e.account_id as accountId, e.thread_id as threadId, e.message_id as messageId, e.in_reply_to as inReplyTo, e.date, e.label_ids as labelIds FROM emails e`;
   const allLightRows = accountId
-    ? db.prepare(allLightQuery).all(accountId) as Array<{ id: string; accountId: string; threadId: string; messageId: string | null; inReplyTo: string | null; date: string; labelIds: string | null }>
-    : db.prepare(allLightQuery).all() as Array<{ id: string; accountId: string; threadId: string; messageId: string | null; inReplyTo: string | null; date: string; labelIds: string | null }>;
+    ? (db.prepare(allLightQuery).all(accountId) as Array<{
+        id: string;
+        accountId: string;
+        threadId: string;
+        messageId: string | null;
+        inReplyTo: string | null;
+        date: string;
+        labelIds: string | null;
+      }>)
+    : (db.prepare(allLightQuery).all() as Array<{
+        id: string;
+        accountId: string;
+        threadId: string;
+        messageId: string | null;
+        inReplyTo: string | null;
+        date: string;
+        labelIds: string | null;
+      }>);
   const queryTime = performance.now() - tQuery;
 
   // Map inbox rows to DashboardEmail
@@ -592,7 +729,9 @@ export function getInboxEmails(accountId?: string): DashboardEmail[] {
   // Per-account merge maps to avoid cross-account threadId collisions
   const mergeMaps = new Map<string, Map<string, string>>();
   for (const [acct, accountRows] of lightByAccount) {
-    const mergeInputs: Array<Pick<DashboardEmail, 'threadId' | 'messageId' | 'inReplyTo' | 'date'>> = accountRows.map(r => ({
+    const mergeInputs: Array<
+      Pick<DashboardEmail, "threadId" | "messageId" | "inReplyTo" | "date">
+    > = accountRows.map((r) => ({
       threadId: r.threadId,
       messageId: r.messageId ?? undefined,
       inReplyTo: r.inReplyTo ?? undefined,
@@ -604,15 +743,15 @@ export function getInboxEmails(accountId?: string): DashboardEmail[] {
 
   // Apply merge to inbox emails, scoped by account
   for (const email of inboxEmails) {
-    const acctMap = mergeMaps.get(email.accountId ?? 'default');
+    const acctMap = mergeMaps.get(email.accountId ?? "default");
     if (!acctMap) continue;
     const canonical = acctMap.get(email.threadId);
     if (canonical) email.threadId = canonical;
   }
 
   // Now build inbox thread IDs from merged inbox emails
-  const inboxThreadIds = new Set(inboxEmails.map(e => e.threadId));
-  const inboxIds = new Set(inboxEmails.map(e => e.id));
+  const inboxThreadIds = new Set(inboxEmails.map((e) => e.threadId));
+  const inboxIds = new Set(inboxEmails.map((e) => e.id));
 
   // Find sent emails whose threads (after merging) overlap with inbox threads
   const sentIdsForInbox: string[] = [];
@@ -629,13 +768,13 @@ export function getInboxEmails(accountId?: string): DashboardEmail[] {
   let fullSentEmails: DashboardEmail[] = [];
   if (sentIdsForInbox.length > 0) {
     const placeholders = sentIdsForInbox.map(() => "?").join(",");
-    const fullSentRows = db.prepare(
-      `SELECT ${selectCols} ${fromJoins} WHERE e.id IN (${placeholders})`
-    ).all(...sentIdsForInbox) as Record<string, unknown>[];
+    const fullSentRows = db
+      .prepare(`SELECT ${selectCols} ${fromJoins} WHERE e.id IN (${placeholders})`)
+      .all(...sentIdsForInbox) as Record<string, unknown>[];
     fullSentEmails = fullSentRows.map(rowToDashboardEmail);
     // Apply thread merge to the full sent emails too, scoped by account
     for (const email of fullSentEmails) {
-      const acctMap = mergeMaps.get(email.accountId ?? 'default');
+      const acctMap = mergeMaps.get(email.accountId ?? "default");
       if (!acctMap) continue;
       const canonical = acctMap.get(email.threadId);
       if (canonical) email.threadId = canonical;
@@ -646,7 +785,9 @@ export function getInboxEmails(accountId?: string): DashboardEmail[] {
   const mapTime = performance.now() - tMap;
 
   const totalTime = performance.now() - t0;
-  console.log(`[PERF] getInboxEmails query=${queryTime.toFixed(1)}ms map=${mapTime.toFixed(1)}ms total=${totalTime.toFixed(1)}ms rows=${result.length}`);
+  log.info(
+    `[PERF] getInboxEmails query=${queryTime.toFixed(1)}ms map=${mapTime.toFixed(1)}ms total=${totalTime.toFixed(1)}ms rows=${result.length}`,
+  );
   return result;
 }
 
@@ -676,7 +817,7 @@ export function getSentEmails(accountId: string): DashboardEmail[] {
   const emails = rows.map(rowToDashboardEmail);
 
   const totalTime = performance.now() - t0;
-  console.log(`[PERF] getSentEmails total=${totalTime.toFixed(1)}ms rows=${rows.length}`);
+  log.info(`[PERF] getSentEmails total=${totalTime.toFixed(1)}ms rows=${rows.length}`);
   return emails;
 }
 
@@ -722,7 +863,9 @@ export function getEmailsByIds(ids: string[]): DashboardEmail[] {
   if (ids.length === 0) return [];
   const db = getDatabase();
   const placeholders = ids.map(() => "?").join(",");
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(
+      `
     SELECT
       e.id, e.account_id as accountId, e.thread_id as threadId, e.subject, e.from_address as "from",
       e.to_address as "to", e.cc_address as "cc", e.bcc_address as "bcc", e.body, e.snippet, e.date, e.label_ids as labelIds, e.attachments as attachmentsJson,
@@ -733,7 +876,9 @@ export function getEmailsByIds(ids: string[]): DashboardEmail[] {
     LEFT JOIN analyses a ON e.id = a.email_id
     LEFT JOIN drafts d ON e.id = d.email_id
     WHERE e.id IN (${placeholders})
-  `).all(...ids) as Record<string, unknown>[];
+  `,
+    )
+    .all(...ids) as Record<string, unknown>[];
   return rows.map(rowToDashboardEmail);
 }
 
@@ -752,16 +897,18 @@ export function hasEmailsForAccount(accountId: string): boolean {
  */
 export function getInboxThreadIds(accountId: string): Set<string> {
   const db = getDatabase();
-  const stmt = db.prepare(`SELECT DISTINCT thread_id FROM emails WHERE account_id = ? AND (label_ids IS NULL OR label_ids LIKE '%"INBOX"%')`);
+  const stmt = db.prepare(
+    `SELECT DISTINCT thread_id FROM emails WHERE account_id = ? AND (label_ids IS NULL OR label_ids LIKE '%"INBOX"%')`,
+  );
   const rows = stmt.all(accountId) as { thread_id: string }[];
-  return new Set(rows.map(r => r.thread_id));
+  return new Set(rows.map((r) => r.thread_id));
 }
 
 export function getEmailIds(accountId: string): Set<string> {
   const db = getDatabase();
   const stmt = db.prepare(`SELECT id FROM emails WHERE account_id = ?`);
   const rows = stmt.all(accountId) as { id: string }[];
-  return new Set(rows.map(r => r.id));
+  return new Set(rows.map((r) => r.id));
 }
 
 /**
@@ -772,9 +919,9 @@ export function getEmailBodies(ids: string[]): Array<{ id: string; body: string 
   if (ids.length === 0) return [];
   const db = getDatabase();
   const placeholders = ids.map(() => "?").join(",");
-  return db.prepare(
-    `SELECT id, body FROM emails WHERE id IN (${placeholders})`
-  ).all(...ids) as Array<{ id: string; body: string }>;
+  return db
+    .prepare(`SELECT id, body FROM emails WHERE id IN (${placeholders})`)
+    .all(...ids) as Array<{ id: string; body: string }>;
 }
 
 // ============================================
@@ -842,7 +989,9 @@ class UnionFind {
  * The canonical threadId is the one containing the oldest email in the group.
  * Only returns entries for threads that need remapping (not identity mappings).
  */
-export function buildThreadMergeMap(emails: ReadonlyArray<Pick<DashboardEmail, 'threadId' | 'messageId' | 'inReplyTo' | 'date'>>): Map<string, string> {
+export function buildThreadMergeMap(
+  emails: ReadonlyArray<Pick<DashboardEmail, "threadId" | "messageId" | "inReplyTo" | "date">>,
+): Map<string, string> {
   // Collect all threadIds per messageId (handles rare duplicate Message-IDs)
   const msgToThreads = new Map<string, string[]>();
   for (const e of emails) {
@@ -921,7 +1070,7 @@ function applyThreadMerge(emails: DashboardEmail[]): void {
   // cross-account merging when emails from different accounts share Message-IDs.
   const byAccount = new Map<string, DashboardEmail[]>();
   for (const email of emails) {
-    const acct = email.accountId ?? 'default';
+    const acct = email.accountId ?? "default";
     const arr = byAccount.get(acct);
     if (arr) arr.push(email);
     else byAccount.set(acct, [email]);
@@ -968,15 +1117,25 @@ function ufFind(parent: Map<string, string>, x: string): string {
   return root;
 }
 
-function ufUnion(parent: Map<string, string>, rank: Map<string, number>, a: string, b: string): void {
+function ufUnion(
+  parent: Map<string, string>,
+  rank: Map<string, number>,
+  a: string,
+  b: string,
+): void {
   const ra = ufFind(parent, a);
   const rb = ufFind(parent, b);
   if (ra === rb) return;
   const rankA = rank.get(ra) || 0;
   const rankB = rank.get(rb) || 0;
-  if (rankA < rankB) { parent.set(ra, rb); }
-  else if (rankA > rankB) { parent.set(rb, ra); }
-  else { parent.set(rb, ra); rank.set(ra, rankA + 1); }
+  if (rankA < rankB) {
+    parent.set(ra, rb);
+  } else if (rankA > rankB) {
+    parent.set(rb, ra);
+  } else {
+    parent.set(rb, ra);
+    rank.set(ra, rankA + 1);
+  }
 }
 
 /**
@@ -991,9 +1150,13 @@ function buildMergeCache(accountId?: string): Map<string, string[]> {
   const accountFilter = accountId ? " WHERE account_id = ?" : "";
   const params = accountId ? [accountId] : [];
 
-  const rows = db.prepare(
-    `SELECT thread_id, message_id, in_reply_to FROM emails${accountFilter}`
-  ).all(...params) as { thread_id: string; message_id: string | null; in_reply_to: string | null }[];
+  const rows = db
+    .prepare(`SELECT thread_id, message_id, in_reply_to FROM emails${accountFilter}`)
+    .all(...params) as {
+    thread_id: string;
+    message_id: string | null;
+    in_reply_to: string | null;
+  }[];
 
   // Build message_id → threadId[] index (a message_id can appear in
   // multiple threads in rare cases — we need to union all of them)
@@ -1059,9 +1222,9 @@ function buildMergeCache(accountId?: string): Map<string, string[]> {
 
   _mergeGroupsByAccount.set(accountKey, mergeGroups);
 
-  console.log(
+  log.info(
     `[ThreadMerge] Built merge cache for account=${accountKey || "(all)"}: ${rows.length} emails, ` +
-    `${allThreadIds.size} threads, ${groups.size} groups in ${(performance.now() - t0).toFixed(1)}ms`
+      `${allThreadIds.size} threads, ${groups.size} groups in ${(performance.now() - t0).toFixed(1)}ms`,
   );
 
   return mergeGroups;
@@ -1112,9 +1275,9 @@ export function getFirstEmailIdForThread(threadId: string, accountId?: string): 
   const accountFilter = accountId ? " AND account_id = ?" : "";
   const placeholders = allThreadIds.map(() => "?").join(",");
   const params = accountId ? [...allThreadIds, accountId] : allThreadIds;
-  const row = db.prepare(
-    `SELECT id FROM emails WHERE thread_id IN (${placeholders})${accountFilter} LIMIT 1`
-  ).get(...params) as { id: string } | undefined;
+  const row = db
+    .prepare(`SELECT id FROM emails WHERE thread_id IN (${placeholders})${accountFilter} LIMIT 1`)
+    .get(...params) as { id: string } | undefined;
   return row?.id ?? null;
 }
 
@@ -1129,14 +1292,18 @@ export function isThreadFullyAnalyzed(threadId: string, accountId?: string): boo
   const placeholders = allThreadIds.map(() => "?").join(",");
   const params = accountId ? [...allThreadIds, accountId] : allThreadIds;
   // Count inbox (non-SENT) emails that don't have an analysis row
-  const row = db.prepare(`
+  const row = db
+    .prepare(
+      `
     SELECT COUNT(*) as unanalyzed
     FROM emails e
     LEFT JOIN analyses a ON e.id = a.email_id
     WHERE e.thread_id IN (${placeholders})${accountFilter}
       AND (e.label_ids IS NULL OR e.label_ids NOT LIKE '%"SENT"%')
       AND a.email_id IS NULL
-  `).get(...params) as { unanalyzed: number };
+  `,
+    )
+    .get(...params) as { unanalyzed: number };
   return row.unanalyzed === 0;
 }
 
@@ -1157,11 +1324,12 @@ function stripLargeDataUris(body: string): string {
       if (dataUri.length < 50_000) return match;
       const mimeMatch = dataUri.match(/^data:([^;,]+)/);
       const mime = mimeMatch?.[1] ?? "image";
-      const sizeKB = Math.round(dataUri.length * 3 / 4 / 1024);
+      const sizeKB = Math.round((dataUri.length * 3) / 4 / 1024);
       const sizeLabel = sizeKB >= 1024 ? `${(sizeKB / 1024).toFixed(1)} MB` : `${sizeKB} KB`;
       // Theme-neutral colors: the main process doesn't know the renderer's theme,
       // so use mid-tone grays that are legible on both light and dark backgrounds.
-      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="60">` +
+      const svg =
+        `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="60">` +
         `<rect width="400" height="60" rx="8" fill="#d1d5db"/>` +
         `<text x="200" y="35" text-anchor="middle" fill="#4b5563" font-family="system-ui" font-size="13">` +
         `Inline ${mime} (${sizeLabel}) — too large to display inline` +
@@ -1183,6 +1351,7 @@ function rowToDashboardEmail(row: Record<string, unknown>): DashboardEmail {
   }
 
   // Parse attachments from JSON string if present
+  // eslint-disable-next-line @typescript-eslint/consistent-type-imports
   let attachments: import("../../shared/types").AttachmentMeta[] | undefined;
   if (row.attachmentsJson && typeof row.attachmentsJson === "string") {
     try {
@@ -1224,20 +1393,33 @@ function rowToDashboardEmail(row: Record<string, unknown>): DashboardEmail {
     let draftCc: string[] | undefined;
     let draftBcc: string[] | undefined;
     if (row.draftTo && typeof row.draftTo === "string") {
-      try { draftTo = JSON.parse(row.draftTo); } catch { /* ignore */ }
+      try {
+        draftTo = JSON.parse(row.draftTo);
+      } catch {
+        /* ignore */
+      }
     }
     if (row.draftCc && typeof row.draftCc === "string") {
-      try { draftCc = JSON.parse(row.draftCc); } catch { /* ignore */ }
+      try {
+        draftCc = JSON.parse(row.draftCc);
+      } catch {
+        /* ignore */
+      }
     }
     if (row.draftBcc && typeof row.draftBcc === "string") {
-      try { draftBcc = JSON.parse(row.draftBcc); } catch { /* ignore */ }
+      try {
+        draftBcc = JSON.parse(row.draftBcc);
+      } catch {
+        /* ignore */
+      }
     }
 
     const validComposeModes = new Set(["reply", "reply-all", "forward"]);
     const rawComposeMode = row.draftComposeMode as string | null;
-    const composeMode = rawComposeMode && validComposeModes.has(rawComposeMode)
-      ? rawComposeMode as "reply" | "reply-all" | "forward"
-      : undefined;
+    const composeMode =
+      rawComposeMode && validComposeModes.has(rawComposeMode)
+        ? (rawComposeMode as "reply" | "reply-all" | "forward")
+        : undefined;
 
     email.draft = {
       body: row.draftBody as string,
@@ -1260,7 +1442,7 @@ export function saveAnalysis(
   emailId: string,
   needsReply: boolean,
   reason: string,
-  priority?: string
+  priority?: string,
 ): void {
   const db = getDatabase();
   const stmt = db.prepare(`
@@ -1276,7 +1458,7 @@ export function saveDraft(
   draftBody: string,
   status: string = "pending",
   gmailDraftId?: string,
-  options?: { to?: string[]; cc?: string[]; bcc?: string[]; composeMode?: string }
+  options?: { to?: string[]; cc?: string[]; bcc?: string[]; composeMode?: string },
 ): void {
   const db = getDatabase();
   // Use INSERT ... ON CONFLICT to preserve agent_task_id on updates.
@@ -1290,11 +1472,21 @@ export function saveDraft(
   const composeMode = options?.composeMode ?? null;
   // Per-field COALESCE: only overwrite a field if it was explicitly provided in options.
   // This prevents saving composeMode/to from accidentally NULLing out cc/bcc.
-  const updateTo = (options !== undefined && "to" in options) ? "excluded.to_recipients" : "COALESCE(excluded.to_recipients, drafts.to_recipients)";
-  const updateCc = (options !== undefined && "cc" in options) ? "excluded.cc" : "COALESCE(excluded.cc, drafts.cc)";
-  const updateBcc = (options !== undefined && "bcc" in options) ? "excluded.bcc" : "COALESCE(excluded.bcc, drafts.bcc)";
+  const updateTo =
+    options !== undefined && "to" in options
+      ? "excluded.to_recipients"
+      : "COALESCE(excluded.to_recipients, drafts.to_recipients)";
+  const updateCc =
+    options !== undefined && "cc" in options ? "excluded.cc" : "COALESCE(excluded.cc, drafts.cc)";
+  const updateBcc =
+    options !== undefined && "bcc" in options
+      ? "excluded.bcc"
+      : "COALESCE(excluded.bcc, drafts.bcc)";
   // compose_mode: preserve existing value when not explicitly provided
-  const updateComposeMode = (options !== undefined && "composeMode" in options) ? "excluded.compose_mode" : "COALESCE(excluded.compose_mode, drafts.compose_mode)";
+  const updateComposeMode =
+    options !== undefined && "composeMode" in options
+      ? "excluded.compose_mode"
+      : "COALESCE(excluded.compose_mode, drafts.compose_mode)";
   const stmt = db.prepare(`
     INSERT INTO drafts (email_id, draft_body, gmail_draft_id, status, created_at, to_recipients, cc, bcc, compose_mode)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -1308,7 +1500,17 @@ export function saveDraft(
       bcc = ${updateBcc},
       compose_mode = ${updateComposeMode}
   `);
-  stmt.run(emailId, draftBody, gmailDraftId || null, status, Date.now(), toJson, ccJson, bccJson, composeMode);
+  stmt.run(
+    emailId,
+    draftBody,
+    gmailDraftId || null,
+    status,
+    Date.now(),
+    toJson,
+    ccJson,
+    bccJson,
+    composeMode,
+  );
 }
 
 export function updateDraftStatus(emailId: string, status: string, gmailDraftId?: string): void {
@@ -1323,8 +1525,7 @@ export function updateDraftStatus(emailId: string, status: string, gmailDraftId?
 /** Update only the gmail_draft_id without changing the draft status. */
 export function updateDraftGmailId(emailId: string, gmailDraftId: string): void {
   const db = getDatabase();
-  db.prepare(`UPDATE drafts SET gmail_draft_id = ? WHERE email_id = ?`)
-    .run(gmailDraftId, emailId);
+  db.prepare(`UPDATE drafts SET gmail_draft_id = ? WHERE email_id = ?`).run(gmailDraftId, emailId);
 }
 
 /** Link a draft to the agent task that produced it (for trace retrieval). */
@@ -1343,7 +1544,9 @@ export function deleteDraft(emailId: string): void {
 /** Get the RFC 5322 Message-ID header for an email (used for reply threading). */
 export function getEmailMessageIdHeader(emailId: string): string | null {
   const db = getDatabase();
-  const row = db.prepare("SELECT message_id FROM emails WHERE id = ?").get(emailId) as { message_id: string | null } | undefined;
+  const row = db.prepare("SELECT message_id FROM emails WHERE id = ?").get(emailId) as
+    | { message_id: string | null }
+    | undefined;
   return row?.message_id ?? null;
 }
 
@@ -1355,50 +1558,76 @@ export function getEmailByMessageId(messageId: string): {
   gmailDraftId: string | null;
 } | null {
   const db = getDatabase();
-  const row = db.prepare(`
+  const row = db
+    .prepare(
+      `
     SELECT e.id AS emailId, e.thread_id AS threadId, e.account_id AS accountId,
            d.gmail_draft_id AS gmailDraftId
     FROM emails e
     LEFT JOIN drafts d ON e.id = d.email_id
     WHERE e.message_id = ?
-  `).get(messageId) as { emailId: string; threadId: string; accountId: string; gmailDraftId: string | null } | undefined;
+  `,
+    )
+    .get(messageId) as
+    | { emailId: string; threadId: string; accountId: string; gmailDraftId: string | null }
+    | undefined;
   return row || null;
 }
 
 /** Find all emails in a thread that have drafts. */
-export function getThreadDrafts(threadId: string, accountId: string): Array<{
+export function getThreadDrafts(
+  threadId: string,
+  accountId: string,
+): Array<{
   emailId: string;
   gmailDraftId: string | null;
   status: string;
 }> {
   const db = getDatabase();
-  return db.prepare(`
+  return db
+    .prepare(
+      `
     SELECT d.email_id AS emailId, d.gmail_draft_id AS gmailDraftId, d.status
     FROM drafts d
     JOIN emails e ON d.email_id = e.id
     WHERE e.thread_id = ? AND e.account_id = ?
-  `).all(threadId, accountId) as Array<{ emailId: string; gmailDraftId: string | null; status: string }>;
+  `,
+    )
+    .all(threadId, accountId) as Array<{
+    emailId: string;
+    gmailDraftId: string | null;
+    status: string;
+  }>;
 }
 
 /**
  * Get the most recent AI-generated draft body for a thread.
  * Used by draft-edit learning to compare what was generated vs what was sent.
  */
-export function getThreadDraftBody(threadId: string, accountId: string): {
+export function getThreadDraftBody(
+  threadId: string,
+  accountId: string,
+): {
   emailId: string;
   draftBody: string;
   fromAddress: string;
   subject: string;
 } | null {
   const db = getDatabase();
-  const row = db.prepare(`
+  const row = db
+    .prepare(
+      `
     SELECT d.email_id AS emailId, d.draft_body AS draftBody, e.from_address AS fromAddress, e.subject
     FROM drafts d
     JOIN emails e ON d.email_id = e.id
     WHERE e.thread_id = ? AND e.account_id = ? AND d.status = 'pending'
     ORDER BY d.created_at DESC
     LIMIT 1
-  `).get(threadId, accountId) as { emailId: string; draftBody: string; fromAddress: string; subject: string } | undefined;
+  `,
+    )
+    .get(threadId, accountId) as
+    | { emailId: string; draftBody: string; fromAddress: string; subject: string }
+    | undefined;
   return row ?? null;
 }
 
@@ -1408,7 +1637,9 @@ export function getThreadDraftBody(threadId: string, accountId: string): {
  */
 export function clearInboxPendingAgentTraces(): number {
   const db = getDatabase();
-  const result = db.prepare(`
+  const result = db
+    .prepare(
+      `
     DELETE FROM agent_conversation_mirror WHERE local_task_id IN (
       SELECT d.agent_task_id FROM drafts d
       JOIN emails e ON d.email_id = e.id
@@ -1416,7 +1647,9 @@ export function clearInboxPendingAgentTraces(): number {
         AND d.agent_task_id IS NOT NULL
         AND (e.label_ids IS NULL OR e.label_ids LIKE '%"INBOX"%')
     )
-  `).run();
+  `,
+    )
+    .run();
   return result.changes;
 }
 
@@ -1424,7 +1657,10 @@ export function clearInboxPendingAgentTraces(): number {
  * Atomically clear pending drafts AND their associated agent traces.
  * Enforces the correct order: traces first (JOIN needs drafts), then drafts.
  */
-export function clearInboxPendingDraftsAndTraces(): { draftsCleared: number; tracesCleared: number } {
+export function clearInboxPendingDraftsAndTraces(): {
+  draftsCleared: number;
+  tracesCleared: number;
+} {
   const tracesCleared = clearInboxPendingAgentTraces();
   const draftsCleared = clearInboxPendingDrafts();
   return { draftsCleared, tracesCleared };
@@ -1470,45 +1706,69 @@ export function deleteAgentTrace(taskId: string): void {
 // Bulk clearing for prompt changes — scoped to inbox emails only
 export function clearInboxAnalyses(): number {
   const db = getDatabase();
-  const result = db.prepare(`
+  const result = db
+    .prepare(
+      `
     DELETE FROM analyses WHERE email_id IN (
       SELECT id FROM emails WHERE label_ids IS NULL OR label_ids LIKE '%"INBOX"%'
     )
-  `).run();
+  `,
+    )
+    .run();
   return result.changes;
 }
 
 /** Get pending inbox drafts that have been synced to Gmail (for bulk cleanup). */
-export function getInboxPendingDraftsWithGmail(): Array<{ emailId: string; gmailDraftId: string; accountId: string }> {
+export function getInboxPendingDraftsWithGmail(): Array<{
+  emailId: string;
+  gmailDraftId: string;
+  accountId: string;
+}> {
   const db = getDatabase();
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(
+      `
     SELECT d.email_id, d.gmail_draft_id, e.account_id FROM drafts d
     JOIN emails e ON d.email_id = e.id
     WHERE d.status = 'pending'
       AND d.gmail_draft_id IS NOT NULL
       AND (e.label_ids IS NULL OR e.label_ids LIKE '%"INBOX"%')
-  `).all() as Array<{ email_id: string; gmail_draft_id: string; account_id: string }>;
-  return rows.map((r) => ({ emailId: r.email_id, gmailDraftId: r.gmail_draft_id, accountId: r.account_id }));
+  `,
+    )
+    .all() as Array<{ email_id: string; gmail_draft_id: string; account_id: string }>;
+  return rows.map((r) => ({
+    emailId: r.email_id,
+    gmailDraftId: r.gmail_draft_id,
+    accountId: r.account_id,
+  }));
 }
 
 export function clearInboxPendingDrafts(): number {
   const db = getDatabase();
   // Only clear AI-generated drafts (status 'pending'), not user-edited or created ones
-  const result = db.prepare(`
+  const result = db
+    .prepare(
+      `
     DELETE FROM drafts WHERE status = 'pending' AND email_id IN (
       SELECT id FROM emails WHERE label_ids IS NULL OR label_ids LIKE '%"INBOX"%'
     )
-  `).run();
+  `,
+    )
+    .run();
   return result.changes;
 }
 
 export function clearInboxArchiveReady(): number {
   const db = getDatabase();
-  const result = db.prepare(`
+  const result = db
+    .prepare(
+      `
     DELETE FROM archive_ready WHERE thread_id IN (
       SELECT DISTINCT thread_id FROM emails WHERE label_ids IS NULL OR label_ids LIKE '%"INBOX"%'
     )
-  `).run();
+  `,
+    )
+    .run();
   return result.changes;
 }
 
@@ -1534,7 +1794,7 @@ export function saveStyleSample(
   sentEmailId: string,
   context: string,
   characteristics: string[],
-  samplePhrases: string[]
+  samplePhrases: string[],
 ): void {
   const db = getDatabase();
   const stmt = db.prepare(`
@@ -1587,7 +1847,7 @@ type SentEmailRow = {
 export function getSentEmailsToRecipient(
   recipientEmail: string,
   accountId: string,
-  limit: number = 10
+  limit: number = 10,
 ): SentEmailRow[] {
   const db = getDatabase();
   // to_address stores "Name <email>" format; match both bare and angle-bracket forms
@@ -1607,7 +1867,7 @@ export function getSentEmailsToRecipient(
 export function getSentEmailsToSameDomain(
   domain: string,
   accountId: string,
-  limit: number = 10
+  limit: number = 10,
 ): SentEmailRow[] {
   const db = getDatabase();
   // Match @domain> (angle-bracket format) to avoid matching subdomains like @domain.spoof
@@ -1628,7 +1888,7 @@ export function getSentEmailsByFormalityRange(
   accountId: string,
   low: number,
   high: number,
-  limit: number = 5
+  limit: number = 5,
 ): SentEmailRow[] {
   const db = getDatabase();
   const stmt = db.prepare(`
@@ -1648,7 +1908,7 @@ export function getSentEmailsByFormalityRange(
 
 export function getCorrespondentProfile(
   email: string,
-  accountId: string
+  accountId: string,
 ): CorrespondentProfile | null {
   const db = getDatabase();
   const stmt = db.prepare(`
@@ -1680,14 +1940,11 @@ export function saveCorrespondentProfile(profile: CorrespondentProfile): void {
     profile.dominantGreeting,
     profile.dominantSignoff,
     profile.formalityScore,
-    profile.lastComputedAt
+    profile.lastComputedAt,
   );
 }
 
-export function getSentEmailCountToRecipient(
-  recipientEmail: string,
-  accountId: string
-): number {
+export function getSentEmailCountToRecipient(recipientEmail: string, accountId: string): number {
   const db = getDatabase();
   // Match both "Name <email>" and bare email formats
   const stmt = db.prepare(`
@@ -1751,7 +2008,12 @@ export type AccountRecord = {
   addedAt: number;
 };
 
-export function saveAccount(accountId: string, email: string, displayName?: string, isPrimary: boolean = false): void {
+export function saveAccount(
+  accountId: string,
+  email: string,
+  displayName?: string,
+  isPrimary: boolean = false,
+): void {
   const db = getDatabase();
   const stmt = db.prepare(`
     INSERT OR REPLACE INTO accounts (id, email, display_name, is_primary, added_at)
@@ -1762,9 +2024,17 @@ export function saveAccount(accountId: string, email: string, displayName?: stri
 
 export function getAccounts(): AccountRecord[] {
   const db = getDatabase();
-  const stmt = db.prepare("SELECT id, email, display_name as displayName, is_primary as isPrimary, added_at as addedAt FROM accounts ORDER BY added_at ASC");
-  const rows = stmt.all() as Array<{ id: string; email: string; displayName: string | null; isPrimary: number; addedAt: number }>;
-  return rows.map(row => ({
+  const stmt = db.prepare(
+    "SELECT id, email, display_name as displayName, is_primary as isPrimary, added_at as addedAt FROM accounts ORDER BY added_at ASC",
+  );
+  const rows = stmt.all() as Array<{
+    id: string;
+    email: string;
+    displayName: string | null;
+    isPrimary: number;
+    addedAt: number;
+  }>;
+  return rows.map((row) => ({
     id: row.id,
     email: row.email,
     displayName: row.displayName || undefined,
@@ -1782,9 +2052,15 @@ export function removeAccount(accountId: string): void {
   const db = getDatabase();
   const run = db.transaction(() => {
     // Delete data joined via email_id (must come before emails deletion)
-    db.prepare("DELETE FROM extension_enrichments WHERE email_id IN (SELECT id FROM emails WHERE account_id = ?)").run(accountId);
-    db.prepare("DELETE FROM drafts WHERE email_id IN (SELECT id FROM emails WHERE account_id = ?)").run(accountId);
-    db.prepare("DELETE FROM analyses WHERE email_id IN (SELECT id FROM emails WHERE account_id = ?)").run(accountId);
+    db.prepare(
+      "DELETE FROM extension_enrichments WHERE email_id IN (SELECT id FROM emails WHERE account_id = ?)",
+    ).run(accountId);
+    db.prepare(
+      "DELETE FROM drafts WHERE email_id IN (SELECT id FROM emails WHERE account_id = ?)",
+    ).run(accountId);
+    db.prepare(
+      "DELETE FROM analyses WHERE email_id IN (SELECT id FROM emails WHERE account_id = ?)",
+    ).run(accountId);
     // Delete data keyed by account_id
     db.prepare("DELETE FROM archive_ready WHERE account_id = ?").run(accountId);
     db.prepare("DELETE FROM snoozed_emails WHERE account_id = ?").run(accountId);
@@ -1837,7 +2113,7 @@ export function saveSenderProfile(profile: SenderProfile): void {
     profile.linkedinUrl || null,
     profile.company || null,
     profile.title || null,
-    profile.lookupAt
+    profile.lookupAt,
   );
 }
 
@@ -1847,15 +2123,17 @@ export function getSenderProfile(email: string): SenderProfile | null {
     SELECT email, name, summary, linkedin_url as linkedinUrl, company, title, lookup_at as lookupAt
     FROM sender_profiles WHERE email = ?
   `);
-  const row = stmt.get(email.toLowerCase()) as {
-    email: string;
-    name: string | null;
-    summary: string;
-    linkedinUrl: string | null;
-    company: string | null;
-    title: string | null;
-    lookupAt: number;
-  } | undefined;
+  const row = stmt.get(email.toLowerCase()) as
+    | {
+        email: string;
+        name: string | null;
+        summary: string;
+        linkedinUrl: string | null;
+        company: string | null;
+        title: string | null;
+        lookupAt: number;
+      }
+    | undefined;
 
   if (!row) return null;
 
@@ -1886,7 +2164,7 @@ export function getSenderProfiles(): SenderProfile[] {
     lookupAt: number;
   }>;
 
-  return rows.map(row => ({
+  return rows.map((row) => ({
     email: row.email,
     name: row.name || undefined,
     summary: row.summary,
@@ -1961,61 +2239,79 @@ export function getMemory(id: string): Memory | null {
 export function getMemories(accountId: string, memoryType?: MemoryType): Memory[] {
   const db = getDatabase();
   if (memoryType) {
-    const rows = db.prepare(
-      "SELECT * FROM memories WHERE account_id = ? AND memory_type = ? ORDER BY scope, created_at DESC"
-    ).all(accountId, memoryType) as MemoryRow[];
+    const rows = db
+      .prepare(
+        "SELECT * FROM memories WHERE account_id = ? AND memory_type = ? ORDER BY scope, created_at DESC",
+      )
+      .all(accountId, memoryType) as MemoryRow[];
     return rows.map(memoryRowToMemory);
   }
-  const rows = db.prepare(
-    "SELECT * FROM memories WHERE account_id = ? ORDER BY scope, created_at DESC"
-  ).all(accountId) as MemoryRow[];
+  const rows = db
+    .prepare("SELECT * FROM memories WHERE account_id = ? ORDER BY scope, created_at DESC")
+    .all(accountId) as MemoryRow[];
   return rows.map(memoryRowToMemory);
 }
 
 /** Fetch global + category memories for an account (no sender context needed). */
-export function getAccountMemories(accountId: string, memoryType: MemoryType = "drafting"): Memory[] {
+export function getAccountMemories(
+  accountId: string,
+  memoryType: MemoryType = "drafting",
+): Memory[] {
   const db = getDatabase();
 
-  const categoryRows = db.prepare(
-    "SELECT * FROM memories WHERE account_id = ? AND scope = 'category' AND enabled = 1 AND memory_type = ? ORDER BY created_at DESC"
-  ).all(accountId, memoryType) as MemoryRow[];
+  const categoryRows = db
+    .prepare(
+      "SELECT * FROM memories WHERE account_id = ? AND scope = 'category' AND enabled = 1 AND memory_type = ? ORDER BY created_at DESC",
+    )
+    .all(accountId, memoryType) as MemoryRow[];
 
-  const globalRows = db.prepare(
-    "SELECT * FROM memories WHERE account_id = ? AND scope = 'global' AND enabled = 1 AND memory_type = ? ORDER BY created_at DESC"
-  ).all(accountId, memoryType) as MemoryRow[];
+  const globalRows = db
+    .prepare(
+      "SELECT * FROM memories WHERE account_id = ? AND scope = 'global' AND enabled = 1 AND memory_type = ? ORDER BY created_at DESC",
+    )
+    .all(accountId, memoryType) as MemoryRow[];
 
-  return [
-    ...categoryRows.map(memoryRowToMemory),
-    ...globalRows.map(memoryRowToMemory),
-  ];
+  return [...categoryRows.map(memoryRowToMemory), ...globalRows.map(memoryRowToMemory)];
 }
 
 /** Fetch all memories relevant to a given sender email, ordered from most to least specific. */
-export function getRelevantMemories(senderEmail: string, accountId: string, memoryType: MemoryType = "drafting"): Memory[] {
+export function getRelevantMemories(
+  senderEmail: string,
+  accountId: string,
+  memoryType: MemoryType = "drafting",
+): Memory[] {
   const db = getDatabase();
   const domain = senderEmail.includes("@") ? senderEmail.split("@")[1] : null;
 
   // Person-specific
-  const personRows = db.prepare(
-    "SELECT * FROM memories WHERE account_id = ? AND scope = 'person' AND scope_value = ? AND enabled = 1 AND memory_type = ? ORDER BY created_at DESC"
-  ).all(accountId, senderEmail.toLowerCase(), memoryType) as MemoryRow[];
+  const personRows = db
+    .prepare(
+      "SELECT * FROM memories WHERE account_id = ? AND scope = 'person' AND scope_value = ? AND enabled = 1 AND memory_type = ? ORDER BY created_at DESC",
+    )
+    .all(accountId, senderEmail.toLowerCase(), memoryType) as MemoryRow[];
 
   // Domain-specific
   const domainRows = domain
-    ? db.prepare(
-        "SELECT * FROM memories WHERE account_id = ? AND scope = 'domain' AND scope_value = ? AND enabled = 1 AND memory_type = ? ORDER BY created_at DESC"
-      ).all(accountId, domain.toLowerCase(), memoryType) as MemoryRow[]
+    ? (db
+        .prepare(
+          "SELECT * FROM memories WHERE account_id = ? AND scope = 'domain' AND scope_value = ? AND enabled = 1 AND memory_type = ? ORDER BY created_at DESC",
+        )
+        .all(accountId, domain.toLowerCase(), memoryType) as MemoryRow[])
     : [];
 
   // Category (all — Claude decides relevance)
-  const categoryRows = db.prepare(
-    "SELECT * FROM memories WHERE account_id = ? AND scope = 'category' AND enabled = 1 AND memory_type = ? ORDER BY created_at DESC"
-  ).all(accountId, memoryType) as MemoryRow[];
+  const categoryRows = db
+    .prepare(
+      "SELECT * FROM memories WHERE account_id = ? AND scope = 'category' AND enabled = 1 AND memory_type = ? ORDER BY created_at DESC",
+    )
+    .all(accountId, memoryType) as MemoryRow[];
 
   // Global
-  const globalRows = db.prepare(
-    "SELECT * FROM memories WHERE account_id = ? AND scope = 'global' AND enabled = 1 AND memory_type = ? ORDER BY created_at DESC"
-  ).all(accountId, memoryType) as MemoryRow[];
+  const globalRows = db
+    .prepare(
+      "SELECT * FROM memories WHERE account_id = ? AND scope = 'global' AND enabled = 1 AND memory_type = ? ORDER BY created_at DESC",
+    )
+    .all(accountId, memoryType) as MemoryRow[];
 
   // Return in specificity order: person > domain > category > global
   return [
@@ -2026,7 +2322,10 @@ export function getRelevantMemories(senderEmail: string, accountId: string, memo
   ];
 }
 
-export function updateMemory(id: string, updates: { content?: string; enabled?: boolean; scope?: MemoryScope; scopeValue?: string | null }): void {
+export function updateMemory(
+  id: string,
+  updates: { content?: string; enabled?: boolean; scope?: MemoryScope; scopeValue?: string | null },
+): void {
   const db = getDatabase();
   const memory = getMemory(id);
   if (!memory) return;
@@ -2037,7 +2336,7 @@ export function updateMemory(id: string, updates: { content?: string; enabled?: 
   const newScopeValue = updates.scopeValue !== undefined ? updates.scopeValue : memory.scopeValue;
 
   db.prepare(
-    "UPDATE memories SET content = ?, enabled = ?, scope = ?, scope_value = ?, updated_at = ? WHERE id = ?"
+    "UPDATE memories SET content = ?, enabled = ?, scope = ?, scope_value = ?, updated_at = ? WHERE id = ?",
   ).run(newContent, newEnabled ? 1 : 0, newScope, newScopeValue, Date.now(), id);
 }
 
@@ -2048,10 +2347,12 @@ export function deleteMemory(id: string): void {
 
 export function getMemoryCategories(accountId: string): string[] {
   const db = getDatabase();
-  const rows = db.prepare(
-    "SELECT DISTINCT scope_value FROM memories WHERE account_id = ? AND scope = 'category' AND scope_value IS NOT NULL ORDER BY scope_value"
-  ).all(accountId) as Array<{ scope_value: string }>;
-  return rows.map(r => r.scope_value);
+  const rows = db
+    .prepare(
+      "SELECT DISTINCT scope_value FROM memories WHERE account_id = ? AND scope = 'category' AND scope_value IS NOT NULL ORDER BY scope_value",
+    )
+    .all(accountId) as Array<{ scope_value: string }>;
+  return rows.map((r) => r.scope_value);
 }
 
 // ============================================
@@ -2096,10 +2397,12 @@ function draftMemoryRowToDraftMemory(row: DraftMemoryRow): DraftMemory {
 
 export function saveDraftMemory(dm: DraftMemory): void {
   const db = getDatabase();
-  db.prepare(`
+  db.prepare(
+    `
     INSERT OR REPLACE INTO draft_memories (id, account_id, scope, scope_value, content, vote_count, source_email_ids, sender_email, sender_domain, subject, email_context, memory_type, created_at, last_voted_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
+  `,
+  ).run(
     dm.id,
     dm.accountId,
     dm.scope,
@@ -2120,26 +2423,32 @@ export function saveDraftMemory(dm: DraftMemory): void {
 export function getDraftMemories(accountId: string, memoryType?: MemoryType): DraftMemory[] {
   const db = getDatabase();
   if (memoryType) {
-    const rows = db.prepare(
-      "SELECT * FROM draft_memories WHERE account_id = ? AND memory_type = ? ORDER BY last_voted_at DESC"
-    ).all(accountId, memoryType) as DraftMemoryRow[];
+    const rows = db
+      .prepare(
+        "SELECT * FROM draft_memories WHERE account_id = ? AND memory_type = ? ORDER BY last_voted_at DESC",
+      )
+      .all(accountId, memoryType) as DraftMemoryRow[];
     return rows.map(draftMemoryRowToDraftMemory);
   }
-  const rows = db.prepare(
-    "SELECT * FROM draft_memories WHERE account_id = ? ORDER BY last_voted_at DESC"
-  ).all(accountId) as DraftMemoryRow[];
+  const rows = db
+    .prepare("SELECT * FROM draft_memories WHERE account_id = ? ORDER BY last_voted_at DESC")
+    .all(accountId) as DraftMemoryRow[];
   return rows.map(draftMemoryRowToDraftMemory);
 }
 
 export function getDraftMemory(id: string): DraftMemory | null {
   const db = getDatabase();
-  const row = db.prepare("SELECT * FROM draft_memories WHERE id = ?").get(id) as DraftMemoryRow | undefined;
+  const row = db.prepare("SELECT * FROM draft_memories WHERE id = ?").get(id) as
+    | DraftMemoryRow
+    | undefined;
   return row ? draftMemoryRowToDraftMemory(row) : null;
 }
 
 export function incrementDraftMemoryVote(id: string, sourceEmailId: string): DraftMemory | null {
   const db = getDatabase();
-  const row = db.prepare("SELECT * FROM draft_memories WHERE id = ?").get(id) as DraftMemoryRow | undefined;
+  const row = db.prepare("SELECT * FROM draft_memories WHERE id = ?").get(id) as
+    | DraftMemoryRow
+    | undefined;
   if (!row) return null;
 
   const sourceEmailIds = JSON.parse(row.source_email_ids) as string[];
@@ -2150,7 +2459,7 @@ export function incrementDraftMemoryVote(id: string, sourceEmailId: string): Dra
   const now = Date.now();
   const newVoteCount = isNew ? row.vote_count + 1 : row.vote_count;
   db.prepare(
-    "UPDATE draft_memories SET vote_count = ?, source_email_ids = ?, last_voted_at = ? WHERE id = ?"
+    "UPDATE draft_memories SET vote_count = ?, source_email_ids = ?, last_voted_at = ? WHERE id = ?",
   ).run(newVoteCount, JSON.stringify(sourceEmailIds), now, id);
 
   return draftMemoryRowToDraftMemory({
@@ -2169,31 +2478,45 @@ export function deleteDraftMemory(id: string): void {
 export function getDraftMemoryCount(accountId: string, memoryType?: MemoryType): number {
   const db = getDatabase();
   if (memoryType) {
-    const row = db.prepare("SELECT COUNT(*) as cnt FROM draft_memories WHERE account_id = ? AND memory_type = ?").get(accountId, memoryType) as { cnt: number };
+    const row = db
+      .prepare(
+        "SELECT COUNT(*) as cnt FROM draft_memories WHERE account_id = ? AND memory_type = ?",
+      )
+      .get(accountId, memoryType) as { cnt: number };
     return row.cnt;
   }
-  const row = db.prepare("SELECT COUNT(*) as cnt FROM draft_memories WHERE account_id = ?").get(accountId) as { cnt: number };
+  const row = db
+    .prepare("SELECT COUNT(*) as cnt FROM draft_memories WHERE account_id = ?")
+    .get(accountId) as { cnt: number };
   return row.cnt;
 }
 
-export function evictOldestDraftMemories(accountId: string, maxCount: number, memoryType?: MemoryType): void {
+export function evictOldestDraftMemories(
+  accountId: string,
+  maxCount: number,
+  memoryType?: MemoryType,
+): void {
   const db = getDatabase();
   const count = getDraftMemoryCount(accountId, memoryType);
   if (count <= maxCount) return;
 
   const toEvict = count - maxCount;
   if (memoryType) {
-    db.prepare(`
+    db.prepare(
+      `
       DELETE FROM draft_memories WHERE id IN (
         SELECT id FROM draft_memories WHERE account_id = ? AND memory_type = ? ORDER BY last_voted_at ASC LIMIT ?
       )
-    `).run(accountId, memoryType, toEvict);
+    `,
+    ).run(accountId, memoryType, toEvict);
   } else {
-    db.prepare(`
+    db.prepare(
+      `
       DELETE FROM draft_memories WHERE id IN (
         SELECT id FROM draft_memories WHERE account_id = ? ORDER BY last_voted_at ASC LIMIT ?
       )
-    `).run(accountId, toEvict);
+    `,
+    ).run(accountId, toEvict);
   }
 }
 
@@ -2249,14 +2572,22 @@ export function saveExtensionEnrichment(
   panelId: string,
   data: string,
   expiresAt: number | null,
-  senderEmail?: string
+  senderEmail?: string,
 ): void {
   const db = getDatabase();
   const stmt = db.prepare(`
     INSERT OR REPLACE INTO extension_enrichments (email_id, extension_id, panel_id, data, expires_at, created_at, sender_email)
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `);
-  stmt.run(emailId, extensionId, panelId, data, expiresAt, Date.now(), senderEmail?.toLowerCase() ?? null);
+  stmt.run(
+    emailId,
+    extensionId,
+    panelId,
+    data,
+    expiresAt,
+    Date.now(),
+    senderEmail?.toLowerCase() ?? null,
+  );
 }
 
 export function getExtensionEnrichments(emailId: string): ExtensionEnrichmentRow[] {
@@ -2271,7 +2602,10 @@ export function getExtensionEnrichments(emailId: string): ExtensionEnrichmentRow
   return stmt.all(emailId, now) as ExtensionEnrichmentRow[];
 }
 
-export function getExtensionEnrichment(emailId: string, extensionId: string): ExtensionEnrichmentRow | null {
+export function getExtensionEnrichment(
+  emailId: string,
+  extensionId: string,
+): ExtensionEnrichmentRow | null {
   const db = getDatabase();
   const now = Date.now();
   const stmt = db.prepare(`
@@ -2286,7 +2620,10 @@ export function getExtensionEnrichment(emailId: string, extensionId: string): Ex
 /**
  * Get enrichment by sender email address - used for caching across multiple emails from the same sender
  */
-export function getExtensionEnrichmentBySender(senderEmail: string, extensionId: string): ExtensionEnrichmentRow | null {
+export function getExtensionEnrichmentBySender(
+  senderEmail: string,
+  extensionId: string,
+): ExtensionEnrichmentRow | null {
   const db = getDatabase();
   const now = Date.now();
   const stmt = db.prepare(`
@@ -2303,7 +2640,9 @@ export function getExtensionEnrichmentBySender(senderEmail: string, extensionId:
 export function clearExpiredEnrichments(): number {
   const db = getDatabase();
   const now = Date.now();
-  const result = db.prepare("DELETE FROM extension_enrichments WHERE expires_at IS NOT NULL AND expires_at <= ?").run(now);
+  const result = db
+    .prepare("DELETE FROM extension_enrichments WHERE expires_at IS NOT NULL AND expires_at <= ?")
+    .run(now);
   return result.changes;
 }
 
@@ -2313,7 +2652,9 @@ export function clearExpiredEnrichments(): number {
  */
 export function deleteEnrichmentBySender(senderEmail: string, extensionId: string): number {
   const db = getDatabase();
-  const result = db.prepare("DELETE FROM extension_enrichments WHERE sender_email = ? AND extension_id = ?").run(senderEmail.toLowerCase(), extensionId);
+  const result = db
+    .prepare("DELETE FROM extension_enrichments WHERE sender_email = ? AND extension_id = ?")
+    .run(senderEmail.toLowerCase(), extensionId);
   return result.changes;
 }
 
@@ -2324,13 +2665,13 @@ export function deleteEnrichmentBySender(senderEmail: string, extensionId: strin
  */
 export function deleteNeedsAuthEnrichments(extensionId: string): number {
   const db = getDatabase();
-  const result = db.prepare(
-    `DELETE FROM extension_enrichments WHERE extension_id = ? AND data LIKE '%"needsAuth":true%'`
-  ).run(extensionId);
+  const result = db
+    .prepare(
+      `DELETE FROM extension_enrichments WHERE extension_id = ? AND data LIKE '%"needsAuth":true%'`,
+    )
+    .run(extensionId);
   return result.changes;
 }
-
-
 
 // ============================================
 // Local draft operations (for compose)
@@ -2365,7 +2706,7 @@ export function saveLocalDraft(draft: LocalDraft): void {
     draft.isForward ? 1 : 0,
     draft.createdAt,
     draft.updatedAt,
-    draft.syncedAt || null
+    draft.syncedAt || null,
   );
 }
 
@@ -2418,8 +2759,11 @@ export function deleteLocalDraft(draftId: string): void {
 
 export function updateLocalDraftGmailId(draftId: string, gmailDraftId: string): void {
   const db = getDatabase();
-  db.prepare("UPDATE local_drafts SET gmail_draft_id = ?, synced_at = ? WHERE id = ?")
-    .run(gmailDraftId, Date.now(), draftId);
+  db.prepare("UPDATE local_drafts SET gmail_draft_id = ?, synced_at = ? WHERE id = ?").run(
+    gmailDraftId,
+    Date.now(),
+    draftId,
+  );
 }
 
 function rowToLocalDraft(row: Record<string, unknown>): LocalDraft {
@@ -2432,8 +2776,8 @@ function rowToLocalDraft(row: Record<string, unknown>): LocalDraft {
     threadId: (row.threadId as string | null) ?? undefined,
     inReplyTo: (row.inReplyTo as string | null) ?? undefined,
     to: JSON.parse(row.toAddresses as string) as string[],
-    cc: row.ccAddresses ? JSON.parse(row.ccAddresses as string) as string[] : undefined,
-    bcc: row.bccAddresses ? JSON.parse(row.bccAddresses as string) as string[] : undefined,
+    cc: row.ccAddresses ? (JSON.parse(row.ccAddresses as string) as string[]) : undefined,
+    bcc: row.bccAddresses ? (JSON.parse(row.bccAddresses as string) as string[]) : undefined,
     subject: row.subject as string,
     bodyHtml: row.bodyHtml as string,
     bodyText: (row.bodyText as string | null) ?? undefined,
@@ -2539,7 +2883,7 @@ export function searchEmails(query: string, options: SearchOptions = {}): Search
     const stmt = db.prepare(sql);
     rows = stmt.all(...params) as Array<Record<string, unknown>>;
   } catch (error) {
-    console.error("[DB] FTS5 search error, falling back to LIKE:", error);
+    log.error({ err: error }, "[DB] FTS5 search error, falling back to LIKE");
     // rows stays empty, will trigger LIKE fallback
   }
 
@@ -2576,7 +2920,7 @@ export function searchEmails(query: string, options: SearchOptions = {}): Search
       const stmt = db.prepare(sql);
       rows = stmt.all(...params) as Array<Record<string, unknown>>;
     } catch (likeError) {
-      console.error("[DB] LIKE fallback search error:", likeError);
+      log.error({ err: likeError }, "[DB] LIKE fallback search error");
       return [];
     }
   }
@@ -2613,7 +2957,7 @@ export function getSearchSuggestions(query: string, limit: number = 10): string[
     const rows = stmt.all(`%${query}%`, limit) as Array<{ address: string }>;
     return rows.map((row) => row.address);
   } catch (error) {
-    console.error("[DB] Search suggestions error:", error);
+    log.error({ err: error }, "[DB] Search suggestions error");
     return [];
   }
 }
@@ -2623,7 +2967,7 @@ export function getSearchSuggestions(query: string, limit: number = 10): string[
  */
 export function rebuildSearchIndex(): void {
   const db = getDatabase();
-  console.log("[DB] Rebuilding FTS5 search index");
+  log.info("[DB] Rebuilding FTS5 search index");
 
   try {
     // Delete all from FTS
@@ -2638,9 +2982,9 @@ export function rebuildSearchIndex(): void {
     // Optimize the index
     db.exec("INSERT INTO emails_fts(emails_fts) VALUES('optimize')");
 
-    console.log("[DB] FTS5 search index rebuilt");
+    log.info("[DB] FTS5 search index rebuilt");
   } catch (error) {
-    console.error("[DB] Failed to rebuild search index:", error);
+    log.error({ err: error }, "[DB] Failed to rebuild search index");
   }
 }
 
@@ -2702,14 +3046,18 @@ export function getContactSuggestions(query: string, limit: number = 10): Contac
 
   try {
     // 1. Search from_address (senders — one address per row, most reliable)
-    const fromRows = db.prepare(`
+    const fromRows = db
+      .prepare(
+        `
       SELECT from_address AS address, COUNT(*) AS freq
       FROM emails
       WHERE from_address LIKE ? COLLATE NOCASE
       GROUP BY from_address COLLATE NOCASE
       ORDER BY freq DESC
       LIMIT ?
-    `).all(likePattern, limit * 3) as Array<{ address: string; freq: number }>;
+    `,
+      )
+      .all(likePattern, limit * 3) as Array<{ address: string; freq: number }>;
 
     for (const row of fromRows) {
       for (const addr of parseAddresses(row.address)) {
@@ -2725,14 +3073,18 @@ export function getContactSuggestions(query: string, limit: number = 10): Contac
     }
 
     // 2. Search to_address (recipients — may contain multiple addresses per row)
-    const toRows = db.prepare(`
+    const toRows = db
+      .prepare(
+        `
       SELECT to_address AS address, COUNT(*) AS freq
       FROM emails
       WHERE to_address LIKE ? COLLATE NOCASE
       GROUP BY to_address COLLATE NOCASE
       ORDER BY freq DESC
       LIMIT ?
-    `).all(likePattern, limit * 3) as Array<{ address: string; freq: number }>;
+    `,
+      )
+      .all(likePattern, limit * 3) as Array<{ address: string; freq: number }>;
 
     const queryLower = query.toLowerCase();
     for (const row of toRows) {
@@ -2755,14 +3107,18 @@ export function getContactSuggestions(query: string, limit: number = 10): Contac
     }
 
     // 3. Search sender_profiles (matches by name, email, or company/domain)
-    const profileRows = db.prepare(`
+    const profileRows = db
+      .prepare(
+        `
       SELECT email, name, company
       FROM sender_profiles
       WHERE email LIKE ? COLLATE NOCASE
          OR name LIKE ? COLLATE NOCASE
          OR company LIKE ? COLLATE NOCASE
       LIMIT ?
-    `).all(likePattern, likePattern, likePattern, limit * 2) as Array<{
+    `,
+      )
+      .all(likePattern, likePattern, likePattern, limit * 2) as Array<{
       email: string;
       name: string | null;
       company: string | null;
@@ -2779,7 +3135,7 @@ export function getContactSuggestions(query: string, limit: number = 10): Contac
       }
     }
   } catch (error) {
-    console.error("[DB] Contact suggestions error:", error);
+    log.error({ err: error }, "[DB] Contact suggestions error");
     return [];
   }
 
@@ -2808,7 +3164,13 @@ export type OutboxItem = {
   bodyText?: string;
   inReplyTo?: string;
   references?: string;
-  attachments?: Array<{ filename: string; mimeType: string; path?: string; content?: string; size?: number }>;
+  attachments?: Array<{
+    filename: string;
+    mimeType: string;
+    path?: string;
+    content?: string;
+    size?: number;
+  }>;
   status: OutboxStatus;
   errorMessage?: string;
   retryCount: number;
@@ -2824,7 +3186,9 @@ export type OutboxStats = {
   total: number;
 };
 
-export function insertOutboxMessage(item: Omit<OutboxItem, "status" | "retryCount" | "updatedAt" | "sentAt" | "errorMessage">): void {
+export function insertOutboxMessage(
+  item: Omit<OutboxItem, "status" | "retryCount" | "updatedAt" | "sentAt" | "errorMessage">,
+): void {
   const db = getDatabase();
   const stmt = db.prepare(`
     INSERT INTO outbox (
@@ -2850,7 +3214,7 @@ export function insertOutboxMessage(item: Omit<OutboxItem, "status" | "retryCoun
     item.references || null,
     item.attachments ? JSON.stringify(item.attachments) : null,
     item.createdAt,
-    now
+    now,
   );
 }
 
@@ -2942,26 +3306,32 @@ export function updateOutboxStatus(
   id: string,
   status: OutboxStatus,
   errorMessage?: string,
-  incrementRetry: boolean = false
+  incrementRetry: boolean = false,
 ): void {
   const db = getDatabase();
   const now = Date.now();
 
   if (status === "sent") {
-    db.prepare(`
+    db.prepare(
+      `
       UPDATE outbox SET status = ?, sent_at = ?, updated_at = ?, error_message = NULL
       WHERE id = ?
-    `).run(status, now, now, id);
+    `,
+    ).run(status, now, now, id);
   } else if (incrementRetry) {
-    db.prepare(`
+    db.prepare(
+      `
       UPDATE outbox SET status = ?, error_message = ?, retry_count = retry_count + 1, updated_at = ?
       WHERE id = ?
-    `).run(status, errorMessage || null, now, id);
+    `,
+    ).run(status, errorMessage || null, now, id);
   } else {
-    db.prepare(`
+    db.prepare(
+      `
       UPDATE outbox SET status = ?, error_message = ?, updated_at = ?
       WHERE id = ?
-    `).run(status, errorMessage || null, now, id);
+    `,
+    ).run(status, errorMessage || null, now, id);
   }
 }
 
@@ -2993,7 +3363,7 @@ export function saveArchiveReady(
   threadId: string,
   accountId: string,
   isReady: boolean,
-  reason: string
+  reason: string,
 ): void {
   const db = getDatabase();
   const stmt = db.prepare(`
@@ -3017,7 +3387,7 @@ export function saveArchiveReady(
 export function batchInsertOnboardingSkips(
   emailIds: string[],
   threadIds: string[],
-  accountId: string
+  accountId: string,
 ): void {
   if (emailIds.length === 0) return;
 
@@ -3049,7 +3419,9 @@ export function batchInsertOnboardingSkips(
   });
   runAll();
 
-  console.log(`[DB] Onboarding: marked ${emailIds.length} emails as skip, ${threadIds.length} threads as archive-ready`);
+  log.info(
+    `[DB] Onboarding: marked ${emailIds.length} emails as skip, ${threadIds.length} threads as archive-ready`,
+  );
 }
 
 export function getArchiveReadyThreads(accountId: string): ArchiveReadyRow[] {
@@ -3062,7 +3434,7 @@ export function getArchiveReadyThreads(accountId: string): ArchiveReadyRow[] {
     ORDER BY analyzed_at DESC
   `);
   const rows = stmt.all(accountId) as Array<Record<string, unknown>>;
-  return rows.map(row => ({
+  return rows.map((row) => ({
     threadId: row.threadId as string,
     accountId: row.accountId as string,
     isReady: Boolean(row.isReady),
@@ -3072,7 +3444,10 @@ export function getArchiveReadyThreads(accountId: string): ArchiveReadyRow[] {
   }));
 }
 
-export function getArchiveReadyForThread(threadId: string, accountId: string): ArchiveReadyRow | null {
+export function getArchiveReadyForThread(
+  threadId: string,
+  accountId: string,
+): ArchiveReadyRow | null {
   const db = getDatabase();
   const stmt = db.prepare(`
     SELECT thread_id as threadId, account_id as accountId, is_ready as isReady,
@@ -3094,8 +3469,10 @@ export function getArchiveReadyForThread(threadId: string, accountId: string): A
 
 export function dismissArchiveReady(threadId: string, accountId: string): void {
   const db = getDatabase();
-  db.prepare("UPDATE archive_ready SET dismissed = 1 WHERE thread_id = ? AND account_id = ?")
-    .run(threadId, accountId);
+  db.prepare("UPDATE archive_ready SET dismissed = 1 WHERE thread_id = ? AND account_id = ?").run(
+    threadId,
+    accountId,
+  );
 }
 
 export function clearArchiveReady(accountId: string): void {
@@ -3107,15 +3484,18 @@ export function deleteArchiveReadyForThreads(threadIds: string[], accountId: str
   if (threadIds.length === 0) return;
   const db = getDatabase();
   const placeholders = threadIds.map(() => "?").join(",");
-  db.prepare(`DELETE FROM archive_ready WHERE thread_id IN (${placeholders}) AND account_id = ?`)
-    .run(...threadIds, accountId);
+  db.prepare(
+    `DELETE FROM archive_ready WHERE thread_id IN (${placeholders}) AND account_id = ?`,
+  ).run(...threadIds, accountId);
 }
 
 export function getAnalyzedArchiveThreadIds(accountId: string): Set<string> {
   const db = getDatabase();
-  const stmt = db.prepare("SELECT thread_id FROM archive_ready WHERE account_id = ? AND dismissed = 0");
+  const stmt = db.prepare(
+    "SELECT thread_id FROM archive_ready WHERE account_id = ? AND dismissed = 0",
+  );
   const rows = stmt.all(accountId) as { thread_id: string }[];
-  return new Set(rows.map(r => r.thread_id));
+  return new Set(rows.map((r) => r.thread_id));
 }
 
 // ============================================
@@ -3129,7 +3509,7 @@ export function snoozeEmail(
   emailId: string,
   threadId: string,
   accountId: string,
-  snoozeUntil: number
+  snoozeUntil: number,
 ): void {
   const db = getDatabase();
   const stmt = db.prepare(`
@@ -3146,7 +3526,10 @@ export function unsnoozeEmail(id: string): void {
 
 export function unsnoozeByThread(threadId: string, accountId: string): void {
   const db = getDatabase();
-  db.prepare("DELETE FROM snoozed_emails WHERE thread_id = ? AND account_id = ?").run(threadId, accountId);
+  db.prepare("DELETE FROM snoozed_emails WHERE thread_id = ? AND account_id = ?").run(
+    threadId,
+    accountId,
+  );
 }
 
 export function clearSnoozedEmails(accountId: string): void {
@@ -3229,7 +3612,9 @@ export type ScheduledMessageRow = {
   sentAt?: number;
 };
 
-export function insertScheduledMessage(item: Omit<ScheduledMessageRow, "status" | "updatedAt" | "sentAt" | "errorMessage">): void {
+export function insertScheduledMessage(
+  item: Omit<ScheduledMessageRow, "status" | "updatedAt" | "sentAt" | "errorMessage">,
+): void {
   const db = getDatabase();
   const stmt = db.prepare(`
     INSERT INTO scheduled_messages (
@@ -3255,7 +3640,7 @@ export function insertScheduledMessage(item: Omit<ScheduledMessageRow, "status" 
     item.references || null,
     item.scheduledAt,
     item.createdAt,
-    now
+    now,
   );
 }
 
@@ -3319,30 +3704,36 @@ export function getScheduledMessage(id: string): ScheduledMessageRow | null {
 export function updateScheduledMessageStatus(
   id: string,
   status: ScheduledMessageStatus,
-  errorMessage?: string
+  errorMessage?: string,
 ): void {
   const db = getDatabase();
   const now = Date.now();
 
   if (status === "sent") {
-    db.prepare(`
+    db.prepare(
+      `
       UPDATE scheduled_messages SET status = ?, sent_at = ?, updated_at = ?, error_message = NULL
       WHERE id = ?
-    `).run(status, now, now, id);
+    `,
+    ).run(status, now, now, id);
   } else {
-    db.prepare(`
+    db.prepare(
+      `
       UPDATE scheduled_messages SET status = ?, error_message = ?, updated_at = ?
       WHERE id = ?
-    `).run(status, errorMessage || null, now, id);
+    `,
+    ).run(status, errorMessage || null, now, id);
   }
 }
 
 export function updateScheduledMessageTime(id: string, scheduledAt: number): void {
   const db = getDatabase();
-  db.prepare(`
+  db.prepare(
+    `
     UPDATE scheduled_messages SET scheduled_at = ?, updated_at = ?
     WHERE id = ? AND status = 'scheduled'
-  `).run(scheduledAt, Date.now(), id);
+  `,
+  ).run(scheduledAt, Date.now(), id);
 }
 
 export function deleteScheduledMessage(id: string): void {
@@ -3382,8 +3773,8 @@ function rowToScheduledMessage(row: Record<string, unknown>): ScheduledMessageRo
     type: row.type as "send" | "reply",
     threadId: (row.threadId as string | null) ?? undefined,
     to: JSON.parse(row.toAddresses as string) as string[],
-    cc: row.ccAddresses ? JSON.parse(row.ccAddresses as string) as string[] : undefined,
-    bcc: row.bccAddresses ? JSON.parse(row.bccAddresses as string) as string[] : undefined,
+    cc: row.ccAddresses ? (JSON.parse(row.ccAddresses as string) as string[]) : undefined,
+    bcc: row.bccAddresses ? (JSON.parse(row.bccAddresses as string) as string[]) : undefined,
     subject: row.subject as string,
     bodyHtml: row.bodyHtml as string,
     bodyText: (row.bodyText as string | null) ?? undefined,
@@ -3438,10 +3829,18 @@ export function saveCalendarEvents(events: CalendarEventRow[]): void {
   const runAll = db.transaction(() => {
     for (const e of events) {
       stmt.run(
-        e.id, e.accountId, e.calendarId, e.summary,
-        e.startTime, e.endTime, e.isAllDay ? 1 : 0,
-        e.calendarName, e.calendarColor, e.status,
-        e.location || null, e.htmlLink || null
+        e.id,
+        e.accountId,
+        e.calendarId,
+        e.summary,
+        e.startTime,
+        e.endTime,
+        e.isAllDay ? 1 : 0,
+        e.calendarName,
+        e.calendarColor,
+        e.status,
+        e.location || null,
+        e.htmlLink || null,
       );
     }
   });
@@ -3482,7 +3881,7 @@ export function getCalendarEventsForDate(dateStr: string): CalendarEventRow[] {
     ORDER BY ce.start_time ASC
   `);
   const rows = stmt.all(datePrefix, dayEnd, dayStart) as Array<Record<string, unknown>>;
-  return rows.map(row => ({
+  return rows.map((row) => ({
     id: row.id as string,
     accountId: row.accountId as string,
     calendarId: row.calendarId as string,
@@ -3498,16 +3897,23 @@ export function getCalendarEventsForDate(dateStr: string): CalendarEventRow[] {
   }));
 }
 
-export function getCalendarSyncState(accountId: string, calendarId: string): CalendarSyncStateRow | null {
+export function getCalendarSyncState(
+  accountId: string,
+  calendarId: string,
+): CalendarSyncStateRow | null {
   const db = getDatabase();
-  const row = db.prepare(`
+  const row = db
+    .prepare(
+      `
     SELECT account_id AS accountId, calendar_id AS calendarId,
            sync_token AS syncToken, calendar_name AS calendarName,
            calendar_color AS calendarColor, last_synced_at AS lastSyncedAt,
            visible
     FROM calendar_sync_state
     WHERE account_id = ? AND calendar_id = ?
-  `).get(accountId, calendarId) as Record<string, unknown> | undefined;
+  `,
+    )
+    .get(accountId, calendarId) as Record<string, unknown> | undefined;
   if (!row) return null;
   return {
     accountId: row.accountId as string,
@@ -3526,11 +3932,12 @@ export function saveCalendarSyncState(
   syncToken: string | null,
   calendarName: string | null,
   calendarColor: string | null,
-  visible?: boolean
+  visible?: boolean,
 ): void {
   const db = getDatabase();
   // Use INSERT ... ON CONFLICT to preserve existing visible value when not explicitly provided
-  db.prepare(`
+  db.prepare(
+    `
     INSERT INTO calendar_sync_state
       (account_id, calendar_id, sync_token, calendar_name, calendar_color, last_synced_at, visible)
     VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -3540,20 +3947,33 @@ export function saveCalendarSyncState(
       calendar_color = excluded.calendar_color,
       last_synced_at = excluded.last_synced_at,
       visible = COALESCE(excluded.visible, calendar_sync_state.visible)
-  `).run(accountId, calendarId, syncToken, calendarName, calendarColor, Date.now(), visible !== undefined ? (visible ? 1 : 0) : null);
+  `,
+  ).run(
+    accountId,
+    calendarId,
+    syncToken,
+    calendarName,
+    calendarColor,
+    Date.now(),
+    visible !== undefined ? (visible ? 1 : 0) : null,
+  );
 }
 
 export function getCalendarSyncStates(accountId: string): CalendarSyncStateRow[] {
   const db = getDatabase();
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(
+      `
     SELECT account_id AS accountId, calendar_id AS calendarId,
            sync_token AS syncToken, calendar_name AS calendarName,
            calendar_color AS calendarColor, last_synced_at AS lastSyncedAt,
            visible
     FROM calendar_sync_state
     WHERE account_id = ?
-  `).all(accountId) as Array<Record<string, unknown>>;
-  return rows.map(row => ({
+  `,
+    )
+    .all(accountId) as Array<Record<string, unknown>>;
+  return rows.map((row) => ({
     accountId: row.accountId as string,
     calendarId: row.calendarId as string,
     syncToken: (row.syncToken as string) || null,
@@ -3566,15 +3986,19 @@ export function getCalendarSyncStates(accountId: string): CalendarSyncStateRow[]
 
 export function getAllCalendarSyncStates(): CalendarSyncStateRow[] {
   const db = getDatabase();
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(
+      `
     SELECT account_id AS accountId, calendar_id AS calendarId,
            sync_token AS syncToken, calendar_name AS calendarName,
            calendar_color AS calendarColor, last_synced_at AS lastSyncedAt,
            visible
     FROM calendar_sync_state
     ORDER BY account_id, calendar_name
-  `).all() as Array<Record<string, unknown>>;
-  return rows.map(row => ({
+  `,
+    )
+    .all() as Array<Record<string, unknown>>;
+  return rows.map((row) => ({
     accountId: row.accountId as string,
     calendarId: row.calendarId as string,
     syncToken: (row.syncToken as string) || null,
@@ -3585,10 +4009,15 @@ export function getAllCalendarSyncStates(): CalendarSyncStateRow[] {
   }));
 }
 
-export function setCalendarVisibility(accountId: string, calendarId: string, visible: boolean): void {
+export function setCalendarVisibility(
+  accountId: string,
+  calendarId: string,
+  visible: boolean,
+): void {
   const db = getDatabase();
-  db.prepare("UPDATE calendar_sync_state SET visible = ? WHERE account_id = ? AND calendar_id = ?")
-    .run(visible ? 1 : 0, accountId, calendarId);
+  db.prepare(
+    "UPDATE calendar_sync_state SET visible = ? WHERE account_id = ? AND calendar_id = ?",
+  ).run(visible ? 1 : 0, accountId, calendarId);
 }
 
 export function clearCalendarData(accountId: string): void {
@@ -3599,8 +4028,14 @@ export function clearCalendarData(accountId: string): void {
 
 export function clearSingleCalendarData(accountId: string, calendarId: string): void {
   const db = getDatabase();
-  db.prepare("DELETE FROM calendar_events WHERE account_id = ? AND calendar_id = ?").run(accountId, calendarId);
-  db.prepare("DELETE FROM calendar_sync_state WHERE account_id = ? AND calendar_id = ?").run(accountId, calendarId);
+  db.prepare("DELETE FROM calendar_events WHERE account_id = ? AND calendar_id = ?").run(
+    accountId,
+    calendarId,
+  );
+  db.prepare("DELETE FROM calendar_sync_state WHERE account_id = ? AND calendar_id = ?").run(
+    accountId,
+    calendarId,
+  );
 }
 
 function rowToOutboxItem(row: Record<string, unknown>): OutboxItem {
@@ -3611,8 +4046,8 @@ function rowToOutboxItem(row: Record<string, unknown>): OutboxItem {
     type: row.type as OutboxType,
     threadId: (row.threadId as string | null) ?? undefined,
     to: JSON.parse(row.toAddresses as string) as string[],
-    cc: row.ccAddresses ? JSON.parse(row.ccAddresses as string) as string[] : undefined,
-    bcc: row.bccAddresses ? JSON.parse(row.bccAddresses as string) as string[] : undefined,
+    cc: row.ccAddresses ? (JSON.parse(row.ccAddresses as string) as string[]) : undefined,
+    bcc: row.bccAddresses ? (JSON.parse(row.bccAddresses as string) as string[]) : undefined,
     subject: row.subject as string,
     bodyHtml: row.bodyHtml as string,
     bodyText: (row.bodyText as string | null) ?? undefined,
@@ -3665,7 +4100,7 @@ export function saveAuditEntry(entry: AuditEntryRow): void {
     entry.redactionApplied ? 1 : 0,
     entry.userApproved !== undefined ? (entry.userApproved ? 1 : 0) : null,
     entry.accountId || null,
-    entry.expiresAt || null
+    entry.expiresAt || null,
   );
 }
 
@@ -3681,7 +4116,7 @@ export function getAuditEntries(taskId: string): AuditEntryRow[] {
     ORDER BY id ASC
   `);
   const rows = stmt.all(taskId) as Array<Record<string, unknown>>;
-  return rows.map(row => ({
+  return rows.map((row) => ({
     id: row.id as number,
     taskId: row.taskId as string,
     providerId: row.providerId as string,
@@ -3700,9 +4135,9 @@ export function getAuditEntries(taskId: string): AuditEntryRow[] {
 export function cleanupExpiredAudit(): number {
   const db = getDatabase();
   const now = new Date().toISOString();
-  const result = db.prepare(
-    "DELETE FROM agent_audit_log WHERE expires_at IS NOT NULL AND expires_at < ?"
-  ).run(now);
+  const result = db
+    .prepare("DELETE FROM agent_audit_log WHERE expires_at IS NOT NULL AND expires_at < ?")
+    .run(now);
   return result.changes;
 }
 
@@ -3731,7 +4166,7 @@ export function upsertConversationMirror(
     status: string;
     messagesJson: string;
     remoteUpdatedAt?: string;
-  }
+  },
 ): void {
   const db = getDatabase();
   const now = new Date().toISOString();
@@ -3756,13 +4191,13 @@ export function upsertConversationMirror(
     data.remoteUpdatedAt || null,
     now,
     now,
-    now
+    now,
   );
 }
 
 export function getConversationMirror(
   providerId: string,
-  conversationId: string
+  conversationId: string,
 ): ConversationMirrorRow | null {
   const db = getDatabase();
   const stmt = db.prepare(`
@@ -3805,7 +4240,7 @@ export function listConversationMirrors(providerId?: string): ConversationMirror
 
   const stmt = db.prepare(query);
   const rows = providerId ? stmt.all(providerId) : stmt.all();
-  return (rows as Array<Record<string, unknown>>).map(row => ({
+  return (rows as Array<Record<string, unknown>>).map((row) => ({
     id: row.id as number,
     providerId: row.providerId as string,
     providerConversationId: row.providerConversationId as string,

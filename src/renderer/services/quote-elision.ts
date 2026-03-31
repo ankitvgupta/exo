@@ -61,10 +61,7 @@ function splitHtmlQuoted(html: string): {
 
   // Fallback: detect "---------- Forwarded message" in text nodes.
   if (!found) {
-    found = removeByTextPattern(
-      doc,
-      /^-{3,}\s*Forwarded message\s*-{3,}/,
-    );
+    found = removeByTextPattern(doc, /^-{3,}\s*Forwarded message\s*-{3,}/);
   }
 
   // Fallback: detect "On ... wrote:" attribution lines without a class marker.
@@ -77,12 +74,20 @@ function splitHtmlQuoted(html: string): {
   cleanTrailingWhitespace(doc.body);
   // Preserve <style> tags that the HTML5 parser moved into <head> — without
   // them, newsletters and styled emails would lose their CSS in the trimmed view.
-  const headStyles = Array.from(doc.querySelectorAll("head style")).map(s => s.outerHTML).join("");
+  const headStyles = Array.from(doc.querySelectorAll("head style"))
+    .map((s) => s.outerHTML)
+    .join("");
   const newContent = (headStyles + doc.body.innerHTML).trim();
 
   // If stripping removed all visible content, show the full body instead.
   // Strip <style> blocks first — their CSS text is not visible content.
-  if (!newContent || !newContent.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "").replace(/<[^>]*>/g, "").trim()) {
+  if (
+    !newContent ||
+    !newContent
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+      .replace(/<[^>]*>/g, "")
+      .trim()
+  ) {
     return { newContent: html, hasQuotedContent: false };
   }
 
@@ -146,10 +151,7 @@ function cleanTrailingWhitespace(el: Element): void {
         const prev = last.previousSibling;
         last.remove();
         last = prev;
-      } else if (
-        !last.textContent?.trim() &&
-        !last.querySelector("img")
-      ) {
+      } else if (!last.textContent?.trim() && !last.querySelector("img")) {
         const prev = last.previousSibling;
         last.remove();
         last = prev;

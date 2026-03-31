@@ -36,7 +36,7 @@ interface GetEventsResponse {
 
 interface CalendarApi {
   getEvents: (d: string) => Promise<GetEventsResponse>;
-  onEventsUpdated: (callback: () => void) => (() => void);
+  onEventsUpdated: (callback: () => void) => () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -113,7 +113,7 @@ interface LayoutInfo {
 
 function computeColumns(events: CalendarEvent[]): Map<string, LayoutInfo> {
   const sorted = [...events].sort(
-    (a, b) => new Date(a.start).getTime() - new Date(b.start).getTime()
+    (a, b) => new Date(a.start).getTime() - new Date(b.start).getTime(),
   );
 
   // Group overlapping events
@@ -172,13 +172,7 @@ function computeColumns(events: CalendarEvent[]): Map<string, LayoutInfo> {
 // Sub-components
 // ---------------------------------------------------------------------------
 
-function EventBlock({
-  event,
-  layoutInfo,
-}: {
-  event: CalendarEvent;
-  layoutInfo: LayoutInfo;
-}) {
+function EventBlock({ event, layoutInfo }: { event: CalendarEvent; layoutInfo: LayoutInfo }) {
   const rawStartHour = toFractionalHour(event.start);
   const startHour = Math.max(rawStartHour, DAY_START_HOUR);
   const endHour = toFractionalHour(event.end);
@@ -246,16 +240,18 @@ function AllDayStrip({ events }: { events: CalendarEvent[] }) {
             color: "inherit",
           }}
         >
-          <span className="text-gray-800 dark:text-gray-200">
-            {evt.summary}
-          </span>
+          <span className="text-gray-800 dark:text-gray-200">{evt.summary}</span>
         </div>
       ))}
     </div>
   );
 }
 
-function CurrentTimeLine({ scrollRef }: { scrollRef: React.RefObject<HTMLDivElement | null> }) {
+function CurrentTimeLine({
+  scrollRef: _scrollRef,
+}: {
+  scrollRef: React.RefObject<HTMLDivElement | null>;
+}) {
   const [now, setNow] = useState(new Date());
 
   useEffect(() => {
@@ -279,22 +275,13 @@ function CurrentTimeLine({ scrollRef }: { scrollRef: React.RefObject<HTMLDivElem
   );
 }
 
-function TimeGrid({
-  events,
-  isToday,
-}: {
-  events: CalendarEvent[];
-  isToday: boolean;
-}) {
+function TimeGrid({ events, isToday }: { events: CalendarEvent[]; isToday: boolean }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const hasScrolled = useRef(false);
 
   const timedEvents = events.filter((e) => !e.isAllDay);
   const columns = useMemo(() => computeColumns(timedEvents), [timedEvents]);
-  const hours = Array.from(
-    { length: DAY_END_HOUR - DAY_START_HOUR },
-    (_, i) => i + DAY_START_HOUR
-  );
+  const hours = Array.from({ length: DAY_END_HOUR - DAY_START_HOUR }, (_, i) => i + DAY_START_HOUR);
 
   // Scroll to current time (today) or VISIBLE_START_HOUR (other days)
   useEffect(() => {
@@ -348,10 +335,7 @@ function LoadingState() {
       <div className="h-6 bg-gray-100 dark:bg-gray-700 rounded animate-pulse w-2/3" />
       <div className="space-y-2">
         {[1, 2, 3].map((i) => (
-          <div
-            key={i}
-            className="h-12 bg-gray-100 dark:bg-gray-700 rounded animate-pulse"
-          />
+          <div key={i} className="h-12 bg-gray-100 dark:bg-gray-700 rounded animate-pulse" />
         ))}
       </div>
     </div>
@@ -475,7 +459,13 @@ export function CalendarPanel({
             className="w-6 h-6 flex items-center justify-center rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400"
             aria-label="Previous day"
           >
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <svg
+              className="w-3.5 h-3.5"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
             </svg>
           </button>
@@ -484,7 +474,13 @@ export function CalendarPanel({
             className="w-6 h-6 flex items-center justify-center rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400"
             aria-label="Next day"
           >
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <svg
+              className="w-3.5 h-3.5"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
             </svg>
           </button>

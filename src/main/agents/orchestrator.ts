@@ -55,9 +55,7 @@ export class AgentOrchestrator {
     this.providerRegistry = new AgentProviderRegistry();
 
     // Register the Claude provider by default
-    this.providerRegistry.register(
-      new ClaudeAgentProvider(deps.config),
-    );
+    this.providerRegistry.register(new ClaudeAgentProvider(deps.config));
 
     // Register the OpenClaw provider
     const ocSettings = deps.config.providers?.["openclaw-agent"];
@@ -96,9 +94,7 @@ export class AgentOrchestrator {
   private async getToolRegistry(): Promise<ToolRegistry> {
     if (this.toolRegistry) return this.toolRegistry;
     if (!this.toolRegistryPromise) {
-      this.toolRegistryPromise = import("./tools/registry").then(
-        (mod) => mod.buildToolRegistry(),
-      );
+      this.toolRegistryPromise = import("./tools/registry").then((mod) => mod.buildToolRegistry());
     }
     this.toolRegistry = await this.toolRegistryPromise;
     return this.toolRegistry;
@@ -111,7 +107,11 @@ export class AgentOrchestrator {
     };
   }
 
-  private buildToolExecutor(taskId: string, registry: ToolRegistry, proxyCtx: ProxyContext): ToolExecutorFn {
+  private buildToolExecutor(
+    taskId: string,
+    registry: ToolRegistry,
+    proxyCtx: ProxyContext,
+  ): ToolExecutorFn {
     const permissionGate = new PermissionGate();
 
     return async (toolName: string, args: Record<string, unknown>): Promise<unknown> => {

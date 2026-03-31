@@ -251,7 +251,9 @@ test.describe("PendingActionsQueue - retry escalation", () => {
   test("multiple items from different accounts: one fails, others succeed", async () => {
     const archived: string[] = [];
     const successClient = createMockClient({
-      archiveMessage: async (id) => { archived.push(id); },
+      archiveMessage: async (id) => {
+        archived.push(id);
+      },
     });
 
     const queue = new TestPendingActionsQueue();
@@ -291,13 +293,14 @@ interface OutboxLikeItem {
   bodyHtml: string;
 }
 
-function isDuplicateInCache(
-  item: OutboxLikeItem,
-  cache: Map<string, SentCacheEntry>
-): boolean {
+function isDuplicateInCache(item: OutboxLikeItem, cache: Map<string, SentCacheEntry>): boolean {
   if (cache.size === 0) return false;
 
-  const itemTo = item.to[0]?.toLowerCase().replace(/<([^>]+)>.*/, "$1").trim() || "";
+  const itemTo =
+    item.to[0]
+      ?.toLowerCase()
+      .replace(/<([^>]+)>.*/, "$1")
+      .trim() || "";
   const itemSubject = item.subject.toLowerCase();
   const itemBodyPrefix = item.bodyHtml
     .replace(/<[^>]*>/g, "")

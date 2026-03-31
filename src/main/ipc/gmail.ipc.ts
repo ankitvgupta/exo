@@ -4,6 +4,9 @@ import { saveEmail, getEmailIds, getInboxEmails, getEmail, saveAccount, getAccou
 import { getConfig } from "./settings.ipc";
 import type { IpcResponse, DashboardEmail } from "../../shared/types";
 import { DEMO_INBOX_EMAILS, DEMO_EXPECTED_ANALYSIS } from "../demo/fake-inbox";
+import { createLogger } from "../services/logger";
+
+const log = createLogger("gmail-ipc");
 
 const isTestMode = process.env.EXO_TEST_MODE === "true";
 const isDemoMode = process.env.EXO_DEMO_MODE === "true";
@@ -23,7 +26,9 @@ function resolveTargetAccountId(accountId?: string): string {
   const fallbackId = fallbackAccount?.id ?? "default";
 
   if (trimmedAccountId) {
-    console.warn(`[Gmail] Requested account "${trimmedAccountId}" not found, falling back to "${fallbackId}"`);
+    log.warn(
+      `[Gmail] Requested account "${trimmedAccountId}" not found, falling back to "${fallbackId}"`,
+    );
   }
 
   return fallbackId;
@@ -45,7 +50,9 @@ export function registerGmailIpc(): void {
   // Check authentication status
   ipcMain.handle(
     "gmail:check-auth",
-    async (): Promise<IpcResponse<{ hasCredentials: boolean; hasTokens: boolean; hasAnthropicKey: boolean }>> => {
+    async (): Promise<
+      IpcResponse<{ hasCredentials: boolean; hasTokens: boolean; hasAnthropicKey: boolean }>
+    > => {
       // In demo/test mode, always return authenticated
       if (useFakeData) {
         return {
@@ -75,13 +82,16 @@ export function registerGmailIpc(): void {
           error: error instanceof Error ? error.message : "Unknown error",
         };
       }
-    }
+    },
   );
 
   // Save credentials
   ipcMain.handle(
     "gmail:save-credentials",
-    async (_, { clientId, clientSecret }: { clientId: string; clientSecret: string }): Promise<IpcResponse<void>> => {
+    async (
+      _,
+      { clientId, clientSecret }: { clientId: string; clientSecret: string },
+    ): Promise<IpcResponse<void>> => {
       if (useFakeData) {
         return { success: true, data: undefined };
       }
@@ -96,7 +106,7 @@ export function registerGmailIpc(): void {
           error: error instanceof Error ? error.message : "Unknown error",
         };
       }
-    }
+    },
   );
 
   // Start OAuth flow
@@ -116,13 +126,15 @@ export function registerGmailIpc(): void {
 
       // Save the account to the database if not already saved
       const existingAccounts = getAccounts();
-      const alreadyExists = existingAccounts.some(a => a.id === accountId || a.email === profile.emailAddress);
+      const alreadyExists = existingAccounts.some(
+        (a) => a.id === accountId || a.email === profile.emailAddress,
+      );
 
       if (!alreadyExists) {
         const displayName = await client.fetchDisplayName();
         const isPrimary = existingAccounts.length === 0;
         saveAccount(accountId, profile.emailAddress, displayName ?? undefined, isPrimary);
-        console.log(`[OAuth] Saved new account: ${profile.emailAddress} (${accountId})`);
+        log.info(`[OAuth] Saved new account: ${profile.emailAddress} (${accountId})`);
       }
 
       return { success: true, data: undefined };
@@ -139,7 +151,7 @@ export function registerGmailIpc(): void {
     "gmail:fetch-unread",
     async (
       _,
-      { maxResults, accountId }: { maxResults?: number; accountId?: string }
+      { maxResults, accountId }: { maxResults?: number; accountId?: string },
     ): Promise<IpcResponse<DashboardEmail[]>> => {
       // In demo/test mode, return fake emails merged with DB state (drafts, analysis)
       if (useFakeData) {
@@ -153,12 +165,16 @@ export function registerGmailIpc(): void {
             return {
               ...email,
               accountId: accountId || "default",
-              analysis: dbEmail.analysis ?? (expectedAnalysis ? {
-                needsReply: expectedAnalysis.needsReply,
-                reason: expectedAnalysis.reason,
-                priority: expectedAnalysis.priority,
-                analyzedAt: Date.now(),
-              } : undefined),
+              analysis:
+                dbEmail.analysis ??
+                (expectedAnalysis
+                  ? {
+                      needsReply: expectedAnalysis.needsReply,
+                      reason: expectedAnalysis.reason,
+                      priority: expectedAnalysis.priority,
+                      analyzedAt: Date.now(),
+                    }
+                  : undefined),
               draft: dbEmail.draft,
             };
           });
@@ -188,7 +204,7 @@ export function registerGmailIpc(): void {
         }
 
         if (newEmailCount > 0) {
-          console.log(`[Gmail] Fetched ${newEmailCount} new emails`);
+          log.info(`[Gmail] Fetched ${newEmailCount} new emails`);
         }
 
         // Get ALL inbox emails from DB (not just the ones from this API call)
@@ -201,7 +217,7 @@ export function registerGmailIpc(): void {
           error: error instanceof Error ? error.message : "Unknown error",
         };
       }
-    }
+    },
   );
 
   // Get single email
@@ -210,7 +226,7 @@ export function registerGmailIpc(): void {
     async (_, { emailId }: { emailId: string }): Promise<IpcResponse<DashboardEmail>> => {
       // In demo mode, find from fake emails
       if (useFakeData) {
-        const email = DEMO_INBOX_EMAILS.find(e => e.id === emailId);
+        const email = DEMO_INBOX_EMAILS.find((e) => e.id === emailId);
         if (!email) {
           return { success: false, error: "Email not found" };
         }
@@ -219,12 +235,14 @@ export function registerGmailIpc(): void {
           success: true,
           data: {
             ...email,
-            analysis: expectedAnalysis ? {
-              needsReply: expectedAnalysis.needsReply,
-              reason: expectedAnalysis.reason,
-              priority: expectedAnalysis.priority,
-              analyzedAt: Date.now(),
-            } : undefined,
+            analysis: expectedAnalysis
+              ? {
+                  needsReply: expectedAnalysis.needsReply,
+                  reason: expectedAnalysis.reason,
+                  priority: expectedAnalysis.priority,
+                  analyzedAt: Date.now(),
+                }
+              : undefined,
           },
         };
       }
@@ -241,7 +259,7 @@ export function registerGmailIpc(): void {
           error: error instanceof Error ? error.message : "Unknown error",
         };
       }
-    }
+    },
   );
 
   // Create draft in Gmail
@@ -249,17 +267,23 @@ export function registerGmailIpc(): void {
     "gmail:create-draft",
     async (
       _,
-      { emailId, body, cc, bcc, accountId }: { emailId: string; body: string; cc?: string[]; bcc?: string[]; accountId?: string }
+      {
+        emailId,
+        body,
+        cc,
+        bcc,
+        accountId,
+      }: { emailId: string; body: string; cc?: string[]; bcc?: string[]; accountId?: string },
     ): Promise<IpcResponse<{ draftId: string }>> => {
       // In demo mode, simulate draft creation
       if (useFakeData) {
-        console.log(`[DEMO] Creating draft for email ${emailId}`);
-        console.log(`[DEMO] Draft body: ${body.substring(0, 100)}...`);
+        log.info(`[DEMO] Creating draft for email ${emailId}`);
+        log.info(`[DEMO] Draft body: ${body.substring(0, 100)}...`);
         if (cc?.length) {
-          console.log(`[DEMO] CC: ${cc.join(", ")}`);
+          log.info(`[DEMO] CC: ${cc.join(", ")}`);
         }
         if (bcc?.length) {
-          console.log(`[DEMO] BCC: ${bcc.join(", ")}`);
+          log.info(`[DEMO] BCC: ${bcc.join(", ")}`);
         }
         return { success: true, data: { draftId: `demo-draft-${Date.now()}` } };
       }
@@ -277,9 +301,7 @@ export function registerGmailIpc(): void {
         const replyTo = fromMatch ? fromMatch[1] : email.from;
 
         // Format subject
-        const subject = email.subject.startsWith("Re:")
-          ? email.subject
-          : `Re: ${email.subject}`;
+        const subject = email.subject.startsWith("Re:") ? email.subject : `Re: ${email.subject}`;
 
         const result = await client.createDraft({
           to: replyTo,
@@ -301,6 +323,6 @@ export function registerGmailIpc(): void {
           error: error instanceof Error ? error.message : "Unknown error",
         };
       }
-    }
+    },
   );
 }

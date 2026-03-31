@@ -1,17 +1,28 @@
-import { google, gmail_v1 } from "googleapis";
+import { google, type gmail_v1 } from "googleapis";
 import { OAuth2Client } from "google-auth-library";
 import { createServer, type Server } from "http";
 import { readFile, writeFile, readdir, copyFile, access } from "fs/promises";
 import { existsSync } from "fs";
 import { homedir } from "os";
 import { join } from "path";
-import { app, shell, BrowserWindow } from "electron";
+import { shell } from "electron";
 import { createTransport } from "nodemailer";
 import type Mail from "nodemailer/lib/mailer";
-import type { Email, EmailSearchResult, SentEmail, GmailDraft, SendMessageOptions, ComposeMessageOptions, AttachmentMeta } from "../../shared/types";
+import type {
+  Email,
+  EmailSearchResult,
+  SentEmail,
+  GmailDraft,
+  SendMessageOptions,
+  ComposeMessageOptions,
+  AttachmentMeta,
+} from "../../shared/types";
 import { getAccounts } from "../db";
 import { getDataDir } from "../data-dir";
 import { extractEmail } from "../utils/address-formatting";
+import { createLogger } from "./logger";
+
+const log = createLogger("gmail");
 
 // Lazy — app.getPath() throws if called before Electron is initialized (e.g. in unit tests).
 // getDataDir() is itself lazy (defers app.getPath() to call time), so this is safe.
@@ -42,7 +53,7 @@ export async function migrateOldConfigIfNeeded(): Promise<void> {
     }
   } catch (err: unknown) {
     if ((err as NodeJS.ErrnoException).code === "ENOENT") return; // fresh install
-    console.warn("[Config] Could not scan old config dir:", err);
+    log.warn({ err: err }, "[Config] Could not scan old config dir");
   }
 
   for (const file of filesToMigrate) {
@@ -53,11 +64,11 @@ export async function migrateOldConfigIfNeeded(): Promise<void> {
     } catch {
       try {
         await copyFile(src, dst);
-        console.log(`[Config] Migrated ${file} to ${newDir}`);
+        log.info(`[Config] Migrated ${file} to ${newDir}`);
       } catch (err: unknown) {
         const code = (err as NodeJS.ErrnoException).code;
         if (code !== "ENOENT") {
-          console.warn(`[Config] Could not migrate ${file}: ${err}`);
+          log.warn(`[Config] Could not migrate ${file}: ${err}`);
         }
       }
     }
@@ -102,9 +113,7 @@ interface Credentials {
 const _clientId = import.meta.env.MAIN_VITE_GOOGLE_CLIENT_ID ?? "";
 const _clientSecret = import.meta.env.MAIN_VITE_GOOGLE_CLIENT_SECRET ?? "";
 const BUNDLED_CREDENTIALS: Credentials | null =
-  _clientId && _clientSecret
-    ? { client_id: _clientId, client_secret: _clientSecret }
-    : null;
+  _clientId && _clientSecret ? { client_id: _clientId, client_secret: _clientSecret } : null;
 
 /**
  * Detect whether an error is an OAuth authentication error (expired/revoked token).
@@ -130,7 +139,8 @@ export class GmailClient {
   private gmail: ReturnType<typeof google.gmail> | null = null;
   private lastHistoryId: string | null = null;
   private accountId: string; // For multi-account support
-  private cachedAccountInfo: { email: string; displayName: string | null } | null | undefined = undefined;
+  private cachedAccountInfo: { email: string; displayName: string | null } | null | undefined =
+    undefined;
   private pendingOAuthServer: Server | null = null;
   private pendingOAuthReject: ((reason: Error) => void) | null = null;
   private pendingOAuthTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -162,14 +172,14 @@ export class GmailClient {
     this.oauth2Client = new OAuth2Client(
       credentials.client_id,
       credentials.client_secret,
-      "http://localhost:3847/oauth2callback"
+      "http://localhost:3847/oauth2callback",
     );
 
     // Persist silently-refreshed access tokens to disk.
     // The google-auth-library automatically refreshes access tokens when they expire,
     // but only in-memory. Without this listener, refreshed tokens are lost on restart.
     this.oauth2Client.on("tokens", (tokens) => {
-      console.log(`[Gmail] Token refreshed for account ${this.accountId}, persisting to disk`);
+      log.info(`[Gmail] Token refreshed for account ${this.accountId}, persisting to disk`);
       const tokensFile = getTokensFile(this.accountId);
       // Merge with existing tokens (refresh_token may not be in the event).
       // If the file can't be read (race with another write, missing, etc.),
@@ -182,7 +192,10 @@ export class GmailClient {
         .catch(() => tokens)
         .then((merged) => writeFile(tokensFile, JSON.stringify(merged, null, 2)))
         .catch((err) => {
-          console.error(`[Gmail] Failed to persist refreshed tokens for ${this.accountId}:`, err);
+          log.error(
+            { err: err },
+            `[Gmail] Failed to persist refreshed tokens for ${this.accountId}`,
+          );
         });
     });
 
@@ -190,7 +203,7 @@ export class GmailClient {
     this.oauth2Client.setCredentials(tokens);
 
     this.gmail = google.gmail({ version: "v1", auth: this.oauth2Client });
-    console.log("Connected to Gmail API");
+    log.info("Connected to Gmail API");
   }
 
   private async loadCredentials(): Promise<Credentials> {
@@ -226,7 +239,7 @@ export class GmailClient {
 
     throw new Error(
       `CREDENTIALS_REQUIRED: No credentials available. ` +
-        `Place credentials.json in ${getConfigDir()}/ or build with MAIN_VITE_GOOGLE_CLIENT_ID and MAIN_VITE_GOOGLE_CLIENT_SECRET env vars.`
+        `Place credentials.json in ${getConfigDir()}/ or build with MAIN_VITE_GOOGLE_CLIENT_ID and MAIN_VITE_GOOGLE_CLIENT_SECRET env vars.`,
     );
   }
 
@@ -238,7 +251,7 @@ export class GmailClient {
 
     await writeFile(
       getCredentialsFile(),
-      JSON.stringify({ client_id: clientId.trim(), client_secret: clientSecret.trim() }, null, 2)
+      JSON.stringify({ client_id: clientId.trim(), client_secret: clientSecret.trim() }, null, 2),
     );
   }
 
@@ -261,18 +274,18 @@ export class GmailClient {
       const isExpired = expiryDate != null && expiryDate < Date.now() + 5 * 60 * 1000;
 
       if (isExpired && tokens.refresh_token) {
-        console.log(`[Gmail] Access token expired for ${this.accountId}, attempting refresh`);
+        log.info(`[Gmail] Access token expired for ${this.accountId}, attempting refresh`);
         try {
           // Use a temporary client to refresh since this.oauth2Client already exists
           this.oauth2Client!.setCredentials(tokens);
           const { credentials } = await this.oauth2Client!.refreshAccessToken();
           const merged = { ...tokens, ...credentials };
           await writeFile(tokensFile, JSON.stringify(merged, null, 2));
-          console.log(`[Gmail] Token refresh successful for ${this.accountId}`);
+          log.info(`[Gmail] Token refresh successful for ${this.accountId}`);
           return merged as { access_token: string; refresh_token: string };
         } catch (err) {
           // Refresh failed — token is likely revoked (Google "testing" mode 7-day expiry)
-          console.error(`[Gmail] Token refresh failed for ${this.accountId}:`, err);
+          log.error({ err: err }, `[Gmail] Token refresh failed for ${this.accountId}`);
           throw err;
         }
       }
@@ -292,10 +305,10 @@ export class GmailClient {
       prompt: "consent",
     });
 
-    console.log("\nOpening browser for Google authorization...");
-    console.log("If browser doesn't open, visit this URL:\n");
-    console.log(authUrl);
-    console.log();
+    log.info("\nOpening browser for Google authorization...");
+    log.info("If browser doesn't open, visit this URL:\n");
+    log.info(authUrl);
+    log.info("");
 
     // Open browser using Electron's shell
     await shell.openExternal(authUrl);
@@ -316,7 +329,7 @@ export class GmailClient {
         const code = url.searchParams.get("code");
 
         if (code) {
-          res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Connection": "close" });
+          res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", Connection: "close" });
           res.end(`
             <html>
               <body style="font-family: system-ui; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0;">
@@ -332,7 +345,7 @@ export class GmailClient {
           cleanup();
           resolve(code);
         } else {
-          res.writeHead(400, { "Content-Type": "text/plain", "Connection": "close" });
+          res.writeHead(400, { "Content-Type": "text/plain", Connection: "close" });
           res.end("Missing authorization code");
           server.closeAllConnections();
           server.close();
@@ -349,22 +362,25 @@ export class GmailClient {
       };
 
       server.listen(3847, () => {
-        console.log("Waiting for authorization...");
+        log.info("Waiting for authorization...");
       });
 
       // Timeout after 5 minutes
-      this.pendingOAuthTimeout = setTimeout(() => {
-        server.closeAllConnections();
-        server.close();
-        cleanup();
-        reject(new Error("Authorization timeout"));
-      }, 5 * 60 * 1000);
+      this.pendingOAuthTimeout = setTimeout(
+        () => {
+          server.closeAllConnections();
+          server.close();
+          cleanup();
+          reject(new Error("Authorization timeout"));
+        },
+        5 * 60 * 1000,
+      );
     });
 
     const { tokens } = await oauth2Client.getToken(code);
 
     await writeFile(getTokensFile(this.accountId), JSON.stringify(tokens, null, 2));
-    console.log(`Authorization successful! Tokens saved for account: ${this.accountId}\n`);
+    log.info(`Authorization successful! Tokens saved for account: ${this.accountId}\n`);
 
     return tokens as { access_token: string; refresh_token: string };
   }
@@ -372,7 +388,7 @@ export class GmailClient {
   async disconnect(): Promise<void> {
     this.oauth2Client = null;
     this.gmail = null;
-    console.log("Disconnected from Gmail API");
+    log.info("Disconnected from Gmail API");
   }
 
   /** Delete the stored token file for this account. */
@@ -381,7 +397,7 @@ export class GmailClient {
     const tokensFile = getTokensFile(this.accountId);
     try {
       await unlink(tokensFile);
-      console.log(`[Gmail] Deleted token file for account ${this.accountId}`);
+      log.info(`[Gmail] Deleted token file for account ${this.accountId}`);
     } catch {
       // File may not exist, that's fine
     }
@@ -415,20 +431,24 @@ export class GmailClient {
       this.oauth2Client = new OAuth2Client(
         credentials.client_id,
         credentials.client_secret,
-        "http://localhost:3847/oauth2callback"
+        "http://localhost:3847/oauth2callback",
       );
     }
     const tokens = await this.doOAuthFlow();
     this.oauth2Client.setCredentials(tokens);
     this.gmail = google.gmail({ version: "v1", auth: this.oauth2Client });
-    console.log(`[Gmail] Re-authenticated account ${this.accountId}`);
+    log.info(`[Gmail] Re-authenticated account ${this.accountId}`);
   }
 
   async listCapabilities(): Promise<string[]> {
     return ["search_emails", "read_email", "create_draft"];
   }
 
-  async searchEmails(query: string, maxResults: number = 50, pageToken?: string): Promise<{ results: EmailSearchResult[]; nextPageToken?: string }> {
+  async searchEmails(
+    query: string,
+    maxResults: number = 50,
+    pageToken?: string,
+  ): Promise<{ results: EmailSearchResult[]; nextPageToken?: string }> {
     const gmail = this.gmail!;
 
     const response = await gmail.users.messages.list({
@@ -497,7 +517,7 @@ export class GmailClient {
       }
 
       if (allMessages.length % 500 === 0 && allMessages.length > 0) {
-        console.log(`[Gmail] getEmailsByLabel(${labelId}): fetched ${allMessages.length} IDs...`);
+        log.info(`[Gmail] getEmailsByLabel(${labelId}): fetched ${allMessages.length} IDs...`);
       }
     } while (pageToken);
 
@@ -554,7 +574,7 @@ export class GmailClient {
 
       // Log progress for large syncs
       if (allMessages.length % 500 === 0 && allMessages.length > 0) {
-        console.log(`[Gmail] Fetched ${allMessages.length} message IDs...`);
+        log.info(`[Gmail] Fetched ${allMessages.length} message IDs...`);
       }
     } while (pageToken);
 
@@ -569,7 +589,7 @@ export class GmailClient {
     const results: Email[] = [];
     for (let i = 0; i < messageIds.length; i += concurrency) {
       const chunk = messageIds.slice(i, i + concurrency);
-      const settled = await Promise.allSettled(chunk.map(id => this.readEmail(id)));
+      const settled = await Promise.allSettled(chunk.map((id) => this.readEmail(id)));
       for (const result of settled) {
         if (result.status === "fulfilled" && result.value) {
           results.push(result.value);
@@ -596,8 +616,8 @@ export class GmailClient {
       return header?.value || "";
     };
 
-    const body = await this.extractBodyWithImages(message.payload, message.id!);
-    const attachments = this.extractAttachments(message.payload);
+    const body = await this.extractBodyWithImages(message.payload!, message.id!);
+    const attachments = this.extractAttachments(message.payload!);
 
     const cc = getHeader("cc");
     const bcc = getHeader("bcc");
@@ -635,9 +655,7 @@ export class GmailClient {
 
     // Filter out DRAFT messages — our synced Gmail drafts show up here
     // and would otherwise be saved as regular thread members.
-    const messages = (response.data.messages || []).filter(
-      (m) => !m.labelIds?.includes("DRAFT"),
-    );
+    const messages = (response.data.messages || []).filter((m) => !m.labelIds?.includes("DRAFT"));
     const emails: Email[] = [];
 
     for (const message of messages) {
@@ -648,8 +666,8 @@ export class GmailClient {
         return header?.value || "";
       };
 
-      const body = await this.extractBodyWithImages(message.payload, message.id!);
-      const attachments = this.extractAttachments(message.payload);
+      const body = await this.extractBodyWithImages(message.payload!, message.id!);
+      const attachments = this.extractAttachments(message.payload!);
 
       const cc = getHeader("cc");
       const bcc = getHeader("bcc");
@@ -676,7 +694,7 @@ export class GmailClient {
     return emails;
   }
 
-  private extractBody(payload: any): string {
+  private extractBody(payload: gmail_v1.Schema$MessagePart): string {
     if (!payload) return "";
 
     // Direct body
@@ -712,11 +730,13 @@ export class GmailClient {
    * Collect inline image parts from MIME tree (parts with Content-ID headers).
    * Returns a map from Content-ID (without angle brackets) to image metadata.
    */
-  private collectInlineImages(payload: any): Map<string, { mimeType: string; data?: string; attachmentId?: string }> {
+  private collectInlineImages(
+    payload: gmail_v1.Schema$MessagePart,
+  ): Map<string, { mimeType: string; data?: string; attachmentId?: string }> {
     const images = new Map<string, { mimeType: string; data?: string; attachmentId?: string }>();
 
-    const walk = (part: any) => {
-      const headers: Array<{ name?: string; value?: string }> = part.headers || [];
+    const walk = (part: gmail_v1.Schema$MessagePart) => {
+      const headers = part.headers || [];
       const contentId = headers.find((h) => h.name?.toLowerCase() === "content-id")?.value;
 
       if (contentId && part.mimeType?.startsWith("image/")) {
@@ -724,8 +744,8 @@ export class GmailClient {
         const cid = contentId.replace(/^<|>$/g, "");
         images.set(cid, {
           mimeType: part.mimeType,
-          data: part.body?.data,
-          attachmentId: part.body?.attachmentId,
+          data: part.body?.data ?? undefined,
+          attachmentId: part.body?.attachmentId ?? undefined,
         });
       }
 
@@ -744,7 +764,7 @@ export class GmailClient {
    * Extract attachment metadata from a Gmail message payload.
    * Recursively walks multipart MIME structure to find parts with a filename.
    */
-  private extractAttachments(payload: any): AttachmentMeta[] {
+  private extractAttachments(payload: gmail_v1.Schema$MessagePart): AttachmentMeta[] {
     const attachments: AttachmentMeta[] = [];
     if (!payload) return attachments;
 
@@ -752,7 +772,7 @@ export class GmailClient {
     return attachments;
   }
 
-  private collectAttachments(part: any, result: AttachmentMeta[]): void {
+  private collectAttachments(part: gmail_v1.Schema$MessagePart, result: AttachmentMeta[]): void {
     // A part is an attachment if it has a filename AND an attachmentId.
     // Inline parts (signatures, logos) have filenames but no attachmentId.
     const filename = part.filename;
@@ -825,7 +845,7 @@ export class GmailClient {
           try {
             base64Data = await this.getAttachment(messageId, imageInfo.attachmentId);
           } catch (err) {
-            console.error(`[Gmail] Failed to fetch inline image ${cid}:`, err);
+            log.error({ err: err }, `[Gmail] Failed to fetch inline image ${cid}`);
             return;
           }
         }
@@ -851,7 +871,10 @@ export class GmailClient {
   /**
    * Extract body and resolve inline CID images to data URIs.
    */
-  private async extractBodyWithImages(payload: gmail_v1.Schema$MessagePart | undefined, messageId: string): Promise<string> {
+  private async extractBodyWithImages(
+    payload: gmail_v1.Schema$MessagePart | undefined,
+    messageId: string,
+  ): Promise<string> {
     if (!payload) return "";
     let body = this.extractBody(payload);
     // Track which payload to use for inline image collection — if we fall back
@@ -873,7 +896,7 @@ export class GmailClient {
           imagePayload = msg.data.payload;
         }
       } catch (err) {
-        console.error(`[GmailClient] Failed to fetch body for message ${messageId}:`, err);
+        log.error({ err: err }, `[GmailClient] Failed to fetch body for message ${messageId}`);
       }
     }
 
@@ -891,7 +914,12 @@ export class GmailClient {
    */
   private hasHtmlPartWithoutData(payload: gmail_v1.Schema$MessagePart | null | undefined): boolean {
     if (!payload) return false;
-    if (payload.mimeType === "text/html" && payload.body && (payload.body.size ?? 0) > 0 && !payload.body.data) {
+    if (
+      payload.mimeType === "text/html" &&
+      payload.body &&
+      (payload.body.size ?? 0) > 0 &&
+      !payload.body.data
+    ) {
       return true;
     }
     if (payload.parts) {
@@ -950,14 +978,24 @@ export class GmailClient {
    * Extract data URI images from HTML, replace with cid: references,
    * and return nodemailer-compatible attachments.
    */
-  private extractInlineImagesFromHtml(html: string): { html: string; attachments: Mail.Attachment[] } {
+  private extractInlineImagesFromHtml(html: string): {
+    html: string;
+    attachments: Mail.Attachment[];
+  } {
     const attachments: Mail.Attachment[] = [];
     let imageIndex = 0;
 
     // Match <img> src attributes with data URIs (backreference ensures matching quotes)
     const processed = html.replace(
       /(<img\s[^>]*src\s*=\s*)(["'])data:(image\/[^;]+);base64,([\s\S]*?)\2([^>]*>)/gi,
-      (_match, prefix: string, quote: string, mimeType: string, rawBase64: string, suffix: string) => {
+      (
+        _match,
+        prefix: string,
+        quote: string,
+        mimeType: string,
+        rawBase64: string,
+        suffix: string,
+      ) => {
         const base64Data = rawBase64.replace(/\s+/g, "");
         if (!base64Data) return _match;
         imageIndex++;
@@ -989,7 +1027,9 @@ export class GmailClient {
     // Format addresses with display names when available.
     // Returns nodemailer Address objects so it handles RFC 2822 quoting
     // (e.g. names with commas: "Doe, John") automatically.
-    const formatAddresses = (addresses: string[]): (string | { name: string; address: string })[] => {
+    const formatAddresses = (
+      addresses: string[],
+    ): (string | { name: string; address: string })[] => {
       if (!options.recipientNames) return addresses;
       return addresses.map((addr) => {
         const name = options.recipientNames![extractEmail(addr).toLowerCase()];
@@ -1054,7 +1094,7 @@ export class GmailClient {
             };
           }
           return { filename: att.filename, content: "", contentType: att.mimeType };
-        })
+        }),
       );
       mailOptions.attachments = [...(mailOptions.attachments || []), ...regularAttachments];
     }
@@ -1108,7 +1148,9 @@ export class GmailClient {
   /**
    * Create a draft with full MIME support (HTML, attachments)
    */
-  async createFullDraft(options: ComposeMessageOptions): Promise<{ id: string; messageId: string }> {
+  async createFullDraft(
+    options: ComposeMessageOptions,
+  ): Promise<{ id: string; messageId: string }> {
     const gmail = this.gmail!;
 
     // Get sender address with display name if not explicitly provided
@@ -1139,7 +1181,10 @@ export class GmailClient {
   /**
    * Update an existing Gmail draft
    */
-  async updateDraft(draftId: string, options: ComposeMessageOptions): Promise<{ id: string; messageId: string }> {
+  async updateDraft(
+    draftId: string,
+    options: ComposeMessageOptions,
+  ): Promise<{ id: string; messageId: string }> {
     const gmail = this.gmail!;
 
     // Get sender address with display name if not explicitly provided
@@ -1208,7 +1253,7 @@ export class GmailClient {
           fullDrafts.push(fullDraft);
         }
       } catch (error) {
-        console.error(`Failed to fetch draft ${draft.id}:`, error);
+        log.error({ err: error }, `Failed to fetch draft ${draft.id}`);
       }
     }
 
@@ -1243,15 +1288,24 @@ export class GmailClient {
         id: response.data.id!,
         messageId: message.id!,
         threadId: message.threadId || undefined,
-        to: getHeader("to").split(",").map((s) => s.trim()).filter(Boolean),
-        cc: getHeader("cc").split(",").map((s) => s.trim()).filter(Boolean),
-        bcc: getHeader("bcc").split(",").map((s) => s.trim()).filter(Boolean),
+        to: getHeader("to")
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean),
+        cc: getHeader("cc")
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean),
+        bcc: getHeader("bcc")
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean),
         subject: getHeader("subject"),
         body,
         snippet: message.snippet || "",
       };
     } catch (error) {
-      console.error(`Failed to get draft ${draftId}:`, error);
+      log.error({ err: error }, `Failed to get draft ${draftId}`);
       return null;
     }
   }
@@ -1313,7 +1367,7 @@ export class GmailClient {
     const CONCURRENCY = 5;
     for (let i = 0; i < messageIds.length; i += CONCURRENCY) {
       const batch = messageIds.slice(i, i + CONCURRENCY);
-      const results = await Promise.allSettled(batch.map(id => this.trashMessage(id)));
+      const results = await Promise.allSettled(batch.map((id) => this.trashMessage(id)));
       for (let j = 0; j < results.length; j++) {
         if (results[j].status === "rejected") {
           failedIds.push(batch[j]);
@@ -1395,7 +1449,9 @@ export class GmailClient {
   /**
    * Get message headers for reply threading
    */
-  async getMessageHeaders(messageId: string): Promise<{ messageId: string; references: string; subject: string } | null> {
+  async getMessageHeaders(
+    messageId: string,
+  ): Promise<{ messageId: string; references: string; subject: string } | null> {
     const gmail = this.gmail!;
 
     try {
@@ -1418,7 +1474,7 @@ export class GmailClient {
         subject: getHeader("subject"),
       };
     } catch (error) {
-      console.error(`Failed to get message headers for ${messageId}:`, error);
+      log.error({ err: error }, `Failed to get message headers for ${messageId}`);
       return null;
     }
   }
@@ -1452,25 +1508,25 @@ export class GmailClient {
 
       // Try send-as settings first (the name shown on outgoing mail)
       const sendAsResponse = await gmail.users.settings.sendAs.list({ userId: "me" });
-      const primarySendAs = sendAsResponse.data.sendAs?.find(s => s.isPrimary);
+      const primarySendAs = sendAsResponse.data.sendAs?.find((s) => s.isPrimary);
       const sendAsName = primarySendAs?.displayName?.trim() || null;
       if (sendAsName) {
-        console.log(`[GmailClient] Display name from send-as: "${sendAsName}"`);
+        log.info(`[GmailClient] Display name from send-as: "${sendAsName}"`);
         return sendAsName;
       }
 
       // Fallback: check all send-as aliases for one matching this account's email.
       // Use getProfile() instead of getAccountInfo() since the account may not
       // be in the DB yet during OAuth registration.
-      const accountEmail = this.getAccountInfo()?.email
-        || (await this.getProfile()).emailAddress;
+      const accountEmail = this.getAccountInfo()?.email || (await this.getProfile()).emailAddress;
       if (accountEmail) {
         const matchingAlias = sendAsResponse.data.sendAs?.find(
-          s => s.sendAsEmail?.toLowerCase() === accountEmail.toLowerCase() && s.displayName?.trim()
+          (s) =>
+            s.sendAsEmail?.toLowerCase() === accountEmail.toLowerCase() && s.displayName?.trim(),
         );
         if (matchingAlias?.displayName) {
           const name = matchingAlias.displayName.trim();
-          console.log(`[GmailClient] Display name from send-as alias match: "${name}"`);
+          log.info(`[GmailClient] Display name from send-as alias match: "${name}"`);
           return name;
         }
       }
@@ -1481,17 +1537,17 @@ export class GmailClient {
         const userInfo = await oauth2.userinfo.get();
         const name = userInfo.data.name?.trim() || null;
         if (name) {
-          console.log(`[GmailClient] Display name from userinfo: "${name}"`);
+          log.info(`[GmailClient] Display name from userinfo: "${name}"`);
           return name;
         }
       } catch (userinfoError) {
-        console.warn("[GmailClient] Userinfo fallback failed:", userinfoError);
+        log.warn({ err: userinfoError }, "[GmailClient] Userinfo fallback failed");
       }
 
-      console.warn("[GmailClient] No display name found from send-as or People API");
+      log.warn("[GmailClient] No display name found from send-as or People API");
       return null;
     } catch (error) {
-      console.warn("[GmailClient] Failed to fetch send-as display name:", error);
+      log.warn({ err: error }, "[GmailClient] Failed to fetch send-as display name");
       return null;
     }
   }
@@ -1511,7 +1567,7 @@ export class GmailClient {
     // saved to DB yet during registration — caching null would make the
     // stale result permanent.
     if (this.cachedAccountInfo === undefined || this.cachedAccountInfo === null) {
-      const account = getAccounts().find(a => a.id === this.accountId);
+      const account = getAccounts().find((a) => a.id === this.accountId);
       if (account) {
         this.cachedAccountInfo = { email: account.email, displayName: account.displayName ?? null };
       } else {
@@ -1652,10 +1708,11 @@ export class GmailClient {
         unreadMessageIds: [...new Set(unreadMessageIds)].filter(filterHandled),
         historyId: latestHistoryId,
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       // History ID might be too old (404 error) - need full resync
-      if (error.code === 404 || error.status === 404) {
-        console.log("[Gmail] History ID expired, need full resync");
+      const errObj = error as { code?: number; status?: number };
+      if (errObj.code === 404 || errObj.status === 404) {
+        log.info("[Gmail] History ID expired, need full resync");
         throw new Error("HISTORY_EXPIRED");
       }
       throw error;
@@ -1684,9 +1741,7 @@ export class GmailClient {
 
         const headers = fullMessage.data.payload?.headers || [];
         const getHeader = (name: string): string => {
-          const header = headers.find(
-            (h) => h.name?.toLowerCase() === name.toLowerCase()
-          );
+          const header = headers.find((h) => h.name?.toLowerCase() === name.toLowerCase());
           return header?.value || "";
         };
 
@@ -1700,7 +1755,7 @@ export class GmailClient {
           date: getHeader("date"),
         });
       } catch (error) {
-        console.error(`Failed to read sent email ${m.id}:`, error);
+        log.error({ err: error }, `Failed to read sent email ${m.id}`);
       }
     }
 

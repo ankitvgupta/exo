@@ -13,7 +13,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const srcDir = path.join(__dirname, "../../src");
 
 // Test the ScheduleSendButton preset logic (extracted for testability)
-function getSchedulePresets(now: Date): Array<{ label: string; description: string; timestamp: number }> {
+function getSchedulePresets(
+  now: Date,
+): Array<{ label: string; description: string; timestamp: number }> {
   const presets: Array<{ label: string; description: string; timestamp: number }> = [];
   const currentHour = now.getHours();
 
@@ -317,8 +319,8 @@ test.describe("Scheduled Send - Schema Validation", () => {
   test("service is registered and started in main/index.ts", () => {
     const mainCode = readFileSync(path.join(srcDir, "main/index.ts"), "utf-8");
 
-    expect(mainCode).toContain('import { scheduledSendService }');
-    expect(mainCode).toContain('import { registerScheduledSendIpc }');
+    expect(mainCode).toContain("import { scheduledSendService }");
+    expect(mainCode).toContain("import { registerScheduledSendIpc }");
     expect(mainCode).toContain("scheduledSendService.setClientResolver");
     expect(mainCode).toContain("scheduledSendService.start()");
     expect(mainCode).toContain("registerScheduledSendIpc()");
@@ -346,12 +348,18 @@ test.describe("Scheduled Send - Schema Validation", () => {
 
 test.describe("Scheduled Send - UI Integration", () => {
   test("ScheduleSendButton is integrated via ComposeToolbar (used in InlineReply + NewEmailCompose)", () => {
-    const toolbarCode = readFileSync(path.join(srcDir, "renderer/components/ComposeToolbar.tsx"), "utf-8");
-    const emailDetailCode = readFileSync(path.join(srcDir, "renderer/components/EmailDetail.tsx"), "utf-8");
+    const toolbarCode = readFileSync(
+      path.join(srcDir, "renderer/components/ComposeToolbar.tsx"),
+      "utf-8",
+    );
+    const emailDetailCode = readFileSync(
+      path.join(srcDir, "renderer/components/EmailDetail.tsx"),
+      "utf-8",
+    );
 
     // ComposeToolbar imports and renders ScheduleSendButton
-    expect(toolbarCode).toContain('import { ScheduleSendButton }');
-    expect(toolbarCode).toContain('<ScheduleSendButton');
+    expect(toolbarCode).toContain("import { ScheduleSendButton }");
+    expect(toolbarCode).toContain("<ScheduleSendButton");
 
     // EmailDetail uses ComposeToolbar in both InlineReply and NewEmailCompose
     const composeToolbarCount = (emailDetailCode.match(/<ComposeToolbar/g) || []).length;

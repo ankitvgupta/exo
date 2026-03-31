@@ -24,18 +24,24 @@ const OpenClawAgentPayloadSchema = z.object({
 
 const OpenClawAgentResultSchema = z.object({
   payloads: z.array(OpenClawAgentPayloadSchema).optional(),
-  meta: z.object({
-    durationMs: z.number(),
-    agentMeta: z.object({
-      sessionId: z.string(),
-      provider: z.string(),
-      model: z.string(),
-      usage: z.object({
-        input: z.number(),
-        output: z.number(),
-      }).optional(),
-    }).optional(),
-  }).optional(),
+  meta: z
+    .object({
+      durationMs: z.number(),
+      agentMeta: z
+        .object({
+          sessionId: z.string(),
+          provider: z.string(),
+          model: z.string(),
+          usage: z
+            .object({
+              input: z.number(),
+              output: z.number(),
+            })
+            .optional(),
+        })
+        .optional(),
+    })
+    .optional(),
 });
 
 export const OpenClawAgentResponseSchema = z.object({

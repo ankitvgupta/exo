@@ -90,25 +90,28 @@ function Toolbar({ editor }: { editor: Editor | null }) {
     fileInputRef.current?.click();
   }, []);
 
-  const handleFileSelected = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!editor) return;
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
+  const handleFileSelected = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (!editor) return;
+      const files = e.target.files;
+      if (!files || files.length === 0) return;
 
-    for (const file of Array.from(files)) {
-      if (!file.type.startsWith("image/")) continue;
-      // Limit to 10MB per image
-      if (file.size > 10 * 1024 * 1024) {
-        console.warn(`Skipping image ${file.name}: exceeds 10MB limit`);
-        continue;
+      for (const file of Array.from(files)) {
+        if (!file.type.startsWith("image/")) continue;
+        // Limit to 10MB per image
+        if (file.size > 10 * 1024 * 1024) {
+          console.warn(`Skipping image ${file.name}: exceeds 10MB limit`);
+          continue;
+        }
+        const dataUrl = await readFileAsDataUrl(file);
+        editor.chain().focus().setImage({ src: dataUrl, alt: file.name }).run();
       }
-      const dataUrl = await readFileAsDataUrl(file);
-      editor.chain().focus().setImage({ src: dataUrl, alt: file.name }).run();
-    }
 
-    // Reset input so the same file can be selected again
-    e.target.value = "";
-  }, [editor]);
+      // Reset input so the same file can be selected again
+      e.target.value = "";
+    },
+    [editor],
+  );
 
   if (!editor) return null;
 
@@ -121,8 +124,18 @@ function Toolbar({ editor }: { editor: Editor | null }) {
         title="Bold (Cmd+B)"
       >
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 4h8a4 4 0 014 4 4 4 0 01-4 4H6z" />
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 12h9a4 4 0 014 4 4 4 0 01-4 4H6z" />
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M6 4h8a4 4 0 014 4 4 4 0 01-4 4H6z"
+          />
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M6 12h9a4 4 0 014 4 4 4 0 01-4 4H6z"
+          />
         </svg>
       </ToolbarButton>
 
@@ -132,7 +145,13 @@ function Toolbar({ editor }: { editor: Editor | null }) {
         title="Italic (Cmd+I)"
       >
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 4h4m-2 0v16m-4 0h8" transform="skewX(-10)" />
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M10 4h4m-2 0v16m-4 0h8"
+            transform="skewX(-10)"
+          />
         </svg>
       </ToolbarButton>
 
@@ -142,7 +161,12 @@ function Toolbar({ editor }: { editor: Editor | null }) {
         title="Strikethrough"
       >
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 6v-6m-6 0h12" />
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M12 6v6m0 6v-6m-6 0h12"
+          />
         </svg>
       </ToolbarButton>
 
@@ -155,7 +179,12 @@ function Toolbar({ editor }: { editor: Editor | null }) {
         title="Bullet list"
       >
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M4 6h16M4 12h16M4 18h16"
+          />
           <circle cx="2" cy="6" r="1" fill="currentColor" />
           <circle cx="2" cy="12" r="1" fill="currentColor" />
           <circle cx="2" cy="18" r="1" fill="currentColor" />
@@ -168,10 +197,21 @@ function Toolbar({ editor }: { editor: Editor | null }) {
         title="Numbered list"
       >
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 6h13M7 12h13M7 18h13" />
-          <text x="1" y="8" fontSize="6" fill="currentColor">1</text>
-          <text x="1" y="14" fontSize="6" fill="currentColor">2</text>
-          <text x="1" y="20" fontSize="6" fill="currentColor">3</text>
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M7 6h13M7 12h13M7 18h13"
+          />
+          <text x="1" y="8" fontSize="6" fill="currentColor">
+            1
+          </text>
+          <text x="1" y="14" fontSize="6" fill="currentColor">
+            2
+          </text>
+          <text x="1" y="20" fontSize="6" fill="currentColor">
+            3
+          </text>
         </svg>
       </ToolbarButton>
 
@@ -184,30 +224,38 @@ function Toolbar({ editor }: { editor: Editor | null }) {
         title="Quote"
       >
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+          />
         </svg>
       </ToolbarButton>
 
       {/* Link */}
-      <ToolbarButton
-        onClick={setLink}
-        active={editor.isActive("link")}
-        title="Insert link"
-      >
+      <ToolbarButton onClick={setLink} active={editor.isActive("link")} title="Insert link">
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"
+          />
         </svg>
       </ToolbarButton>
 
       <div className="w-px h-5 bg-gray-300 dark:bg-gray-600 mx-1" />
 
       {/* Insert image */}
-      <ToolbarButton
-        onClick={insertImage}
-        title="Insert image"
-      >
+      <ToolbarButton onClick={insertImage} title="Insert image">
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+          />
         </svg>
       </ToolbarButton>
       {/* Hidden file input for image picker */}
@@ -229,7 +277,12 @@ function Toolbar({ editor }: { editor: Editor | null }) {
         title="Align left"
       >
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h10M4 18h14" />
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M4 6h16M4 12h10M4 18h14"
+          />
         </svg>
       </ToolbarButton>
 
@@ -239,10 +292,14 @@ function Toolbar({ editor }: { editor: Editor | null }) {
         title="Align center"
       >
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M7 12h10M5 18h14" />
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M4 6h16M7 12h10M5 18h14"
+          />
         </svg>
       </ToolbarButton>
-
     </div>
   );
 }
@@ -319,7 +376,11 @@ export function ComposeEditor({
         event.preventDefault();
         // Capture position before async work to avoid stale state
         const insertPos = view.state.selection.from;
-        Promise.all(imageFiles.map((file) => readFileAsDataUrl(file).then((dataUrl) => ({ dataUrl, name: file.name })))).then((images) => {
+        Promise.all(
+          imageFiles.map((file) =>
+            readFileAsDataUrl(file).then((dataUrl) => ({ dataUrl, name: file.name })),
+          ),
+        ).then((images) => {
           let tr = view.state.tr;
           let pos = insertPos;
           for (const img of images) {
@@ -344,7 +405,11 @@ export function ComposeEditor({
         const pos = view.posAtCoords({ left: event.clientX, top: event.clientY });
 
         // Resolve all files first, then insert in a single transaction to avoid stale positions
-        Promise.all(imageFiles.map((file) => readFileAsDataUrl(file).then((dataUrl) => ({ dataUrl, name: file.name })))).then((images) => {
+        Promise.all(
+          imageFiles.map((file) =>
+            readFileAsDataUrl(file).then((dataUrl) => ({ dataUrl, name: file.name })),
+          ),
+        ).then((images) => {
           let tr = view.state.tr;
           let insertPos = pos?.pos ?? view.state.selection.from;
           for (const img of images) {
@@ -372,7 +437,9 @@ export function ComposeEditor({
   }, [initialContent, editor]);
 
   return (
-    <div className={`border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden bg-white dark:bg-gray-800 ${className}`}>
+    <div
+      className={`border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden bg-white dark:bg-gray-800 ${className}`}
+    >
       <Toolbar editor={editor} />
       <div className="dark:text-gray-100">
         <EditorContent editor={editor} />
@@ -396,19 +463,19 @@ export function ComposeEditor({
                       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
                       font-size: 14px;
                       line-height: 1.5;
-                      color: ${isDark ? '#e5e7eb' : '#333'};
-                      background: ${isDark ? '#1f2937' : 'transparent'};
+                      color: ${isDark ? "#e5e7eb" : "#333"};
+                      background: ${isDark ? "#1f2937" : "transparent"};
                       margin: 0;
                       padding: 0;
                     }
                     blockquote {
-                      border-left: 2px solid ${isDark ? '#4b5563' : '#ccc'};
+                      border-left: 2px solid ${isDark ? "#4b5563" : "#ccc"};
                       margin: 8px 0;
                       padding-left: 12px;
-                      color: ${isDark ? '#9ca3af' : '#555'};
+                      color: ${isDark ? "#9ca3af" : "#555"};
                     }
                     img { max-width: 100%; height: auto; }
-                    a { color: ${isDark ? '#60a5fa' : '#1a73e8'}; }
+                    a { color: ${isDark ? "#60a5fa" : "#1a73e8"}; }
                   </style>
                 </head>
                 <body>${quotedContent}</body>

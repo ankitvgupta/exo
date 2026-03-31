@@ -44,20 +44,16 @@ test.describe("SidebarPanelContributionSchema", () => {
         id: "p1",
         title: "Panel",
         scope: "thread",
-      })
+      }),
     ).toThrow();
   });
 
   test("rejects missing id", () => {
-    expect(() =>
-      SidebarPanelContributionSchema.parse({ title: "Panel" })
-    ).toThrow();
+    expect(() => SidebarPanelContributionSchema.parse({ title: "Panel" })).toThrow();
   });
 
   test("rejects missing title", () => {
-    expect(() =>
-      SidebarPanelContributionSchema.parse({ id: "p1" })
-    ).toThrow();
+    expect(() => SidebarPanelContributionSchema.parse({ id: "p1" })).toThrow();
   });
 });
 
@@ -108,7 +104,7 @@ test.describe("SettingDefinitionSchema", () => {
         type: "array",
         default: [],
         title: "X",
-      })
+      }),
     ).toThrow();
   });
 
@@ -118,7 +114,7 @@ test.describe("SettingDefinitionSchema", () => {
         id: "x",
         type: "boolean",
         title: "X",
-      })
+      }),
     ).toThrow();
   });
 
@@ -128,7 +124,7 @@ test.describe("SettingDefinitionSchema", () => {
         id: "x",
         type: "string",
         default: "",
-      })
+      }),
     ).toThrow();
   });
 });
@@ -170,21 +166,15 @@ test.describe("EnrichmentDataSchema", () => {
   });
 
   test("rejects missing extensionId", () => {
-    expect(() =>
-      EnrichmentDataSchema.parse({ panelId: "p", data: {} })
-    ).toThrow();
+    expect(() => EnrichmentDataSchema.parse({ panelId: "p", data: {} })).toThrow();
   });
 
   test("rejects missing panelId", () => {
-    expect(() =>
-      EnrichmentDataSchema.parse({ extensionId: "e", data: {} })
-    ).toThrow();
+    expect(() => EnrichmentDataSchema.parse({ extensionId: "e", data: {} })).toThrow();
   });
 
   test("rejects missing data", () => {
-    expect(() =>
-      EnrichmentDataSchema.parse({ extensionId: "e", panelId: "p" })
-    ).toThrow();
+    expect(() => EnrichmentDataSchema.parse({ extensionId: "e", panelId: "p" })).toThrow();
   });
 });
 
@@ -217,9 +207,7 @@ test.describe("ExtensionManifestSchema", () => {
       activationEvents: ["onEmail", "onStartup"],
       contributes: {
         sidebarPanels: [{ id: "sp1", title: "Sidebar" }],
-        settings: [
-          { id: "s1", type: "boolean", default: false, title: "Toggle" },
-        ],
+        settings: [{ id: "s1", type: "boolean", default: false, title: "Toggle" }],
       },
     });
     expect(result.version).toBe("2.3.1");
@@ -231,15 +219,11 @@ test.describe("ExtensionManifestSchema", () => {
   });
 
   test("rejects missing id", () => {
-    expect(() =>
-      ExtensionManifestSchema.parse({ displayName: "No ID" })
-    ).toThrow();
+    expect(() => ExtensionManifestSchema.parse({ displayName: "No ID" })).toThrow();
   });
 
   test("rejects missing displayName", () => {
-    expect(() =>
-      ExtensionManifestSchema.parse({ id: "no-name" })
-    ).toThrow();
+    expect(() => ExtensionManifestSchema.parse({ id: "no-name" })).toThrow();
   });
 
   test("contributes can be empty object", () => {
@@ -287,7 +271,7 @@ test.describe("ExtensionContributesSchema", () => {
     expect(() =>
       ExtensionContributesSchema.parse({
         settings: [{ id: "x" }], // missing type, default, title
-      })
+      }),
     ).toThrow();
   });
 });

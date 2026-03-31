@@ -179,7 +179,8 @@ Michael`,
 Also, we'll need your input on the technical architecture decisions before we finalize the design phase.
 
 Jared`,
-    snippet: "Good point Michael. Let's plan for 7 weeks then. Can you confirm your availability...",
+    snippet:
+      "Good point Michael. Let's plan for 7 weeks then. Can you confirm your availability...",
   },
 
   // Thread 2: API question (single email, needs reply)
@@ -866,38 +867,118 @@ Kevin`,
 ];
 
 // Expected analysis results for demo emails
-export const DEMO_EXPECTED_ANALYSIS: Record<string, { needsReply: boolean; priority?: "high" | "medium" | "low"; reason: string }> = {
+export const DEMO_EXPECTED_ANALYSIS: Record<
+  string,
+  { needsReply: boolean; priority?: "high" | "medium" | "low"; reason: string }
+> = {
   "demo-001": { needsReply: false, reason: "Initial email in thread, already has follow-ups" },
   "demo-002": { needsReply: false, reason: "Middle of thread, not the latest message" },
-  "demo-003": { needsReply: true, priority: "high", reason: "Direct question about availability and request for technical input" },
-  "demo-004": { needsReply: true, priority: "medium", reason: "Technical questions requiring expertise, customer going live next week" },
-  "demo-005": { needsReply: true, priority: "high", reason: "Action items with deadline, needs confirmation for exec review" },
+  "demo-003": {
+    needsReply: true,
+    priority: "high",
+    reason: "Direct question about availability and request for technical input",
+  },
+  "demo-004": {
+    needsReply: true,
+    priority: "medium",
+    reason: "Technical questions requiring expertise, customer going live next week",
+  },
+  "demo-005": {
+    needsReply: true,
+    priority: "high",
+    reason: "Action items with deadline, needs confirmation for exec review",
+  },
   "demo-006": { needsReply: false, reason: "Automated GitHub CI notification" },
   "demo-007": { needsReply: false, reason: "Newsletter/marketing email" },
   "demo-008": { needsReply: false, reason: "Automated shipping notification" },
-  "demo-009": { needsReply: true, priority: "medium", reason: "Interview scheduling request requiring confirmation" },
-  "demo-010": { needsReply: true, priority: "low", reason: "Personal lunch invitation, can respond when convenient" },
+  "demo-009": {
+    needsReply: true,
+    priority: "medium",
+    reason: "Interview scheduling request requiring confirmation",
+  },
+  "demo-010": {
+    needsReply: true,
+    priority: "low",
+    reason: "Personal lunch invitation, can respond when convenient",
+  },
   "demo-011": { needsReply: false, reason: "Automated calendar notification" },
-  "demo-012": { needsReply: true, priority: "high", reason: "Production incident requiring immediate attention" },
-  "demo-meeting": { needsReply: true, priority: "medium", reason: "Partnership discussion request with scheduling ask" },
-  "demo-inline-images": { needsReply: true, priority: "medium", reason: "Design review request requiring feedback" },
+  "demo-012": {
+    needsReply: true,
+    priority: "high",
+    reason: "Production incident requiring immediate attention",
+  },
+  "demo-meeting": {
+    needsReply: true,
+    priority: "medium",
+    reason: "Partnership discussion request with scheduling ask",
+  },
+  "demo-inline-images": {
+    needsReply: true,
+    priority: "medium",
+    reason: "Design review request requiring feedback",
+  },
   "demo-sent-reply-001": { needsReply: false, reason: "Sent by user - no reply needed" },
   "demo-multi-001": { needsReply: false, reason: "Initial kickoff email, already has follow-ups" },
-  "demo-multi-002": { needsReply: false, reason: "Status update from Pete, not directly addressed to user" },
-  "demo-multi-003": { needsReply: false, reason: "Status update from Aaron, copy review request addressed in later email" },
+  "demo-multi-002": {
+    needsReply: false,
+    reason: "Status update from Pete, not directly addressed to user",
+  },
+  "demo-multi-003": {
+    needsReply: false,
+    reason: "Status update from Aaron, copy review request addressed in later email",
+  },
   "demo-multi-004": { needsReply: false, reason: "QA status update from Brad" },
-  "demo-multi-005": { needsReply: false, reason: "Marketing status, webinar question addressed in later email" },
-  "demo-multi-006": { needsReply: true, priority: "high", reason: "Direct request for tooltip copy, release notes, and webinar date by EOD" },
+  "demo-multi-005": {
+    needsReply: false,
+    reason: "Marketing status, webinar question addressed in later email",
+  },
+  "demo-multi-006": {
+    needsReply: true,
+    priority: "high",
+    reason: "Direct request for tooltip copy, release notes, and webinar date by EOD",
+  },
   "demo-html-email": { needsReply: false, reason: "Product update newsletter, no action required" },
-  "demo-casual-inbox": { needsReply: true, priority: "low", reason: "Casual friend asking about weekend plans" },
-  "demo-formal-inbox": { needsReply: true, priority: "medium", reason: "Strategic advisory request with deadline from managing partner" },
-  "demo-intro-request": { needsReply: true, priority: "high", reason: "Direct request for 3 introductions — requires drafting individual intro emails to Garry, Jared, and Diana" },
-  "demo-intro": { needsReply: true, priority: "high", reason: "Introduction email — should reply to Tim and BCC Kevin (the introducer) to move him to BCC" },
-  "demo-ea-sched-001": { needsReply: false, reason: "Initial scheduling request, already replied in thread" },
+  "demo-casual-inbox": {
+    needsReply: true,
+    priority: "low",
+    reason: "Casual friend asking about weekend plans",
+  },
+  "demo-formal-inbox": {
+    needsReply: true,
+    priority: "medium",
+    reason: "Strategic advisory request with deadline from managing partner",
+  },
+  "demo-intro-request": {
+    needsReply: true,
+    priority: "high",
+    reason:
+      "Direct request for 3 introductions — requires drafting individual intro emails to Garry, Jared, and Diana",
+  },
+  "demo-intro": {
+    needsReply: true,
+    priority: "high",
+    reason:
+      "Introduction email — should reply to Tim and BCC Kevin (the introducer) to move him to BCC",
+  },
+  "demo-ea-sched-001": {
+    needsReply: false,
+    reason: "Initial scheduling request, already replied in thread",
+  },
   "demo-ea-sched-002": { needsReply: false, reason: "Sent by user — no reply needed" },
-  "demo-ea-sched-003": { needsReply: false, reason: "Sent by EA Claire coordinating scheduling — no user action needed" },
-  "demo-ea-sched-004": { needsReply: true, priority: "medium", reason: "David confirmed a time — but Claire (EA) is handling scheduling, user is just CC'd" },
-  "demo-ea-direct-001": { needsReply: true, priority: "high", reason: "Direct technical questions addressed to user requiring personal expertise" },
+  "demo-ea-sched-003": {
+    needsReply: false,
+    reason: "Sent by EA Claire coordinating scheduling — no user action needed",
+  },
+  "demo-ea-sched-004": {
+    needsReply: true,
+    priority: "medium",
+    reason: "David confirmed a time — but Claire (EA) is handling scheduling, user is just CC'd",
+  },
+  "demo-ea-direct-001": {
+    needsReply: true,
+    priority: "high",
+    reason: "Direct technical questions addressed to user requiring personal expertise",
+  },
 };
 
 // Demo sent emails for style learning

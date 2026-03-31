@@ -49,7 +49,8 @@ function isInputFocused(): boolean {
 
 // Read current keyboard mode directly from store (no closure dependency)
 function getKeyboardMode(): KeyboardMode {
-  const { composeState, isSearchOpen, isCommandPaletteOpen, isAgentPaletteOpen } = useAppStore.getState();
+  const { composeState, isSearchOpen, isCommandPaletteOpen, isAgentPaletteOpen } =
+    useAppStore.getState();
   if (composeState?.isOpen) return "compose";
   if (isSearchOpen || isCommandPaletteOpen || isAgentPaletteOpen) return "search";
   return "normal";
@@ -331,11 +332,14 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
 
       const navigateList = (direction: "up" | "down") => {
         // Build combined nav list matching visual render order
-        const items: ({ type: "draft"; draftId: string } | { type: "thread"; threadId: string; emailId: string })[] = [];
+        const items: (
+          | { type: "draft"; draftId: string }
+          | { type: "thread"; threadId: string; emailId: string }
+        )[] = [];
 
         // Add drafts if we're in inbox view or drafts view
         const accountDrafts = localDrafts.filter(
-          (d) => !currentAccountId || d.accountId === currentAccountId
+          (d) => !currentAccountId || d.accountId === currentAccountId,
         );
         const isDraftsView = currentSplitId === "__drafts__";
 
@@ -387,7 +391,9 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
       };
 
       // --- Helper: merge+dedup+thread search results (same order as rendered list) ---
-      const currentUserEmail = accounts.find((a: { id: string }) => a.id === currentAccountId)?.email;
+      const currentUserEmail = accounts.find(
+        (a: { id: string }) => a.id === currentAccountId,
+      )?.email;
       const getSearchThreads = () =>
         mergeAndThreadSearchResults(activeSearchResults, remoteSearchResults, currentUserEmail);
 
@@ -454,9 +460,15 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
           const currentIndex = currentThreads.findIndex((t) => t.threadId === selectedThreadId);
           if (currentIndex >= 0 && currentThreads.length > 1) {
             const nextIndex = Math.min(currentIndex, currentThreads.length - 2);
-            const nextThread = currentThreads.filter((t) => t.threadId !== selectedThreadId)[nextIndex];
+            const nextThread = currentThreads.filter((t) => t.threadId !== selectedThreadId)[
+              nextIndex
+            ];
             if (viewMode === "full" && nextThread) markThreadAsRead(nextThread.threadId);
-            removeEmailsAndAdvance(threadEmailIds, nextThread?.threadId ?? null, nextThread?.latestEmail.id ?? null);
+            removeEmailsAndAdvance(
+              threadEmailIds,
+              nextThread?.threadId ?? null,
+              nextThread?.latestEmail.id ?? null,
+            );
           } else {
             removeEmailsAndAdvance(threadEmailIds, null, null);
             if (viewMode === "full") {
@@ -512,9 +524,15 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
           const currentIndex = currentThreads.findIndex((t) => t.threadId === selectedThreadId);
           if (currentIndex >= 0 && currentThreads.length > 1) {
             const nextIndex = Math.min(currentIndex, currentThreads.length - 2);
-            const nextThread = currentThreads.filter((t) => t.threadId !== selectedThreadId)[nextIndex];
+            const nextThread = currentThreads.filter((t) => t.threadId !== selectedThreadId)[
+              nextIndex
+            ];
             if (viewMode === "full" && nextThread) markThreadAsRead(nextThread.threadId);
-            removeEmailsAndAdvance(threadEmailIds, nextThread?.threadId ?? null, nextThread?.latestEmail.id ?? null);
+            removeEmailsAndAdvance(
+              threadEmailIds,
+              nextThread?.threadId ?? null,
+              nextThread?.latestEmail.id ?? null,
+            );
           } else {
             removeEmailsAndAdvance(threadEmailIds, null, null);
             if (viewMode === "full") {
@@ -545,7 +563,7 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
         if (threadEmails.length === 0) return;
 
         const latestEmail = threadEmails.reduce((a, b) =>
-          new Date(a.date).getTime() >= new Date(b.date).getTime() ? a : b
+          new Date(a.date).getTime() >= new Date(b.date).getTime() ? a : b,
         );
 
         const currentLabels = latestEmail.labelIds || ["INBOX"];
@@ -575,8 +593,8 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
       const {
         selectedThreadIds,
         toggleThreadSelected,
-        clearSelectedThreads,
-        selectAllThreads,
+        clearSelectedThreads: _clearSelectedThreads,
+        selectAllThreads: _selectAllThreads,
       } = state;
       const isMultiSelect = selectedThreadIds.size > 0;
 
@@ -588,14 +606,18 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
       }
 
       // --- Shift+J/K/Arrow: extend selection up/down ---
-      if (e.shiftKey && (e.key === "J" || e.key === "K" || e.key === "ArrowDown" || e.key === "ArrowUp") && !activeSearchQuery) {
+      if (
+        e.shiftKey &&
+        (e.key === "J" || e.key === "K" || e.key === "ArrowDown" || e.key === "ArrowUp") &&
+        !activeSearchQuery
+      ) {
         e.preventDefault();
         markNavigationActive();
         if (currentThreads.length === 0) return;
         const currentIndex = currentThreads.findIndex((t) => t.threadId === selectedThreadId);
         if (currentIndex < 0) return;
 
-        const direction = (e.key === "J" || e.key === "ArrowDown") ? 1 : -1;
+        const direction = e.key === "J" || e.key === "ArrowDown" ? 1 : -1;
         const nextIndex = currentIndex + direction;
         if (nextIndex < 0 || nextIndex >= currentThreads.length) return;
 
@@ -635,13 +657,15 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
         for (const s of customSplits) ids.push(s.id);
         // Conditional virtual tabs (only when visible in SplitTabs)
         const hasDrafts = state.localDrafts.some(
-          (d) => !currentAccountId || d.accountId === currentAccountId
+          (d) => !currentAccountId || d.accountId === currentAccountId,
         );
         if (hasDrafts) ids.push("__drafts__");
         // Only include snoozed when there are snoozed threads with loaded email data
         // for the current account (matches SplitTabs.tsx snoozedCount from useThreadedEmails)
         const hasSnoozed = state.emails.some(
-          (e) => state.snoozedThreadIds.has(e.threadId) && (!currentAccountId || e.accountId === currentAccountId)
+          (e) =>
+            state.snoozedThreadIds.has(e.threadId) &&
+            (!currentAccountId || e.accountId === currentAccountId),
         );
         if (hasSnoozed) ids.push("__snoozed__");
         ids.push(ALL_SENTINEL);
@@ -693,14 +717,18 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
         case "n":
           if (isGmail && viewMode === "full" && selectedThreadId) {
             e.preventDefault();
-            window.dispatchEvent(new CustomEvent(THREAD_NAV_EVENT, { detail: "next" as ThreadNavDirection }));
+            window.dispatchEvent(
+              new CustomEvent(THREAD_NAV_EVENT, { detail: "next" as ThreadNavDirection }),
+            );
           }
           break;
 
         case "p":
           if (isGmail && viewMode === "full" && selectedThreadId) {
             e.preventDefault();
-            window.dispatchEvent(new CustomEvent(THREAD_NAV_EVENT, { detail: "prev" as ThreadNavDirection }));
+            window.dispatchEvent(
+              new CustomEvent(THREAD_NAV_EVENT, { detail: "prev" as ThreadNavDirection }),
+            );
           }
           break;
 
@@ -721,8 +749,8 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
         case "o":
           // "o" is Gmail's open conversation key (Gmail only, same as Enter)
           if (!isGmail) break;
-          // falls through to Enter handler
-        // eslint-disable-next-line no-fallthrough
+        // falls through to Enter handler
+
         case "Enter":
           if (activeSearchQuery && viewMode !== "full" && selectedThreadId) {
             const threads = getSearchThreads();
@@ -820,8 +848,8 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
         case "y":
           // "y" archives in Gmail mode only
           if (!isGmail) break;
-          // falls through to "e" handler
-        // eslint-disable-next-line no-fallthrough
+        // falls through to "e" handler
+
         case "e":
           if (isMultiSelect) {
             e.preventDefault();
@@ -854,8 +882,8 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
         case "U":
           // Shift+U: Gmail only (lowercase u works in both)
           if (!isGmail) break;
-          // falls through to "u" handler
-        // eslint-disable-next-line no-fallthrough
+        // falls through to "u" handler
+
         case "u":
           if (isMultiSelect) {
             e.preventDefault();
@@ -889,18 +917,22 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
             const threadEmails = emails.filter((item) => item.threadId === selectedThreadId);
             if (threadEmails.length === 0) break;
             const latestEmail = threadEmails.reduce((a, b) =>
-              new Date(a.date).getTime() >= new Date(b.date).getTime() ? a : b
+              new Date(a.date).getTime() >= new Date(b.date).getTime() ? a : b,
             );
             const currentLabels = latestEmail.labelIds || ["INBOX"];
             const isStarred = currentLabels.includes("STARRED");
             if (isStarred) {
               // Unstar: remove STARRED from all starred emails in thread
-              const starredEmails = threadEmails.filter((item) => item.labelIds?.includes("STARRED"));
+              const starredEmails = threadEmails.filter((item) =>
+                item.labelIds?.includes("STARRED"),
+              );
               const previousLabels: Record<string, string[]> = {};
               for (const email of starredEmails) {
                 const labels = email.labelIds || ["INBOX"];
                 previousLabels[email.id] = [...labels];
-                state.updateEmail(email.id, { labelIds: labels.filter((l: string) => l !== "STARRED") });
+                state.updateEmail(email.id, {
+                  labelIds: labels.filter((l: string) => l !== "STARRED"),
+                });
               }
               addUndoAction({
                 id: `unstar-${selectedThreadId}-${Date.now()}`,
@@ -914,7 +946,9 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
               });
             } else {
               // Star: add STARRED to latest email
-              const previousLabels: Record<string, string[]> = { [latestEmail.id]: [...currentLabels] };
+              const previousLabels: Record<string, string[]> = {
+                [latestEmail.id]: [...currentLabels],
+              };
               state.updateEmail(latestEmail.id, { labelIds: [...currentLabels, "STARRED"] });
               addUndoAction({
                 id: `star-${selectedThreadId}-${Date.now()}`,
@@ -969,11 +1003,13 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
           if (isGmail && !e.shiftKey) {
             e.preventDefault();
             // Trigger the same undo mechanism as Cmd+Z in UndoActionToast
-            window.dispatchEvent(new KeyboardEvent("keydown", {
-              key: "z",
-              metaKey: true,
-              bubbles: true,
-            }));
+            window.dispatchEvent(
+              new KeyboardEvent("keydown", {
+                key: "z",
+                metaKey: true,
+                bubbles: true,
+              }),
+            );
           }
           break;
 
@@ -1017,33 +1053,37 @@ export function getKeyboardShortcuts(bindings: "superhuman" | "gmail") {
       { key: "k / ↑", description: "Move up" },
       { key: isGmail ? "o / Enter" : "Enter", description: "Open conversation" },
       { key: "Escape", description: "Back / Deselect" },
-      ...(isGmail ? [
-        { key: "n", description: "Next message in thread" },
-        { key: "p", description: "Previous message in thread" },
-      ] : []),
+      ...(isGmail
+        ? [
+            { key: "n", description: "Next message in thread" },
+            { key: "p", description: "Previous message in thread" },
+          ]
+        : []),
       { key: "g i", description: "Go to inbox" },
       { key: "g g", description: "Go to top" },
       { key: "G", description: "Go to bottom" },
-      ...(isGmail ? [
-        { key: "g d", description: "Go to drafts" },
-        { key: "g t", description: "Go to sent" },
-        { key: "g s", description: "Go to snoozed (starred in Gmail)" },
-        { key: "` / ~", description: "Next / previous section" },
-      ] : []),
+      ...(isGmail
+        ? [
+            { key: "g d", description: "Go to drafts" },
+            { key: "g t", description: "Go to sent" },
+            { key: "g s", description: "Go to snoozed (starred in Gmail)" },
+            { key: "` / ~", description: "Next / previous section" },
+          ]
+        : []),
     ],
     actions: [
       { key: isGmail ? "e / y" : "e", description: "Archive" },
       { key: "#", description: "Delete" },
       { key: "u", description: "Mark unread" },
-      ...(isGmail ? [
-        { key: "Shift+I", description: "Mark as read" },
-      ] : []),
+      ...(isGmail ? [{ key: "Shift+I", description: "Mark as read" }] : []),
       { key: "s", description: "Star / unstar" },
       { key: "h", description: "Snooze" },
-      ...(isGmail ? [
-        { key: "z", description: "Undo last action" },
-        { key: "Shift+N", description: "Refresh" },
-      ] : []),
+      ...(isGmail
+        ? [
+            { key: "z", description: "Undo last action" },
+            { key: "Shift+N", description: "Refresh" },
+          ]
+        : []),
       { key: "x", description: "Select / deselect thread" },
       { key: "Shift+J/K", description: "Extend selection down/up" },
       { key: "Cmd+A", description: "Select all threads" },
@@ -1066,4 +1106,3 @@ export function getKeyboardShortcuts(bindings: "superhuman" | "gmail") {
     ],
   };
 }
-

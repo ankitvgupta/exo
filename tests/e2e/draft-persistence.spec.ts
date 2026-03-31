@@ -142,7 +142,9 @@ test.describe("Draft persistence across navigation", () => {
 
     // Verify the chip was added
     await expect(
-      inlineCompose.locator("[data-testid='address-chip']").filter({ hasText: "forward-persist@example.com" })
+      inlineCompose
+        .locator("[data-testid='address-chip']")
+        .filter({ hasText: "forward-persist@example.com" }),
     ).toBeVisible({ timeout: 3000 });
 
     // Type body content
@@ -161,11 +163,15 @@ test.describe("Draft persistence across navigation", () => {
 
     // Compose should auto-reopen in forward mode
     await expect(inlineCompose).toBeVisible({ timeout: 5000 });
-    await expect(inlineCompose.getByText("Forward", { exact: true })).toBeVisible({ timeout: 3000 });
+    await expect(inlineCompose.getByText("Forward", { exact: true })).toBeVisible({
+      timeout: 3000,
+    });
 
     // Recipient should be restored
     await expect(
-      inlineCompose.locator("[data-testid='address-chip']").filter({ hasText: "forward-persist@example.com" })
+      inlineCompose
+        .locator("[data-testid='address-chip']")
+        .filter({ hasText: "forward-persist@example.com" }),
     ).toBeVisible({ timeout: 3000 });
 
     // Body should be restored
@@ -230,15 +236,21 @@ test.describe("Draft persistence across navigation", () => {
 
     // Compose should restore in forward mode
     await expect(inlineCompose).toBeVisible({ timeout: 5000 });
-    await expect(inlineCompose.getByText("Forward", { exact: true })).toBeVisible({ timeout: 3000 });
+    await expect(inlineCompose.getByText("Forward", { exact: true })).toBeVisible({
+      timeout: 3000,
+    });
 
     // To recipient restored
     await expect(
-      inlineCompose.locator("[data-testid='address-chip']").filter({ hasText: "primary@example.com" })
+      inlineCompose
+        .locator("[data-testid='address-chip']")
+        .filter({ hasText: "primary@example.com" }),
     ).toBeVisible({ timeout: 3000 });
 
     // Cc field should be visible and have the recipient
-    const ccChip = inlineCompose.locator("[data-testid='address-input-cc'] [data-testid='address-chip']").filter({ hasText: "cc-person@example.com" });
+    const ccChip = inlineCompose
+      .locator("[data-testid='address-input-cc'] [data-testid='address-chip']")
+      .filter({ hasText: "cc-person@example.com" });
     await expect(ccChip).toBeVisible({ timeout: 3000 });
 
     // Body restored
@@ -281,10 +293,14 @@ test.describe("Draft persistence across navigation", () => {
 
     // Should reopen in forward mode, NOT reply mode
     await expect(inlineCompose).toBeVisible({ timeout: 5000 });
-    await expect(inlineCompose.getByText("Forward", { exact: true })).toBeVisible({ timeout: 3000 });
+    await expect(inlineCompose.getByText("Forward", { exact: true })).toBeVisible({
+      timeout: 3000,
+    });
 
     // The AddressInput for To should be visible (forward-specific)
-    await expect(inlineCompose.locator("[data-testid='address-input-to']")).toBeVisible({ timeout: 3000 });
+    await expect(inlineCompose.locator("[data-testid='address-input-to']")).toBeVisible({
+      timeout: 3000,
+    });
 
     // Clean up
     await inlineCompose.locator("[data-testid='inline-compose-close']").click();

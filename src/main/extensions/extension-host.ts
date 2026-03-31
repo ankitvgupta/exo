@@ -3,30 +3,51 @@ import { existsSync, readdirSync, statSync, readFileSync, mkdirSync, rmSync, cpS
 import type {
   ExtensionManifest,
   ExtensionModule,
-  ExtensionContext,
   LoadedExtension,
   EnrichmentProvider,
   BadgeProvider,
   SidebarPanelRegistration,
-  EnrichmentData,
   ExtensionPanelInfo,
   ExtensionEnrichmentResult,
   InstalledExtensionInfo,
   AgentProviderManifest,
 } from "../../shared/extension-types";
-import { ExtensionManifestSchema, AgentProviderManifestSchema, checkApiCompatibility } from "../../shared/extension-types";
+import {
+  ExtensionManifestSchema,
+  AgentProviderManifestSchema,
+  checkApiCompatibility,
+} from "../../shared/extension-types";
 import type { AgentCoordinator } from "../agents/agent-coordinator";
 import { registerProviderAuth, unregisterProviderAuth } from "../agents/private-providers-main";
 import type { DashboardEmail } from "../../shared/types";
 import { loadManifest, findExtensionPaths } from "./manifest-loader";
 import { createExtensionContext } from "./extension-context";
-import { createExtensionAPI, setRegistries, setAuthRequiredCallback, registerExtensionDisplayName, getAuthHandler, getAuthExtensions, checkExtensionAuth, hasCheckAuth } from "./extension-api";
-import { saveEnrichment, getEnrichments, hasValidEnrichment, getEnrichmentBySender } from "./enrichment-store";
+import {
+  createExtensionAPI,
+  setRegistries,
+  setAuthRequiredCallback,
+  registerExtensionDisplayName,
+  getAuthHandler,
+  getAuthExtensions,
+  checkExtensionAuth,
+  hasCheckAuth,
+} from "./extension-api";
+import {
+  saveEnrichment,
+  getEnrichments,
+  hasValidEnrichment,
+  getEnrichmentBySender,
+} from "./enrichment-store";
+import { createLogger } from "../services/logger";
+
+const log = createLogger("extension-host");
 
 // Memory logging helper
 function logMemory(label: string): void {
   const used = process.memoryUsage();
-  console.log(`[Memory:${label}] RSS: ${Math.round(used.rss / 1024 / 1024)}MB, Heap: ${Math.round(used.heapUsed / 1024 / 1024)}/${Math.round(used.heapTotal / 1024 / 1024)}MB`);
+  log.info(
+    `[Memory:${label}] RSS: ${Math.round(used.rss / 1024 / 1024)}MB, Heap: ${Math.round(used.heapUsed / 1024 / 1024)}/${Math.round(used.heapTotal / 1024 / 1024)}MB`,
+  );
 }
 
 /**
@@ -49,19 +70,32 @@ export class ExtensionHost {
   private agentCoordinator: AgentCoordinator | null = null;
 
   // Callbacks for notifying renderer of enrichment updates
-  private enrichmentCallbacks: ((emailId: string, enrichment: ExtensionEnrichmentResult) => void)[] = [];
+  private enrichmentCallbacks: ((
+    emailId: string,
+    enrichment: ExtensionEnrichmentResult,
+  ) => void)[] = [];
 
   // Batching for enrichment notifications to avoid flooding renderer
-  private pendingEnrichmentNotifications: { emailId: string; enrichment: ExtensionEnrichmentResult }[] = [];
+  private pendingEnrichmentNotifications: {
+    emailId: string;
+    enrichment: ExtensionEnrichmentResult;
+  }[] = [];
   private enrichmentNotifyTimer: NodeJS.Timeout | null = null;
   private static readonly ENRICHMENT_BATCH_MS = 500; // Batch notifications every 500ms
 
   // Concurrency control for enrichment
   private enrichmentInProgress: Set<string> = new Set(); // emailIds currently being enriched
-  private enrichmentQueue: Map<string, { resolve: (results: ExtensionEnrichmentResult[]) => void }> = new Map();
+  private enrichmentQueue: Map<
+    string,
+    { resolve: (results: ExtensionEnrichmentResult[]) => void }
+  > = new Map();
 
   // Callbacks for extension auth required events
-  private authRequiredCallbacks: ((extensionId: string, displayName: string, message?: string) => void)[] = [];
+  private authRequiredCallbacks: ((
+    extensionId: string,
+    displayName: string,
+    message?: string,
+  ) => void)[] = [];
 
   constructor() {
     // Set the registries for extension-api to use
@@ -88,7 +122,7 @@ export class ExtensionHost {
    */
   async loadExtensions(bundledPath: string, installedPath?: string): Promise<void> {
     const extensionPaths = findExtensionPaths(bundledPath, installedPath);
-    console.log(`[Extensions] Found ${extensionPaths.length} extension(s) to load`);
+    log.info(`[Extensions] Found ${extensionPaths.length} extension(s) to load`);
 
     for (const extPath of extensionPaths) {
       await this.loadExtension(extPath);
@@ -106,7 +140,7 @@ export class ExtensionHost {
 
     // Check if already loaded
     if (this.extensions.has(manifest.id)) {
-      console.warn(`[Extensions] Extension ${manifest.id} already loaded, skipping`);
+      log.warn(`[Extensions] Extension ${manifest.id} already loaded, skipping`);
       return false;
     }
 
@@ -124,7 +158,7 @@ export class ExtensionHost {
           scope: panel.scope ?? "sender",
         };
         this.sidebarPanels.set(`${manifest.id}:${panel.id}`, registration);
-        console.log(`[Extensions] Registered sidebar panel: ${manifest.id}:${panel.id}`);
+        log.info(`[Extensions] Registered sidebar panel: ${manifest.id}:${panel.id}`);
       }
     }
 
@@ -149,7 +183,7 @@ export class ExtensionHost {
 
     this.extensions.set(manifest.id, loadedExt);
     registerExtensionDisplayName(manifest.id, manifest.displayName);
-    console.log(`[Extensions] Loaded extension: ${manifest.id}`);
+    log.info(`[Extensions] Loaded extension: ${manifest.id}`);
 
     return true;
   }
@@ -171,12 +205,12 @@ export class ExtensionHost {
   async activateExtension(extensionId: string): Promise<boolean> {
     const ext = this.extensions.get(extensionId);
     if (!ext) {
-      console.error(`[Extensions] Extension ${extensionId} not found`);
+      log.error(`[Extensions] Extension ${extensionId} not found`);
       return false;
     }
 
     if (ext.isActive) {
-      console.warn(`[Extensions] Extension ${extensionId} already active`);
+      log.warn(`[Extensions] Extension ${extensionId} already active`);
       return true;
     }
 
@@ -184,7 +218,7 @@ export class ExtensionHost {
       // For bundled extensions, use pre-registered modules
       const module = this.bundledModules.get(extensionId);
       if (!module) {
-        console.error(`[Extensions] No module registered for ${extensionId}`);
+        log.error(`[Extensions] No module registered for ${extensionId}`);
         return false;
       }
 
@@ -197,10 +231,10 @@ export class ExtensionHost {
       await module.activate(ext.context, api);
 
       ext.isActive = true;
-      console.log(`[Extensions] Activated extension: ${extensionId}`);
+      log.info(`[Extensions] Activated extension: ${extensionId}`);
       return true;
     } catch (error) {
-      console.error(`[Extensions] Failed to activate extension ${extensionId}:`, error);
+      log.error({ err: error }, `[Extensions] Failed to activate extension ${extensionId}`);
       return false;
     }
   }
@@ -210,7 +244,7 @@ export class ExtensionHost {
    */
   registerBundledModule(extensionId: string, module: ExtensionModule): void {
     this.bundledModules.set(extensionId, module);
-    console.log(`[Extensions] Registered bundled module: ${extensionId}`);
+    log.info(`[Extensions] Registered bundled module: ${extensionId}`);
   }
 
   /**
@@ -219,10 +253,10 @@ export class ExtensionHost {
    */
   async registerBundledExtensionFull(
     manifest: ExtensionManifest,
-    module: ExtensionModule
+    module: ExtensionModule,
   ): Promise<void> {
     if (this.extensions.has(manifest.id)) {
-      console.warn(`[Extensions] Extension ${manifest.id} already loaded, skipping`);
+      log.warn(`[Extensions] Extension ${manifest.id} already loaded, skipping`);
       return;
     }
 
@@ -240,7 +274,7 @@ export class ExtensionHost {
           scope: panel.scope ?? "sender",
         };
         this.sidebarPanels.set(`${manifest.id}:${panel.id}`, registration);
-        console.log(`[Extensions] Registered sidebar panel: ${manifest.id}:${panel.id}`);
+        log.info(`[Extensions] Registered sidebar panel: ${manifest.id}:${panel.id}`);
       }
     }
 
@@ -301,10 +335,10 @@ export class ExtensionHost {
 
       ext.isActive = false;
       ext.module = null;
-      console.log(`[Extensions] Deactivated extension: ${extensionId}`);
+      log.info(`[Extensions] Deactivated extension: ${extensionId}`);
       return true;
     } catch (error) {
-      console.error(`[Extensions] Failed to deactivate extension ${extensionId}:`, error);
+      log.error({ err: error }, `[Extensions] Failed to deactivate extension ${extensionId}`);
       return false;
     }
   }
@@ -317,7 +351,7 @@ export class ExtensionHost {
   async enrichEmail(
     email: DashboardEmail,
     threadEmails: DashboardEmail[],
-    options: { allowNewLookups?: boolean } = {}
+    options: { allowNewLookups?: boolean } = {},
   ): Promise<ExtensionEnrichmentResult[]> {
     const { allowNewLookups = false } = options;
     const results: ExtensionEnrichmentResult[] = [];
@@ -327,7 +361,7 @@ export class ExtensionHost {
 
     // Sort providers by priority (higher first)
     const sortedProviders = [...this.enrichmentProviders.values()].sort(
-      (a, b) => (b.priority ?? 0) - (a.priority ?? 0)
+      (a, b) => (b.priority ?? 0) - (a.priority ?? 0),
     );
 
     for (const provider of sortedProviders) {
@@ -337,7 +371,7 @@ export class ExtensionHost {
       // Check if we already have valid cached enrichment for this email
       if (hasValidEnrichment(email.id, extensionId)) {
         const cached = getEnrichments(email.id).find(
-          (e) => e.extensionId === extensionId && e.panelId === provider.panelId
+          (e) => e.extensionId === extensionId && e.panelId === provider.panelId,
         );
         if (cached) {
           results.push(cached);
@@ -349,11 +383,15 @@ export class ExtensionHost {
       const cachedBySender = getEnrichmentBySender(senderEmail, extensionId);
       if (cachedBySender && cachedBySender.panelId === provider.panelId) {
         // Save a copy for this email ID so future lookups are faster
-        saveEnrichment(email.id, {
-          extensionId: cachedBySender.extensionId,
-          panelId: cachedBySender.panelId,
-          data: cachedBySender.data,
-        }, senderEmail);
+        saveEnrichment(
+          email.id,
+          {
+            extensionId: cachedBySender.extensionId,
+            panelId: cachedBySender.panelId,
+            data: cachedBySender.data,
+          },
+          senderEmail,
+        );
         results.push(cachedBySender);
 
         // Notify listeners (batched to avoid flooding renderer)
@@ -380,7 +418,7 @@ export class ExtensionHost {
       this.enrichmentInProgress.add(email.id);
 
       try {
-        console.log(`[Extensions] Starting enrichment for ${email.id}`);
+        log.info(`[Extensions] Starting enrichment for ${email.id}`);
         const enrichment = await provider.enrich(email, threadEmails);
         if (enrichment) {
           // Save to database with sender email for cross-email caching
@@ -398,7 +436,7 @@ export class ExtensionHost {
           this.notifyEnrichmentReady(email.id, result);
         }
       } catch (error) {
-        console.error(`[Extensions] Enrichment provider ${provider.id} failed:`, error);
+        log.error({ err: error }, `[Extensions] Enrichment provider ${provider.id} failed`);
       } finally {
         this.enrichmentInProgress.delete(email.id);
       }
@@ -447,7 +485,7 @@ export class ExtensionHost {
    * Register a callback for enrichment updates
    */
   onEnrichmentReady(
-    callback: (emailId: string, enrichment: ExtensionEnrichmentResult) => void
+    callback: (emailId: string, enrichment: ExtensionEnrichmentResult) => void,
   ): () => void {
     this.enrichmentCallbacks.push(callback);
     return () => {
@@ -463,7 +501,7 @@ export class ExtensionHost {
    * Called when any extension invokes api.emitAuthRequired().
    */
   onAuthRequired(
-    callback: (extensionId: string, displayName: string, message?: string) => void
+    callback: (extensionId: string, displayName: string, message?: string) => void,
   ): () => void {
     this.authRequiredCallbacks.push(callback);
     return () => {
@@ -478,7 +516,9 @@ export class ExtensionHost {
    * Get all extensions that have registered auth handlers, along with their current auth status.
    * Used during onboarding to show a "Connect Services" step.
    */
-  async getExtensionsNeedingAuth(): Promise<Array<{ extensionId: string; displayName: string; needsAuth: boolean }>> {
+  async getExtensionsNeedingAuth(): Promise<
+    Array<{ extensionId: string; displayName: string; needsAuth: boolean }>
+  > {
     const authExtensions = getAuthExtensions();
     const results: Array<{ extensionId: string; displayName: string; needsAuth: boolean }> = [];
     for (const ext of authExtensions) {
@@ -500,9 +540,9 @@ export class ExtensionHost {
       throw new Error(`No auth handler registered for extension: ${extensionId}`);
     }
 
-    console.log(`[Extensions] Triggering auth for ${extensionId}`);
+    log.info(`[Extensions] Triggering auth for ${extensionId}`);
     await handler();
-    console.log(`[Extensions] Auth completed for ${extensionId}`);
+    log.info(`[Extensions] Auth completed for ${extensionId}`);
   }
 
   /**
@@ -617,12 +657,12 @@ export class ExtensionHost {
         await this.loadInstalledExtension(extDir);
         loaded++;
       } catch (error) {
-        console.error(`[Extensions] Failed to load installed extension at ${extDir}:`, error);
+        log.error({ err: error }, `[Extensions] Failed to load installed extension at ${extDir}`);
       }
     }
 
     if (loaded > 0) {
-      console.log(`[Extensions] Loaded ${loaded} installed extension(s)`);
+      log.info(`[Extensions] Loaded ${loaded} installed extension(s)`);
     }
   }
 
@@ -667,7 +707,7 @@ export class ExtensionHost {
     }
 
     if (this.extensions.has(id)) {
-      console.warn(`[Extensions] Extension ${id} already loaded, skipping installed version`);
+      log.warn(`[Extensions] Extension ${id} already loaded, skipping installed version`);
       return;
     }
 
@@ -711,13 +751,15 @@ export class ExtensionHost {
     }
 
     const loadedExt: LoadedExtension = {
-      manifest: manifest ?? ExtensionManifestSchema.parse({
-        id,
-        displayName,
-        description: agentProviderManifest?.description,
-        version: agentProviderManifest?.version ?? "1.0.0",
-        builtIn: false,
-      }),
+      manifest:
+        manifest ??
+        ExtensionManifestSchema.parse({
+          id,
+          displayName,
+          description: agentProviderManifest?.description,
+          version: agentProviderManifest?.version ?? "1.0.0",
+          builtIn: false,
+        }),
       path: extDir,
       module: null,
       context,
@@ -744,7 +786,7 @@ export class ExtensionHost {
       }
     }
 
-    console.log(`[Extensions] Loaded installed package: ${displayName} (${id})`);
+    log.info(`[Extensions] Loaded installed package: ${displayName} (${id})`);
   }
 
   /**
@@ -766,7 +808,7 @@ export class ExtensionHost {
         const setup = setupModule.default || setupModule;
         registerProviderAuth(id, setup);
       } catch (err) {
-        console.error(`[Extensions] Failed to load main-setup.js for ${id}:`, err);
+        log.error({ err: err }, `[Extensions] Failed to load main-setup.js for ${id}`);
       }
     }
 
@@ -778,9 +820,10 @@ export class ExtensionHost {
         // Store load error on the extension record
         const ext = this.extensions.get(id);
         if (ext) {
-          (ext as unknown as { loadError: string }).loadError = result.error ?? "Unknown load error";
+          (ext as unknown as { loadError: string }).loadError =
+            result.error ?? "Unknown load error";
         }
-        console.error(`[Extensions] Agent provider ${id} failed to load: ${result.error}`);
+        log.error(`[Extensions] Agent provider ${id} failed to load: ${result.error}`);
       }
     }
   }
@@ -806,7 +849,7 @@ export class ExtensionHost {
     try {
       // Use execFileSync (no shell) to prevent shell injection via zipPath
       execFileSync("unzip", ["-o", zipPath, "-d", tempDir], { stdio: "pipe" });
-    } catch (error) {
+    } catch (_error) {
       rmSync(tempDir, { recursive: true, force: true });
       throw new Error("Failed to extract extension — is it a valid zip archive?");
     }
@@ -843,7 +886,9 @@ export class ExtensionHost {
       }
     } catch (error) {
       rmSync(tempDir, { recursive: true, force: true });
-      throw new Error(`Invalid package manifest: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(
+        `Invalid package manifest: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
 
     // Validate manifest.id to prevent path traversal
@@ -935,7 +980,7 @@ export class ExtensionHost {
       rmSync(ext.path, { recursive: true, force: true });
     }
 
-    console.log(`[Extensions] Uninstalled extension: ${extensionId}`);
+    log.info(`[Extensions] Uninstalled extension: ${extensionId}`);
     return true;
   }
 
@@ -955,7 +1000,9 @@ export class ExtensionHost {
             if (pkg.agentProvider) {
               agentProviderManifest = AgentProviderManifestSchema.parse(pkg.agentProvider);
             }
-          } catch { /* ignore parse errors */ }
+          } catch {
+            /* ignore parse errors */
+          }
         }
         results.push({
           id: ext.manifest.id,

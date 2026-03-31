@@ -7,7 +7,9 @@ let page: Page;
 // Helper to read store state
 async function getStoreState(page: Page) {
   return page.evaluate(() => {
-    const store = (window as unknown as { __ZUSTAND_STORE__?: { getState: () => Record<string, unknown> } }).__ZUSTAND_STORE__;
+    const store = (
+      window as unknown as { __ZUSTAND_STORE__?: { getState: () => Record<string, unknown> } }
+    ).__ZUSTAND_STORE__;
     if (!store) return null;
     const state = store.getState();
     return {
@@ -21,7 +23,7 @@ async function getStoreState(page: Page) {
 }
 
 test.describe("Snooze — email must leave inbox and cursor must advance", () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: "serial" });
 
   test.beforeAll(async ({}, testInfo) => {
     const result = await launchElectronApp({
@@ -37,7 +39,11 @@ test.describe("Snooze — email must leave inbox and cursor must advance", () =>
 
     // Wait for the app to fully load with emails
     await page.waitForSelector("text=Exo", { timeout: 15000 });
-    await page.locator("button").filter({ hasText: /High|Medium|Low/ }).first().waitFor({ timeout: 10000 });
+    await page
+      .locator("button")
+      .filter({ hasText: /High|Medium|Low/ })
+      .first()
+      .waitFor({ timeout: 10000 });
   });
 
   test.afterAll(async () => {
@@ -60,17 +66,25 @@ test.describe("Snooze — email must leave inbox and cursor must advance", () =>
 
     // Step 2: Identify the thread BELOW the selected one (the expected next selection)
     const nextThreadInfo = await page.evaluate((currentThreadId: string) => {
-      const store = (window as unknown as { __ZUSTAND_STORE__?: { getState: () => Record<string, unknown> } }).__ZUSTAND_STORE__;
+      const store = (
+        window as unknown as { __ZUSTAND_STORE__?: { getState: () => Record<string, unknown> } }
+      ).__ZUSTAND_STORE__;
       if (!store) return null;
       // Access the useThreadedEmails derived data by calling the selector
       const state = store.getState();
-      const emails = state.emails as Array<{ id: string; threadId: string; accountId: string; date: string; labelIds?: string[] }>;
+      const emails = state.emails as Array<{
+        id: string;
+        threadId: string;
+        accountId: string;
+        date: string;
+        labelIds?: string[];
+      }>;
       const snoozedThreadIds = state.snoozedThreadIds as Set<string>;
       const currentAccountId = state.currentAccountId as string;
 
       // Reproduce thread grouping logic to get the ordered thread list
       const accountEmails = emails.filter(
-        (e) => e.accountId === currentAccountId && (e.labelIds || []).includes("INBOX")
+        (e) => e.accountId === currentAccountId && (e.labelIds || []).includes("INBOX"),
       );
       const threadMap = new Map<string, typeof accountEmails>();
       for (const e of accountEmails) {
@@ -82,14 +96,20 @@ test.describe("Snooze — email must leave inbox and cursor must advance", () =>
       const threadIds = [...threadMap.keys()].filter((tid) => !snoozedThreadIds.has(tid));
       const currentIndex = threadIds.indexOf(currentThreadId);
 
-      if (currentIndex < 0 || threadIds.length <= 1) return { nextThreadId: null, currentIndex, threadCount: threadIds.length };
+      if (currentIndex < 0 || threadIds.length <= 1)
+        return { nextThreadId: null, currentIndex, threadCount: threadIds.length };
 
       // Same logic as archive: Math.min(currentIndex, length - 2), then filter out current
       const nextIndex = Math.min(currentIndex, threadIds.length - 2);
       const remaining = threadIds.filter((tid) => tid !== currentThreadId);
       const nextThreadId = remaining[nextIndex] || null;
 
-      return { nextThreadId, currentIndex, threadCount: threadIds.length, remainingCount: remaining.length };
+      return {
+        nextThreadId,
+        currentIndex,
+        threadCount: threadIds.length,
+        remainingCount: remaining.length,
+      };
     }, snoozedThreadId!);
 
     console.log("Expected next thread:", JSON.stringify(nextThreadInfo));
@@ -127,7 +147,7 @@ test.describe("Snooze — email must leave inbox and cursor must advance", () =>
     }
 
     // The selected row in the UI should be highlighted
-    const selectedRow = page.locator('.overflow-y-auto div[data-thread-id].bg-blue-600');
+    const selectedRow = page.locator(".overflow-y-auto div[data-thread-id].bg-blue-600");
     await expect(selectedRow.first()).toBeVisible({ timeout: 2000 });
   });
 });

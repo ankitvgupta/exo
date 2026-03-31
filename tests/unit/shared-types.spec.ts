@@ -51,9 +51,7 @@ test.describe("EmailSchema", () => {
       bcc: "bcc@example.com",
       snippet: "plain text body",
       labelIds: ["INBOX", "UNREAD"],
-      attachments: [
-        { id: "att-1", filename: "doc.pdf", mimeType: "application/pdf", size: 1024 },
-      ],
+      attachments: [{ id: "att-1", filename: "doc.pdf", mimeType: "application/pdf", size: 1024 }],
       messageIdHeader: "<msg-002@mail.gmail.com>",
     };
     const result = EmailSchema.safeParse(email);

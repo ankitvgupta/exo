@@ -8,7 +8,8 @@ const require = createRequire(import.meta.url);
 type DB = BetterSqlite3.Database;
 
 // better-sqlite3 may be compiled for Electron's Node version rather than system Node.
-let DatabaseCtor: (new (filename: string | Buffer, options?: BetterSqlite3.Options) => DB) | null = null;
+let DatabaseCtor: (new (filename: string | Buffer, options?: BetterSqlite3.Options) => DB) | null =
+  null;
 let nativeModuleError: string | null = null;
 try {
   DatabaseCtor = require("better-sqlite3");
@@ -16,7 +17,10 @@ try {
   testDb.close();
 } catch (e: unknown) {
   const err = e as Error;
-  if (err.message?.includes("NODE_MODULE_VERSION") || err.message?.includes("did not self-register")) {
+  if (
+    err.message?.includes("NODE_MODULE_VERSION") ||
+    err.message?.includes("did not self-register")
+  ) {
     nativeModuleError = err.message.split("\n")[0];
   } else {
     throw e;
@@ -54,12 +58,14 @@ function sanitizeFtsQuery(query: string): string {
   if (query.startsWith('"') && query.endsWith('"')) return query;
   const ftsOperators = new Set(["AND", "OR", "NOT", "NEAR"]);
   const tokens = query.split(/\s+/).filter(Boolean);
-  return tokens.map(token => {
-    if (ftsOperators.has(token.toUpperCase())) return token.toUpperCase();
-    if (/^(subject|body_text|from_address|to_address):/.test(token)) return token;
-    if (/[*"():^{}+\-]/.test(token)) return `"${token.replace(/"/g, '""')}"`;
-    return token;
-  }).join(" ");
+  return tokens
+    .map((token) => {
+      if (ftsOperators.has(token.toUpperCase())) return token.toUpperCase();
+      if (/^(subject|body_text|from_address|to_address):/.test(token)) return token;
+      if (/[*"():^{}+\-]/.test(token)) return `"${token.replace(/"/g, '""')}"`;
+      return token;
+    })
+    .join(" ");
 }
 
 function createTestDb(): DB {
@@ -76,27 +82,55 @@ function createTestDb(): DB {
 
 // ---- DB operation wrappers (mirror src/main/db/index.ts logic) ----
 
-function saveEmail(db: DB, email: {
-  id: string; threadId: string; subject: string; from: string; to: string;
-  cc?: string; bcc?: string; body: string; snippet?: string; date: string;
-  labelIds?: string[]; attachments?: unknown[]; messageIdHeader?: string;
-}, accountId = "default") {
+function saveEmail(
+  db: DB,
+  email: {
+    id: string;
+    threadId: string;
+    subject: string;
+    from: string;
+    to: string;
+    cc?: string;
+    bcc?: string;
+    body: string;
+    snippet?: string;
+    date: string;
+    labelIds?: string[];
+    attachments?: unknown[];
+    messageIdHeader?: string;
+  },
+  accountId = "default",
+) {
   const bodyText = stripHtmlForSearch(email.body);
-  db.prepare(`
+  db.prepare(
+    `
     INSERT OR REPLACE INTO emails (id, account_id, thread_id, subject, from_address, to_address, cc_address, bcc_address, body, body_text, snippet, date, fetched_at, label_ids, attachments, message_id)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
-    email.id, accountId, email.threadId, email.subject, email.from, email.to,
-    email.cc || null, email.bcc || null, email.body, bodyText,
-    email.snippet || null, email.date, Date.now(),
+  `,
+  ).run(
+    email.id,
+    accountId,
+    email.threadId,
+    email.subject,
+    email.from,
+    email.to,
+    email.cc || null,
+    email.bcc || null,
+    email.body,
+    bodyText,
+    email.snippet || null,
+    email.date,
+    Date.now(),
     email.labelIds ? JSON.stringify(email.labelIds) : null,
     email.attachments?.length ? JSON.stringify(email.attachments) : null,
-    email.messageIdHeader || null
+    email.messageIdHeader || null,
   );
 }
 
 function getEmail(db: DB, emailId: string) {
-  return db.prepare(`
+  return db
+    .prepare(
+      `
     SELECT e.id, e.account_id as accountId, e.thread_id as threadId, e.subject,
       e.from_address as "from", e.to_address as "to", e.cc_address as cc, e.bcc_address as bcc,
       e.body, e.snippet, e.date, e.label_ids as labelIds, e.attachments as attachmentsJson,
@@ -107,7 +141,9 @@ function getEmail(db: DB, emailId: string) {
     LEFT JOIN analyses a ON e.id = a.email_id
     LEFT JOIN drafts d ON e.id = d.email_id
     WHERE e.id = ?
-  `).get(emailId);
+  `,
+    )
+    .get(emailId);
 }
 
 // Shared SELECT columns matching production's getAllEmails, getInboxEmails, getEmailsByThread, getEmailsByIds, getSentEmails
@@ -156,39 +192,63 @@ function getEmailsByThread(db: DB, threadId: string, accountId?: string) {
 function getEmailsByIds(db: DB, ids: string[]) {
   if (ids.length === 0) return [];
   const placeholders = ids.map(() => "?").join(",");
-  return db.prepare(`SELECT ${DASHBOARD_EMAIL_SELECT} ${DASHBOARD_EMAIL_FROM_JOINS}
-    WHERE e.id IN (${placeholders})`).all(...ids);
+  return db
+    .prepare(
+      `SELECT ${DASHBOARD_EMAIL_SELECT} ${DASHBOARD_EMAIL_FROM_JOINS}
+    WHERE e.id IN (${placeholders})`,
+    )
+    .all(...ids);
 }
 
 function getAllEmailIds(db: DB, accountId?: string): string[] {
   if (accountId) {
-    return (db.prepare("SELECT id FROM emails WHERE account_id = ?").all(accountId) as { id: string }[]).map(r => r.id);
+    return (
+      db.prepare("SELECT id FROM emails WHERE account_id = ?").all(accountId) as { id: string }[]
+    ).map((r) => r.id);
   }
-  return (db.prepare("SELECT id FROM emails").all() as { id: string }[]).map(r => r.id);
+  return (db.prepare("SELECT id FROM emails").all() as { id: string }[]).map((r) => r.id);
 }
 
 function getEmailIds(db: DB, accountId: string): Set<string> {
-  const rows = db.prepare("SELECT id FROM emails WHERE account_id = ?").all(accountId) as { id: string }[];
-  return new Set(rows.map(r => r.id));
+  const rows = db.prepare("SELECT id FROM emails WHERE account_id = ?").all(accountId) as {
+    id: string;
+  }[];
+  return new Set(rows.map((r) => r.id));
 }
 
 function updateEmailLabelIds(db: DB, emailId: string, labelIds: string[]) {
   db.prepare("UPDATE emails SET label_ids = ? WHERE id = ?").run(JSON.stringify(labelIds), emailId);
 }
 
-function saveAnalysis(db: DB, emailId: string, needsReply: boolean, reason: string, priority?: string) {
-  db.prepare(`
+function saveAnalysis(
+  db: DB,
+  emailId: string,
+  needsReply: boolean,
+  reason: string,
+  priority?: string,
+) {
+  db.prepare(
+    `
     INSERT OR REPLACE INTO analyses (email_id, needs_reply, reason, priority, analyzed_at)
     VALUES (?, ?, ?, ?, ?)
-  `).run(emailId, needsReply ? 1 : 0, reason, priority || null, Date.now());
+  `,
+  ).run(emailId, needsReply ? 1 : 0, reason, priority || null, Date.now());
 }
 
-function saveDraft(db: DB, emailId: string, draftBody: string, status = "pending", gmailDraftId?: string, options?: { cc?: string[]; bcc?: string[] }) {
+function saveDraft(
+  db: DB,
+  emailId: string,
+  draftBody: string,
+  status = "pending",
+  gmailDraftId?: string,
+  options?: { cc?: string[]; bcc?: string[] },
+) {
   const ccJson = options?.cc?.length ? JSON.stringify(options.cc) : null;
   const bccJson = options?.bcc?.length ? JSON.stringify(options.bcc) : null;
   const updateCc = options !== undefined ? "excluded.cc" : "COALESCE(excluded.cc, drafts.cc)";
   const updateBcc = options !== undefined ? "excluded.bcc" : "COALESCE(excluded.bcc, drafts.bcc)";
-  db.prepare(`
+  db.prepare(
+    `
     INSERT INTO drafts (email_id, draft_body, gmail_draft_id, status, created_at, cc, bcc)
     VALUES (?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(email_id) DO UPDATE SET
@@ -198,7 +258,8 @@ function saveDraft(db: DB, emailId: string, draftBody: string, status = "pending
       created_at = excluded.created_at,
       cc = ${updateCc},
       bcc = ${updateBcc}
-  `).run(emailId, draftBody, gmailDraftId || null, status, Date.now(), ccJson, bccJson);
+  `,
+  ).run(emailId, draftBody, gmailDraftId || null, status, Date.now(), ccJson, bccJson);
 }
 
 function deleteDraft(db: DB, emailId: string) {
@@ -209,20 +270,39 @@ function updateDraftAgentTaskId(db: DB, emailId: string, agentTaskId: string) {
   db.prepare("UPDATE drafts SET agent_task_id = ? WHERE email_id = ?").run(agentTaskId, emailId);
 }
 
-function saveAccount(db: DB, accountId: string, email: string, displayName?: string, isPrimary = false) {
-  db.prepare(`
+function saveAccount(
+  db: DB,
+  accountId: string,
+  email: string,
+  displayName?: string,
+  isPrimary = false,
+) {
+  db.prepare(
+    `
     INSERT OR REPLACE INTO accounts (id, email, display_name, is_primary, added_at)
     VALUES (?, ?, ?, ?, ?)
-  `).run(accountId, email, displayName || null, isPrimary ? 1 : 0, Date.now());
+  `,
+  ).run(accountId, email, displayName || null, isPrimary ? 1 : 0, Date.now());
 }
 
 function getAccounts(db: DB) {
-  const rows = db.prepare("SELECT id, email, display_name as displayName, is_primary as isPrimary, added_at as addedAt FROM accounts ORDER BY added_at ASC").all() as {
-    id: string; email: string; displayName: string | null; isPrimary: number; addedAt: number;
+  const rows = db
+    .prepare(
+      "SELECT id, email, display_name as displayName, is_primary as isPrimary, added_at as addedAt FROM accounts ORDER BY added_at ASC",
+    )
+    .all() as {
+    id: string;
+    email: string;
+    displayName: string | null;
+    isPrimary: number;
+    addedAt: number;
   }[];
-  return rows.map(r => ({
-    id: r.id, email: r.email, displayName: r.displayName || undefined,
-    isPrimary: Boolean(r.isPrimary), addedAt: r.addedAt,
+  return rows.map((r) => ({
+    id: r.id,
+    email: r.email,
+    displayName: r.displayName || undefined,
+    isPrimary: Boolean(r.isPrimary),
+    addedAt: r.addedAt,
   }));
 }
 
@@ -237,9 +317,15 @@ function setPrimaryAccount(db: DB, accountId: string) {
 
 function removeAccount(db: DB, accountId: string) {
   const run = db.transaction(() => {
-    db.prepare("DELETE FROM extension_enrichments WHERE email_id IN (SELECT id FROM emails WHERE account_id = ?)").run(accountId);
-    db.prepare("DELETE FROM drafts WHERE email_id IN (SELECT id FROM emails WHERE account_id = ?)").run(accountId);
-    db.prepare("DELETE FROM analyses WHERE email_id IN (SELECT id FROM emails WHERE account_id = ?)").run(accountId);
+    db.prepare(
+      "DELETE FROM extension_enrichments WHERE email_id IN (SELECT id FROM emails WHERE account_id = ?)",
+    ).run(accountId);
+    db.prepare(
+      "DELETE FROM drafts WHERE email_id IN (SELECT id FROM emails WHERE account_id = ?)",
+    ).run(accountId);
+    db.prepare(
+      "DELETE FROM analyses WHERE email_id IN (SELECT id FROM emails WHERE account_id = ?)",
+    ).run(accountId);
     db.prepare("DELETE FROM archive_ready WHERE account_id = ?").run(accountId);
     db.prepare("DELETE FROM snoozed_emails WHERE account_id = ?").run(accountId);
     db.prepare("DELETE FROM scheduled_messages WHERE account_id = ?").run(accountId);
@@ -258,25 +344,43 @@ function removeAccount(db: DB, accountId: string) {
   run();
 }
 
-function saveSentEmail(db: DB, email: { id: string; toAddress: string; subject: string; body: string; date: string }) {
-  db.prepare(`
+function saveSentEmail(
+  db: DB,
+  email: { id: string; toAddress: string; subject: string; body: string; date: string },
+) {
+  db.prepare(
+    `
     INSERT OR REPLACE INTO sent_emails (id, to_address, subject, body, date, indexed_at)
     VALUES (?, ?, ?, ?, ?, ?)
-  `).run(email.id, email.toAddress, email.subject, email.body, email.date, Date.now());
+  `,
+  ).run(email.id, email.toAddress, email.subject, email.body, email.date, Date.now());
 }
 
 function getSentEmails(db: DB, accountId: string) {
-  return db.prepare(`SELECT ${DASHBOARD_EMAIL_SELECT} ${DASHBOARD_EMAIL_FROM_JOINS}
+  return db
+    .prepare(
+      `SELECT ${DASHBOARD_EMAIL_SELECT} ${DASHBOARD_EMAIL_FROM_JOINS}
     WHERE EXISTS (SELECT 1 FROM json_each(e.label_ids) WHERE value = 'SENT') AND e.account_id = ?
     ORDER BY e.date DESC
-  `).all(accountId);
+  `,
+    )
+    .all(accountId);
 }
 
-function snoozeEmail(db: DB, id: string, emailId: string, threadId: string, accountId: string, snoozeUntil: number) {
-  db.prepare(`
+function snoozeEmail(
+  db: DB,
+  id: string,
+  emailId: string,
+  threadId: string,
+  accountId: string,
+  snoozeUntil: number,
+) {
+  db.prepare(
+    `
     INSERT OR REPLACE INTO snoozed_emails (id, email_id, thread_id, account_id, snooze_until, snoozed_at)
     VALUES (?, ?, ?, ?, ?, ?)
-  `).run(id, emailId, threadId, accountId, snoozeUntil, Date.now());
+  `,
+  ).run(id, emailId, threadId, accountId, snoozeUntil, Date.now());
 }
 
 function unsnoozeEmail(db: DB, id: string) {
@@ -284,50 +388,83 @@ function unsnoozeEmail(db: DB, id: string) {
 }
 
 function getSnoozedEmails(db: DB, accountId: string) {
-  return db.prepare(`
+  return db
+    .prepare(
+      `
     SELECT id, email_id as emailId, thread_id as threadId, account_id as accountId,
            snooze_until as snoozeUntil, snoozed_at as snoozedAt
     FROM snoozed_emails WHERE account_id = ? ORDER BY snooze_until ASC
-  `).all(accountId);
+  `,
+    )
+    .all(accountId);
 }
 
 function clearSnoozedEmails(db: DB, accountId: string) {
   db.prepare("DELETE FROM snoozed_emails WHERE account_id = ?").run(accountId);
 }
 
-function insertScheduledMessage(db: DB, item: {
-  id: string; accountId: string; type: string; threadId?: string;
-  to: string[]; cc?: string[]; bcc?: string[]; subject: string;
-  bodyHtml: string; bodyText?: string; inReplyTo?: string;
-  references?: string; scheduledAt: number; createdAt: number;
-}) {
+function insertScheduledMessage(
+  db: DB,
+  item: {
+    id: string;
+    accountId: string;
+    type: string;
+    threadId?: string;
+    to: string[];
+    cc?: string[];
+    bcc?: string[];
+    subject: string;
+    bodyHtml: string;
+    bodyText?: string;
+    inReplyTo?: string;
+    references?: string;
+    scheduledAt: number;
+    createdAt: number;
+  },
+) {
   const now = Date.now();
-  db.prepare(`
+  db.prepare(
+    `
     INSERT INTO scheduled_messages (
       id, account_id, type, thread_id, to_addresses, cc_addresses, bcc_addresses,
       subject, body_html, body_text, in_reply_to, references_header,
       scheduled_at, status, created_at, updated_at
     )
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'scheduled', ?, ?)
-  `).run(
-    item.id, item.accountId, item.type, item.threadId || null,
-    JSON.stringify(item.to), item.cc ? JSON.stringify(item.cc) : null,
-    item.bcc ? JSON.stringify(item.bcc) : null, item.subject,
-    item.bodyHtml, item.bodyText || null, item.inReplyTo || null,
-    item.references || null, item.scheduledAt, item.createdAt, now
+  `,
+  ).run(
+    item.id,
+    item.accountId,
+    item.type,
+    item.threadId || null,
+    JSON.stringify(item.to),
+    item.cc ? JSON.stringify(item.cc) : null,
+    item.bcc ? JSON.stringify(item.bcc) : null,
+    item.subject,
+    item.bodyHtml,
+    item.bodyText || null,
+    item.inReplyTo || null,
+    item.references || null,
+    item.scheduledAt,
+    item.createdAt,
+    now,
   );
 }
 
 function getDueScheduledMessages(db: DB, limit = 10) {
   const now = Date.now();
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(
+      `
     SELECT id, account_id as accountId, type, thread_id as threadId,
            to_addresses as toAddresses, status, scheduled_at as scheduledAt
     FROM scheduled_messages
     WHERE status = 'scheduled' AND scheduled_at <= ?
     ORDER BY scheduled_at ASC LIMIT ?
-  `).all(now, limit);
-  return (rows as Record<string, unknown>[]).map(r => ({
+  `,
+    )
+    .all(now, limit);
+  return (rows as Record<string, unknown>[]).map((r) => ({
     ...r,
     to: JSON.parse(r.toAddresses as string),
   }));
@@ -347,7 +484,7 @@ function getScheduledMessages(db: DB, accountId?: string) {
   query += ` ORDER BY scheduled_at ASC`;
   const stmt = db.prepare(query);
   const rows = accountId ? stmt.all(accountId) : stmt.all();
-  return (rows as Record<string, unknown>[]).map(r => ({
+  return (rows as Record<string, unknown>[]).map((r) => ({
     ...r,
     to: JSON.parse(r.toAddresses as string),
     cc: r.ccAddresses ? JSON.parse(r.ccAddresses as string) : undefined,
@@ -359,21 +496,25 @@ function getScheduledMessages(db: DB, accountId?: string) {
 function updateScheduledMessageStatus(db: DB, id: string, status: string, errorMessage?: string) {
   const now = Date.now();
   if (status === "sent") {
-    db.prepare("UPDATE scheduled_messages SET status = ?, sent_at = ?, updated_at = ?, error_message = NULL WHERE id = ?")
-      .run(status, now, now, id);
+    db.prepare(
+      "UPDATE scheduled_messages SET status = ?, sent_at = ?, updated_at = ?, error_message = NULL WHERE id = ?",
+    ).run(status, now, now, id);
   } else {
-    db.prepare("UPDATE scheduled_messages SET status = ?, error_message = ?, updated_at = ? WHERE id = ?")
-      .run(status, errorMessage || null, now, id);
+    db.prepare(
+      "UPDATE scheduled_messages SET status = ?, error_message = ?, updated_at = ? WHERE id = ?",
+    ).run(status, errorMessage || null, now, id);
   }
 }
 
 function getScheduledMessageStats(db: DB, accountId?: string) {
-  let query = "SELECT status, COUNT(*) as count FROM scheduled_messages WHERE status IN ('scheduled', 'sending')";
+  let query =
+    "SELECT status, COUNT(*) as count FROM scheduled_messages WHERE status IN ('scheduled', 'sending')";
   if (accountId) query += ` AND account_id = ?`;
   query += " GROUP BY status";
   const stmt = db.prepare(query);
   const rows = accountId ? stmt.all(accountId) : stmt.all();
-  let scheduled = 0, total = 0;
+  let scheduled = 0,
+    total = 0;
   for (const row of rows as { status: string; count: number }[]) {
     if (row.status === "scheduled") scheduled = row.count;
     total += row.count;
@@ -381,31 +522,57 @@ function getScheduledMessageStats(db: DB, accountId?: string) {
   return { scheduled, total };
 }
 
-function insertOutboxMessage(db: DB, item: {
-  id: string; accountId: string; type: string; threadId?: string;
-  to: string[]; cc?: string[]; bcc?: string[]; subject: string;
-  bodyHtml: string; bodyText?: string; inReplyTo?: string; references?: string;
-  attachments?: unknown[]; createdAt: number;
-}) {
+function insertOutboxMessage(
+  db: DB,
+  item: {
+    id: string;
+    accountId: string;
+    type: string;
+    threadId?: string;
+    to: string[];
+    cc?: string[];
+    bcc?: string[];
+    subject: string;
+    bodyHtml: string;
+    bodyText?: string;
+    inReplyTo?: string;
+    references?: string;
+    attachments?: unknown[];
+    createdAt: number;
+  },
+) {
   const now = Date.now();
-  db.prepare(`
+  db.prepare(
+    `
     INSERT INTO outbox (
       id, account_id, type, thread_id, to_addresses, cc_addresses, bcc_addresses,
       subject, body_html, body_text, in_reply_to, references_header,
       attachments, status, retry_count, created_at, updated_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 0, ?, ?)
-  `).run(
-    item.id, item.accountId, item.type, item.threadId || null,
-    JSON.stringify(item.to), item.cc ? JSON.stringify(item.cc) : null,
-    item.bcc ? JSON.stringify(item.bcc) : null, item.subject,
-    item.bodyHtml, item.bodyText || null, item.inReplyTo || null,
-    item.references || null, item.attachments ? JSON.stringify(item.attachments) : null,
-    item.createdAt, now
+  `,
+  ).run(
+    item.id,
+    item.accountId,
+    item.type,
+    item.threadId || null,
+    JSON.stringify(item.to),
+    item.cc ? JSON.stringify(item.cc) : null,
+    item.bcc ? JSON.stringify(item.bcc) : null,
+    item.subject,
+    item.bodyHtml,
+    item.bodyText || null,
+    item.inReplyTo || null,
+    item.references || null,
+    item.attachments ? JSON.stringify(item.attachments) : null,
+    item.createdAt,
+    now,
   );
 }
 
 function getOutboxItem(db: DB, id: string) {
-  const row = db.prepare(`
+  const row = db
+    .prepare(
+      `
     SELECT id, account_id as accountId, type, thread_id as threadId,
            to_addresses as toAddresses, cc_addresses as ccAddresses, bcc_addresses as bccAddresses,
            subject, body_html as bodyHtml, body_text as bodyText,
@@ -413,7 +580,9 @@ function getOutboxItem(db: DB, id: string) {
            status, error_message as errorMessage, retry_count as retryCount,
            created_at as createdAt, updated_at as updatedAt, sent_at as sentAt
     FROM outbox WHERE id = ?
-  `).get(id) as Record<string, unknown> | undefined;
+  `,
+    )
+    .get(id) as Record<string, unknown> | undefined;
   if (!row) return null;
   return {
     ...row,
@@ -435,17 +604,29 @@ function getOutboxItems(db: DB, accountId?: string) {
   return accountId ? stmt.all(accountId) : stmt.all();
 }
 
-function updateOutboxStatus(db: DB, id: string, status: string, errorMessage?: string, incrementRetry = false) {
+function updateOutboxStatus(
+  db: DB,
+  id: string,
+  status: string,
+  errorMessage?: string,
+  incrementRetry = false,
+) {
   const now = Date.now();
   if (status === "sent") {
-    db.prepare("UPDATE outbox SET status = ?, sent_at = ?, updated_at = ?, error_message = NULL WHERE id = ?")
-      .run(status, now, now, id);
+    db.prepare(
+      "UPDATE outbox SET status = ?, sent_at = ?, updated_at = ?, error_message = NULL WHERE id = ?",
+    ).run(status, now, now, id);
   } else if (incrementRetry) {
-    db.prepare("UPDATE outbox SET status = ?, error_message = ?, retry_count = retry_count + 1, updated_at = ? WHERE id = ?")
-      .run(status, errorMessage || null, now, id);
+    db.prepare(
+      "UPDATE outbox SET status = ?, error_message = ?, retry_count = retry_count + 1, updated_at = ? WHERE id = ?",
+    ).run(status, errorMessage || null, now, id);
   } else {
-    db.prepare("UPDATE outbox SET status = ?, error_message = ?, updated_at = ? WHERE id = ?")
-      .run(status, errorMessage || null, now, id);
+    db.prepare("UPDATE outbox SET status = ?, error_message = ?, updated_at = ? WHERE id = ?").run(
+      status,
+      errorMessage || null,
+      now,
+      id,
+    );
   }
 }
 
@@ -477,33 +658,60 @@ function getPendingOutbox(db: DB, accountId?: string, limit = 10) {
   return accountId ? stmt.all(accountId, limit) : stmt.all(limit);
 }
 
-function saveLocalDraft(db: DB, draft: {
-  id: string; accountId: string; gmailDraftId?: string; threadId?: string;
-  inReplyTo?: string; to: string[]; cc?: string[]; bcc?: string[];
-  subject: string; bodyHtml: string; bodyText?: string;
-  isReply?: boolean; isForward?: boolean;
-  createdAt: number; updatedAt: number; syncedAt?: number;
-}) {
-  db.prepare(`
+function saveLocalDraft(
+  db: DB,
+  draft: {
+    id: string;
+    accountId: string;
+    gmailDraftId?: string;
+    threadId?: string;
+    inReplyTo?: string;
+    to: string[];
+    cc?: string[];
+    bcc?: string[];
+    subject: string;
+    bodyHtml: string;
+    bodyText?: string;
+    isReply?: boolean;
+    isForward?: boolean;
+    createdAt: number;
+    updatedAt: number;
+    syncedAt?: number;
+  },
+) {
+  db.prepare(
+    `
     INSERT OR REPLACE INTO local_drafts (
       id, account_id, gmail_draft_id, thread_id, in_reply_to,
       to_addresses, cc_addresses, bcc_addresses, subject,
       body_html, body_text, is_reply, is_forward,
       created_at, updated_at, synced_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
-    draft.id, draft.accountId, draft.gmailDraftId || null,
-    draft.threadId || null, draft.inReplyTo || null,
-    JSON.stringify(draft.to), draft.cc ? JSON.stringify(draft.cc) : null,
-    draft.bcc ? JSON.stringify(draft.bcc) : null, draft.subject,
-    draft.bodyHtml, draft.bodyText || null,
-    draft.isReply ? 1 : 0, draft.isForward ? 1 : 0,
-    draft.createdAt, draft.updatedAt, draft.syncedAt || null
+  `,
+  ).run(
+    draft.id,
+    draft.accountId,
+    draft.gmailDraftId || null,
+    draft.threadId || null,
+    draft.inReplyTo || null,
+    JSON.stringify(draft.to),
+    draft.cc ? JSON.stringify(draft.cc) : null,
+    draft.bcc ? JSON.stringify(draft.bcc) : null,
+    draft.subject,
+    draft.bodyHtml,
+    draft.bodyText || null,
+    draft.isReply ? 1 : 0,
+    draft.isForward ? 1 : 0,
+    draft.createdAt,
+    draft.updatedAt,
+    draft.syncedAt || null,
   );
 }
 
 function getLocalDraft(db: DB, draftId: string) {
-  const row = db.prepare(`
+  const row = db
+    .prepare(
+      `
     SELECT id, account_id as accountId, gmail_draft_id as gmailDraftId,
            thread_id as threadId, in_reply_to as inReplyTo,
            to_addresses as toAddresses, cc_addresses as ccAddresses,
@@ -512,7 +720,9 @@ function getLocalDraft(db: DB, draftId: string) {
            is_reply as isReply, is_forward as isForward,
            created_at as createdAt, updated_at as updatedAt, synced_at as syncedAt
     FROM local_drafts WHERE id = ?
-  `).get(draftId) as Record<string, unknown> | undefined;
+  `,
+    )
+    .get(draftId) as Record<string, unknown> | undefined;
   if (!row) return null;
   return {
     ...row,
@@ -536,109 +746,180 @@ function getLocalDrafts(db: DB, accountId?: string) {
 }
 
 function updateLocalDraftGmailId(db: DB, draftId: string, gmailDraftId: string) {
-  db.prepare("UPDATE local_drafts SET gmail_draft_id = ?, synced_at = ? WHERE id = ?")
-    .run(gmailDraftId, Date.now(), draftId);
+  db.prepare("UPDATE local_drafts SET gmail_draft_id = ?, synced_at = ? WHERE id = ?").run(
+    gmailDraftId,
+    Date.now(),
+    draftId,
+  );
 }
 
 function deleteLocalDraft(db: DB, draftId: string) {
   db.prepare("DELETE FROM local_drafts WHERE id = ?").run(draftId);
 }
 
-function saveArchiveReady(db: DB, threadId: string, accountId: string, isReady: boolean, reason: string) {
-  db.prepare(`
+function saveArchiveReady(
+  db: DB,
+  threadId: string,
+  accountId: string,
+  isReady: boolean,
+  reason: string,
+) {
+  db.prepare(
+    `
     INSERT INTO archive_ready (thread_id, account_id, is_ready, reason, analyzed_at, dismissed)
     VALUES (?, ?, ?, ?, ?, 0)
     ON CONFLICT(thread_id, account_id) DO UPDATE SET
       is_ready = excluded.is_ready, reason = excluded.reason,
       analyzed_at = excluded.analyzed_at, dismissed = 0
-  `).run(threadId, accountId, isReady ? 1 : 0, reason, Date.now());
+  `,
+  ).run(threadId, accountId, isReady ? 1 : 0, reason, Date.now());
 }
 
 function getArchiveReadyThreads(db: DB, accountId: string) {
-  return db.prepare(`
+  return db
+    .prepare(
+      `
     SELECT thread_id as threadId, account_id as accountId, is_ready as isReady,
            reason, analyzed_at as analyzedAt, dismissed
     FROM archive_ready
     WHERE account_id = ? AND is_ready = 1 AND dismissed = 0
     ORDER BY analyzed_at DESC
-  `).all(accountId).map((r: Record<string, unknown>) => ({
-    threadId: r.threadId, accountId: r.accountId,
-    isReady: Boolean(r.isReady), reason: r.reason,
-    analyzedAt: r.analyzedAt, dismissed: Boolean(r.dismissed),
-  }));
+  `,
+    )
+    .all(accountId)
+    .map((r: Record<string, unknown>) => ({
+      threadId: r.threadId,
+      accountId: r.accountId,
+      isReady: Boolean(r.isReady),
+      reason: r.reason,
+      analyzedAt: r.analyzedAt,
+      dismissed: Boolean(r.dismissed),
+    }));
 }
 
 function getArchiveReadyForThread(db: DB, threadId: string, accountId: string) {
-  const row = db.prepare(`
+  const row = db
+    .prepare(
+      `
     SELECT thread_id as threadId, account_id as accountId, is_ready as isReady,
            reason, analyzed_at as analyzedAt, dismissed
     FROM archive_ready WHERE thread_id = ? AND account_id = ?
-  `).get(threadId, accountId) as Record<string, unknown> | undefined;
+  `,
+    )
+    .get(threadId, accountId) as Record<string, unknown> | undefined;
   if (!row) return null;
   return {
-    threadId: row.threadId, accountId: row.accountId,
-    isReady: Boolean(row.isReady), reason: row.reason,
-    analyzedAt: row.analyzedAt, dismissed: Boolean(row.dismissed),
+    threadId: row.threadId,
+    accountId: row.accountId,
+    isReady: Boolean(row.isReady),
+    reason: row.reason,
+    analyzedAt: row.analyzedAt,
+    dismissed: Boolean(row.dismissed),
   };
 }
 
 function dismissArchiveReady(db: DB, threadId: string, accountId: string) {
-  db.prepare("UPDATE archive_ready SET dismissed = 1 WHERE thread_id = ? AND account_id = ?")
-    .run(threadId, accountId);
+  db.prepare("UPDATE archive_ready SET dismissed = 1 WHERE thread_id = ? AND account_id = ?").run(
+    threadId,
+    accountId,
+  );
 }
 
-function saveMemory(db: DB, memory: {
-  id: string; accountId: string; scope: string; scopeValue: string | null;
-  content: string; source: string; sourceEmailId?: string | null;
-  enabled: boolean; createdAt: number; updatedAt: number;
-}) {
-  db.prepare(`
+function saveMemory(
+  db: DB,
+  memory: {
+    id: string;
+    accountId: string;
+    scope: string;
+    scopeValue: string | null;
+    content: string;
+    source: string;
+    sourceEmailId?: string | null;
+    enabled: boolean;
+    createdAt: number;
+    updatedAt: number;
+  },
+) {
+  db.prepare(
+    `
     INSERT OR REPLACE INTO memories (id, account_id, scope, scope_value, content, source, source_email_id, enabled, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
-    memory.id, memory.accountId, memory.scope, memory.scopeValue,
-    memory.content, memory.source, memory.sourceEmailId ?? null,
-    memory.enabled ? 1 : 0, memory.createdAt, memory.updatedAt
+  `,
+  ).run(
+    memory.id,
+    memory.accountId,
+    memory.scope,
+    memory.scopeValue,
+    memory.content,
+    memory.source,
+    memory.sourceEmailId ?? null,
+    memory.enabled ? 1 : 0,
+    memory.createdAt,
+    memory.updatedAt,
   );
 }
 
 function getMemory(db: DB, id: string) {
-  const row = db.prepare("SELECT * FROM memories WHERE id = ?").get(id) as Record<string, unknown> | undefined;
+  const row = db.prepare("SELECT * FROM memories WHERE id = ?").get(id) as
+    | Record<string, unknown>
+    | undefined;
   if (!row) return null;
   return {
-    id: row.id, accountId: row.account_id, scope: row.scope,
-    scopeValue: row.scope_value, content: row.content,
-    source: row.source, sourceEmailId: row.source_email_id,
-    enabled: row.enabled === 1, createdAt: row.created_at, updatedAt: row.updated_at,
+    id: row.id,
+    accountId: row.account_id,
+    scope: row.scope,
+    scopeValue: row.scope_value,
+    content: row.content,
+    source: row.source,
+    sourceEmailId: row.source_email_id,
+    enabled: row.enabled === 1,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
   };
 }
 
 function getMemories(db: DB, accountId: string) {
-  const rows = db.prepare("SELECT * FROM memories WHERE account_id = ? ORDER BY scope, created_at DESC").all(accountId) as Record<string, unknown>[];
-  return rows.map(row => ({
-    id: row.id, accountId: row.account_id, scope: row.scope,
-    scopeValue: row.scope_value, content: row.content,
-    source: row.source, enabled: row.enabled === 1,
-    createdAt: row.created_at, updatedAt: row.updated_at,
+  const rows = db
+    .prepare("SELECT * FROM memories WHERE account_id = ? ORDER BY scope, created_at DESC")
+    .all(accountId) as Record<string, unknown>[];
+  return rows.map((row) => ({
+    id: row.id,
+    accountId: row.account_id,
+    scope: row.scope,
+    scopeValue: row.scope_value,
+    content: row.content,
+    source: row.source,
+    enabled: row.enabled === 1,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
   }));
 }
 
-function updateMemory(db: DB, id: string, updates: { content?: string; enabled?: boolean; scope?: string; scopeValue?: string | null }) {
+function updateMemory(
+  db: DB,
+  id: string,
+  updates: { content?: string; enabled?: boolean; scope?: string; scopeValue?: string | null },
+) {
   const memory = getMemory(db, id);
   if (!memory) return;
   const newContent = updates.content ?? memory.content;
   const newEnabled = updates.enabled ?? memory.enabled;
   const newScope = updates.scope ?? memory.scope;
   const newScopeValue = updates.scopeValue !== undefined ? updates.scopeValue : memory.scopeValue;
-  db.prepare("UPDATE memories SET content = ?, enabled = ?, scope = ?, scope_value = ?, updated_at = ? WHERE id = ?")
-    .run(newContent, newEnabled ? 1 : 0, newScope, newScopeValue, Date.now(), id);
+  db.prepare(
+    "UPDATE memories SET content = ?, enabled = ?, scope = ?, scope_value = ?, updated_at = ? WHERE id = ?",
+  ).run(newContent, newEnabled ? 1 : 0, newScope, newScopeValue, Date.now(), id);
 }
 
 function deleteMemory(db: DB, id: string) {
   db.prepare("DELETE FROM memories WHERE id = ?").run(id);
 }
 
-function searchEmails(db: DB, query: string, options: { accountId?: string; limit?: number; offset?: number } = {}) {
+function searchEmails(
+  db: DB,
+  query: string,
+  options: { accountId?: string; limit?: number; offset?: number } = {},
+) {
   const { accountId, limit = 50, offset = 0 } = options;
 
   let ftsQuery = query;
@@ -667,11 +948,16 @@ function searchEmails(db: DB, query: string, options: { accountId?: string; limi
       WHERE emails_fts MATCH ?
     `;
     const params: (string | number)[] = [finalQuery];
-    if (accountId) { sql += ` AND e.account_id = ?`; params.push(accountId); }
+    if (accountId) {
+      sql += ` AND e.account_id = ?`;
+      params.push(accountId);
+    }
     sql += ` ORDER BY rank, e.date DESC LIMIT ? OFFSET ?`;
     params.push(limit, offset);
     rows = db.prepare(sql).all(...params) as Record<string, unknown>[];
-  } catch { /* FTS error, fall through to LIKE */ }
+  } catch {
+    /* FTS error, fall through to LIKE */
+  }
 
   if (rows.length === 0) {
     try {
@@ -684,21 +970,36 @@ function searchEmails(db: DB, query: string, options: { accountId?: string; limi
                OR e.from_address LIKE ? COLLATE NOCASE OR e.to_address LIKE ? COLLATE NOCASE)
       `;
       const params: (string | number)[] = [likePattern, likePattern, likePattern, likePattern];
-      if (accountId) { sql += ` AND e.account_id = ?`; params.push(accountId); }
+      if (accountId) {
+        sql += ` AND e.account_id = ?`;
+        params.push(accountId);
+      }
       sql += ` ORDER BY e.date DESC LIMIT ? OFFSET ?`;
       params.push(limit, offset);
       rows = db.prepare(sql).all(...params) as Record<string, unknown>[];
-    } catch { return []; }
+    } catch {
+      return [];
+    }
   }
 
-  return rows.map(r => ({
-    id: r.id as string, threadId: r.threadId as string, accountId: r.accountId as string,
-    subject: r.subject as string, from: r.from as string, to: r.to as string,
-    date: r.date as string, snippet: (r.snippet as string) || "", rank: r.rank as number,
+  return rows.map((r) => ({
+    id: r.id as string,
+    threadId: r.threadId as string,
+    accountId: r.accountId as string,
+    subject: r.subject as string,
+    from: r.from as string,
+    to: r.to as string,
+    date: r.date as string,
+    snippet: (r.snippet as string) || "",
+    rank: r.rank as number,
   }));
 }
 
-function saveLabels(db: DB, accountId: string, labels: { id: string; name: string; type: string; color?: string; messageCount?: number }[]) {
+function saveLabels(
+  db: DB,
+  accountId: string,
+  labels: { id: string; name: string; type: string; color?: string; messageCount?: number }[],
+) {
   const stmt = db.prepare(`
     INSERT OR REPLACE INTO labels (id, account_id, name, type, color, message_count)
     VALUES (?, ?, ?, ?, ?, ?)
@@ -712,7 +1013,11 @@ function saveLabels(db: DB, accountId: string, labels: { id: string; name: strin
 }
 
 function getLabels(db: DB, accountId: string) {
-  return db.prepare("SELECT id, account_id as accountId, name, type, color, message_count as messageCount FROM labels WHERE account_id = ?").all(accountId);
+  return db
+    .prepare(
+      "SELECT id, account_id as accountId, name, type, color, message_count as messageCount FROM labels WHERE account_id = ?",
+    )
+    .all(accountId);
 }
 
 function deleteLabels(db: DB, accountId: string) {
@@ -766,13 +1071,21 @@ test.describe("Database CRUD operations", () => {
     });
 
     test("saveEmail with labelIds persists them as JSON", () => {
-      saveEmail(db, makeEmail({ id: "e2", threadId: "t2", labelIds: ["INBOX", "IMPORTANT"] }), "acct1");
+      saveEmail(
+        db,
+        makeEmail({ id: "e2", threadId: "t2", labelIds: ["INBOX", "IMPORTANT"] }),
+        "acct1",
+      );
       const result = getEmail(db, "e2");
       expect(JSON.parse(result.labelIds)).toEqual(["INBOX", "IMPORTANT"]);
     });
 
     test("saveEmail with cc and bcc", () => {
-      saveEmail(db, makeEmail({ id: "e3", threadId: "t3", cc: "cc@example.com", bcc: "bcc@example.com" }), "acct1");
+      saveEmail(
+        db,
+        makeEmail({ id: "e3", threadId: "t3", cc: "cc@example.com", bcc: "bcc@example.com" }),
+        "acct1",
+      );
       const result = getEmail(db, "e3");
       expect(result.cc).toBe("cc@example.com");
       expect(result.bcc).toBe("bcc@example.com");
@@ -952,7 +1265,8 @@ test.describe("Database CRUD operations", () => {
     test("saveDraft with cc and bcc options", () => {
       saveEmail(db, makeEmail({ id: "e1", threadId: "t1" }), "acct1");
       saveDraft(db, "e1", "Draft with cc", "pending", undefined, {
-        cc: ["cc1@example.com"], bcc: ["bcc1@example.com"],
+        cc: ["cc1@example.com"],
+        bcc: ["bcc1@example.com"],
       });
       const result = getEmail(db, "e1");
       expect(JSON.parse(result.draftCc)).toEqual(["cc1@example.com"]);
@@ -1040,7 +1354,9 @@ test.describe("Database CRUD operations", () => {
       saveAccount(db, "acct2", "b@gmail.com");
       setPrimaryAccount(db, "acct2");
       const accounts = getAccounts(db);
-      expect(accounts.find((a: Record<string, unknown>) => a.id === "acct1")!.isPrimary).toBe(false);
+      expect(accounts.find((a: Record<string, unknown>) => a.id === "acct1")!.isPrimary).toBe(
+        false,
+      );
       expect(accounts.find((a: Record<string, unknown>) => a.id === "acct2")!.isPrimary).toBe(true);
     });
 
@@ -1054,22 +1370,52 @@ test.describe("Database CRUD operations", () => {
   // ===== Sent email operations =====
   test.describe("Sent email operations", () => {
     test("saveSentEmail inserts into sent_emails table", () => {
-      saveSentEmail(db, { id: "s1", toAddress: "friend@example.com", subject: "Hello", body: "<p>Hey!</p>", date: "2025-06-01" });
+      saveSentEmail(db, {
+        id: "s1",
+        toAddress: "friend@example.com",
+        subject: "Hello",
+        body: "<p>Hey!</p>",
+        date: "2025-06-01",
+      });
       const row = db.prepare("SELECT * FROM sent_emails WHERE id = ?").get("s1");
       expect(row).toBeTruthy();
       expect(row.subject).toBe("Hello");
     });
 
     test("saveSentEmail upserts on duplicate id", () => {
-      saveSentEmail(db, { id: "s1", toAddress: "a@b.com", subject: "First", body: "b", date: "2025-01-01" });
-      saveSentEmail(db, { id: "s1", toAddress: "a@b.com", subject: "Updated", body: "b", date: "2025-01-01" });
-      const row = db.prepare("SELECT subject FROM sent_emails WHERE id = ?").get("s1") as { subject: string };
+      saveSentEmail(db, {
+        id: "s1",
+        toAddress: "a@b.com",
+        subject: "First",
+        body: "b",
+        date: "2025-01-01",
+      });
+      saveSentEmail(db, {
+        id: "s1",
+        toAddress: "a@b.com",
+        subject: "Updated",
+        body: "b",
+        date: "2025-01-01",
+      });
+      const row = db.prepare("SELECT subject FROM sent_emails WHERE id = ?").get("s1") as {
+        subject: string;
+      };
       expect(row.subject).toBe("Updated");
     });
 
     test("getSentEmails returns emails with SENT label", () => {
       saveAccount(db, "acct1", "me@gmail.com");
-      saveEmail(db, makeEmail({ id: "e1", threadId: "t1", labelIds: ["SENT"], from: "me@gmail.com", to: "friend@example.com" }), "acct1");
+      saveEmail(
+        db,
+        makeEmail({
+          id: "e1",
+          threadId: "t1",
+          labelIds: ["SENT"],
+          from: "me@gmail.com",
+          to: "friend@example.com",
+        }),
+        "acct1",
+      );
       saveEmail(db, makeEmail({ id: "e2", threadId: "t2", labelIds: ["INBOX"] }), "acct1");
       const sent = getSentEmails(db, "acct1");
       expect(sent).toHaveLength(1);
@@ -1124,9 +1470,14 @@ test.describe("Database CRUD operations", () => {
   // ===== Scheduled message operations =====
   test.describe("Scheduled message operations", () => {
     const makeScheduledMsg = (overrides: Record<string, unknown> = {}) => ({
-      id: "sm1", accountId: "acct1", type: "send",
-      to: ["recipient@example.com"], subject: "Scheduled email",
-      bodyHtml: "<p>Body</p>", scheduledAt: Date.now() + 3600000, createdAt: Date.now(),
+      id: "sm1",
+      accountId: "acct1",
+      type: "send",
+      to: ["recipient@example.com"],
+      subject: "Scheduled email",
+      bodyHtml: "<p>Body</p>",
+      scheduledAt: Date.now() + 3600000,
+      createdAt: Date.now(),
       ...overrides,
     });
 
@@ -1141,7 +1492,10 @@ test.describe("Database CRUD operations", () => {
 
     test("getDueScheduledMessages returns only due messages", () => {
       insertScheduledMessage(db, makeScheduledMsg({ id: "sm1", scheduledAt: Date.now() - 1000 }));
-      insertScheduledMessage(db, makeScheduledMsg({ id: "sm2", scheduledAt: Date.now() + 9999999 }));
+      insertScheduledMessage(
+        db,
+        makeScheduledMsg({ id: "sm2", scheduledAt: Date.now() + 9999999 }),
+      );
       const due = getDueScheduledMessages(db);
       expect(due).toHaveLength(1);
       expect(due[0].id).toBe("sm1");
@@ -1162,7 +1516,9 @@ test.describe("Database CRUD operations", () => {
     test("updateScheduledMessageStatus to failed with error", () => {
       insertScheduledMessage(db, makeScheduledMsg({ id: "sm1" }));
       updateScheduledMessageStatus(db, "sm1", "failed", "Network error");
-      const row = db.prepare("SELECT status, error_message FROM scheduled_messages WHERE id = ?").get("sm1");
+      const row = db
+        .prepare("SELECT status, error_message FROM scheduled_messages WHERE id = ?")
+        .get("sm1");
       expect(row.status).toBe("failed");
       expect(row.error_message).toBe("Network error");
     });
@@ -1182,11 +1538,18 @@ test.describe("Database CRUD operations", () => {
     });
 
     test("insertScheduledMessage with cc, bcc, reply fields", () => {
-      insertScheduledMessage(db, makeScheduledMsg({
-        id: "sm1", type: "reply", threadId: "t1",
-        cc: ["cc@example.com"], bcc: ["bcc@example.com"],
-        inReplyTo: "<msg-id@example.com>", references: "<ref1@example.com>",
-      }));
+      insertScheduledMessage(
+        db,
+        makeScheduledMsg({
+          id: "sm1",
+          type: "reply",
+          threadId: "t1",
+          cc: ["cc@example.com"],
+          bcc: ["bcc@example.com"],
+          inReplyTo: "<msg-id@example.com>",
+          references: "<ref1@example.com>",
+        }),
+      );
       const msgs = getScheduledMessages(db, "acct1");
       expect(msgs[0].type).toBe("reply");
       expect(msgs[0].threadId).toBe("t1");
@@ -1200,9 +1563,13 @@ test.describe("Database CRUD operations", () => {
   // ===== Outbox operations =====
   test.describe("Outbox operations", () => {
     const makeOutboxItem = (overrides: Record<string, unknown> = {}) => ({
-      id: "ob1", accountId: "acct1", type: "send",
-      to: ["recipient@example.com"], subject: "Outbox email",
-      bodyHtml: "<p>Outbox body</p>", createdAt: Date.now(),
+      id: "ob1",
+      accountId: "acct1",
+      type: "send",
+      to: ["recipient@example.com"],
+      subject: "Outbox email",
+      bodyHtml: "<p>Outbox body</p>",
+      createdAt: Date.now(),
       ...overrides,
     });
 
@@ -1288,9 +1655,13 @@ test.describe("Database CRUD operations", () => {
     });
 
     test("insertOutboxMessage with attachments", () => {
-      insertOutboxMessage(db, makeOutboxItem({
-        id: "ob1", attachments: [{ filename: "doc.pdf", mimeType: "application/pdf", size: 1024 }],
-      }));
+      insertOutboxMessage(
+        db,
+        makeOutboxItem({
+          id: "ob1",
+          attachments: [{ filename: "doc.pdf", mimeType: "application/pdf", size: 1024 }],
+        }),
+      );
       const item = getOutboxItem(db, "ob1");
       expect(item!.attachments).toHaveLength(1);
       expect(item!.attachments[0].filename).toBe("doc.pdf");
@@ -1300,9 +1671,15 @@ test.describe("Database CRUD operations", () => {
   // ===== Local draft operations =====
   test.describe("Local draft operations", () => {
     const makeLocalDraft = (overrides: Record<string, unknown> = {}) => ({
-      id: "ld1", accountId: "acct1", to: ["recipient@example.com"],
-      subject: "My Draft", bodyHtml: "<p>Draft content</p>",
-      isReply: false, isForward: false, createdAt: Date.now(), updatedAt: Date.now(),
+      id: "ld1",
+      accountId: "acct1",
+      to: ["recipient@example.com"],
+      subject: "My Draft",
+      bodyHtml: "<p>Draft content</p>",
+      isReply: false,
+      isForward: false,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
       ...overrides,
     });
 
@@ -1350,10 +1727,17 @@ test.describe("Database CRUD operations", () => {
     });
 
     test("saveLocalDraft with reply fields", () => {
-      saveLocalDraft(db, makeLocalDraft({
-        id: "ld1", threadId: "t1", inReplyTo: "msg-id", isReply: true,
-        cc: ["cc@example.com"], bcc: ["bcc@example.com"],
-      }));
+      saveLocalDraft(
+        db,
+        makeLocalDraft({
+          id: "ld1",
+          threadId: "t1",
+          inReplyTo: "msg-id",
+          isReply: true,
+          cc: ["cc@example.com"],
+          bcc: ["bcc@example.com"],
+        }),
+      );
       const draft = getLocalDraft(db, "ld1");
       expect(draft!.threadId).toBe("t1");
       expect(draft!.inReplyTo).toBe("msg-id");
@@ -1420,9 +1804,16 @@ test.describe("Database CRUD operations", () => {
   // ===== Memory operations =====
   test.describe("Memory operations", () => {
     const makeMemory = (overrides: Record<string, unknown> = {}) => ({
-      id: "mem1", accountId: "acct1", scope: "global", scopeValue: null,
-      content: "Always sign off with Best", source: "manual",
-      sourceEmailId: null, enabled: true, createdAt: Date.now(), updatedAt: Date.now(),
+      id: "mem1",
+      accountId: "acct1",
+      scope: "global",
+      scopeValue: null,
+      content: "Always sign off with Best",
+      source: "manual",
+      sourceEmailId: null,
+      enabled: true,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
       ...overrides,
     });
 
@@ -1442,7 +1833,15 @@ test.describe("Database CRUD operations", () => {
 
     test("getMemories returns memories for account", () => {
       saveMemory(db, makeMemory({ id: "mem1", accountId: "acct1" }));
-      saveMemory(db, makeMemory({ id: "mem2", accountId: "acct1", scope: "person", scopeValue: "boss@example.com" }));
+      saveMemory(
+        db,
+        makeMemory({
+          id: "mem2",
+          accountId: "acct1",
+          scope: "person",
+          scopeValue: "boss@example.com",
+        }),
+      );
       saveMemory(db, makeMemory({ id: "mem3", accountId: "acct2" }));
       expect(getMemories(db, "acct1")).toHaveLength(2);
     });
@@ -1545,7 +1944,11 @@ test.describe("Database CRUD operations", () => {
   // ===== FTS5 search operations =====
   test.describe("FTS5 search operations", () => {
     test("searchEmails finds by subject", () => {
-      saveEmail(db, makeEmail({ id: "e1", threadId: "t1", subject: "Meeting tomorrow at 3pm" }), "acct1");
+      saveEmail(
+        db,
+        makeEmail({ id: "e1", threadId: "t1", subject: "Meeting tomorrow at 3pm" }),
+        "acct1",
+      );
       saveEmail(db, makeEmail({ id: "e2", threadId: "t2", subject: "Unrelated email" }), "acct1");
       const results = searchEmails(db, "Meeting");
       expect(results.length).toBeGreaterThanOrEqual(1);
@@ -1553,17 +1956,27 @@ test.describe("Database CRUD operations", () => {
     });
 
     test("searchEmails finds by body content", () => {
-      saveEmail(db, makeEmail({
-        id: "e1", threadId: "t1", subject: "Hello",
-        body: "<p>The quarterly report is attached</p>",
-      }), "acct1");
+      saveEmail(
+        db,
+        makeEmail({
+          id: "e1",
+          threadId: "t1",
+          subject: "Hello",
+          body: "<p>The quarterly report is attached</p>",
+        }),
+        "acct1",
+      );
       const results = searchEmails(db, "quarterly report");
       expect(results.length).toBeGreaterThanOrEqual(1);
       expect(results[0].id).toBe("e1");
     });
 
     test("searchEmails finds by from address via LIKE fallback", () => {
-      saveEmail(db, makeEmail({ id: "e1", threadId: "t1", from: "special-sender@company.com" }), "acct1");
+      saveEmail(
+        db,
+        makeEmail({ id: "e1", threadId: "t1", from: "special-sender@company.com" }),
+        "acct1",
+      );
       // Search by sender address directly (uses LIKE fallback since from_address column filter
       // with special characters may fail in FTS5)
       const results = searchEmails(db, "special-sender@company.com");
@@ -1588,7 +2001,11 @@ test.describe("Database CRUD operations", () => {
 
     test("searchEmails respects limit and offset", () => {
       for (let i = 0; i < 5; i++) {
-        saveEmail(db, makeEmail({ id: `e${i}`, threadId: `t${i}`, subject: "Common keyword" }), "acct1");
+        saveEmail(
+          db,
+          makeEmail({ id: `e${i}`, threadId: `t${i}`, subject: "Common keyword" }),
+          "acct1",
+        );
       }
       const page1 = searchEmails(db, "Common", { limit: 2, offset: 0 });
       const page2 = searchEmails(db, "Common", { limit: 2, offset: 2 });
@@ -1604,12 +2021,14 @@ test.describe("Database CRUD operations", () => {
     });
 
     test("strips style and script blocks", () => {
-      expect(stripHtmlForSearch("<style>.foo { color: red; }</style><p>content</p>")).toBe("content");
+      expect(stripHtmlForSearch("<style>.foo { color: red; }</style><p>content</p>")).toBe(
+        "content",
+      );
       expect(stripHtmlForSearch("<script>alert('hi')</script><p>content</p>")).toBe("content");
     });
 
     test("decodes HTML entities", () => {
-      expect(stripHtmlForSearch("&amp; &lt; &gt; &quot; &#39;")).toBe('& < > " \'');
+      expect(stripHtmlForSearch("&amp; &lt; &gt; &quot; &#39;")).toBe("& < > \" '");
     });
 
     test("collapses whitespace", () => {
@@ -1672,9 +2091,16 @@ test.describe("Database CRUD operations", () => {
       snoozeEmail(db, "snz1", "e1", "t1", "acct1", Date.now() + 3600000);
       saveArchiveReady(db, "t1", "acct1", true, "ready");
       saveMemory(db, {
-        id: "mem1", accountId: "acct1", scope: "global", scopeValue: null,
-        content: "test", source: "manual", sourceEmailId: null,
-        enabled: true, createdAt: Date.now(), updatedAt: Date.now(),
+        id: "mem1",
+        accountId: "acct1",
+        scope: "global",
+        scopeValue: null,
+        content: "test",
+        source: "manual",
+        sourceEmailId: null,
+        enabled: true,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
       });
 
       removeAccount(db, "acct1");

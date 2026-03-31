@@ -10,16 +10,46 @@ import { test, expect } from "@playwright/test";
 // ---- Copied from SnoozeMenu.tsx (pure functions, no Electron dependency) ----
 
 const MONTH_NAMES: Record<string, number> = {
-  jan: 0, january: 0, feb: 1, february: 1, mar: 2, march: 2,
-  apr: 3, april: 3, may: 4, jun: 5, june: 5,
-  jul: 6, july: 6, aug: 7, august: 7, sep: 8, september: 8,
-  oct: 9, october: 9, nov: 10, november: 10, dec: 11, december: 11,
+  jan: 0,
+  january: 0,
+  feb: 1,
+  february: 1,
+  mar: 2,
+  march: 2,
+  apr: 3,
+  april: 3,
+  may: 4,
+  jun: 5,
+  june: 5,
+  jul: 6,
+  july: 6,
+  aug: 7,
+  august: 7,
+  sep: 8,
+  september: 8,
+  oct: 9,
+  october: 9,
+  nov: 10,
+  november: 10,
+  dec: 11,
+  december: 11,
 };
 
 const DAY_NAMES: Record<string, number> = {
-  sun: 0, sunday: 0, mon: 1, monday: 1, tue: 2, tuesday: 2,
-  wed: 3, wednesday: 3, thu: 4, thursday: 4, fri: 5, friday: 5,
-  sat: 6, saturday: 6,
+  sun: 0,
+  sunday: 0,
+  mon: 1,
+  monday: 1,
+  tue: 2,
+  tuesday: 2,
+  wed: 3,
+  wednesday: 3,
+  thu: 4,
+  thursday: 4,
+  fri: 5,
+  friday: 5,
+  sat: 6,
+  saturday: 6,
 };
 
 function parseTimeString(text: string): { hours: number; minutes: number } | null {
@@ -57,7 +87,7 @@ function parseSnoozeText(input: string): number | null {
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
   const relMatch = text.match(
-    /^(\d+)\s*(s|sec|secs|seconds?|m|min|mins|minutes?|h|hr|hrs|hours?|d|days?|w|wk|wks|weeks?)$/
+    /^(\d+)\s*(s|sec|secs|seconds?|m|min|mins|minutes?|h|hr|hrs|hours?|d|days?|w|wk|wks|weeks?)$/,
   );
   if (relMatch) {
     const num = parseInt(relMatch[1], 10);
@@ -65,9 +95,11 @@ function parseSnoozeText(input: string): number | null {
     let ms = 0;
     if (unit.startsWith("s")) ms = num * 1000;
     else if (unit === "m" || unit.startsWith("min")) ms = num * 60 * 1000;
-    else if (unit === "h" || unit.startsWith("hr") || unit.startsWith("hour")) ms = num * 3600 * 1000;
+    else if (unit === "h" || unit.startsWith("hr") || unit.startsWith("hour"))
+      ms = num * 3600 * 1000;
     else if (unit === "d" || unit.startsWith("day")) ms = num * 86400 * 1000;
-    else if (unit === "w" || unit.startsWith("wk") || unit.startsWith("week")) ms = num * 7 * 86400 * 1000;
+    else if (unit === "w" || unit.startsWith("wk") || unit.startsWith("week"))
+      ms = num * 7 * 86400 * 1000;
     if (ms > 0) {
       const target = now.getTime() + ms;
       return target > now.getTime() ? target : null;
@@ -75,7 +107,7 @@ function parseSnoozeText(input: string): number | null {
   }
 
   const inRelMatch = text.match(
-    /^in\s+(\d+)\s*(s|sec|secs|seconds?|m|min|mins|minutes?|h|hr|hrs|hours?|d|days?|w|wk|wks|weeks?)$/
+    /^in\s+(\d+)\s*(s|sec|secs|seconds?|m|min|mins|minutes?|h|hr|hrs|hours?|d|days?|w|wk|wks|weeks?)$/,
   );
   if (inRelMatch) {
     return parseSnoozeText(`${inRelMatch[1]}${inRelMatch[2]}`);
@@ -108,7 +140,7 @@ function parseSnoozeText(input: string): number | null {
   if (text === "this weekend") {
     const target = new Date(today);
     const dayOfWeek = target.getDay();
-    const daysUntilSat = dayOfWeek === 6 ? 7 : (6 - dayOfWeek);
+    const daysUntilSat = dayOfWeek === 6 ? 7 : 6 - dayOfWeek;
     target.setDate(target.getDate() + daysUntilSat);
     target.setHours(9, 0, 0, 0);
     return target.getTime();
@@ -117,7 +149,7 @@ function parseSnoozeText(input: string): number | null {
   if (text === "next week") {
     const target = new Date(today);
     const dayOfWeek = target.getDay();
-    const daysUntilMon = dayOfWeek === 0 ? 1 : (8 - dayOfWeek);
+    const daysUntilMon = dayOfWeek === 0 ? 1 : 8 - dayOfWeek;
     target.setDate(target.getDate() + daysUntilMon);
     target.setHours(9, 0, 0, 0);
     return target.getTime();
@@ -164,10 +196,14 @@ function parseSnoozeText(input: string): number | null {
     const month = MONTH_NAMES[monthName];
     if (month !== undefined) {
       const day = parseInt(monthDayMatch[2], 10);
-      let hours = 9, minutes = 0;
+      let hours = 9,
+        minutes = 0;
       if (monthDayMatch[3]) {
         const timeTs = parseTimeString(monthDayMatch[3]);
-        if (timeTs) { hours = timeTs.hours; minutes = timeTs.minutes; }
+        if (timeTs) {
+          hours = timeTs.hours;
+          minutes = timeTs.minutes;
+        }
       }
       let year = now.getFullYear();
       const target = new Date(year, month, day, hours, minutes, 0, 0);
@@ -476,7 +512,20 @@ test.describe("parseSnoozeText — month + day", () => {
     // Use a date that's definitely in the past
     const now = new Date();
     const pastMonth = now.getMonth() === 0 ? 11 : now.getMonth() - 1;
-    const monthNames = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+    const monthNames = [
+      "jan",
+      "feb",
+      "mar",
+      "apr",
+      "may",
+      "jun",
+      "jul",
+      "aug",
+      "sep",
+      "oct",
+      "nov",
+      "dec",
+    ];
     const result = parseSnoozeText(`${monthNames[pastMonth]} 1`);
     expect(result).not.toBeNull();
     const d = new Date(result!);

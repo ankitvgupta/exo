@@ -46,9 +46,9 @@ test.describe("Sidebar reflects focused email in thread", () => {
     await threadRow.click();
 
     // Wait for thread detail to load
-    await expect(
-      page.locator("h1").filter({ hasText: /Launch Readiness/ }),
-    ).toBeVisible({ timeout: 5000 });
+    await expect(page.locator("h1").filter({ hasText: /Launch Readiness/ })).toBeVisible({
+      timeout: 5000,
+    });
 
     // Wait for the sidebar to settle after thread load
     await page.waitForTimeout(1000);

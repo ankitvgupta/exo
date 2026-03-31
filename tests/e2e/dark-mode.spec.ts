@@ -5,7 +5,7 @@ let electronApp: ElectronApplication;
 let page: Page;
 
 test.describe("Dark Mode", () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: "serial" });
 
   test.beforeAll(async ({}, testInfo) => {
     const result = await launchElectronApp({ workerIndex: testInfo.workerIndex });
@@ -13,7 +13,11 @@ test.describe("Dark Mode", () => {
     page = result.page;
 
     // Wait for email list to populate
-    await page.locator("button").filter({ hasText: /High|Medium|Low/ }).first().waitFor({ timeout: 10000 });
+    await page
+      .locator("button")
+      .filter({ hasText: /High|Medium|Low/ })
+      .first()
+      .waitFor({ timeout: 10000 });
   });
 
   test.afterAll(async () => {
@@ -38,7 +42,9 @@ test.describe("Dark Mode", () => {
     // Look for the theme toggle buttons: Light, Dark, System
     // Scope within settings panel to avoid matching email content behind the overlay
     const settings = page.locator("[data-testid='settings-panel']");
-    await expect(settings.getByRole("button", { name: "Light", exact: true })).toBeVisible({ timeout: 5000 });
+    await expect(settings.getByRole("button", { name: "Light", exact: true })).toBeVisible({
+      timeout: 5000,
+    });
     await expect(settings.getByRole("button", { name: "Dark", exact: true })).toBeVisible();
     await expect(settings.getByRole("button", { name: "System", exact: true })).toBeVisible();
   });
@@ -52,7 +58,7 @@ test.describe("Dark Mode", () => {
 
     // The <html> element should now have the "dark" class
     const hasDarkClass = await page.evaluate(() =>
-      document.documentElement.classList.contains("dark")
+      document.documentElement.classList.contains("dark"),
     );
     expect(hasDarkClass).toBe(true);
 
@@ -95,7 +101,7 @@ test.describe("Dark Mode", () => {
 
     // The <html> element should NOT have the "dark" class
     const hasDarkClass = await page.evaluate(() =>
-      document.documentElement.classList.contains("dark")
+      document.documentElement.classList.contains("dark"),
     );
     expect(hasDarkClass).toBe(false);
 
@@ -117,7 +123,7 @@ test.describe("Dark Mode", () => {
     // We can't control OS theme in tests, but we can verify
     // the class is set consistently with nativeTheme
     const hasDarkClass = await page.evaluate(() =>
-      document.documentElement.classList.contains("dark")
+      document.documentElement.classList.contains("dark"),
     );
     // Just verify it's a boolean (either is fine depending on OS)
     expect(typeof hasDarkClass).toBe("boolean");
@@ -130,7 +136,10 @@ test.describe("Dark Mode", () => {
     await page.waitForTimeout(300);
 
     // Close settings
-    const closeButton = page.locator("button").filter({ has: page.locator("svg path[d*='M6 18L18 6']") }).first();
+    const closeButton = page
+      .locator("button")
+      .filter({ has: page.locator("svg path[d*='M6 18L18 6']") })
+      .first();
     if (await closeButton.isVisible()) {
       await closeButton.click();
       await page.waitForTimeout(300);
@@ -141,7 +150,7 @@ test.describe("Dark Mode", () => {
 
     // Dark class should still be active
     const hasDarkClass = await page.evaluate(() =>
-      document.documentElement.classList.contains("dark")
+      document.documentElement.classList.contains("dark"),
     );
     expect(hasDarkClass).toBe(true);
 
@@ -155,7 +164,9 @@ test.describe("Dark Mode", () => {
   test("inbox email list renders with dark colors", async () => {
     // Verify the inbox area has dark-themed elements
     // Check that at least one email row exists and has appropriate dark styling
-    const emailButtons = page.locator("button").filter({ hasText: /Garry|HR Team|Amazon|GitHub|Product Team/ });
+    const emailButtons = page
+      .locator("button")
+      .filter({ hasText: /Garry|HR Team|Amazon|GitHub|Product Team/ });
     const count = await emailButtons.count();
     expect(count).toBeGreaterThan(0);
 
@@ -237,7 +248,10 @@ test.describe("Dark Mode", () => {
         if (truncateSpans.length >= 2) {
           const snippet = truncateSpans[truncateSpans.length - 1];
           // Accept text-gray-400 (unselected) or text-white/60 (selected row)
-          if (snippet.className.includes("text-gray-400") || snippet.className.includes("text-white")) {
+          if (
+            snippet.className.includes("text-gray-400") ||
+            snippet.className.includes("text-white")
+          ) {
             return true;
           }
         }
@@ -285,7 +299,10 @@ test.describe("Dark Mode", () => {
 
   test("account switcher dropdown has dark background", async () => {
     // Close settings first
-    const closeButton = page.locator("button").filter({ has: page.locator("svg path[d*='M6 18L18 6']") }).first();
+    const closeButton = page
+      .locator("button")
+      .filter({ has: page.locator("svg path[d*='M6 18L18 6']") })
+      .first();
     if (await closeButton.isVisible()) {
       await closeButton.click();
       await page.waitForTimeout(300);
@@ -338,7 +355,12 @@ test.describe("Dark Mode", () => {
       const inputs = document.querySelectorAll("input[placeholder]");
       for (const input of inputs) {
         const ph = (input as HTMLInputElement).placeholder;
-        if (ph && (ph.toLowerCase().includes("to") || ph.toLowerCase().includes("recipient") || ph.toLowerCase().includes("email"))) {
+        if (
+          ph &&
+          (ph.toLowerCase().includes("to") ||
+            ph.toLowerCase().includes("recipient") ||
+            ph.toLowerCase().includes("email"))
+        ) {
           // For placeholder color, we use getComputedStyle with ::placeholder
           // but that's not directly accessible — check the CSS custom property or class
           // Instead, check if the element has the dark:placeholder-gray-400 class
@@ -402,7 +424,10 @@ test.describe("Dark Mode", () => {
     expect(rgbWithinTolerance(rgb, [107, 114, 128], 25)).toBe(true);
 
     // Close settings
-    const closeButton = page.locator("button").filter({ has: page.locator("svg path[d*='M6 18L18 6']") }).first();
+    const closeButton = page
+      .locator("button")
+      .filter({ has: page.locator("svg path[d*='M6 18L18 6']") })
+      .first();
     if (await closeButton.isVisible()) {
       await closeButton.click();
       await page.waitForTimeout(300);

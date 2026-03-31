@@ -72,10 +72,9 @@ function groupByThread(emails: DashboardEmail[], currentUserEmail?: string): Ema
     threadEmails.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     const latestEmail = threadEmails[threadEmails.length - 1];
 
-    const receivedEmails = threadEmails.filter(e => !isSentEmail(e, currentUserEmail));
-    const latestReceivedEmail = receivedEmails.length > 0
-      ? receivedEmails[receivedEmails.length - 1]
-      : latestEmail;
+    const receivedEmails = threadEmails.filter((e) => !isSentEmail(e, currentUserEmail));
+    const latestReceivedEmail =
+      receivedEmails.length > 0 ? receivedEmails[receivedEmails.length - 1] : latestEmail;
 
     const userReplied = isSentEmail(latestEmail, currentUserEmail);
 
@@ -83,7 +82,9 @@ function groupByThread(emails: DashboardEmail[], currentUserEmail?: string): Ema
     if (!isSentEmail(latestReceivedEmail, currentUserEmail)) {
       displaySender = latestReceivedEmail.from;
     } else {
-      const nonSelfEmail = [...threadEmails].reverse().find(e => !isSentEmail(e, currentUserEmail));
+      const nonSelfEmail = [...threadEmails]
+        .reverse()
+        .find((e) => !isSentEmail(e, currentUserEmail));
       if (nonSelfEmail) {
         displaySender = nonSelfEmail.from;
       } else {
@@ -91,8 +92,7 @@ function groupByThread(emails: DashboardEmail[], currentUserEmail?: string): Ema
       }
     }
 
-    const threadDraft = latestReceivedEmail.draft
-      ?? threadEmails.find((e) => e.draft)?.draft;
+    const threadDraft = latestReceivedEmail.draft ?? threadEmails.find((e) => e.draft)?.draft;
 
     threads.push({
       threadId,
@@ -102,7 +102,7 @@ function groupByThread(emails: DashboardEmail[], currentUserEmail?: string): Ema
       latestReceivedDate: new Date(latestReceivedEmail.date).getTime(),
       subject: latestEmail.subject.replace(/^(Re:\s*)+/i, ""),
       hasMultipleEmails: threadEmails.length > 1,
-      isUnread: threadEmails.some(e => e.labelIds?.includes("UNREAD")),
+      isUnread: threadEmails.some((e) => e.labelIds?.includes("UNREAD")),
       analysis: latestReceivedEmail.analysis,
       draft: threadDraft,
       userReplied,
@@ -138,12 +138,14 @@ function evaluateCondition(email: DashboardEmail, condition: InboxSplit["conditi
   switch (condition.type) {
     case "from": {
       const emailAddr = extractEmailAddress(email.from);
-      matches = matchesPattern(email.from, condition.value) || matchesPattern(emailAddr, condition.value);
+      matches =
+        matchesPattern(email.from, condition.value) || matchesPattern(emailAddr, condition.value);
       break;
     }
     case "to": {
       const emailAddr = extractEmailAddress(email.to);
-      matches = matchesPattern(email.to, condition.value) || matchesPattern(emailAddr, condition.value);
+      matches =
+        matchesPattern(email.to, condition.value) || matchesPattern(emailAddr, condition.value);
       break;
     }
     case "subject":
@@ -159,9 +161,7 @@ function evaluateCondition(email: DashboardEmail, condition: InboxSplit["conditi
 function threadMatchesSplit(thread: EmailThread, split: InboxSplit): boolean {
   const email = thread.latestEmail;
   const results = split.conditions.map((c) => evaluateCondition(email, c));
-  return split.conditionLogic === "and"
-    ? results.every(Boolean)
-    : results.some(Boolean);
+  return split.conditionLogic === "and" ? results.every(Boolean) : results.some(Boolean);
 }
 
 // ============================================================
@@ -187,7 +187,7 @@ test.describe("groupByThread — basic threading", () => {
     const threads = groupByThread([e1, e2, e3]);
 
     expect(threads).toHaveLength(2);
-    const t1 = threads.find(t => t.threadId === "t1")!;
+    const t1 = threads.find((t) => t.threadId === "t1")!;
     expect(t1.emails).toHaveLength(2);
     expect(t1.hasMultipleEmails).toBe(true);
   });
@@ -213,8 +213,18 @@ test.describe("groupByThread — basic threading", () => {
   });
 
   test("thread subject comes from the latest email with Re: prefix stripped", () => {
-    const e1 = makeEmail({ id: "e1", threadId: "t1", subject: "Original Subject", date: "2025-01-01T10:00:00Z" });
-    const e2 = makeEmail({ id: "e2", threadId: "t1", subject: "Re: Original Subject", date: "2025-01-02T10:00:00Z" });
+    const e1 = makeEmail({
+      id: "e1",
+      threadId: "t1",
+      subject: "Original Subject",
+      date: "2025-01-01T10:00:00Z",
+    });
+    const e2 = makeEmail({
+      id: "e2",
+      threadId: "t1",
+      subject: "Re: Original Subject",
+      date: "2025-01-02T10:00:00Z",
+    });
 
     const threads = groupByThread([e1, e2]);
 
@@ -222,7 +232,12 @@ test.describe("groupByThread — basic threading", () => {
   });
 
   test("thread subject strips nested Re: prefixes", () => {
-    const e1 = makeEmail({ id: "e1", threadId: "t1", subject: "Re: Re: Re: Topic", date: "2025-01-01T10:00:00Z" });
+    const e1 = makeEmail({
+      id: "e1",
+      threadId: "t1",
+      subject: "Re: Re: Re: Topic",
+      date: "2025-01-01T10:00:00Z",
+    });
 
     const threads = groupByThread([e1]);
 
@@ -232,8 +247,18 @@ test.describe("groupByThread — basic threading", () => {
 
 test.describe("groupByThread — unread and label detection", () => {
   test("isUnread is true when any email has UNREAD in labelIds", () => {
-    const e1 = makeEmail({ id: "e1", threadId: "t1", labelIds: ["INBOX"], date: "2025-01-01T10:00:00Z" });
-    const e2 = makeEmail({ id: "e2", threadId: "t1", labelIds: ["INBOX", "UNREAD"], date: "2025-01-01T11:00:00Z" });
+    const e1 = makeEmail({
+      id: "e1",
+      threadId: "t1",
+      labelIds: ["INBOX"],
+      date: "2025-01-01T10:00:00Z",
+    });
+    const e2 = makeEmail({
+      id: "e2",
+      threadId: "t1",
+      labelIds: ["INBOX", "UNREAD"],
+      date: "2025-01-01T11:00:00Z",
+    });
 
     const threads = groupByThread([e1, e2]);
     expect(threads[0].isUnread).toBe(true);
@@ -256,47 +281,116 @@ test.describe("groupByThread — unread and label detection", () => {
 
 test.describe("groupByThread — sent email detection", () => {
   test("userReplied is true when latest email has SENT label", () => {
-    const received = makeEmail({ id: "e1", threadId: "t1", from: "bob@example.com", date: "2025-01-01T10:00:00Z", labelIds: ["INBOX"] });
-    const sent = makeEmail({ id: "e2", threadId: "t1", from: "user@example.com", date: "2025-01-02T10:00:00Z", labelIds: ["SENT"] });
+    const received = makeEmail({
+      id: "e1",
+      threadId: "t1",
+      from: "bob@example.com",
+      date: "2025-01-01T10:00:00Z",
+      labelIds: ["INBOX"],
+    });
+    const sent = makeEmail({
+      id: "e2",
+      threadId: "t1",
+      from: "user@example.com",
+      date: "2025-01-02T10:00:00Z",
+      labelIds: ["SENT"],
+    });
 
     const threads = groupByThread([received, sent], "user@example.com");
     expect(threads[0].userReplied).toBe(true);
   });
 
   test("userReplied is false when latest email is received", () => {
-    const sent = makeEmail({ id: "e1", threadId: "t1", from: "user@example.com", date: "2025-01-01T10:00:00Z", labelIds: ["SENT"] });
-    const received = makeEmail({ id: "e2", threadId: "t1", from: "bob@example.com", date: "2025-01-02T10:00:00Z", labelIds: ["INBOX"] });
+    const sent = makeEmail({
+      id: "e1",
+      threadId: "t1",
+      from: "user@example.com",
+      date: "2025-01-01T10:00:00Z",
+      labelIds: ["SENT"],
+    });
+    const received = makeEmail({
+      id: "e2",
+      threadId: "t1",
+      from: "bob@example.com",
+      date: "2025-01-02T10:00:00Z",
+      labelIds: ["INBOX"],
+    });
 
     const threads = groupByThread([sent, received], "user@example.com");
     expect(threads[0].userReplied).toBe(false);
   });
 
   test("latestReceivedEmail ignores sent emails", () => {
-    const received = makeEmail({ id: "e1", threadId: "t1", from: "bob@example.com", date: "2025-01-01T10:00:00Z", labelIds: ["INBOX"] });
-    const sent = makeEmail({ id: "e2", threadId: "t1", from: "user@example.com", date: "2025-01-02T10:00:00Z", labelIds: ["SENT"] });
+    const received = makeEmail({
+      id: "e1",
+      threadId: "t1",
+      from: "bob@example.com",
+      date: "2025-01-01T10:00:00Z",
+      labelIds: ["INBOX"],
+    });
+    const sent = makeEmail({
+      id: "e2",
+      threadId: "t1",
+      from: "user@example.com",
+      date: "2025-01-02T10:00:00Z",
+      labelIds: ["SENT"],
+    });
 
     const threads = groupByThread([received, sent], "user@example.com");
     expect(threads[0].latestReceivedEmail.id).toBe("e1");
   });
 
   test("displaySender shows non-self sender when available", () => {
-    const received = makeEmail({ id: "e1", threadId: "t1", from: "bob@example.com", date: "2025-01-01T10:00:00Z", labelIds: ["INBOX"] });
-    const sent = makeEmail({ id: "e2", threadId: "t1", from: "user@example.com", to: "bob@example.com", date: "2025-01-02T10:00:00Z", labelIds: ["SENT"] });
+    const received = makeEmail({
+      id: "e1",
+      threadId: "t1",
+      from: "bob@example.com",
+      date: "2025-01-01T10:00:00Z",
+      labelIds: ["INBOX"],
+    });
+    const sent = makeEmail({
+      id: "e2",
+      threadId: "t1",
+      from: "user@example.com",
+      to: "bob@example.com",
+      date: "2025-01-02T10:00:00Z",
+      labelIds: ["SENT"],
+    });
 
     const threads = groupByThread([received, sent], "user@example.com");
     expect(threads[0].displaySender).toBe("bob@example.com");
   });
 
   test("displaySender falls back to recipient when all emails are from user", () => {
-    const sent1 = makeEmail({ id: "e1", threadId: "t1", from: "user@example.com", to: "bob@example.com", date: "2025-01-01T10:00:00Z", labelIds: ["SENT"] });
-    const sent2 = makeEmail({ id: "e2", threadId: "t1", from: "user@example.com", to: "bob@example.com", date: "2025-01-02T10:00:00Z", labelIds: ["SENT"] });
+    const sent1 = makeEmail({
+      id: "e1",
+      threadId: "t1",
+      from: "user@example.com",
+      to: "bob@example.com",
+      date: "2025-01-01T10:00:00Z",
+      labelIds: ["SENT"],
+    });
+    const sent2 = makeEmail({
+      id: "e2",
+      threadId: "t1",
+      from: "user@example.com",
+      to: "bob@example.com",
+      date: "2025-01-02T10:00:00Z",
+      labelIds: ["SENT"],
+    });
 
     const threads = groupByThread([sent1, sent2], "user@example.com");
     expect(threads[0].displaySender).toBe("bob@example.com");
   });
 
   test("isSentEmail matches from-field with Name <email> format", () => {
-    const email = makeEmail({ id: "e1", threadId: "t1", from: "Me <user@example.com>", labelIds: ["INBOX"], date: "2025-01-01T10:00:00Z" });
+    const email = makeEmail({
+      id: "e1",
+      threadId: "t1",
+      from: "Me <user@example.com>",
+      labelIds: ["INBOX"],
+      date: "2025-01-01T10:00:00Z",
+    });
 
     const threads = groupByThread([email], "user@example.com");
     expect(threads[0].userReplied).toBe(true);
@@ -305,9 +399,25 @@ test.describe("groupByThread — sent email detection", () => {
 
 test.describe("groupByThread — analysis and draft propagation", () => {
   test("thread analysis comes from latestReceivedEmail", () => {
-    const analysis = { needsReply: true, reason: "Question asked", priority: "high" as const, analyzedAt: Date.now() };
-    const e1 = makeEmail({ id: "e1", threadId: "t1", analysis, date: "2025-01-01T10:00:00Z", labelIds: ["INBOX"] });
-    const e2 = makeEmail({ id: "e2", threadId: "t1", date: "2025-01-02T10:00:00Z", labelIds: ["SENT"] });
+    const analysis = {
+      needsReply: true,
+      reason: "Question asked",
+      priority: "high" as const,
+      analyzedAt: Date.now(),
+    };
+    const e1 = makeEmail({
+      id: "e1",
+      threadId: "t1",
+      analysis,
+      date: "2025-01-01T10:00:00Z",
+      labelIds: ["INBOX"],
+    });
+    const e2 = makeEmail({
+      id: "e2",
+      threadId: "t1",
+      date: "2025-01-02T10:00:00Z",
+      labelIds: ["SENT"],
+    });
 
     const threads = groupByThread([e1, e2], "user@example.com");
     // latestReceivedEmail is e1 (e2 is sent), so analysis should be from e1
@@ -316,8 +426,19 @@ test.describe("groupByThread — analysis and draft propagation", () => {
 
   test("thread draft is found from any email in thread", () => {
     const draft = { body: "Reply", status: "created" as const, createdAt: Date.now() };
-    const e1 = makeEmail({ id: "e1", threadId: "t1", draft, date: "2025-01-01T10:00:00Z", labelIds: ["INBOX"] });
-    const e2 = makeEmail({ id: "e2", threadId: "t1", date: "2025-01-02T10:00:00Z", labelIds: ["INBOX"] });
+    const e1 = makeEmail({
+      id: "e1",
+      threadId: "t1",
+      draft,
+      date: "2025-01-01T10:00:00Z",
+      labelIds: ["INBOX"],
+    });
+    const e2 = makeEmail({
+      id: "e2",
+      threadId: "t1",
+      date: "2025-01-02T10:00:00Z",
+      labelIds: ["INBOX"],
+    });
 
     const threads = groupByThread([e1, e2]);
     // latestReceivedEmail is e2 (no draft), but threadDraft fallback finds e1's draft
@@ -328,10 +449,28 @@ test.describe("groupByThread — analysis and draft propagation", () => {
 test.describe("groupByThread — thread sorting by received date", () => {
   test("sent reply does not bump thread to top", () => {
     // Thread A: received yesterday
-    const a1 = makeEmail({ id: "a1", threadId: "t-a", from: "alice@example.com", date: "2025-01-01T10:00:00Z", labelIds: ["INBOX"] });
+    const a1 = makeEmail({
+      id: "a1",
+      threadId: "t-a",
+      from: "alice@example.com",
+      date: "2025-01-01T10:00:00Z",
+      labelIds: ["INBOX"],
+    });
     // Thread B: received today, then user replied
-    const b1 = makeEmail({ id: "b1", threadId: "t-b", from: "bob@example.com", date: "2025-01-02T10:00:00Z", labelIds: ["INBOX"] });
-    const b2 = makeEmail({ id: "b2", threadId: "t-b", from: "user@example.com", date: "2025-01-03T10:00:00Z", labelIds: ["SENT"] });
+    const b1 = makeEmail({
+      id: "b1",
+      threadId: "t-b",
+      from: "bob@example.com",
+      date: "2025-01-02T10:00:00Z",
+      labelIds: ["INBOX"],
+    });
+    const b2 = makeEmail({
+      id: "b2",
+      threadId: "t-b",
+      from: "user@example.com",
+      date: "2025-01-03T10:00:00Z",
+      labelIds: ["SENT"],
+    });
 
     const threads = groupByThread([a1, b1, b2], "user@example.com");
 
@@ -352,15 +491,24 @@ test.describe("isSentEmail", () => {
   });
 
   test("returns true when from matches currentUserEmail (case-insensitive)", () => {
-    expect(isSentEmail(makeEmail({ from: "User@Example.COM", labelIds: ["INBOX"] }), "user@example.com")).toBe(true);
+    expect(
+      isSentEmail(makeEmail({ from: "User@Example.COM", labelIds: ["INBOX"] }), "user@example.com"),
+    ).toBe(true);
   });
 
   test("returns false when no SENT label and no currentUserEmail", () => {
-    expect(isSentEmail(makeEmail({ from: "someone@example.com", labelIds: ["INBOX"] }))).toBe(false);
+    expect(isSentEmail(makeEmail({ from: "someone@example.com", labelIds: ["INBOX"] }))).toBe(
+      false,
+    );
   });
 
   test("returns false when from does not match currentUserEmail", () => {
-    expect(isSentEmail(makeEmail({ from: "other@example.com", labelIds: ["INBOX"] }), "user@example.com")).toBe(false);
+    expect(
+      isSentEmail(
+        makeEmail({ from: "other@example.com", labelIds: ["INBOX"] }),
+        "user@example.com",
+      ),
+    ).toBe(false);
   });
 });
 
@@ -416,8 +564,12 @@ test.describe("evaluateCondition", () => {
 
   test("negate inverts the result", () => {
     const email = makeEmail({ from: "alice@company.com" });
-    expect(evaluateCondition(email, { type: "from", value: "*@company.com", negate: true })).toBe(false);
-    expect(evaluateCondition(email, { type: "from", value: "*@other.com", negate: true })).toBe(true);
+    expect(evaluateCondition(email, { type: "from", value: "*@company.com", negate: true })).toBe(
+      false,
+    );
+    expect(evaluateCondition(email, { type: "from", value: "*@other.com", negate: true })).toBe(
+      true,
+    );
   });
 });
 
@@ -515,14 +667,12 @@ test.describe("thread categorization", () => {
   // Re-implement the categorization logic from useThreadedEmails
   function categorize(threads: EmailThread[]) {
     const needsReply = threads.filter(
-      (t) => t.analysis?.needsReply && t.draft?.status !== "created" && !t.userReplied
+      (t) => t.analysis?.needsReply && t.draft?.status !== "created" && !t.userReplied,
     );
     const done = threads.filter(
-      (t) => t.analysis?.needsReply && t.draft?.status === "created" && !t.userReplied
+      (t) => t.analysis?.needsReply && t.draft?.status === "created" && !t.userReplied,
     );
-    const skipped = threads.filter(
-      (t) => (t.analysis && !t.analysis.needsReply) || t.userReplied
-    );
+    const skipped = threads.filter((t) => (t.analysis && !t.analysis.needsReply) || t.userReplied);
     const unanalyzed = threads.filter((t) => !t.analysis && !t.userReplied);
 
     const priorityOrder: Record<string, number> = { high: 0, medium: 1, low: 2 };
@@ -535,7 +685,9 @@ test.describe("thread categorization", () => {
     return { needsReply: sortedNeedsReply, done, skipped, unanalyzed };
   }
 
-  function makeThreadFromEmail(overrides: Partial<DashboardEmail> & { userReplied?: boolean } = {}): EmailThread {
+  function makeThreadFromEmail(
+    overrides: Partial<DashboardEmail> & { userReplied?: boolean } = {},
+  ): EmailThread {
     const { userReplied = false, ...emailOverrides } = overrides;
     const email = makeEmail(emailOverrides);
     return {
@@ -579,7 +731,12 @@ test.describe("thread categorization", () => {
     const thread = makeThreadFromEmail({
       id: "e1",
       threadId: "t1",
-      analysis: { needsReply: true, reason: "question", priority: "medium", analyzedAt: Date.now() },
+      analysis: {
+        needsReply: true,
+        reason: "question",
+        priority: "medium",
+        analyzedAt: Date.now(),
+      },
       draft: { body: "reply", status: "created", createdAt: Date.now() },
     });
     const result = categorize([thread]);
@@ -592,7 +749,12 @@ test.describe("thread categorization", () => {
     const thread = makeThreadFromEmail({
       id: "e1",
       threadId: "t1",
-      analysis: { needsReply: false, reason: "newsletter", priority: "skip", analyzedAt: Date.now() },
+      analysis: {
+        needsReply: false,
+        reason: "newsletter",
+        priority: "skip",
+        analyzedAt: Date.now(),
+      },
     });
     const result = categorize([thread]);
 
@@ -614,20 +776,23 @@ test.describe("thread categorization", () => {
 
   test("needsReply is sorted by priority: high > medium > low", () => {
     const low = makeThreadFromEmail({
-      id: "e1", threadId: "t1",
+      id: "e1",
+      threadId: "t1",
       analysis: { needsReply: true, reason: "r", priority: "low", analyzedAt: Date.now() },
     });
     const high = makeThreadFromEmail({
-      id: "e2", threadId: "t2",
+      id: "e2",
+      threadId: "t2",
       analysis: { needsReply: true, reason: "r", priority: "high", analyzedAt: Date.now() },
     });
     const medium = makeThreadFromEmail({
-      id: "e3", threadId: "t3",
+      id: "e3",
+      threadId: "t3",
       analysis: { needsReply: true, reason: "r", priority: "medium", analyzedAt: Date.now() },
     });
 
     const result = categorize([low, high, medium]);
 
-    expect(result.needsReply.map(t => t.analysis?.priority)).toEqual(["high", "medium", "low"]);
+    expect(result.needsReply.map((t) => t.analysis?.priority)).toEqual(["high", "medium", "low"]);
   });
 });

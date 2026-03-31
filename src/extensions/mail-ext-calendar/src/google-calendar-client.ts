@@ -7,7 +7,6 @@ import { OAuth2Client } from "google-auth-library";
 import { readFile, readdir } from "fs/promises";
 import { existsSync } from "fs";
 import { join } from "path";
-import { app } from "electron";
 import { getDataDir } from "../../../main/data-dir";
 
 export interface CalendarEvent {
@@ -49,9 +48,7 @@ function getConfigDir(): string {
 const _clientId = import.meta.env.MAIN_VITE_GOOGLE_CLIENT_ID ?? "";
 const _clientSecret = import.meta.env.MAIN_VITE_GOOGLE_CLIENT_SECRET ?? "";
 const BUNDLED_CREDENTIALS =
-  _clientId && _clientSecret
-    ? { client_id: _clientId, client_secret: _clientSecret }
-    : null;
+  _clientId && _clientSecret ? { client_id: _clientId, client_secret: _clientSecret } : null;
 
 function getTokensFile(accountId: string): string {
   if (accountId === "default") {
@@ -194,7 +191,7 @@ export async function syncCalendarEvents(
   calendarId: string,
   calendarName: string,
   calendarColor: string,
-  syncToken: string | null
+  syncToken: string | null,
 ): Promise<SyncResult> {
   const auth = await getOAuth2Client(accountId);
   if (!auth) {
@@ -251,7 +248,9 @@ export async function syncCalendarEvents(
     // 410 GONE means sync token is invalid — need full re-sync
     const statusCode = (error as { code?: number })?.code;
     if (statusCode === 410) {
-      console.log(`[Calendar] Sync token expired for ${calendarName} (410 GONE), full re-sync needed`);
+      console.log(
+        `[Calendar] Sync token expired for ${calendarName} (410 GONE), full re-sync needed`,
+      );
       return { events: [], deletedIds: [], nextSyncToken: null, fullSyncRequired: true };
     }
     throw error;
@@ -265,7 +264,7 @@ export async function syncCalendarEvents(
  */
 export async function getEventsForDate(
   accountId: string,
-  dateStr: string
+  dateStr: string,
 ): Promise<CalendarEvent[]> {
   const auth = await getOAuth2Client(accountId);
   if (!auth) return [];
@@ -314,7 +313,7 @@ export async function getEventsForDate(
           console.error(`[Calendar] Failed to fetch events from ${calInfo.name}:`, error);
           return [];
         }
-      })
+      }),
     );
 
     // Merge, deduplicate by event ID, sort by start time
@@ -339,7 +338,7 @@ export async function getEventsForDate(
 
 function parseCalendarEvent(
   item: calendar_v3.Schema$Event,
-  calInfo: { name: string; color: string }
+  calInfo: { name: string; color: string },
 ): CalendarEvent | null {
   if (!item.id) return null;
 

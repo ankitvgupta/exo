@@ -15,7 +15,12 @@ import { EmailAnalyzer } from "./email-analyzer";
 import { DraftGenerator } from "./draft-generator";
 import { getAccounts } from "../db";
 import { DEFAULT_STYLE_PROMPT } from "../../shared/types";
-import type { Email, AnalysisResult, GeneratedDraftResponse, DashboardEmail } from "../../shared/types";
+import type {
+  Email,
+  AnalysisResult,
+  GeneratedDraftResponse,
+  DashboardEmail,
+} from "../../shared/types";
 
 export interface GenerateDraftOptions {
   emailId: string;
@@ -59,7 +64,12 @@ async function buildDraftPipeline(
   const gmailClient = getEmailSyncService().getClientForAccount(emailAccountId);
 
   const styleContext = recipientEmail
-    ? await buildStyleContext(recipientEmail, emailAccountId, config.stylePrompt ?? DEFAULT_STYLE_PROMPT, gmailClient)
+    ? await buildStyleContext(
+        recipientEmail,
+        emailAccountId,
+        config.stylePrompt ?? DEFAULT_STYLE_PROMPT,
+        gmailClient,
+      )
     : "";
 
   const memoryContext = recipientEmail
@@ -87,7 +97,11 @@ async function buildDraftPipeline(
     snippet: email.snippet,
   };
 
-  const generator = new DraftGenerator(getModelIdForFeature("drafts"), prompt, getModelIdForFeature("calendaring"));
+  const generator = new DraftGenerator(
+    getModelIdForFeature("drafts"),
+    prompt,
+    getModelIdForFeature("calendaring"),
+  );
 
   return { email, emailForDraft, config, prompt, generator, emailAccountId };
 }
@@ -120,9 +134,17 @@ export async function generateDraftForEmail(
 
   // Auto-analyze if not already done (e.g. freshly synced email)
   if (!email.analysis) {
-    const analyzer = new EmailAnalyzer(getModelIdForFeature("analysis"), config.analysisPrompt ?? undefined);
+    const analyzer = new EmailAnalyzer(
+      getModelIdForFeature("analysis"),
+      config.analysisPrompt ?? undefined,
+    );
     const analysisResult = await analyzer.analyze(emailForDraft);
-    saveAnalysis(emailId, analysisResult.needs_reply, analysisResult.reason, analysisResult.priority);
+    saveAnalysis(
+      emailId,
+      analysisResult.needs_reply,
+      analysisResult.reason,
+      analysisResult.priority,
+    );
     email.analysis = {
       needsReply: analysisResult.needs_reply,
       reason: analysisResult.reason,
@@ -135,7 +157,11 @@ export async function generateDraftForEmail(
   let { generator } = pipeline;
   if (instructions) {
     const fullPrompt = `${pipeline.prompt}\n\nADDITIONAL INSTRUCTIONS:\n${instructions}`;
-    generator = new DraftGenerator(getModelIdForFeature("drafts"), fullPrompt, getModelIdForFeature("calendaring"));
+    generator = new DraftGenerator(
+      getModelIdForFeature("drafts"),
+      fullPrompt,
+      getModelIdForFeature("calendaring"),
+    );
   }
 
   const analysis: AnalysisResult = {
@@ -146,8 +172,11 @@ export async function generateDraftForEmail(
 
   const enableSenderLookup = config.enableSenderLookup ?? true;
   const accounts = getAccounts();
-  const userEmail = accounts.find(a => a.id === emailAccountId)?.email;
-  const result = await generator.generateDraft(emailForDraft, analysis, config.ea, { enableSenderLookup, userEmail });
+  const userEmail = accounts.find((a) => a.id === emailAccountId)?.email;
+  const result = await generator.generateDraft(emailForDraft, analysis, config.ea, {
+    enableSenderLookup,
+    userEmail,
+  });
 
   saveDraftAndSync(emailId, result.body, "pending", result.cc, result.bcc);
 
@@ -173,10 +202,16 @@ export async function generateForwardForEmail(
   const primaryRecipient = to && to.length > 0 ? to[0] : "";
   const recipientEmail = extractEmail(primaryRecipient);
 
-  const { emailForDraft, config, generator } = await buildDraftPipeline(emailId, accountId, recipientEmail);
+  const { emailForDraft, config, generator } = await buildDraftPipeline(
+    emailId,
+    accountId,
+    recipientEmail,
+  );
 
   const enableSenderLookup = config.enableSenderLookup ?? true;
-  const result = await generator.generateForward(emailForDraft, instructions, { enableSenderLookup });
+  const result = await generator.generateForward(emailForDraft, instructions, {
+    enableSenderLookup,
+  });
 
   // Save only the intro text as a draft on the existing email, just like replies.
   // The forwarded message attribution + quoted body are appended at send time.

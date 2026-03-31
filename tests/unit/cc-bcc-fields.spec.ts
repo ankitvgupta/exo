@@ -26,15 +26,16 @@ test.describe("CC/BCC - useComposeForm Hook", () => {
   let hookCode: string;
 
   test.beforeAll(() => {
-    hookCode = readFileSync(
-      path.join(srcDir, "renderer/hooks/useComposeForm.ts"),
-      "utf-8"
-    );
+    hookCode = readFileSync(path.join(srcDir, "renderer/hooks/useComposeForm.ts"), "utf-8");
   });
 
   test("hook has CC and BCC state", () => {
-    expect(hookCode).toContain("const [cc, setCc] = useState<string[]>(() => initialCc.map(extractBareEmail))");
-    expect(hookCode).toContain("const [bcc, setBcc] = useState<string[]>(() => initialBcc.map(extractBareEmail))");
+    expect(hookCode).toContain(
+      "const [cc, setCc] = useState<string[]>(() => initialCc.map(extractBareEmail))",
+    );
+    expect(hookCode).toContain(
+      "const [bcc, setBcc] = useState<string[]>(() => initialBcc.map(extractBareEmail))",
+    );
   });
 
   test("hook send includes CC and BCC in send options", () => {
@@ -44,7 +45,7 @@ test.describe("CC/BCC - useComposeForm Hook", () => {
 
   test("hook validates at least one of To/CC/BCC has recipients", () => {
     expect(hookCode).toContain(
-      "const hasAnyRecipient = to.length > 0 || cc.length > 0 || bcc.length > 0"
+      "const hasAnyRecipient = to.length > 0 || cc.length > 0 || bcc.length > 0",
     );
   });
 
@@ -63,7 +64,7 @@ test.describe("CC/BCC - InlineReply Component", () => {
   test.beforeAll(() => {
     emailDetailCode = readFileSync(
       path.join(srcDir, "renderer/components/EmailDetail.tsx"),
-      "utf-8"
+      "utf-8",
     );
   });
 
@@ -74,8 +75,7 @@ test.describe("CC/BCC - InlineReply Component", () => {
 
   test("InlineReply renders AddressInput for CC and BCC", () => {
     // The InlineReply section should have AddressInput components
-    const addressInputCount = (emailDetailCode.match(/<AddressInput/g) || [])
-      .length;
+    const addressInputCount = (emailDetailCode.match(/<AddressInput/g) || []).length;
     // At least 5: NewEmailCompose has To+Cc+Bcc, InlineReply has To+Cc+Bcc
     expect(addressInputCount).toBeGreaterThanOrEqual(5);
   });
@@ -97,7 +97,7 @@ test.describe("CC/BCC - NewEmailCompose Component", () => {
   test.beforeAll(() => {
     emailDetailCode = readFileSync(
       path.join(srcDir, "renderer/components/EmailDetail.tsx"),
-      "utf-8"
+      "utf-8",
     );
   });
 
@@ -129,9 +129,9 @@ test.describe("CC/BCC - Type Definitions", () => {
   });
 
   test("IpcChannels gmail:create-draft includes bcc", () => {
-    expect(typesCode).toContain(
-      '"gmail:create-draft": { emailId: string; body: string; cc?: string[]; bcc?: string[]; accountId?: string }'
-    );
+    expect(typesCode).toContain('"gmail:create-draft"');
+    expect(typesCode).toContain("bcc?: string[];");
+    expect(typesCode).toContain("accountId?: string;");
   });
 
   test("ComposeMessageOptions already supports bcc", () => {
@@ -139,15 +139,11 @@ test.describe("CC/BCC - Type Definitions", () => {
   });
 
   test("LocalDraftSchema supports bcc", () => {
-    expect(typesCode).toContain(
-      "bcc: z.array(z.string()).optional()"
-    );
+    expect(typesCode).toContain("bcc: z.array(z.string()).optional()");
   });
 
   test("GmailDraftSchema supports bcc", () => {
-    expect(typesCode).toContain(
-      "bcc: z.array(z.string()).optional()"
-    );
+    expect(typesCode).toContain("bcc: z.array(z.string()).optional()");
   });
 });
 
@@ -157,28 +153,18 @@ test.describe("CC/BCC - Type Definitions", () => {
 
 test.describe("CC/BCC - IPC Handlers", () => {
   test("gmail.ipc.ts create-draft handler accepts bcc parameter", () => {
-    const gmailIpc = readFileSync(
-      path.join(srcDir, "main/ipc/gmail.ipc.ts"),
-      "utf-8"
-    );
-    expect(gmailIpc).toContain(
-      "{ emailId, body, cc, bcc, accountId }: { emailId: string; body: string; cc?: string[]; bcc?: string[]; accountId?: string }"
-    );
+    const gmailIpc = readFileSync(path.join(srcDir, "main/ipc/gmail.ipc.ts"), "utf-8");
+    expect(gmailIpc).toContain("bcc,");
+    expect(gmailIpc).toContain("bcc?: string[]");
   });
 
   test("gmail.ipc.ts logs BCC in demo mode", () => {
-    const gmailIpc = readFileSync(
-      path.join(srcDir, "main/ipc/gmail.ipc.ts"),
-      "utf-8"
-    );
-    expect(gmailIpc).toContain('[DEMO] BCC:');
+    const gmailIpc = readFileSync(path.join(srcDir, "main/ipc/gmail.ipc.ts"), "utf-8");
+    expect(gmailIpc).toContain("[DEMO] BCC:");
   });
 
   test("gmail.ipc.ts passes bcc to client.createDraft", () => {
-    const gmailIpc = readFileSync(
-      path.join(srcDir, "main/ipc/gmail.ipc.ts"),
-      "utf-8"
-    );
+    const gmailIpc = readFileSync(path.join(srcDir, "main/ipc/gmail.ipc.ts"), "utf-8");
     // Should pass bcc in the createDraft call
     expect(gmailIpc).toContain("bcc,");
   });
@@ -190,13 +176,9 @@ test.describe("CC/BCC - IPC Handlers", () => {
 
 test.describe("CC/BCC - Preload API", () => {
   test("preload exposes createDraft with bcc parameter", () => {
-    const preloadCode = readFileSync(
-      path.join(srcDir, "preload/index.ts"),
-      "utf-8"
-    );
-    expect(preloadCode).toContain(
-      "createDraft: (emailId: string, body: string, cc?: string[], bcc?: string[], accountId?: string)"
-    );
+    const preloadCode = readFileSync(path.join(srcDir, "preload/index.ts"), "utf-8");
+    expect(preloadCode).toContain("createDraft:");
+    expect(preloadCode).toContain("bcc?: string[]");
     expect(preloadCode).toContain("{ emailId, body, cc, bcc, accountId }");
   });
 });
@@ -207,10 +189,7 @@ test.describe("CC/BCC - Preload API", () => {
 
 test.describe("CC/BCC - Gmail Client Service", () => {
   test("GmailClient.createDraft accepts bcc parameter", () => {
-    const clientCode = readFileSync(
-      path.join(srcDir, "main/services/gmail-client.ts"),
-      "utf-8"
-    );
+    const clientCode = readFileSync(path.join(srcDir, "main/services/gmail-client.ts"), "utf-8");
 
     // The createDraft method should accept bcc
     expect(clientCode).toContain("bcc?: string[];");

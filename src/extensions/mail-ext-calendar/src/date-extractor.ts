@@ -11,14 +11,46 @@ export interface ExtractedDate {
 }
 
 const MONTHS: Record<string, number> = {
-  january: 0, february: 1, march: 2, april: 3, may: 4, june: 5,
-  july: 6, august: 7, september: 8, october: 9, november: 10, december: 11,
-  jan: 0, feb: 1, mar: 2, apr: 3, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11,
+  january: 0,
+  february: 1,
+  march: 2,
+  april: 3,
+  may: 4,
+  june: 5,
+  july: 6,
+  august: 7,
+  september: 8,
+  october: 9,
+  november: 10,
+  december: 11,
+  jan: 0,
+  feb: 1,
+  mar: 2,
+  apr: 3,
+  jun: 5,
+  jul: 6,
+  aug: 7,
+  sep: 8,
+  oct: 9,
+  nov: 10,
+  dec: 11,
 };
 
 const DAYS_OF_WEEK: Record<string, number> = {
-  sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6,
-  sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6,
+  sunday: 0,
+  monday: 1,
+  tuesday: 2,
+  wednesday: 3,
+  thursday: 4,
+  friday: 5,
+  saturday: 6,
+  sun: 0,
+  mon: 1,
+  tue: 2,
+  wed: 3,
+  thu: 4,
+  fri: 5,
+  sat: 6,
 };
 
 function toISODate(d: Date): string {
@@ -58,13 +90,14 @@ export function extractDatesFromEmail(body: string, emailDate: string): Extracte
   function addDate(date: Date, label: string, confidence: number) {
     const iso = toISODate(date);
     // Keep highest confidence for duplicate dates
-    if (!found.has(iso) || (found.get(iso)!.confidence < confidence)) {
+    if (!found.has(iso) || found.get(iso)!.confidence < confidence) {
       found.set(iso, { date: iso, label: label || formatLabel(date), confidence });
     }
   }
 
   // Pattern 1: "Month Day, Year" or "Month Day Year" — e.g., "February 3, 2025", "Feb 3 2025"
-  const monthDayYear = /\b(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|oct|nov|dec)\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s*(\d{4})\b/gi;
+  const monthDayYear =
+    /\b(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|oct|nov|dec)\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s*(\d{4})\b/gi;
   for (const m of text.matchAll(monthDayYear)) {
     const month = MONTHS[m[1].toLowerCase()];
     const day = parseInt(m[2], 10);
@@ -75,7 +108,8 @@ export function extractDatesFromEmail(body: string, emailDate: string): Extracte
   }
 
   // Pattern 2: "Month Day" without year — e.g., "February 3rd", "Feb 3"
-  const monthDay = /\b(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|oct|nov|dec)\.?\s+(\d{1,2})(?:st|nd|rd|th)?\b(?!\s*,?\s*\d{4})/gi;
+  const monthDay =
+    /\b(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|oct|nov|dec)\.?\s+(\d{1,2})(?:st|nd|rd|th)?\b(?!\s*,?\s*\d{4})/gi;
   for (const m of text.matchAll(monthDay)) {
     const month = MONTHS[m[1].toLowerCase()];
     const day = parseInt(m[2], 10);
@@ -130,7 +164,8 @@ export function extractDatesFromEmail(body: string, emailDate: string): Extracte
   }
 
   // Pattern 6: "next Monday", "this Friday", etc.
-  const dayRef = /\b(next|this|coming)\s+(sunday|monday|tuesday|wednesday|thursday|friday|saturday|sun|mon|tue|wed|thu|fri|sat)\b/gi;
+  const dayRef =
+    /\b(next|this|coming)\s+(sunday|monday|tuesday|wednesday|thursday|friday|saturday|sun|mon|tue|wed|thu|fri|sat)\b/gi;
   for (const m of text.matchAll(dayRef)) {
     const modifier = m[1].toLowerCase();
     const targetDay = DAYS_OF_WEEK[m[2].toLowerCase()];
@@ -152,7 +187,8 @@ export function extractDatesFromEmail(body: string, emailDate: string): Extracte
   }
 
   // Pattern 7: Standalone day names — "on Monday", "by Wednesday"
-  const standaloneDay = /\b(?:on|by|before|after|until)\s+(sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/gi;
+  const standaloneDay =
+    /\b(?:on|by|before|after|until)\s+(sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/gi;
   for (const m of text.matchAll(standaloneDay)) {
     const targetDay = DAYS_OF_WEEK[m[1].toLowerCase()];
     if (targetDay !== undefined) {
@@ -166,7 +202,5 @@ export function extractDatesFromEmail(body: string, emailDate: string): Extracte
   }
 
   // Sort by date, then by confidence
-  return [...found.values()]
-    .sort((a, b) => a.date.localeCompare(b.date))
-    .slice(0, 10); // Cap at 10 dates
+  return [...found.values()].sort((a, b) => a.date.localeCompare(b.date)).slice(0, 10); // Cap at 10 dates
 }

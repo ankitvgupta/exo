@@ -16,10 +16,14 @@ function currentPriorityValue(analysis: { needsReply: boolean; priority?: string
 
 function priorityColor(value: string): string {
   switch (value) {
-    case "high": return "text-red-600 dark:text-red-400";
-    case "medium": return "text-yellow-600 dark:text-yellow-400";
-    case "low": return "text-blue-600 dark:text-blue-400";
-    default: return "text-gray-500 dark:text-gray-400";
+    case "high":
+      return "text-red-600 dark:text-red-400";
+    case "medium":
+      return "text-yellow-600 dark:text-yellow-400";
+    case "low":
+      return "text-blue-600 dark:text-blue-400";
+    default:
+      return "text-gray-500 dark:text-gray-400";
   }
 }
 
@@ -47,7 +51,7 @@ export function AnalysisPrioritySection({
   }, [email.id]);
 
   const handleSave = async () => {
-    const option = PRIORITY_OPTIONS.find(o => o.value === selectedValue);
+    const option = PRIORITY_OPTIONS.find((o) => o.value === selectedValue);
     if (!option || selectedValue === current) {
       setIsEditing(false);
       return;
@@ -75,13 +79,17 @@ export function AnalysisPrioritySection({
     return (
       <div className="px-6 py-4 border-t border-gray-100 dark:border-gray-700/50 bg-gray-50 dark:bg-gray-800/50">
         <div className="flex items-center gap-3 text-sm">
-          <span className={`font-medium ${analysis.needsReply ? "text-blue-600 dark:text-blue-400" : "text-gray-500 dark:text-gray-400"}`}>
+          <span
+            className={`font-medium ${analysis.needsReply ? "text-blue-600 dark:text-blue-400" : "text-gray-500 dark:text-gray-400"}`}
+          >
             {analysis.needsReply ? "Needs Reply" : "No Reply Needed"}
           </span>
           {analysis.priority && (
             <>
               <span className="text-gray-300 dark:text-gray-600">·</span>
-              <span className={`capitalize ${priorityColor(analysis.priority)}`}>{analysis.priority} priority</span>
+              <span className={`capitalize ${priorityColor(analysis.priority)}`}>
+                {analysis.priority} priority
+              </span>
             </>
           )}
           <span className="text-gray-300 dark:text-gray-600">·</span>
@@ -103,7 +111,7 @@ export function AnalysisPrioritySection({
         <div className="flex items-center gap-2 text-sm">
           <span className="text-gray-500 dark:text-gray-400 text-xs font-medium">Priority:</span>
           <div className="flex gap-1">
-            {PRIORITY_OPTIONS.map(opt => (
+            {PRIORITY_OPTIONS.map((opt) => (
               <button
                 key={opt.value}
                 onClick={() => setSelectedValue(opt.value)}
@@ -129,15 +137,26 @@ export function AnalysisPrioritySection({
             <input
               type="text"
               value={reason}
-              onChange={e => setReason(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter") handleSave(); if (e.key === "Escape") { setIsEditing(false); setSelectedValue(current); setReason(""); } }}
+              onChange={(e) => setReason(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleSave();
+                if (e.key === "Escape") {
+                  setIsEditing(false);
+                  setSelectedValue(current);
+                  setReason("");
+                }
+              }}
               placeholder="Reason (optional) — helps improve future classification"
               className="w-full px-3 py-1.5 text-xs rounded border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-400"
               autoFocus
             />
             <div className="flex items-center gap-2 justify-end">
               <button
-                onClick={() => { setIsEditing(false); setSelectedValue(current); setReason(""); }}
+                onClick={() => {
+                  setIsEditing(false);
+                  setSelectedValue(current);
+                  setReason("");
+                }}
                 className="px-3 py-1 text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
               >
                 Cancel

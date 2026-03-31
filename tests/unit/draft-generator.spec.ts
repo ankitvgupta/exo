@@ -25,25 +25,22 @@ import { DEFAULT_DRAFT_PROMPT, DRAFT_FORMAT_SUFFIX } from "../../src/shared/type
 
 function extractReplyAllCc(
   email: { from: string; to: string; cc?: string },
-  userEmail: string
+  userEmail: string,
 ): string[] {
   const parseAddresses = (field: string): string[] =>
     (field.match(/[\w.+-]+@[\w.-]+\.\w+/g) || []).map((e) => e.toLowerCase());
 
   const senderEmail = parseAddresses(email.from)[0];
-  const exclude = new Set(
-    [senderEmail, userEmail.toLowerCase()].filter(Boolean)
-  );
+  const exclude = new Set([senderEmail, userEmail.toLowerCase()].filter(Boolean));
 
   const seen = new Set<string>();
-  return [
-    ...parseAddresses(email.to),
-    ...(email.cc ? parseAddresses(email.cc) : []),
-  ].filter((addr) => {
-    const dominated = exclude.has(addr) || seen.has(addr);
-    seen.add(addr);
-    return !dominated;
-  });
+  return [...parseAddresses(email.to), ...(email.cc ? parseAddresses(email.cc) : [])].filter(
+    (addr) => {
+      const dominated = exclude.has(addr) || seen.has(addr);
+      seen.add(addr);
+      return !dominated;
+    },
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -118,7 +115,7 @@ class TestDraftGenerator {
   async generateDraft(
     email: Email,
     analysis: AnalysisResult,
-    options?: { userEmail?: string }
+    options?: { userEmail?: string },
   ): Promise<GeneratedDraftResponse> {
     let cc: string[] = [];
 
@@ -165,7 +162,7 @@ ${email.body}`,
   async composeNewEmail(
     to: string[],
     subject: string,
-    instructions: string
+    instructions: string,
   ): Promise<GeneratedDraftResponse> {
     const response = await this.anthropic.messages.create({
       model: this.model,
@@ -198,12 +195,10 @@ ${instructions}`,
     gmailClient: MockGmailClient,
     email: Email,
     draftBody: string,
-    dryRun: boolean = false
+    dryRun: boolean = false,
   ): Promise<DraftResult> {
     const replyTo = extractReplyAddress(email.from);
-    const subject = email.subject.startsWith("Re:")
-      ? email.subject
-      : `Re: ${email.subject}`;
+    const subject = email.subject.startsWith("Re:") ? email.subject : `Re: ${email.subject}`;
 
     if (dryRun) {
       return {
@@ -232,8 +227,7 @@ ${instructions}`,
         created: true,
       };
     } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
       return {
         emailId: email.id,
         threadId: email.threadId,
@@ -289,13 +283,10 @@ test.describe("DraftGenerator - generateDraft", () => {
     });
     const generator = new TestDraftGenerator();
 
-    const result = await generator.generateDraft(
-      makeEmail(),
-      makeAnalysis()
-    );
+    const result = await generator.generateDraft(makeEmail(), makeAnalysis());
 
     expect(result.body).toBe(
-      "Thanks for sending the Q3 budget proposal. I'll review sections 3 and 4 and get back to you by Friday."
+      "Thanks for sending the Q3 budget proposal. I'll review sections 3 and 4 and get back to you by Friday.",
     );
   });
 
@@ -338,10 +329,13 @@ test.describe("DraftGenerator - generateDraft", () => {
     mockAnthropicResponse({ text: "Reply body" });
     const generator = new TestDraftGenerator();
 
-    await generator.generateDraft(makeEmail(), makeAnalysis({
-      reason: "Urgent budget question",
-      priority: "high",
-    }));
+    await generator.generateDraft(
+      makeEmail(),
+      makeAnalysis({
+        reason: "Urgent budget question",
+        priority: "high",
+      }),
+    );
 
     const requests = getCapturedRequests();
     const content = (requests[0].messages[0] as { content: string }).content;
@@ -384,12 +378,10 @@ test.describe("DraftGenerator - composeNewEmail", () => {
     const result = await generator.composeNewEmail(
       ["team@company.com"],
       "Sprint Update",
-      "Write a brief project update"
+      "Write a brief project update",
     );
 
-    expect(result.body).toBe(
-      "Hi team, I wanted to share the project update for this sprint."
-    );
+    expect(result.body).toBe("Hi team, I wanted to share the project update for this sprint.");
     expect(result.cc).toBeUndefined();
     expect(result.calendaringResult).toBeUndefined();
   });
@@ -401,7 +393,7 @@ test.describe("DraftGenerator - composeNewEmail", () => {
     await generator.composeNewEmail(
       ["alice@example.com", "bob@example.com"],
       "Hello",
-      "Introduce yourself"
+      "Introduce yourself",
     );
 
     const requests = getCapturedRequests();
@@ -424,7 +416,8 @@ test.describe("DraftGenerator - createDraft", () => {
   test("calls gmailClient.createDraft with correct params", async () => {
     const generator = new TestDraftGenerator();
     const email = makeEmail();
-    const createdDrafts: Array<{ to: string; subject: string; body: string; threadId: string }> = [];
+    const createdDrafts: Array<{ to: string; subject: string; body: string; threadId: string }> =
+      [];
     const mockGmailClient: MockGmailClient = {
       createDraft: async (params) => {
         createdDrafts.push(params);
@@ -432,11 +425,7 @@ test.describe("DraftGenerator - createDraft", () => {
       },
     };
 
-    const result = await generator.createDraft(
-      mockGmailClient,
-      email,
-      "Here is my reply."
-    );
+    const result = await generator.createDraft(mockGmailClient, email, "Here is my reply.");
 
     expect(createdDrafts).toHaveLength(1);
     expect(createdDrafts[0].to).toBe("alice@example.com");
@@ -451,7 +440,8 @@ test.describe("DraftGenerator - createDraft", () => {
   test("preserves existing Re: prefix in subject", async () => {
     const generator = new TestDraftGenerator();
     const email = makeEmail({ subject: "Re: Q3 Budget Review" });
-    const createdDrafts: Array<{ to: string; subject: string; body: string; threadId: string }> = [];
+    const createdDrafts: Array<{ to: string; subject: string; body: string; threadId: string }> =
+      [];
     const mockGmailClient: MockGmailClient = {
       createDraft: async (params) => {
         createdDrafts.push(params);
@@ -479,7 +469,7 @@ test.describe("DraftGenerator - createDraft", () => {
       mockGmailClient,
       email,
       "Draft body",
-      true // dryRun
+      true, // dryRun
     );
 
     expect(gmailCalled).toBe(false);
@@ -498,11 +488,7 @@ test.describe("DraftGenerator - createDraft", () => {
       },
     };
 
-    const result = await generator.createDraft(
-      mockGmailClient,
-      email,
-      "Draft body"
-    );
+    const result = await generator.createDraft(mockGmailClient, email, "Draft body");
 
     expect(result.created).toBe(false);
     expect(result.error).toBe("Gmail API rate limit exceeded");
@@ -516,9 +502,7 @@ test.describe("DraftGenerator - createDraft", () => {
 
 test.describe("extractReplyAddress", () => {
   test('handles "Name <email>" format', () => {
-    expect(extractReplyAddress("Alice Smith <alice@example.com>")).toBe(
-      "alice@example.com"
-    );
+    expect(extractReplyAddress("Alice Smith <alice@example.com>")).toBe("alice@example.com");
   });
 
   test("handles bare email format", () => {
@@ -526,9 +510,7 @@ test.describe("extractReplyAddress", () => {
   });
 
   test("handles email with special chars in name", () => {
-    expect(
-      extractReplyAddress('"O\'Brien, John" <john@example.com>')
-    ).toBe("john@example.com");
+    expect(extractReplyAddress('"O\'Brien, John" <john@example.com>')).toBe("john@example.com");
   });
 });
 
@@ -544,7 +526,7 @@ test.describe("extractReplyAllCc", () => {
         to: "user@company.com, bob@example.com",
         cc: "carol@example.com",
       },
-      "user@company.com"
+      "user@company.com",
     );
 
     expect(result).toEqual(["bob@example.com", "carol@example.com"]);
@@ -556,7 +538,7 @@ test.describe("extractReplyAllCc", () => {
         from: "Alice <alice@example.com>",
         to: "User <user@company.com>, Bob <bob@example.com>",
       },
-      "user@company.com"
+      "user@company.com",
     );
 
     expect(result).toEqual(["bob@example.com"]);
@@ -569,7 +551,7 @@ test.describe("extractReplyAllCc", () => {
         to: "user@company.com, bob@example.com",
         cc: "bob@example.com",
       },
-      "user@company.com"
+      "user@company.com",
     );
 
     expect(result).toEqual(["bob@example.com"]);
@@ -581,7 +563,7 @@ test.describe("extractReplyAllCc", () => {
         from: "alice@example.com",
         to: "user@company.com",
       },
-      "user@company.com"
+      "user@company.com",
     );
 
     expect(result).toEqual([]);
@@ -593,7 +575,7 @@ test.describe("extractReplyAllCc", () => {
         from: "Alice@Example.COM",
         to: "USER@Company.com, bob@example.com",
       },
-      "user@company.com"
+      "user@company.com",
     );
 
     expect(result).toEqual(["bob@example.com"]);

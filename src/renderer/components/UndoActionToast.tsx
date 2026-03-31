@@ -23,15 +23,25 @@ async function commitAction(item: UndoActionItem, removeFromQueue: () => void): 
         // For archive, only call the API on INBOX-labeled emails (archiving SENT/other emails is a no-op).
         // Treat null/undefined labelIds as INBOX (matches server-side getInboxEmails query).
         // For trash, all emails should be trashed.
-        const emailsToExecute = item.type === "archive"
-          ? item.emails.filter(e => !e.labelIds || e.labelIds.includes("INBOX"))
-          : item.emails;
+        const emailsToExecute =
+          item.type === "archive"
+            ? item.emails.filter((e) => !e.labelIds || e.labelIds.includes("INBOX"))
+            : item.emails;
 
         // Use batch API — single Gmail batchModify call instead of N individual calls.
-        const emailIds = emailsToExecute.map(e => e.id);
-        const result = item.type === "archive"
-          ? await api().emails.batchArchive(emailIds, accountId) as { success: boolean; error?: string; failedIds?: string[] }
-          : await api().emails.batchTrash(emailIds, accountId) as { success: boolean; error?: string; failedIds?: string[] };
+        const emailIds = emailsToExecute.map((e) => e.id);
+        const result =
+          item.type === "archive"
+            ? ((await api().emails.batchArchive(emailIds, accountId)) as {
+                success: boolean;
+                error?: string;
+                failedIds?: string[];
+              })
+            : ((await api().emails.batchTrash(emailIds, accountId)) as {
+                success: boolean;
+                error?: string;
+                failedIds?: string[];
+              });
 
         // If batch call fails, remove from undo queue FIRST so addEmails suppression
         // doesn't silently drop the emails we're trying to restore.
@@ -42,34 +52,42 @@ async function commitAction(item: UndoActionItem, removeFromQueue: () => void): 
           failedEmails = [];
         } else if (result.failedIds) {
           const failedIdSet = new Set(result.failedIds);
-          failedEmails = emailsToExecute.filter(e => failedIdSet.has(e.id));
+          failedEmails = emailsToExecute.filter((e) => failedIdSet.has(e.id));
         } else {
           failedEmails = emailsToExecute;
         }
         if (failedEmails.length > 0) {
-          console.error(`[Archive] Batch ${item.type} failed, restoring ${failedEmails.length} emails:`, result.error);
+          console.error(
+            `[Archive] Batch ${item.type} failed, restoring ${failedEmails.length} emails:`,
+            result.error,
+          );
           removeFromQueue();
           addEmails(failedEmails);
         }
 
         // Only dismiss archive-ready threads whose emails all succeeded
         if (item.archiveReadyThreadIds && item.archiveReadyThreadIds.length > 0) {
-          const failedEmailIds = new Set(failedEmails.map(e => e.id));
+          const failedEmailIds = new Set(failedEmails.map((e) => e.id));
           const store = useAppStore.getState();
           for (const threadId of item.archiveReadyThreadIds) {
             const threadFailed = item.emails
-              .filter(e => e.threadId === threadId)
-              .some(e => failedEmailIds.has(e.id));
+              .filter((e) => e.threadId === threadId)
+              .some((e) => failedEmailIds.has(e.id));
             if (!threadFailed) {
               store.removeArchiveReadyThread(threadId);
-              api().archiveReady.dismiss(threadId, accountId).catch((err: unknown) =>
-                console.error("Failed to dismiss archive-ready thread:", err)
-              );
+              api()
+                .archiveReady.dismiss(threadId, accountId)
+                .catch((err: unknown) =>
+                  console.error("Failed to dismiss archive-ready thread:", err),
+                );
             }
           }
         }
       } catch (err: unknown) {
-        console.error(`[Archive] Batch ${item.type} rejected, restoring ${item.emails.length} emails:`, err);
+        console.error(
+          `[Archive] Batch ${item.type} rejected, restoring ${item.emails.length} emails:`,
+          err,
+        );
         removeFromQueue();
         addEmails(item.emails);
       }
@@ -77,15 +95,17 @@ async function commitAction(item: UndoActionItem, removeFromQueue: () => void): 
     }
 
     case "mark-unread": {
-      const results = await Promise.allSettled(item.emails.map(e =>
-        api().emails.setRead(e.id, accountId, false)
-      ));
+      const results = await Promise.allSettled(
+        item.emails.map((e) => api().emails.setRead(e.id, accountId, false)),
+      );
       // Revert labels only for emails whose API call failed
       if (item.previousLabels) {
         const store = useAppStore.getState();
         for (let i = 0; i < item.emails.length; i++) {
-          const failed = results[i].status === "rejected" ||
-            (results[i].status === "fulfilled" && !(results[i] as PromiseFulfilledResult<{ success: boolean }>).value?.success);
+          const failed =
+            results[i].status === "rejected" ||
+            (results[i].status === "fulfilled" &&
+              !(results[i] as PromiseFulfilledResult<{ success: boolean }>).value?.success);
           if (failed) {
             const prev = item.previousLabels[item.emails[i].id];
             if (prev) {
@@ -100,15 +120,17 @@ async function commitAction(item: UndoActionItem, removeFromQueue: () => void): 
     case "star":
     case "unstar": {
       const starred = item.type === "star";
-      const results = await Promise.allSettled(item.emails.map(e =>
-        api().emails.setStarred(e.id, accountId, starred)
-      ));
+      const results = await Promise.allSettled(
+        item.emails.map((e) => api().emails.setStarred(e.id, accountId, starred)),
+      );
       // Revert labels only for emails whose API call failed
       if (item.previousLabels) {
         const store = useAppStore.getState();
         for (let i = 0; i < item.emails.length; i++) {
-          const failed = results[i].status === "rejected" ||
-            (results[i].status === "fulfilled" && !(results[i] as PromiseFulfilledResult<{ success: boolean }>).value?.success);
+          const failed =
+            results[i].status === "rejected" ||
+            (results[i].status === "fulfilled" &&
+              !(results[i] as PromiseFulfilledResult<{ success: boolean }>).value?.success);
           if (failed) {
             const prev = item.previousLabels[item.emails[i].id];
             if (prev) {
@@ -143,7 +165,10 @@ function UndoActionToastItem({ item }: { item: UndoActionItem }) {
     if (executedRef.current) return;
     executedRef.current = true;
     let removed = false;
-    await commitAction(item, () => { removeUndoAction(item.id); removed = true; });
+    await commitAction(item, () => {
+      removeUndoAction(item.id);
+      removed = true;
+    });
     if (!removed) removeUndoAction(item.id);
   }, [item, removeUndoAction]);
 
@@ -197,9 +222,11 @@ function UndoActionToastItem({ item }: { item: UndoActionItem }) {
           const store = useAppStore.getState();
           for (const threadId of item.snoozedThreadIds) {
             store.removeSnoozedThread(threadId);
-            api().snooze.unsnooze(threadId, item.accountId).catch((err: unknown) => {
-              console.error("Failed to unsnooze:", err);
-            });
+            api()
+              .snooze.unsnooze(threadId, item.accountId)
+              .catch((err: unknown) => {
+                console.error("Failed to unsnooze:", err);
+              });
           }
         }
         break;
@@ -211,7 +238,9 @@ function UndoActionToastItem({ item }: { item: UndoActionItem }) {
 
   useEffect(() => {
     cancelHandlers.set(item.id, handleUndo);
-    return () => { cancelHandlers.delete(item.id); };
+    return () => {
+      cancelHandlers.delete(item.id);
+    };
   }, [item.id, handleUndo]);
 
   useEffect(() => {
@@ -237,7 +266,7 @@ function UndoActionToastItem({ item }: { item: UndoActionItem }) {
     return () => {
       if (!executedRef.current) {
         const queue = useAppStore.getState().undoActionQueue;
-        const stillInQueue = queue.some(i => i.id === itemRef.current.id);
+        const stillInQueue = queue.some((i) => i.id === itemRef.current.id);
         if (!stillInQueue) {
           executedRef.current = true;
           const capturedItem = itemRef.current;
@@ -247,7 +276,6 @@ function UndoActionToastItem({ item }: { item: UndoActionItem }) {
         }
       }
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const noun = item.threadCount === 1 ? "Thread" : `${item.threadCount} threads`;

@@ -10,8 +10,18 @@ function PersonIcon({ active }: { active: boolean }) {
     ? "text-blue-600 dark:text-blue-400"
     : "text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300";
   return (
-    <svg className={`w-4 h-4 ${cls}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+    <svg
+      className={`w-4 h-4 ${cls}`}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={2}
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+      />
     </svg>
   );
 }
@@ -21,8 +31,18 @@ function CalendarIcon({ active }: { active: boolean }) {
     ? "text-blue-600 dark:text-blue-400"
     : "text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300";
   return (
-    <svg className={`w-4 h-4 ${cls}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+    <svg
+      className={`w-4 h-4 ${cls}`}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={2}
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+      />
     </svg>
   );
 }
@@ -32,8 +52,18 @@ function AgentIcon({ active }: { active: boolean }) {
     ? "text-purple-600 dark:text-purple-400"
     : "text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300";
   return (
-    <svg className={`w-4 h-4 ${cls}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 14.5M14.25 3.104c.251.023.501.05.75.082M19.8 14.5l-2.425 2.425a2.25 2.25 0 00-.659 1.591v2.234" />
+    <svg
+      className={`w-4 h-4 ${cls}`}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={2}
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 14.5M14.25 3.104c.251.023.501.05.75.082M19.8 14.5l-2.425 2.425a2.25 2.25 0 00-.659 1.591v2.234"
+      />
     </svg>
   );
 }
@@ -76,9 +106,7 @@ export const EmailPreviewSidebar = memo(function EmailPreviewSidebar() {
   // - Email selected with its own agent task/trace → use that email's key
   // - Draft selected → use draft:${id} as key
   // - No email/draft selected (inbox view) → use globalAgentTaskKey (Cmd+J results)
-  const agentTaskKey = selectedEmailId
-    ? selectedEmailId
-    : draftTaskKey ?? globalAgentTaskKey;
+  const agentTaskKey = selectedEmailId ? selectedEmailId : (draftTaskKey ?? globalAgentTaskKey);
 
   const hasAgentTask = useAppStore((s) => {
     if (!agentTaskKey) return false;
@@ -102,9 +130,8 @@ export const EmailPreviewSidebar = memo(function EmailPreviewSidebar() {
   // stale-frame bug when navigating between two emails that both have
   // agent tasks (the ref update fires post-render, but nothing would
   // trigger a re-render to pick up the new value).
-  const displayAgentKey = (agentTaskKey && (hasAgentTask || hasPersistedTrace))
-    ? agentTaskKey
-    : frozenAgentKeyRef.current;
+  const displayAgentKey =
+    agentTaskKey && (hasAgentTask || hasPersistedTrace) ? agentTaskKey : frozenAgentKeyRef.current;
 
   // Agent task existence check for the DISPLAYED key (frozen when hidden)
   const displayHasAgentTask = useAppStore((s) => {
@@ -146,9 +173,8 @@ export const EmailPreviewSidebar = memo(function EmailPreviewSidebar() {
   // The email the sidebar should reflect: focused email takes priority, then
   // falls back to the latest received email (previous default behavior).
   // Skip SENT emails — showing the user's own info in the sidebar isn't useful.
-  const contextEmail = (focusedEmail && !focusedEmail.labelIds?.includes("SENT"))
-    ? focusedEmail
-    : latestReceivedEmail;
+  const contextEmail =
+    focusedEmail && !focusedEmail.labelIds?.includes("SENT") ? focusedEmail : latestReceivedEmail;
 
   // Get extension panels (all scopes)
   const { panels: extensionPanels } = useExtensionPanels(contextEmail, threadEmails);
@@ -211,7 +237,11 @@ export const EmailPreviewSidebar = memo(function EmailPreviewSidebar() {
     if (loadedTraceRef.current === taskId) return;
 
     const api = window.api as unknown as {
-      agent: { getTrace: (taskId: string) => Promise<{ success: boolean; data?: { events: ScopedAgentEvent[] } }> };
+      agent: {
+        getTrace: (
+          taskId: string,
+        ) => Promise<{ success: boolean; data?: { events: ScopedAgentEvent[] } }>;
+      };
     };
 
     // Snapshot email ID before async call — selectedEmail could change if user switches emails
@@ -220,27 +250,37 @@ export const EmailPreviewSidebar = memo(function EmailPreviewSidebar() {
     // Debounce: only load if user stays on this email for 500ms.
     // Agent traces can be 100MB+ and IPC deserialization is synchronous on the main thread.
     const timeoutId = setTimeout(() => {
-      api.agent.getTrace(taskId).then((result) => {
-        if (!result.success || !result.data?.events.length) return;
-        // Guard: user may have switched emails during the async IPC call
-        if (useAppStore.getState().selectedEmailId !== emailIdSnapshot) return;
-        // Mark as loaded only after success — allows retry on failure
-        loadedTraceRef.current = taskId;
+      api.agent
+        .getTrace(taskId)
+        .then((result) => {
+          if (!result.success || !result.data?.events.length) return;
+          // Guard: user may have switched emails during the async IPC call
+          if (useAppStore.getState().selectedEmailId !== emailIdSnapshot) return;
+          // Mark as loaded only after success — allows retry on failure
+          loadedTraceRef.current = taskId;
 
-        // Read fresh email data from the store for the synthetic task
-        const email = useAppStore.getState().emails.find((e) => e.id === emailIdSnapshot);
-        if (!email) return;
+          // Read fresh email data from the store for the synthetic task
+          const email = useAppStore.getState().emails.find((e) => e.id === emailIdSnapshot);
+          if (!email) return;
 
-        // Replay entire trace in a single store update (avoids O(n²) from N appendAgentEvent calls)
-        replayAgentTrace(taskId, email.id, ["claude"], "", {
-          accountId: email.accountId || "",
-          currentEmailId: email.id,
-          currentThreadId: email.threadId,
-          userEmail: "",
-        }, result.data.events);
-      }).catch((err: unknown) => {
-        console.error("[EmailPreviewSidebar] Failed to load agent trace:", err);
-      });
+          // Replay entire trace in a single store update (avoids O(n²) from N appendAgentEvent calls)
+          replayAgentTrace(
+            taskId,
+            email.id,
+            ["claude"],
+            "",
+            {
+              accountId: email.accountId || "",
+              currentEmailId: email.id,
+              currentThreadId: email.threadId,
+              userEmail: "",
+            },
+            result.data.events,
+          );
+        })
+        .catch((err: unknown) => {
+          console.error("[EmailPreviewSidebar] Failed to load agent trace:", err);
+        });
     }, 500);
 
     return () => clearTimeout(timeoutId);
@@ -262,7 +302,11 @@ export const EmailPreviewSidebar = memo(function EmailPreviewSidebar() {
           <div className="text-center px-6">
             <p className="text-gray-400 dark:text-gray-500 text-sm">Draft selected</p>
             <p className="text-gray-300 dark:text-gray-500 text-xs mt-1">
-              Press <kbd className="px-1 py-0.5 bg-gray-200 dark:bg-gray-700 rounded text-gray-600 dark:text-gray-400 font-mono text-xs">Cmd+J</kbd> to ask agent about this draft
+              Press{" "}
+              <kbd className="px-1 py-0.5 bg-gray-200 dark:bg-gray-700 rounded text-gray-600 dark:text-gray-400 font-mono text-xs">
+                Cmd+J
+              </kbd>{" "}
+              to ask agent about this draft
             </p>
           </div>
         </div>
@@ -280,9 +324,10 @@ export const EmailPreviewSidebar = memo(function EmailPreviewSidebar() {
 
   // Select email based on current tab scope.
   // When an individual thread email is focused, use that for both tabs.
-  const sidebarEmail = sidebarTab === "sender"
-    ? (contextEmail || latestEmail)
-    : (focusedEmail || selectedEmail || latestEmail);
+  const sidebarEmail =
+    sidebarTab === "sender"
+      ? contextEmail || latestEmail
+      : focusedEmail || selectedEmail || latestEmail;
 
   const senderSource = contextEmail || latestEmail;
   const senderMatch = senderSource.from.match(/^([^<]+)/);
@@ -359,8 +404,18 @@ export const EmailPreviewSidebar = memo(function EmailPreviewSidebar() {
                 {senderName.charAt(0).toUpperCase()}
               </div>
               <div className="min-w-0 flex-1">
-                <p data-testid="sidebar-sender-name" className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">{senderName}</p>
-                <p data-testid="sidebar-sender-email" className="text-xs text-gray-500 dark:text-gray-400 truncate">{senderEmail}</p>
+                <p
+                  data-testid="sidebar-sender-name"
+                  className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate"
+                >
+                  {senderName}
+                </p>
+                <p
+                  data-testid="sidebar-sender-email"
+                  className="text-xs text-gray-500 dark:text-gray-400 truncate"
+                >
+                  {senderEmail}
+                </p>
               </div>
             </div>
           </div>
@@ -391,19 +446,29 @@ export const EmailPreviewSidebar = memo(function EmailPreviewSidebar() {
       </div>
 
       {/* Hint bar — hidden when agent tab is active (it has its own input) */}
-      {sidebarTab !== "agent" && <div className="p-3 border-t border-gray-100 dark:border-gray-700/50 bg-gray-50 dark:bg-gray-800/50 flex-shrink-0">
-        <p className="text-xs text-gray-400 dark:text-gray-500 text-center">
-          {availableTabs.length > 1 ? (
-            <>
-              Press <kbd className="px-1 py-0.5 bg-gray-200 dark:bg-gray-700 rounded text-gray-600 dark:text-gray-400 font-mono">b</kbd> to switch tabs
-            </>
-          ) : (
-            <>
-              Press <kbd className="px-1 py-0.5 bg-gray-200 dark:bg-gray-700 rounded text-gray-600 dark:text-gray-400 font-mono">Enter</kbd> to read email
-            </>
-          )}
-        </p>
-      </div>}
+      {sidebarTab !== "agent" && (
+        <div className="p-3 border-t border-gray-100 dark:border-gray-700/50 bg-gray-50 dark:bg-gray-800/50 flex-shrink-0">
+          <p className="text-xs text-gray-400 dark:text-gray-500 text-center">
+            {availableTabs.length > 1 ? (
+              <>
+                Press{" "}
+                <kbd className="px-1 py-0.5 bg-gray-200 dark:bg-gray-700 rounded text-gray-600 dark:text-gray-400 font-mono">
+                  b
+                </kbd>{" "}
+                to switch tabs
+              </>
+            ) : (
+              <>
+                Press{" "}
+                <kbd className="px-1 py-0.5 bg-gray-200 dark:bg-gray-700 rounded text-gray-600 dark:text-gray-400 font-mono">
+                  Enter
+                </kbd>{" "}
+                to read email
+              </>
+            )}
+          </p>
+        </div>
+      )}
     </div>
   );
 });

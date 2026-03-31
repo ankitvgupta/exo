@@ -2,6 +2,9 @@ import { ipcMain, BrowserWindow } from "electron";
 import { snoozeService } from "../services/snooze-service";
 import { getDueSnoozedEmails, unsnoozeEmail } from "../db";
 import type { IpcResponse, SnoozedEmail } from "../../shared/types";
+import { createLogger } from "../services/logger";
+
+const log = createLogger("snooze-ipc");
 
 export function registerSnoozeIpc(): void {
   // Set up the unsnooze callback to broadcast to renderer
@@ -29,7 +32,7 @@ export function registerSnoozeIpc(): void {
         threadId: string;
         accountId: string;
         snoozeUntil: number;
-      }
+      },
     ): Promise<IpcResponse<SnoozedEmail>> => {
       try {
         const result = snoozeService.snooze(emailId, threadId, accountId, snoozeUntil);
@@ -41,13 +44,13 @@ export function registerSnoozeIpc(): void {
 
         return { success: true, data: result };
       } catch (error) {
-        console.error("[Snooze IPC] Failed to snooze:", error);
+        log.error({ err: error }, "[Snooze IPC] Failed to snooze");
         return {
           success: false,
           error: error instanceof Error ? error.message : "Failed to snooze email",
         };
       }
-    }
+    },
   );
 
   // Manually unsnooze a thread
@@ -55,7 +58,7 @@ export function registerSnoozeIpc(): void {
     "snooze:unsnooze",
     async (
       _event,
-      { threadId, accountId }: { threadId: string; accountId: string }
+      { threadId, accountId }: { threadId: string; accountId: string },
     ): Promise<IpcResponse<void>> => {
       try {
         // Get snooze info before removing so we can include snoozeUntil in the event
@@ -73,13 +76,13 @@ export function registerSnoozeIpc(): void {
 
         return { success: true, data: undefined };
       } catch (error) {
-        console.error("[Snooze IPC] Failed to unsnooze:", error);
+        log.error({ err: error }, "[Snooze IPC] Failed to unsnooze");
         return {
           success: false,
           error: error instanceof Error ? error.message : "Failed to unsnooze email",
         };
       }
-    }
+    },
   );
 
   // List snoozed emails for an account.
@@ -89,7 +92,7 @@ export function registerSnoozeIpc(): void {
     "snooze:list",
     async (
       _event,
-      { accountId }: { accountId: string }
+      { accountId }: { accountId: string },
     ): Promise<IpcResponse<SnoozedEmail[]> & { expired?: SnoozedEmail[] }> => {
       try {
         // Process expired snoozes for this account so the renderer can
@@ -103,19 +106,21 @@ export function registerSnoozeIpc(): void {
           }
         }
         if (expired.length > 0) {
-          console.log(`[Snooze IPC] Processed ${expired.length} expired snooze(s) for account ${accountId}`);
+          log.info(
+            `[Snooze IPC] Processed ${expired.length} expired snooze(s) for account ${accountId}`,
+          );
         }
 
         const snoozed = snoozeService.getSnoozedEmails(accountId);
         return { success: true, data: snoozed, expired };
       } catch (error) {
-        console.error("[Snooze IPC] Failed to list snoozed:", error);
+        log.error({ err: error }, "[Snooze IPC] Failed to list snoozed");
         return {
           success: false,
           error: error instanceof Error ? error.message : "Failed to list snoozed emails",
         };
       }
-    }
+    },
   );
 
   // Get snooze info for a specific thread
@@ -123,18 +128,18 @@ export function registerSnoozeIpc(): void {
     "snooze:get",
     async (
       _event,
-      { threadId, accountId }: { threadId: string; accountId: string }
+      { threadId, accountId }: { threadId: string; accountId: string },
     ): Promise<IpcResponse<SnoozedEmail | null>> => {
       try {
         const snoozed = snoozeService.getSnoozedByThread(threadId, accountId);
         return { success: true, data: snoozed };
       } catch (error) {
-        console.error("[Snooze IPC] Failed to get snooze:", error);
+        log.error({ err: error }, "[Snooze IPC] Failed to get snooze");
         return {
           success: false,
           error: error instanceof Error ? error.message : "Failed to get snooze info",
         };
       }
-    }
+    },
   );
 }

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ToolDefinition, ToolRiskLevel } from "./types";
+import { type ToolDefinition, ToolRiskLevel } from "./types";
 import type { DashboardEmail } from "../../../shared/types";
 
 const analyzeEmail: ToolDefinition<{ emailId: string }> = {
@@ -33,8 +33,7 @@ const analyzeEmail: ToolDefinition<{ emailId: string }> = {
       to: email.to,
       date: email.date,
       body: email.body,
-      message:
-        "No cached analysis found. The email content is provided for inline analysis.",
+      message: "No cached analysis found. The email content is provided for inline analysis.",
     };
   },
 };
@@ -56,8 +55,7 @@ const lookupSender: ToolDefinition<{ email: string }> = {
     return {
       email: input.email,
       cached: false,
-      message:
-        "No cached profile found. Use web_search to find information about this sender.",
+      message: "No cached profile found. Use web_search to find information about this sender.",
     };
   },
 };

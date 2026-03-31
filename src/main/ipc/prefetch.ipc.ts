@@ -1,7 +1,10 @@
 import { ipcMain, BrowserWindow } from "electron";
 import { prefetchService, type PrefetchProgress } from "../services/prefetch-service";
 import { getEmail } from "../db";
-import type { IpcResponse, DashboardEmail } from "../../shared/types";
+import type { IpcResponse } from "../../shared/types";
+import { createLogger } from "../services/logger";
+
+const log = createLogger("prefetch-ipc");
 
 // Get the main window for sending IPC events
 function getMainWindow(): BrowserWindow | null {
@@ -21,7 +24,12 @@ export function notifyEmailAnalyzed(emailId: string): void {
 }
 
 // Notify renderer when a thread's archive-readiness is determined
-export function notifyArchiveReady(threadId: string, accountId: string, isReady: boolean, reason: string): void {
+export function notifyArchiveReady(
+  threadId: string,
+  accountId: string,
+  isReady: boolean,
+  reason: string,
+): void {
   const window = getMainWindow();
   if (!window) return;
 
@@ -55,7 +63,7 @@ export function registerPrefetchIpc(): void {
     try {
       // Start processing in background (non-blocking)
       prefetchService.processAllPending().catch((error) => {
-        console.error("[Prefetch] Error in processAllPending:", error);
+        log.error({ err: error }, "[Prefetch] Error in processAllPending");
       });
       return { success: true, data: undefined };
     } catch (error) {
@@ -79,7 +87,7 @@ export function registerPrefetchIpc(): void {
           error: error instanceof Error ? error.message : "Unknown error",
         };
       }
-    }
+    },
   );
 
   // Clear prefetch state

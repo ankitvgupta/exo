@@ -4,7 +4,11 @@
  * knows whether to show the permission prompt. Actual event fetching is
  * driven by the CalendarPanel through the calendar:get-events IPC channel.
  */
-import type { EnrichmentProvider, EnrichmentData, ExtensionContext } from "../../../shared/extension-types";
+import type {
+  EnrichmentProvider,
+  EnrichmentData,
+  ExtensionContext,
+} from "../../../shared/extension-types";
 import type { DashboardEmail } from "../../../shared/types";
 import { findAllCalendarAccounts } from "./google-calendar-client";
 
@@ -23,7 +27,7 @@ export function createCalendarProvider(context: ExtensionContext): EnrichmentPro
 
     async enrich(
       _email: DashboardEmail,
-      _threadEmails: DashboardEmail[]
+      _threadEmails: DashboardEmail[],
     ): Promise<EnrichmentData | null> {
       context.logger.info("Checking calendar access");
 

@@ -47,10 +47,7 @@ interface HistoryChanges {
  * Determines whether an account should do a full sync or incremental sync.
  * A full sync has completed before only if we have BOTH a history ID and emails.
  */
-function shouldDoFullSync(
-  storedHistoryId: string | null,
-  hasExistingEmails: boolean
-): boolean {
+function shouldDoFullSync(storedHistoryId: string | null, hasExistingEmails: boolean): boolean {
   const hasCompletedFullSync = !!(storedHistoryId && hasExistingEmails);
   return !hasCompletedFullSync;
 }
@@ -84,10 +81,7 @@ test.describe("Full sync vs incremental sync decision", () => {
 // Processing both would delete then re-add, causing data loss.
 // ============================================================================
 
-function filterDeletedMessages(
-  deletedMessageIds: string[],
-  newMessageIds: string[]
-): string[] {
+function filterDeletedMessages(deletedMessageIds: string[], newMessageIds: string[]): string[] {
   const newSet = new Set(newMessageIds);
   return deletedMessageIds.filter((id) => !newSet.has(id));
 }
@@ -188,10 +182,7 @@ test.describe("Label update logic (read/unread)", () => {
   });
 
   test("emails with explicit labels use those labels", () => {
-    expect(getEffectiveLabels(["INBOX", "UNREAD"])).toEqual([
-      "INBOX",
-      "UNREAD",
-    ]);
+    expect(getEffectiveLabels(["INBOX", "UNREAD"])).toEqual(["INBOX", "UNREAD"]);
   });
 
   test("marking as read on legacy email (defaulting to INBOX) is no-op", () => {
@@ -225,24 +216,17 @@ interface TriageResult {
   toSkip: MinimalEmail[];
 }
 
-function triageEmails(
-  emails: MinimalEmail[],
-  cutoffMs: number
-): TriageResult {
+function triageEmails(emails: MinimalEmail[], cutoffMs: number): TriageResult {
   // Sort by date descending (newest first)
   const sorted = [...emails].sort(
-    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
   );
 
   const analysisWindow = sorted.slice(0, MAX_ANALYSIS_EMAILS);
   const overflow = sorted.slice(MAX_ANALYSIS_EMAILS);
 
-  const recentEmails = analysisWindow.filter(
-    (e) => new Date(e.date).getTime() >= cutoffMs
-  );
-  const oldInWindow = analysisWindow.filter(
-    (e) => new Date(e.date).getTime() < cutoffMs
-  );
+  const recentEmails = analysisWindow.filter((e) => new Date(e.date).getTime() >= cutoffMs);
+  const oldInWindow = analysisWindow.filter((e) => new Date(e.date).getTime() < cutoffMs);
 
   const toSkip = [...overflow, ...oldInWindow];
 
@@ -254,23 +238,15 @@ function triageEmails(
  * BUT only if they don't also contain recent emails.
  * Re-implements lines 698-700 from runOnboardingSync.
  */
-function computeSkipThreadIds(
-  toSkip: MinimalEmail[],
-  recentEmails: MinimalEmail[]
-): string[] {
+function computeSkipThreadIds(toSkip: MinimalEmail[], recentEmails: MinimalEmail[]): string[] {
   const recentThreadIds = new Set(recentEmails.map((e) => e.threadId));
-  const skipThreadIds = [
-    ...new Set(toSkip.map((e) => e.threadId)),
-  ].filter((tid) => !recentThreadIds.has(tid));
+  const skipThreadIds = [...new Set(toSkip.map((e) => e.threadId))].filter(
+    (tid) => !recentThreadIds.has(tid),
+  );
   return skipThreadIds;
 }
 
-function makeEmail(
-  id: string,
-  threadId: string,
-  date: string,
-  labelIds?: string[]
-): MinimalEmail {
+function makeEmail(id: string, threadId: string, date: string, labelIds?: string[]): MinimalEmail {
   return { id, threadId, date, labelIds };
 }
 
@@ -294,9 +270,7 @@ test.describe("Onboarding triage partitioning", () => {
   test("emails beyond MAX_ANALYSIS_EMAILS go to overflow", () => {
     const emails: MinimalEmail[] = [];
     for (let i = 0; i < 510; i++) {
-      const date = new Date(
-        Date.UTC(2026, 0, 1) + i * 60000
-      ).toISOString();
+      const date = new Date(Date.UTC(2026, 0, 1) + i * 60000).toISOString();
       emails.push(makeEmail(`e${i}`, `t${i}`, date));
     }
 
@@ -328,8 +302,8 @@ test.describe("Onboarding triage partitioning", () => {
         makeEmail(
           `recent-${i}`,
           `t-recent-${i}`,
-          new Date(Date.UTC(2026, 0, 1) + i * 60000).toISOString()
-        )
+          new Date(Date.UTC(2026, 0, 1) + i * 60000).toISOString(),
+        ),
       );
     }
     // 5 old emails (will be in overflow since we already have 500)
@@ -338,8 +312,8 @@ test.describe("Onboarding triage partitioning", () => {
         makeEmail(
           `old-${i}`,
           `t-old-${i}`,
-          new Date(Date.UTC(2025, 5, 1) + i * 60000).toISOString()
-        )
+          new Date(Date.UTC(2025, 5, 1) + i * 60000).toISOString(),
+        ),
       );
     }
 
@@ -505,7 +479,7 @@ function chunkArray<T>(arr: T[], size: number): T[][] {
  */
 function computeProgressEmissions(
   totalIds: number,
-  chunkSize: number
+  chunkSize: number,
 ): Array<{ fetched: number; total: number }> {
   const emissions: Array<{ fetched: number; total: number }> = [];
   // Initial emission
@@ -589,11 +563,9 @@ test.describe("Progress emission", () => {
 function filterSentForInboxThreads(
   sentResults: Array<{ id: string; threadId: string }>,
   inboxThreadIds: Set<string>,
-  existingIds: Set<string>
+  existingIds: Set<string>,
 ): Array<{ id: string; threadId: string }> {
-  return sentResults.filter(
-    (r) => inboxThreadIds.has(r.threadId) && !existingIds.has(r.id)
-  );
+  return sentResults.filter((r) => inboxThreadIds.has(r.threadId) && !existingIds.has(r.id));
 }
 
 test.describe("Sent email filtering for inbox threads", () => {
@@ -627,9 +599,7 @@ test.describe("Sent email filtering for inbox threads", () => {
   });
 
   test("returns empty for empty sent list", () => {
-    expect(
-      filterSentForInboxThreads([], new Set(["t1"]), new Set())
-    ).toEqual([]);
+    expect(filterSentForInboxThreads([], new Set(["t1"]), new Set())).toEqual([]);
   });
 
   test("returns empty when inbox thread set is empty", () => {
@@ -645,7 +615,7 @@ test.describe("Sent email filtering for inbox threads", () => {
 
 function filterNewEmails(
   searchResults: Array<{ id: string; threadId: string }>,
-  existingIds: Set<string>
+  existingIds: Set<string>,
 ): string[] {
   return searchResults.filter((r) => !existingIds.has(r.id)).map((r) => r.id);
 }
@@ -696,7 +666,7 @@ interface DraftCleanupContext {
   cleanupStaleDraftsForThread: (
     threadId: string,
     newEmailIds: Set<string>,
-    hasSent: boolean
+    hasSent: boolean,
   ) => string[];
 }
 
@@ -709,7 +679,7 @@ interface DraftCleanupContext {
 function runDraftCleanup(
   newEmails: NewEmail[],
   threadsWithDeletedDrafts: Set<string>,
-  ctx: DraftCleanupContext
+  ctx: DraftCleanupContext,
 ): {
   removedDraftEmailIds: string[];
   forceQueuedThreads: Set<string>;
@@ -725,14 +695,9 @@ function runDraftCleanup(
     processedThreads.add(email.threadId);
 
     const hasSent = newEmails.some(
-      (e) =>
-        e.threadId === email.threadId && e.labelIds?.includes("SENT")
+      (e) => e.threadId === email.threadId && e.labelIds?.includes("SENT"),
     );
-    const removed = ctx.cleanupStaleDraftsForThread(
-      email.threadId,
-      newEmailIds,
-      hasSent
-    );
+    const removed = ctx.cleanupStaleDraftsForThread(email.threadId, newEmailIds, hasSent);
 
     if (removed.length > 0) {
       removedDraftEmailIds.push(...removed);
@@ -746,11 +711,10 @@ function runDraftCleanup(
     if (email.labelIds?.includes("SENT")) continue;
     const tid = email.threadId;
     if (forceQueuedThreads.has(tid)) continue;
-    if (!threadsWithRemovedDrafts.has(tid) && !threadsWithDeletedDrafts.has(tid))
-      continue;
+    if (!threadsWithRemovedDrafts.has(tid) && !threadsWithDeletedDrafts.has(tid)) continue;
     // Don't re-draft if the user also replied in this thread
     const userAlsoReplied = newEmails.some(
-      (e) => e.threadId === tid && e.labelIds?.includes("SENT")
+      (e) => e.threadId === tid && e.labelIds?.includes("SENT"),
     );
     if (userAlsoReplied) continue;
 
@@ -847,9 +811,7 @@ test.describe("Draft cleanup two-pass logic", () => {
   });
 
   test("pass 2: force-queues for threads with deleted drafts (from deletion handler)", () => {
-    const emails: NewEmail[] = [
-      { id: "e1", threadId: "t1", labelIds: ["INBOX"] },
-    ];
+    const emails: NewEmail[] = [{ id: "e1", threadId: "t1", labelIds: ["INBOX"] }];
 
     // No drafts removed in pass 1, but deletion handler flagged the thread
     const result = runDraftCleanup(emails, new Set(["t1"]), noopCleanup);
@@ -902,7 +864,7 @@ interface StatusTransition {
 
 function computeSyncStatusTransitions(
   outcome: SyncOutcome,
-  fallbackOutcome?: FallbackOutcome
+  fallbackOutcome?: FallbackOutcome,
 ): StatusTransition {
   if (outcome.type === "success") {
     return { status: "idle" };
@@ -965,17 +927,14 @@ test.describe("Sync status lifecycle", () => {
   });
 
   test("history expired + successful full sync → idle", () => {
-    const result = computeSyncStatusTransitions(
-      { type: "history_expired" },
-      { type: "success" }
-    );
+    const result = computeSyncStatusTransitions({ type: "history_expired" }, { type: "success" });
     expect(result.status).toBe("idle");
   });
 
   test("history expired + auth error during full sync → error with auth", () => {
     const result = computeSyncStatusTransitions(
       { type: "history_expired" },
-      { type: "auth_error" }
+      { type: "auth_error" },
     );
     expect(result.status).toBe("error");
     expect(result.lastError).toBe("Authentication expired");
@@ -986,7 +945,7 @@ test.describe("Sync status lifecycle", () => {
   test("history expired + other error during full sync → error", () => {
     const result = computeSyncStatusTransitions(
       { type: "history_expired" },
-      { type: "other_error", message: "Network timeout" }
+      { type: "other_error", message: "Network timeout" },
     );
     expect(result.status).toBe("error");
     expect(result.lastError).toBe("Network timeout");
@@ -1066,10 +1025,7 @@ test.describe("Received vs sent email categorization", () => {
 // Re-implements the condition from runHealthChecks (lines 996-998)
 // ============================================================================
 
-function shouldSkipHealthCheck(
-  status: SyncStatus,
-  lastError: string | undefined
-): boolean {
+function shouldSkipHealthCheck(status: SyncStatus, lastError: string | undefined): boolean {
   return status === "error" && lastError === "Authentication expired";
 }
 
@@ -1127,10 +1083,7 @@ test.describe("First-sync triage flag", () => {
   });
 
   test("hasFirstSyncPending: returns false when no accounts have flag", () => {
-    const accounts = [
-      { needsFirstSyncTriage: false },
-      { needsFirstSyncTriage: false },
-    ];
+    const accounts = [{ needsFirstSyncTriage: false }, { needsFirstSyncTriage: false }];
 
     const hasFirstSyncPending = accounts.some((a) => a.needsFirstSyncTriage);
     expect(hasFirstSyncPending).toBe(false);

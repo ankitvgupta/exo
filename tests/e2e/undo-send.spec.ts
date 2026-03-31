@@ -45,11 +45,15 @@ function resetTestEnvironment(workerIndex: number) {
           unlinkSync(path.join(dir, file));
         }
       }
-    } catch { /* dir may not exist */ }
+    } catch {
+      /* dir may not exist */
+    }
   }
 }
 
-async function launchElectronApp(workerIndex: number): Promise<{ app: ElectronApplication; page: Page }> {
+async function launchElectronApp(
+  workerIndex: number,
+): Promise<{ app: ElectronApplication; page: Page }> {
   resetTestEnvironment(workerIndex);
   return _launchElectronApp({ workerIndex });
 }
@@ -72,9 +76,8 @@ async function closeAnyOpenModal(page: Page) {
   await page.waitForTimeout(300);
 }
 
-
 test.describe("Undo Send - Inline Reply", () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: "serial" });
   let electronApp: ElectronApplication;
   let page: Page;
 
@@ -88,7 +91,6 @@ test.describe("Undo Send - Inline Reply", () => {
         console.error(`[Console Error]: ${msg.text()}`);
       }
     });
-
   });
 
   test.afterAll(async () => {
@@ -100,7 +102,9 @@ test.describe("Undo Send - Inline Reply", () => {
   test("app loads with inbox emails", async () => {
     await expect(page.locator("text=Exo")).toBeVisible();
     await expect(page.locator("text=Inbox").first()).toBeVisible();
-    await expect(page.locator("button").filter({ hasText: "Garry Tan" }).first()).toBeVisible({ timeout: 5000 });
+    await expect(page.locator("button").filter({ hasText: "Garry Tan" }).first()).toBeVisible({
+      timeout: 5000,
+    });
 
     await takeScreenshot(electronApp, page, "undo-send-01-app-loaded");
   });
@@ -129,7 +133,9 @@ test.describe("Undo Send - Inline Reply", () => {
 
     // Type some reply text
     await editor.click();
-    await editor.type("Thanks for the update, Garry. I will review the quarterly report.", { delay: 10 });
+    await editor.type("Thanks for the update, Garry. I will review the quarterly report.", {
+      delay: 10,
+    });
 
     await takeScreenshot(electronApp, page, "undo-send-04-reply-typed");
 
@@ -164,7 +170,7 @@ test.describe("Undo Send - Inline Reply", () => {
 });
 
 test.describe("Undo Send - Inline Reply Undo Action", () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: "serial" });
   let electronApp: ElectronApplication;
   let page: Page;
 
@@ -242,7 +248,7 @@ test.describe("Undo Send - Inline Reply Undo Action", () => {
 });
 
 test.describe("Undo Send - New Email Compose", () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: "serial" });
   let electronApp: ElectronApplication;
   let page: Page;
 
@@ -256,7 +262,6 @@ test.describe("Undo Send - New Email Compose", () => {
         console.error(`[Console Error]: ${msg.text()}`);
       }
     });
-
   });
 
   test.afterAll(async () => {
@@ -283,7 +288,7 @@ test.describe("Undo Send - New Email Compose", () => {
 
     // Verify recipient chip appeared
     await expect(
-      page.locator("[data-testid='address-chip']").filter({ hasText: "test@example.com" })
+      page.locator("[data-testid='address-chip']").filter({ hasText: "test@example.com" }),
     ).toBeVisible({ timeout: 3000 });
 
     // Fill Subject
@@ -335,7 +340,7 @@ test.describe("Undo Send - New Email Compose", () => {
     await toInput.fill("recipient@example.com");
     await toInput.press("Enter");
     await expect(
-      page.locator("[data-testid='address-chip']").filter({ hasText: "recipient@example.com" })
+      page.locator("[data-testid='address-chip']").filter({ hasText: "recipient@example.com" }),
     ).toBeVisible({ timeout: 3000 });
 
     const subjectInput = page.locator("[placeholder='Subject']");
@@ -378,7 +383,7 @@ test.describe("Undo Send - New Email Compose", () => {
 });
 
 test.describe("Undo Send - Forward", () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: "serial" });
   let electronApp: ElectronApplication;
   let page: Page;
 
@@ -392,7 +397,6 @@ test.describe("Undo Send - Forward", () => {
         console.error(`[Console Error]: ${msg.text()}`);
       }
     });
-
   });
 
   test.afterAll(async () => {
@@ -440,8 +444,11 @@ test.describe("Undo Send - Forward", () => {
       await takeScreenshot(electronApp, page, "undo-send-17-forward-sent");
 
       const undoToast = page.getByText("Message sent.");
-      const toastAttached = await undoToast.isVisible({ timeout: 5000 }).catch(() => false)
-        || await page.evaluate(() => document.body.innerHTML.includes("Message sent")).catch(() => false);
+      const toastAttached =
+        (await undoToast.isVisible({ timeout: 5000 }).catch(() => false)) ||
+        (await page
+          .evaluate(() => document.body.innerHTML.includes("Message sent"))
+          .catch(() => false));
 
       if (toastAttached) {
         const undoButton = page.getByRole("button", { name: "Undo", exact: true });
@@ -456,7 +463,7 @@ test.describe("Undo Send - Forward", () => {
 });
 
 test.describe("Undo Send - Settings Configuration", () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: "serial" });
   let electronApp: ElectronApplication;
   let page: Page;
 

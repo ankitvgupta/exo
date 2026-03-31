@@ -53,11 +53,7 @@ class TestableBackgroundSync {
     }
     return {
       accountId,
-      status: state.isRunning
-        ? "running"
-        : state.lastError
-          ? "error"
-          : "completed",
+      status: state.isRunning ? "running" : state.lastError ? "error" : "completed",
       synced: state.syncedCount,
       total: state.totalCount,
       error: state.lastError,
@@ -82,7 +78,7 @@ class TestableBackgroundSync {
  */
 function filterToSync(
   allMailResults: Array<{ id: string; threadId: string }>,
-  existingIds: Set<string>
+  existingIds: Set<string>,
 ): Array<{ id: string; threadId: string }> {
   return allMailResults.filter((m) => !existingIds.has(m.id));
 }

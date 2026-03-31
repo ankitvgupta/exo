@@ -26,7 +26,11 @@ test.describe("Error States - App Load", () => {
       if (msg.type() === "error") {
         const text = msg.text();
         // Exclude known harmless errors
-        if (!text.includes("net::ERR_") && !text.includes("favicon") && !text.includes("DevTools")) {
+        if (
+          !text.includes("net::ERR_") &&
+          !text.includes("favicon") &&
+          !text.includes("DevTools")
+        ) {
           consoleErrors.push(text);
         }
       }
@@ -49,7 +53,7 @@ test.describe("Error States - App Load", () => {
         e.includes("Uncaught") ||
         e.includes("TypeError") ||
         e.includes("ReferenceError") ||
-        e.includes("SyntaxError")
+        e.includes("SyntaxError"),
     );
 
     if (criticalErrors.length > 0) {
@@ -103,7 +107,7 @@ test.describe("Error States - Empty Inbox Handling", () => {
     await page.waitForTimeout(300);
 
     const batchBar = page.locator("[data-testid='batch-action-bar']");
-    if (!await batchBar.isVisible().catch(() => false)) {
+    if (!(await batchBar.isVisible().catch(() => false))) {
       test.skip();
       return;
     }
@@ -318,7 +322,10 @@ test.describe("Error States - UI Resilience", () => {
 
   test("double-clicking an email doesn't cause issues", async () => {
     // Find an email to double-click
-    const emailButton = page.locator("button").filter({ hasText: /HIGH|MEDIUM|LOW/ }).first();
+    const emailButton = page
+      .locator("button")
+      .filter({ hasText: /HIGH|MEDIUM|LOW/ })
+      .first();
 
     if (await emailButton.isVisible()) {
       await emailButton.dblclick();

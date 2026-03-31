@@ -45,7 +45,7 @@ async function selectFirstThread(page: Page): Promise<void> {
 // Archive via 'e' key
 // ---------------------------------------------------------------------------
 test.describe("Archive - Optimistic UI", () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: "serial" });
   let electronApp: ElectronApplication;
   let page: Page;
 
@@ -92,7 +92,9 @@ test.describe("Archive - Optimistic UI", () => {
     }).toPass({ timeout: 2000 });
 
     // The archived thread's text should no longer appear
-    const allRowTexts = await page.locator(".overflow-y-auto div[data-thread-id]").allTextContents();
+    const allRowTexts = await page
+      .locator(".overflow-y-auto div[data-thread-id]")
+      .allTextContents();
     const stillPresent = allRowTexts.some((t) => t === archivedText);
     expect(stillPresent).toBe(false);
   });
@@ -107,7 +109,10 @@ test.describe("Archive - Optimistic UI", () => {
   });
 
   test("archive is instantaneous (sub-second)", async () => {
-    const isSelected = await page.locator(".overflow-y-auto div[data-thread-id].bg-blue-600").isVisible().catch(() => false);
+    const isSelected = await page
+      .locator(".overflow-y-auto div[data-thread-id].bg-blue-600")
+      .isVisible()
+      .catch(() => false);
     if (!isSelected) {
       await selectFirstThread(page);
     }
@@ -136,7 +141,7 @@ test.describe("Archive - Optimistic UI", () => {
 // Archive persistence — email should not come back after re-fetch
 // ---------------------------------------------------------------------------
 test.describe("Archive - Persistence", () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: "serial" });
   let electronApp: ElectronApplication;
   let page: Page;
 
@@ -182,7 +187,9 @@ test.describe("Archive - Persistence", () => {
     expect(countAfterRefresh).toBe(countBefore - 1);
 
     // Verify the specific text is not in the list
-    const allRowTexts = await page.locator(".overflow-y-auto div[data-thread-id]").allTextContents();
+    const allRowTexts = await page
+      .locator(".overflow-y-auto div[data-thread-id]")
+      .allTextContents();
     const stillPresent = allRowTexts.some((t) => t === archivedText);
     expect(stillPresent).toBe(false);
   });
@@ -192,7 +199,7 @@ test.describe("Archive - Persistence", () => {
 // Rapid-succession archive (own app to avoid stale-closure issues)
 // ---------------------------------------------------------------------------
 test.describe("Archive - Rapid Succession", () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: "serial" });
   let electronApp: ElectronApplication;
   let page: Page;
 
@@ -216,7 +223,9 @@ test.describe("Archive - Rapid Succession", () => {
     expect(countBefore).toBeGreaterThan(3);
 
     for (let i = 0; i < 3; i++) {
-      await expect(page.locator(".overflow-y-auto div[data-thread-id].bg-blue-600")).toBeVisible({ timeout: 3000 });
+      await expect(page.locator(".overflow-y-auto div[data-thread-id].bg-blue-600")).toBeVisible({
+        timeout: 3000,
+      });
       await page.waitForTimeout(200);
 
       const before = await countInboxThreads(page);
@@ -239,7 +248,7 @@ test.describe("Archive - Rapid Succession", () => {
 // Rapid-fire archive race condition regression test
 // ---------------------------------------------------------------------------
 test.describe("Archive - Rapid Fire Race Condition", () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: "serial" });
   let electronApp: ElectronApplication;
   let page: Page;
 
@@ -271,9 +280,9 @@ test.describe("Archive - Rapid Fire Race Condition", () => {
     // Archive 4 threads as fast as possible (no intentional delay between presses)
     const archiveCount = 4;
     for (let i = 0; i < archiveCount; i++) {
-      await expect(
-        page.locator(".overflow-y-auto div[data-thread-id].bg-blue-600")
-      ).toBeVisible({ timeout: 3000 });
+      await expect(page.locator(".overflow-y-auto div[data-thread-id].bg-blue-600")).toBeVisible({
+        timeout: 3000,
+      });
       await page.keyboard.press("e");
       // Minimal delay — just enough for optimistic UI to process
       await page.waitForTimeout(50);
@@ -316,7 +325,7 @@ test.describe("Archive - Rapid Fire Race Condition", () => {
 // Trash via '#' key
 // ---------------------------------------------------------------------------
 test.describe("Trash - Optimistic UI", () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: "serial" });
   let electronApp: ElectronApplication;
   let page: Page;
 
@@ -363,7 +372,10 @@ test.describe("Trash - Optimistic UI", () => {
   });
 
   test("can trash multiple threads in rapid succession", async () => {
-    const isSelected = await page.locator(".overflow-y-auto div[data-thread-id].bg-blue-600").isVisible().catch(() => false);
+    const isSelected = await page
+      .locator(".overflow-y-auto div[data-thread-id].bg-blue-600")
+      .isVisible()
+      .catch(() => false);
     if (!isSelected) {
       await selectFirstThread(page);
     }
@@ -386,7 +398,7 @@ test.describe("Trash - Optimistic UI", () => {
 // Navigation edge cases
 // ---------------------------------------------------------------------------
 test.describe("Archive/Trash - Navigation Edge Cases", () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: "serial" });
   let electronApp: ElectronApplication;
   let page: Page;
 
@@ -407,7 +419,10 @@ test.describe("Archive/Trash - Navigation Edge Cases", () => {
 
     // Don't select anything — press 'e' immediately.
     // Verify no selection exists (no highlighted row in the list).
-    const hasSelection = await page.locator(".overflow-y-auto div[data-thread-id].bg-blue-600").isVisible().catch(() => false);
+    const hasSelection = await page
+      .locator(".overflow-y-auto div[data-thread-id].bg-blue-600")
+      .isVisible()
+      .catch(() => false);
 
     const countBefore = await countInboxThreads(page);
     await page.keyboard.press("e");
@@ -431,9 +446,12 @@ test.describe("Archive/Trash - Navigation Edge Cases", () => {
     // Archive threads one at a time, waiting for each removal
     let archived = 0;
     let count = initialCount;
-    while (count > 0 && archived < initialCount + 5) { // safety limit
+    while (count > 0 && archived < initialCount + 5) {
+      // safety limit
       // Ensure selection is active before each archive
-      await expect(page.locator(".overflow-y-auto div[data-thread-id].bg-blue-600")).toBeVisible({ timeout: 2000 });
+      await expect(page.locator(".overflow-y-auto div[data-thread-id].bg-blue-600")).toBeVisible({
+        timeout: 2000,
+      });
       await page.waitForTimeout(200);
 
       const before = await countInboxThreads(page);
@@ -466,7 +484,7 @@ test.describe("Archive/Trash - Navigation Edge Cases", () => {
 // Archive-ready: 'e' archives entire thread (all messages)
 // ---------------------------------------------------------------------------
 test.describe("Archive Ready - Thread Archive via 'e' key", () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: "serial" });
   let electronApp: ElectronApplication;
   let page: Page;
 
@@ -506,7 +524,9 @@ test.describe("Archive Ready - Thread Archive via 'e' key", () => {
     expect(countBefore).toBeGreaterThan(0);
 
     // Find and select the "Project Alpha" thread (has 4 emails: 3 INBOX + 1 SENT)
-    const projectAlphaRow = page.locator(".overflow-y-auto div[data-thread-id]:has-text('Project Alpha')");
+    const projectAlphaRow = page.locator(
+      ".overflow-y-auto div[data-thread-id]:has-text('Project Alpha')",
+    );
     await expect(projectAlphaRow).toBeVisible({ timeout: 3000 });
     await projectAlphaRow.click();
     await page.waitForTimeout(500);
@@ -534,7 +554,9 @@ test.describe("Archive Ready - Thread Archive via 'e' key", () => {
     }).toPass({ timeout: 2000 });
 
     // The "Project Alpha" text should no longer appear in the thread list
-    const allRowTexts = await page.locator(".overflow-y-auto div[data-thread-id]").allTextContents();
+    const allRowTexts = await page
+      .locator(".overflow-y-auto div[data-thread-id]")
+      .allTextContents();
     const stillPresent = allRowTexts.some((t) => t.includes("Project Alpha"));
     expect(stillPresent).toBe(false);
 
@@ -545,7 +567,9 @@ test.describe("Archive Ready - Thread Archive via 'e' key", () => {
     await page.waitForTimeout(500);
 
     // Project Alpha should not appear in the main inbox either
-    const inboxRowTexts = await page.locator(".overflow-y-auto div[data-thread-id]").allTextContents();
+    const inboxRowTexts = await page
+      .locator(".overflow-y-auto div[data-thread-id]")
+      .allTextContents();
     const inInbox = inboxRowTexts.some((t) => t.includes("Project Alpha"));
     expect(inInbox).toBe(false);
   });
@@ -555,7 +579,7 @@ test.describe("Archive Ready - Thread Archive via 'e' key", () => {
 // Click-to-select then archive (reproduces real user behavior)
 // ---------------------------------------------------------------------------
 test.describe("Archive - Click to Select", () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: "serial" });
   let electronApp: ElectronApplication;
   let page: Page;
 
@@ -626,7 +650,9 @@ test.describe("Archive - Click to Select", () => {
     }).toPass({ timeout: 3000 });
 
     // Verify the archived email text is gone
-    const allRowTexts = await page.locator(".overflow-y-auto div[data-thread-id]").allTextContents();
+    const allRowTexts = await page
+      .locator(".overflow-y-auto div[data-thread-id]")
+      .allTextContents();
     const stillPresent = allRowTexts.some((t) => t === rowText);
     expect(stillPresent).toBe(false);
   });
@@ -662,7 +688,9 @@ test.describe("Archive - Click to Select", () => {
     }).toPass({ timeout: 3000 });
 
     // Verify the specific email text is gone
-    const allRowTexts = await page.locator(".overflow-y-auto div[data-thread-id]").allTextContents();
+    const allRowTexts = await page
+      .locator(".overflow-y-auto div[data-thread-id]")
+      .allTextContents();
     const stillPresent = allRowTexts.some((t) => t === archivedText);
     expect(stillPresent).toBe(false);
   });

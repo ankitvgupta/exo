@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { createMessage } from "./anthropic-service";
 import { stripJsonFences } from "../../shared/strip-json-fences";
 import {
   ARCHIVE_READY_JSON_FORMAT,
@@ -8,21 +8,22 @@ import {
   type DashboardEmail,
 } from "../../shared/types";
 import { stripQuotedContent } from "./strip-quoted-content";
+import { createLogger } from "./logger";
+
+const log = createLogger("archive-ready");
 
 export class ArchiveReadyAnalyzer {
-  private anthropic: Anthropic;
   private model: string;
   private customPrompt: string | null;
 
   constructor(model: string = "claude-sonnet-4-20250514", prompt?: string) {
-    this.anthropic = new Anthropic();
     this.model = model;
     this.customPrompt = prompt && prompt !== DEFAULT_ARCHIVE_READY_PROMPT ? prompt : null;
   }
 
   async analyzeThread(
     threadEmails: DashboardEmail[],
-    userEmail?: string
+    userEmail?: string,
   ): Promise<ArchiveReadyResult> {
     const threadContent = this.formatThreadForAnalysis(threadEmails, userEmail);
 
@@ -31,28 +32,31 @@ export class ArchiveReadyAnalyzer {
       ? this.customPrompt + ARCHIVE_READY_JSON_FORMAT
       : DEFAULT_ARCHIVE_READY_PROMPT + ARCHIVE_READY_JSON_FORMAT;
 
-    const response = await this.anthropic.messages.create({
-      model: this.model,
-      max_tokens: 256,
-      system: [
-        {
-          type: "text",
-          text: systemPrompt,
-          cache_control: { type: "ephemeral" },
-        },
-      ],
-      messages: [
-        {
-          role: "user",
-          content: threadContent,
-        },
-      ],
-    });
+    const response = await createMessage(
+      {
+        model: this.model,
+        max_tokens: 256,
+        system: [
+          {
+            type: "text",
+            text: systemPrompt,
+            cache_control: { type: "ephemeral" },
+          },
+        ],
+        messages: [
+          {
+            role: "user",
+            content: threadContent,
+          },
+        ],
+      },
+      { caller: "archive-ready-analyzer" },
+    );
 
     // Log cache performance
     const usage = response.usage as unknown as Record<string, number>;
-    console.log(
-      `[ArchiveReady] Usage: input=${usage.input_tokens}, output=${usage.output_tokens}, cache_read=${usage.cache_read_input_tokens || 0}, cache_create=${usage.cache_creation_input_tokens || 0}`
+    log.info(
+      `[ArchiveReady] Usage: input=${usage.input_tokens}, output=${usage.output_tokens}, cache_read=${usage.cache_read_input_tokens || 0}, cache_create=${usage.cache_creation_input_tokens || 0}`,
     );
 
     const textBlock = response.content.find((block) => block.type === "text");
@@ -63,11 +67,8 @@ export class ArchiveReadyAnalyzer {
     try {
       const parsed = JSON.parse(stripJsonFences(textBlock.text));
       return ArchiveReadyResultSchema.parse(parsed);
-    } catch (error) {
-      console.error(
-        "Failed to parse archive-ready response:",
-        textBlock.text
-      );
+    } catch (_error) {
+      log.error({ responseText: textBlock.text }, "Failed to parse archive-ready response");
       return {
         archive_ready: false,
         reason: "Failed to parse analysis - keeping in inbox for safety",
@@ -75,13 +76,10 @@ export class ArchiveReadyAnalyzer {
     }
   }
 
-  private formatThreadForAnalysis(
-    emails: DashboardEmail[],
-    userEmail?: string
-  ): string {
+  private formatThreadForAnalysis(emails: DashboardEmail[], userEmail?: string): string {
     // Sort by date ascending (conversation order)
     const sorted = [...emails].sort(
-      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
     );
 
     // Only the last 1-2 emails matter for archive-ready determination —
@@ -106,7 +104,7 @@ export class ArchiveReadyAnalyzer {
       // Include analysis if available
       if (email.analysis) {
         parts.push(
-          `Analysis: ${email.analysis.needsReply ? "Needs reply" : "No reply needed"} - ${email.analysis.reason}`
+          `Analysis: ${email.analysis.needsReply ? "Needs reply" : "No reply needed"} - ${email.analysis.reason}`,
         );
       }
       if (email.draft) {

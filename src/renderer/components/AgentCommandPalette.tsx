@@ -13,17 +13,41 @@ function stripHtml(html: string): string {
 
 // --- Quick actions when an email IS selected ---
 const EMAIL_QUICK_ACTIONS = [
-  { id: "draft-reply", label: "Draft a reply to this thread", icon: "M3 10l9-7 9 7M3 10v10a1 1 0 001 1h16a1 1 0 001-1V10" },
-  { id: "summarize", label: "Summarize this conversation", icon: "M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" },
-  { id: "lookup-sender", label: "Look up the sender", icon: "M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" },
-  { id: "archive-label", label: "Archive and label as handled", icon: "M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" },
-  { id: "find-related", label: "Find related emails from this sender", icon: "M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" },
+  {
+    id: "draft-reply",
+    label: "Draft a reply to this thread",
+    icon: "M3 10l9-7 9 7M3 10v10a1 1 0 001 1h16a1 1 0 001-1V10",
+  },
+  {
+    id: "summarize",
+    label: "Summarize this conversation",
+    icon: "M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z",
+  },
+  {
+    id: "lookup-sender",
+    label: "Look up the sender",
+    icon: "M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z",
+  },
+  {
+    id: "archive-label",
+    label: "Archive and label as handled",
+    icon: "M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4",
+  },
+  {
+    id: "find-related",
+    label: "Find related emails from this sender",
+    icon: "M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z",
+  },
 ];
 
 // --- Quick actions when a local draft IS selected (built dynamically based on recipient count) ---
 function getDraftQuickActions(recipientCount: number) {
   const actions = [
-    { id: "refine-draft", label: "Refine this draft", icon: "M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" },
+    {
+      id: "refine-draft",
+      label: "Refine this draft",
+      icon: "M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z",
+    },
   ];
   if (recipientCount > 0) {
     actions.push({
@@ -33,25 +57,51 @@ function getDraftQuickActions(recipientCount: number) {
     });
   }
   actions.push(
-    { id: "improve-subject", label: "Improve the subject line", icon: "M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" },
-    { id: "check-tone", label: "Check the tone and clarity", icon: "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" },
+    {
+      id: "improve-subject",
+      label: "Improve the subject line",
+      icon: "M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z",
+    },
+    {
+      id: "check-tone",
+      label: "Check the tone and clarity",
+      icon: "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z",
+    },
   );
   return actions;
 }
 
 // --- Quick actions when NO email is selected (general-purpose) ---
 const GENERAL_QUICK_ACTIONS = [
-  { id: "compose-new", label: "Draft a new email", icon: "M3 10l9-7 9 7M3 10v10a1 1 0 001 1h16a1 1 0 001-1V10" },
-  { id: "search-inbox", label: "Search my inbox", icon: "M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" },
-  { id: "lookup-person", label: "Look up a person or company", icon: "M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" },
-  { id: "summarize-inbox", label: "Summarize my inbox", icon: "M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" },
+  {
+    id: "compose-new",
+    label: "Draft a new email",
+    icon: "M3 10l9-7 9 7M3 10v10a1 1 0 001 1h16a1 1 0 001-1V10",
+  },
+  {
+    id: "search-inbox",
+    label: "Search my inbox",
+    icon: "M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z",
+  },
+  {
+    id: "lookup-person",
+    label: "Look up a person or company",
+    icon: "M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z",
+  },
+  {
+    id: "summarize-inbox",
+    label: "Summarize my inbox",
+    icon: "M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z",
+  },
 ];
 
 /**
  * Derive suggested actions based on the selected email's context.
  * These appear above quick actions when an email with analysis is selected.
  */
-function getSuggestedActions(email: DashboardEmail | undefined): Array<{ id: string; label: string; icon: string }> {
+function getSuggestedActions(
+  email: DashboardEmail | undefined,
+): Array<{ id: string; label: string; icon: string }> {
   if (!email) return [];
   const suggestions: Array<{ id: string; label: string; icon: string }> = [];
 
@@ -139,26 +189,23 @@ export function AgentCommandPalette({ isOpen, onClose }: AgentCommandPaletteProp
   // Get current email context
   const selectedEmail = useMemo(
     () => emails.find((e) => e.id === selectedEmailId),
-    [emails, selectedEmailId]
+    [emails, selectedEmailId],
   );
 
   // Get current draft context (local drafts from compose)
   const selectedDraft = useMemo(
-    () => selectedDraftId ? localDrafts.find((d) => d.id === selectedDraftId) : undefined,
-    [localDrafts, selectedDraftId]
+    () => (selectedDraftId ? localDrafts.find((d) => d.id === selectedDraftId) : undefined),
+    [localDrafts, selectedDraftId],
   );
   const hasDraft = Boolean(selectedDraft);
 
   const currentAccount = useMemo(
     () => accounts.find((a) => a.id === currentAccountId),
-    [accounts, currentAccountId]
+    [accounts, currentAccountId],
   );
 
   // Suggested actions based on email context
-  const suggestedActions = useMemo(
-    () => getSuggestedActions(selectedEmail),
-    [selectedEmail],
-  );
+  const suggestedActions = useMemo(() => getSuggestedActions(selectedEmail), [selectedEmail]);
 
   // Pick the right quick actions depending on selection state
   const quickActions = hasEmail
@@ -188,7 +235,13 @@ export function AgentCommandPalette({ isOpen, onClose }: AgentCommandPaletteProp
       // will update the store when the response arrives.
       window.api?.agent?.providers?.();
     }
-  }, [isOpen, selectedAgentIds.length, availableProviders.length, setSelectedAgentIds, setAvailableProviders]);
+  }, [
+    isOpen,
+    selectedAgentIds.length,
+    availableProviders.length,
+    setSelectedAgentIds,
+    setAvailableProviders,
+  ]);
 
   // Reset state when opened/closed
   useEffect(() => {
@@ -244,7 +297,8 @@ export function AgentCommandPalette({ isOpen, onClose }: AgentCommandPaletteProp
         context.currentThreadId = selectedDraft.threadId;
         context.emailSubject = selectedDraft.subject;
         context.emailTo = selectedDraft.to.join(", ");
-        context.emailBody = selectedDraft.bodyText || stripHtml(selectedDraft.bodyHtml) || undefined;
+        context.emailBody =
+          selectedDraft.bodyText || stripHtml(selectedDraft.bodyHtml) || undefined;
       } else {
         taskKey = GLOBAL_AGENT_KEY;
         setGlobalAgentTaskKey(GLOBAL_AGENT_KEY);
@@ -254,15 +308,22 @@ export function AgentCommandPalette({ isOpen, onClose }: AgentCommandPaletteProp
       // before any backend events arrive (avoids race condition).
       const taskId = crypto.randomUUID();
       startAgentTask(taskId, taskKey, effectiveProviderIds, effectivePrompt, context);
-      trackEvent("agent_run_started", { source: "manual", provider_count: effectiveProviderIds.length });
+      trackEvent("agent_run_started", {
+        source: "manual",
+        provider_count: effectiveProviderIds.length,
+      });
 
       // Close palette immediately for responsiveness
       onClose();
 
       // Await the IPC result — if the backend fails to start (missing worker, bad API key, etc.)
       // we need to surface the error so the user doesn't see "Running" forever.
-      const result = await window.api?.agent?.run?.(taskId, effectiveProviderIds, effectivePrompt, context) as
-        { success: boolean; error?: string } | undefined;
+      const result = (await window.api?.agent?.run?.(
+        taskId,
+        effectiveProviderIds,
+        effectivePrompt,
+        context,
+      )) as { success: boolean; error?: string } | undefined;
       if (result && !result.success) {
         const store = useAppStore.getState();
         store.appendAgentEvent(taskId, {
@@ -284,7 +345,7 @@ export function AgentCommandPalette({ isOpen, onClose }: AgentCommandPaletteProp
       startAgentTask,
       setGlobalAgentTaskKey,
       onClose,
-    ]
+    ],
   );
 
   const handleKeyDown = useCallback(
@@ -314,7 +375,7 @@ export function AgentCommandPalette({ isOpen, onClose }: AgentCommandPaletteProp
           break;
       }
     },
-    [filteredActions, selectedIndex, query, handleSubmit, onClose]
+    [filteredActions, selectedIndex, query, handleSubmit, onClose],
   );
 
   if (!isOpen) return null;
@@ -347,7 +408,13 @@ export function AgentCommandPalette({ isOpen, onClose }: AgentCommandPaletteProp
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={hasEmail ? "Ask agent about this email..." : hasDraft ? "Ask agent about this draft..." : "Ask agent anything..."}
+            placeholder={
+              hasEmail
+                ? "Ask agent about this email..."
+                : hasDraft
+                  ? "Ask agent about this draft..."
+                  : "Ask agent anything..."
+            }
             className="flex-1 text-base outline-none placeholder-gray-400 dark:text-gray-100 dark:placeholder-gray-500 bg-transparent"
           />
           <kbd className="px-2 py-0.5 text-xs text-gray-400 bg-gray-100 dark:bg-gray-700 rounded">
@@ -379,9 +446,7 @@ export function AgentCommandPalette({ isOpen, onClose }: AgentCommandPaletteProp
               );
             })
           ) : (
-            <span className="text-xs text-gray-400 dark:text-gray-500">
-              No agents available
-            </span>
+            <span className="text-xs text-gray-400 dark:text-gray-500">No agents available</span>
           )}
 
           {selectedEmail ? (
@@ -401,9 +466,7 @@ export function AgentCommandPalette({ isOpen, onClose }: AgentCommandPaletteProp
           ) : (
             <>
               <span className="text-gray-300 dark:text-gray-600">|</span>
-              <span className="text-xs text-purple-500 dark:text-purple-400">
-                No email context
-              </span>
+              <span className="text-xs text-purple-500 dark:text-purple-400">No email context</span>
             </>
           )}
         </div>
@@ -426,9 +489,11 @@ export function AgentCommandPalette({ isOpen, onClose }: AgentCommandPaletteProp
                 const isSuggested = suggestedActions.some((s) => s.id === action.id);
 
                 // Show "Quick Actions" header before the first non-suggested action
-                const showQuickHeader = !query.trim()
-                  && !isSuggested
-                  && (idx === 0 || suggestedActions.some((s) => s.id === filteredActions[idx - 1]?.id));
+                const showQuickHeader =
+                  !query.trim() &&
+                  !isSuggested &&
+                  (idx === 0 ||
+                    suggestedActions.some((s) => s.id === filteredActions[idx - 1]?.id));
 
                 return (
                   <div key={action.id}>
@@ -458,15 +523,13 @@ export function AgentCommandPalette({ isOpen, onClose }: AgentCommandPaletteProp
                         viewBox="0 0 24 24"
                         strokeWidth={1.5}
                       >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          d={action.icon}
-                        />
+                        <path strokeLinecap="round" strokeLinejoin="round" d={action.icon} />
                       </svg>
                       <span className="flex-1">{action.label}</span>
                       {isSuggested && (
-                        <span className="text-xs text-purple-400 dark:text-purple-500">suggested</span>
+                        <span className="text-xs text-purple-400 dark:text-purple-500">
+                          suggested
+                        </span>
                       )}
                     </button>
                   </div>
@@ -479,22 +542,14 @@ export function AgentCommandPalette({ isOpen, onClose }: AgentCommandPaletteProp
         {/* Footer */}
         <div className="flex items-center gap-4 px-4 py-2 text-xs text-gray-400 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
           <span>
-            <kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 rounded">
-              &uarr;&darr;
-            </kbd>{" "}
+            <kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 rounded">&uarr;&darr;</kbd>{" "}
             navigate
           </span>
           <span>
-            <kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 rounded">
-              Enter
-            </kbd>{" "}
-            run
+            <kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 rounded">Enter</kbd> run
           </span>
           <span>
-            <kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 rounded">
-              Esc
-            </kbd>{" "}
-            close
+            <kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 rounded">Esc</kbd> close
           </span>
         </div>
       </div>

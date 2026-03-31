@@ -80,13 +80,12 @@ function groupByThreadOld(emails: DashboardEmail[], currentUserEmail?: string): 
     // OLD: new Date() on every comparison
     threadEmails.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     const latestEmail = threadEmails[threadEmails.length - 1];
-    const receivedEmails = threadEmails.filter(e => !isSentEmail(e, currentUserEmail));
-    const latestReceivedEmail = receivedEmails.length > 0
-      ? receivedEmails[receivedEmails.length - 1]
-      : latestEmail;
+    const receivedEmails = threadEmails.filter((e) => !isSentEmail(e, currentUserEmail));
+    const latestReceivedEmail =
+      receivedEmails.length > 0 ? receivedEmails[receivedEmails.length - 1] : latestEmail;
     const userReplied = isSentEmail(latestEmail, currentUserEmail);
     const displaySender = latestReceivedEmail.from;
-    const threadDraft = latestReceivedEmail.draft ?? threadEmails.find(e => e.draft)?.draft;
+    const threadDraft = latestReceivedEmail.draft ?? threadEmails.find((e) => e.draft)?.draft;
 
     threads.push({
       threadId,
@@ -97,7 +96,7 @@ function groupByThreadOld(emails: DashboardEmail[], currentUserEmail?: string): 
       latestReceivedDate: new Date(latestReceivedEmail.date).getTime(),
       subject: threadEmails[0].subject,
       hasMultipleEmails: threadEmails.length > 1,
-      isUnread: threadEmails.some(e => e.labelIds?.includes("UNREAD")),
+      isUnread: threadEmails.some((e) => e.labelIds?.includes("UNREAD")),
       analysis: latestReceivedEmail.analysis,
       draft: threadDraft,
       userReplied,
@@ -130,13 +129,12 @@ function groupByThreadNew(emails: DashboardEmail[], currentUserEmail?: string): 
     // NEW: use cached timestamps
     threadEmails.sort((a, b) => dateCache.get(a.id)! - dateCache.get(b.id)!);
     const latestEmail = threadEmails[threadEmails.length - 1];
-    const receivedEmails = threadEmails.filter(e => !isSentEmail(e, currentUserEmail));
-    const latestReceivedEmail = receivedEmails.length > 0
-      ? receivedEmails[receivedEmails.length - 1]
-      : latestEmail;
+    const receivedEmails = threadEmails.filter((e) => !isSentEmail(e, currentUserEmail));
+    const latestReceivedEmail =
+      receivedEmails.length > 0 ? receivedEmails[receivedEmails.length - 1] : latestEmail;
     const userReplied = isSentEmail(latestEmail, currentUserEmail);
     const displaySender = latestReceivedEmail.from;
-    const threadDraft = latestReceivedEmail.draft ?? threadEmails.find(e => e.draft)?.draft;
+    const threadDraft = latestReceivedEmail.draft ?? threadEmails.find((e) => e.draft)?.draft;
 
     threads.push({
       threadId,
@@ -146,7 +144,7 @@ function groupByThreadNew(emails: DashboardEmail[], currentUserEmail?: string): 
       latestReceivedDate: dateCache.get(latestReceivedEmail.id)!,
       subject: threadEmails[0].subject,
       hasMultipleEmails: threadEmails.length > 1,
-      isUnread: threadEmails.some(e => e.labelIds?.includes("UNREAD")),
+      isUnread: threadEmails.some((e) => e.labelIds?.includes("UNREAD")),
       analysis: latestReceivedEmail.analysis,
       draft: threadDraft,
       userReplied,
@@ -242,9 +240,7 @@ function simulateSyncEmissions(
   // Simulate progressive loading: emails arrive in chunks of 10 from the API,
   // but we only emit (trigger groupByThread) every emitBatchSize emails
   for (let i = 0; i < totalEmails; i += 10) {
-    const chunk = Array.from({ length: Math.min(10, totalEmails - i) }, (_, j) =>
-      makeEmail(i + j)
-    );
+    const chunk = Array.from({ length: Math.min(10, totalEmails - i) }, (_, j) => makeEmail(i + j));
     allEmails.push(...chunk);
 
     // Emit when we've accumulated enough
@@ -268,7 +264,11 @@ function simulateSyncEmissions(
 // Tests
 // ============================================================
 
-function runBenchmark<T>(name: string, fn: () => T, iterations: number = 5): { median: number; result: T } {
+function runBenchmark<T>(
+  name: string,
+  fn: () => T,
+  iterations: number = 5,
+): { median: number; result: T } {
   const times: number[] = [];
   let result!: T;
   for (let i = 0; i < iterations; i++) {
@@ -278,7 +278,9 @@ function runBenchmark<T>(name: string, fn: () => T, iterations: number = 5): { m
   }
   times.sort((a, b) => a - b);
   const median = times[Math.floor(times.length / 2)];
-  console.log(`  ${name}: ${times.map(t => t.toFixed(2) + "ms").join(", ")} (median: ${median.toFixed(2)}ms)`);
+  console.log(
+    `  ${name}: ${times.map((t) => t.toFixed(2) + "ms").join(", ")} (median: ${median.toFixed(2)}ms)`,
+  );
   return { median, result };
 }
 
@@ -291,15 +293,15 @@ test.describe("Sync CPU performance benchmarks", () => {
       console.log(`\n--- ${count} emails (${Math.ceil(count / 3)} threads) ---`);
 
       const old = runBenchmark("OLD (Date in sort)", () =>
-        groupByThreadOld([...emails], "user@example.com")
+        groupByThreadOld([...emails], "user@example.com"),
       );
       const neo = runBenchmark("NEW (cached timestamps)", () =>
-        groupByThreadNew([...emails], "user@example.com")
+        groupByThreadNew([...emails], "user@example.com"),
       );
 
       // Verify correctness — both produce same thread structure
       expect(old.result.length).toBe(neo.result.length);
-      expect(old.result.map(t => t.threadId)).toEqual(neo.result.map(t => t.threadId));
+      expect(old.result.map((t) => t.threadId)).toEqual(neo.result.map((t) => t.threadId));
 
       const speedup = old.median / neo.median;
       console.log(`  Speedup: ${speedup.toFixed(2)}x`);
@@ -318,15 +320,11 @@ test.describe("Sync CPU performance benchmarks", () => {
       const queue = generateQueue(size);
       console.log(`\n--- ${size} queued tasks ---`);
 
-      const old = runBenchmark("OLD (sort per iteration)", () =>
-        processQueueOld([...queue])
-      );
-      const neo = runBenchmark("NEW (sort once)", () =>
-        processQueueNew([...queue])
-      );
+      const old = runBenchmark("OLD (sort per iteration)", () => processQueueOld([...queue]));
+      const neo = runBenchmark("NEW (sort once)", () => processQueueNew([...queue]));
 
       // Verify correctness: both process ALL tasks (no dropped items)
-      const expectedIds = queue.map(t => t.emailId).sort();
+      const expectedIds = queue.map((t) => t.emailId).sort();
       expect(old.result.processed.sort()).toEqual(expectedIds);
       expect(neo.result.processed.sort()).toEqual(expectedIds);
 
@@ -344,14 +342,20 @@ test.describe("Sync CPU performance benchmarks", () => {
     console.log(`\n--- ${totalEmails} emails synced progressively ---`);
 
     const oldResult = simulateSyncEmissions(totalEmails, 10, "OLD");
-    console.log(`  OLD (emit every 10): ${oldResult.emitCount} emissions, total groupByThread: ${oldResult.totalGroupByThreadMs.toFixed(2)}ms, avg: ${oldResult.avgPerEmit.toFixed(2)}ms`);
+    console.log(
+      `  OLD (emit every 10): ${oldResult.emitCount} emissions, total groupByThread: ${oldResult.totalGroupByThreadMs.toFixed(2)}ms, avg: ${oldResult.avgPerEmit.toFixed(2)}ms`,
+    );
 
     const newResult = simulateSyncEmissions(totalEmails, 50, "NEW");
-    console.log(`  NEW (emit every 50): ${newResult.emitCount} emissions, total groupByThread: ${newResult.totalGroupByThreadMs.toFixed(2)}ms, avg: ${newResult.avgPerEmit.toFixed(2)}ms`);
+    console.log(
+      `  NEW (emit every 50): ${newResult.emitCount} emissions, total groupByThread: ${newResult.totalGroupByThreadMs.toFixed(2)}ms, avg: ${newResult.avgPerEmit.toFixed(2)}ms`,
+    );
 
     // NEW emits fewer times
     expect(newResult.emitCount).toBeLessThan(oldResult.emitCount);
-    console.log(`  Emission reduction: ${oldResult.emitCount} → ${newResult.emitCount} (${((1 - newResult.emitCount / oldResult.emitCount) * 100).toFixed(0)}% fewer)`);
+    console.log(
+      `  Emission reduction: ${oldResult.emitCount} → ${newResult.emitCount} (${((1 - newResult.emitCount / oldResult.emitCount) * 100).toFixed(0)}% fewer)`,
+    );
 
     // Log speedup for informational purposes — timing assertions are flaky on CI.
     const speedup = oldResult.totalGroupByThreadMs / newResult.totalGroupByThreadMs;

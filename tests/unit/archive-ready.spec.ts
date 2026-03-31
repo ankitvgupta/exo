@@ -18,11 +18,9 @@ import {
   resetAnthropicMock,
   getCapturedRequests,
 } from "../mocks/anthropic-api-mock";
+import { _setClientForTesting } from "../../src/main/services/anthropic-service";
 import { ArchiveReadyAnalyzer } from "../../src/main/services/archive-ready-analyzer";
-import {
-  ARCHIVE_READY_JSON_FORMAT,
-  DEFAULT_ARCHIVE_READY_PROMPT,
-} from "../../src/shared/types";
+import { ARCHIVE_READY_JSON_FORMAT, DEFAULT_ARCHIVE_READY_PROMPT } from "../../src/shared/types";
 import type { DashboardEmail } from "../../src/shared/types";
 
 // ---------------------------------------------------------------------------
@@ -30,10 +28,7 @@ import type { DashboardEmail } from "../../src/shared/types";
 // ---------------------------------------------------------------------------
 
 /** Re-implementation of ArchiveReadyAnalyzer.isFromUser */
-function isFromUser(
-  email: { from: string; labelIds?: string[] },
-  userEmail: string
-): boolean {
+function isFromUser(email: { from: string; labelIds?: string[] }, userEmail: string): boolean {
   if (email.labelIds?.includes("SENT")) return true;
   const fromLower = email.from.toLowerCase();
   const userLower = userEmail.toLowerCase();
@@ -48,12 +43,9 @@ function stripQuotedContent(body: string): string {
 }
 
 /** Re-implementation of ArchiveReadyAnalyzer.formatThreadForAnalysis */
-function formatThreadForAnalysis(
-  emails: DashboardEmail[],
-  userEmail?: string
-): string {
+function formatThreadForAnalysis(emails: DashboardEmail[], userEmail?: string): string {
   const sorted = [...emails].sort(
-    (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+    (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
   );
   const recentEmails = sorted.slice(-2);
 
@@ -67,16 +59,14 @@ function formatThreadForAnalysis(
 
   for (const email of recentEmails) {
     const isUser = userEmail ? isFromUser(email, userEmail) : false;
-    parts.push(
-      `--- Message ${isUser ? "(FROM USER)" : "(RECEIVED)"} ---`
-    );
+    parts.push(`--- Message ${isUser ? "(FROM USER)" : "(RECEIVED)"} ---`);
     parts.push(`From: ${email.from}`);
     parts.push(`To: ${email.to}`);
     parts.push(`Date: ${email.date}`);
 
     if (email.analysis) {
       parts.push(
-        `Analysis: ${email.analysis.needsReply ? "Needs reply" : "No reply needed"} - ${email.analysis.reason}`
+        `Analysis: ${email.analysis.needsReply ? "Needs reply" : "No reply needed"} - ${email.analysis.reason}`,
       );
     }
     if (email.draft) {
@@ -99,9 +89,7 @@ function formatThreadForAnalysis(
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makeDashboardEmail(
-  overrides: Partial<DashboardEmail> = {}
-): DashboardEmail {
+function makeDashboardEmail(overrides: Partial<DashboardEmail> = {}): DashboardEmail {
   return {
     id: "msg-1",
     threadId: "thread-1",
@@ -116,17 +104,8 @@ function makeDashboardEmail(
   };
 }
 
-function createAnalyzerWithMock(prompt?: string): {
-  analyzer: ArchiveReadyAnalyzer;
-  mock: MockAnthropic;
-} {
-  const analyzer = new ArchiveReadyAnalyzer(
-    "claude-sonnet-4-20250514",
-    prompt
-  );
-  const mock = new MockAnthropic();
-  (analyzer as { anthropic: unknown }).anthropic = mock;
-  return { analyzer, mock };
+function createAnalyzerWithMock(prompt?: string): ArchiveReadyAnalyzer {
+  return new ArchiveReadyAnalyzer("claude-sonnet-4-20250514", prompt);
 }
 
 // ---------------------------------------------------------------------------
@@ -135,48 +114,33 @@ function createAnalyzerWithMock(prompt?: string): {
 
 test.describe("isFromUser", () => {
   test("returns true when email has SENT label", () => {
-    expect(
-      isFromUser(
-        { from: "anyone@example.com", labelIds: ["SENT"] },
-        "user@example.com"
-      )
-    ).toBe(true);
+    expect(isFromUser({ from: "anyone@example.com", labelIds: ["SENT"] }, "user@example.com")).toBe(
+      true,
+    );
   });
 
   test("returns true when from address matches user email (angle brackets)", () => {
     expect(
-      isFromUser(
-        { from: "Alice <user@example.com>", labelIds: ["INBOX"] },
-        "user@example.com"
-      )
+      isFromUser({ from: "Alice <user@example.com>", labelIds: ["INBOX"] }, "user@example.com"),
     ).toBe(true);
   });
 
   test("returns true when from address matches user email (bare address)", () => {
-    expect(
-      isFromUser(
-        { from: "user@example.com", labelIds: ["INBOX"] },
-        "user@example.com"
-      )
-    ).toBe(true);
+    expect(isFromUser({ from: "user@example.com", labelIds: ["INBOX"] }, "user@example.com")).toBe(
+      true,
+    );
   });
 
   test("is case-insensitive", () => {
-    expect(
-      isFromUser(
-        { from: "User@Example.COM", labelIds: ["INBOX"] },
-        "user@example.com"
-      )
-    ).toBe(true);
+    expect(isFromUser({ from: "User@Example.COM", labelIds: ["INBOX"] }, "user@example.com")).toBe(
+      true,
+    );
   });
 
   test("returns false when from address does not match", () => {
-    expect(
-      isFromUser(
-        { from: "alice@other.com", labelIds: ["INBOX"] },
-        "user@example.com"
-      )
-    ).toBe(false);
+    expect(isFromUser({ from: "alice@other.com", labelIds: ["INBOX"] }, "user@example.com")).toBe(
+      false,
+    );
   });
 });
 
@@ -251,9 +215,7 @@ test.describe("formatThreadForAnalysis", () => {
   });
 
   test("marks messages not from user as (RECEIVED)", () => {
-    const emails = [
-      makeDashboardEmail({ from: "alice@example.com" }),
-    ];
+    const emails = [makeDashboardEmail({ from: "alice@example.com" })];
     const result = formatThreadForAnalysis(emails, "user@example.com");
     expect(result).toContain("(RECEIVED)");
   });
@@ -289,9 +251,7 @@ test.describe("formatThreadForAnalysis", () => {
 
   test("truncates body at 1500 characters", () => {
     const longBody = "A".repeat(2000);
-    const emails = [
-      makeDashboardEmail({ body: longBody, snippet: longBody }),
-    ];
+    const emails = [makeDashboardEmail({ body: longBody, snippet: longBody })];
     const result = formatThreadForAnalysis(emails);
     expect(result).toContain("[... truncated ...]");
     expect(result).not.toContain("A".repeat(2000));
@@ -336,13 +296,18 @@ test.describe("formatThreadForAnalysis", () => {
 test.describe("ArchiveReadyAnalyzer.analyzeThread", () => {
   test.beforeEach(() => {
     resetAnthropicMock();
+    _setClientForTesting(new MockAnthropic());
+  });
+
+  test.afterEach(() => {
+    _setClientForTesting(null as unknown);
   });
 
   test("returns archive_ready=true when Claude says so", async () => {
     mockAnthropicResponse({
       text: '{"archive_ready": true, "reason": "User replied, no follow-up needed"}',
     });
-    const { analyzer } = createAnalyzerWithMock();
+    const analyzer = createAnalyzerWithMock();
     const emails = [makeDashboardEmail()];
 
     const result = await analyzer.analyzeThread(emails);
@@ -355,7 +320,7 @@ test.describe("ArchiveReadyAnalyzer.analyzeThread", () => {
     mockAnthropicResponse({
       text: '{"archive_ready": false, "reason": "Awaiting response from sender"}',
     });
-    const { analyzer } = createAnalyzerWithMock();
+    const analyzer = createAnalyzerWithMock();
     const emails = [makeDashboardEmail()];
 
     const result = await analyzer.analyzeThread(emails);
@@ -368,7 +333,7 @@ test.describe("ArchiveReadyAnalyzer.analyzeThread", () => {
     mockAnthropicResponse({
       text: '```json\n{"archive_ready": true, "reason": "Done"}\n```',
     });
-    const { analyzer } = createAnalyzerWithMock();
+    const analyzer = createAnalyzerWithMock();
     const emails = [makeDashboardEmail()];
 
     const result = await analyzer.analyzeThread(emails);
@@ -381,7 +346,7 @@ test.describe("ArchiveReadyAnalyzer.analyzeThread", () => {
     mockAnthropicResponse({
       text: "I cannot determine this in JSON format, sorry.",
     });
-    const { analyzer } = createAnalyzerWithMock();
+    const analyzer = createAnalyzerWithMock();
     const emails = [makeDashboardEmail()];
 
     const result = await analyzer.analyzeThread(emails);
@@ -395,7 +360,7 @@ test.describe("ArchiveReadyAnalyzer.analyzeThread", () => {
       text: '{"archive_ready": true, "reason": "custom"}',
     });
     const customPrompt = "You are a custom archive analyzer.";
-    const { analyzer } = createAnalyzerWithMock(customPrompt);
+    const analyzer = createAnalyzerWithMock(customPrompt);
     const emails = [makeDashboardEmail()];
 
     await analyzer.analyzeThread(emails);
@@ -410,16 +375,14 @@ test.describe("ArchiveReadyAnalyzer.analyzeThread", () => {
     mockAnthropicResponse({
       text: '{"archive_ready": false, "reason": "test"}',
     });
-    const { analyzer } = createAnalyzerWithMock();
+    const analyzer = createAnalyzerWithMock();
     const emails = [makeDashboardEmail()];
 
     await analyzer.analyzeThread(emails);
 
     const requests = getCapturedRequests();
     const systemText = (requests[0].system as Array<{ text: string }>)[0].text;
-    expect(systemText).toBe(
-      DEFAULT_ARCHIVE_READY_PROMPT + ARCHIVE_READY_JSON_FORMAT
-    );
+    expect(systemText).toBe(DEFAULT_ARCHIVE_READY_PROMPT + ARCHIVE_READY_JSON_FORMAT);
   });
 
   test("does not treat default prompt as custom (no double-append)", async () => {
@@ -427,7 +390,7 @@ test.describe("ArchiveReadyAnalyzer.analyzeThread", () => {
       text: '{"archive_ready": false, "reason": "test"}',
     });
     // Pass the default prompt explicitly — constructor treats it as non-custom
-    const { analyzer } = createAnalyzerWithMock(DEFAULT_ARCHIVE_READY_PROMPT);
+    const analyzer = createAnalyzerWithMock(DEFAULT_ARCHIVE_READY_PROMPT);
     const emails = [makeDashboardEmail()];
 
     await analyzer.analyzeThread(emails);
@@ -435,16 +398,14 @@ test.describe("ArchiveReadyAnalyzer.analyzeThread", () => {
     const requests = getCapturedRequests();
     const systemText = (requests[0].system as Array<{ text: string }>)[0].text;
     // Should use default + JSON format, not default + JSON format + JSON format
-    expect(systemText).toBe(
-      DEFAULT_ARCHIVE_READY_PROMPT + ARCHIVE_READY_JSON_FORMAT
-    );
+    expect(systemText).toBe(DEFAULT_ARCHIVE_READY_PROMPT + ARCHIVE_READY_JSON_FORMAT);
   });
 
   test("passes userEmail to the formatted thread content", async () => {
     mockAnthropicResponse({
       text: '{"archive_ready": true, "reason": "test"}',
     });
-    const { analyzer } = createAnalyzerWithMock();
+    const analyzer = createAnalyzerWithMock();
     const emails = [makeDashboardEmail()];
 
     await analyzer.analyzeThread(emails, "me@company.com");

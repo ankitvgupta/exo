@@ -1,5 +1,9 @@
 import { useAppStore } from "../store";
-import type { AgentProviderConfig, AgentTaskState, AgentTaskHistoryEntry } from "../../shared/agent-types";
+import type {
+  AgentProviderConfig,
+  AgentTaskState,
+  AgentTaskHistoryEntry,
+} from "../../shared/agent-types";
 
 function ProviderStatusDot({ status }: { status: AgentTaskState | "ready" | "unavailable" }) {
   const config: Record<string, { color: string; pulse: boolean; label: string }> = {
@@ -18,7 +22,9 @@ function ProviderStatusDot({ status }: { status: AgentTaskState | "ready" | "una
   return (
     <span className="relative flex h-2 w-2" title={label}>
       {pulse && (
-        <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${color} opacity-75`} />
+        <span
+          className={`animate-ping absolute inline-flex h-full w-full rounded-full ${color} opacity-75`}
+        />
       )}
       <span className={`relative inline-flex rounded-full h-2 w-2 ${color}`} />
     </span>
@@ -26,12 +32,7 @@ function ProviderStatusDot({ status }: { status: AgentTaskState | "ready" | "una
 }
 
 function ProviderRow({ provider }: { provider: AgentProviderConfig }) {
-  const {
-    selectedAgentIds,
-    setSelectedAgentIds,
-    agentTasks,
-    selectedEmailId,
-  } = useAppStore();
+  const { selectedAgentIds, setSelectedAgentIds, agentTasks, selectedEmailId } = useAppStore();
 
   const isSelected = selectedAgentIds.includes(provider.id);
 
@@ -59,13 +60,17 @@ function ProviderRow({ provider }: { provider: AgentProviderConfig }) {
       {/* Checkbox */}
       <div
         className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 transition-colors ${
-          isSelected
-            ? "bg-purple-600 border-purple-600"
-            : "border-gray-300 dark:border-gray-600"
+          isSelected ? "bg-purple-600 border-purple-600" : "border-gray-300 dark:border-gray-600"
         }`}
       >
         {isSelected && (
-          <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}>
+          <svg
+            className="w-3 h-3 text-white"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            strokeWidth={3}
+          >
             <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
           </svg>
         )}
@@ -106,7 +111,11 @@ function TaskHistoryRow({ entry }: { entry: AgentTaskHistoryEntry }) {
   return (
     <div className="px-3 py-2 text-xs text-gray-600 dark:text-gray-400">
       <div className="flex items-center gap-1.5">
-        <svg className={`w-3 h-3 flex-shrink-0 ${statusIcon[entry.status] ?? "text-gray-400"}`} fill="currentColor" viewBox="0 0 24 24">
+        <svg
+          className={`w-3 h-3 flex-shrink-0 ${statusIcon[entry.status] ?? "text-gray-400"}`}
+          fill="currentColor"
+          viewBox="0 0 24 24"
+        >
           {entry.status === "completed" ? (
             <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
           ) : entry.status === "failed" ? (
@@ -116,7 +125,9 @@ function TaskHistoryRow({ entry }: { entry: AgentTaskHistoryEntry }) {
           )}
         </svg>
         <span className="truncate flex-1">{entry.prompt}</span>
-        <span className="text-gray-400 dark:text-gray-500 flex-shrink-0">{relativeTime(entry.timestamp)}</span>
+        <span className="text-gray-400 dark:text-gray-500 flex-shrink-0">
+          {relativeTime(entry.timestamp)}
+        </span>
       </div>
       {entry.summary && (
         <div className="ml-4.5 mt-0.5 text-gray-400 dark:text-gray-500 truncate">
@@ -145,15 +156,19 @@ export function AgentsSidebar() {
     <div className="w-56 flex-shrink-0 border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex flex-col h-full">
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-3 border-b border-gray-200 dark:border-gray-700">
-        <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-          Agents
-        </span>
+        <span className="text-sm font-medium text-gray-900 dark:text-gray-100">Agents</span>
         <button
           onClick={toggleAgentsSidebar}
           className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded transition-colors"
           title="Close sidebar"
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+          <svg
+            className="w-4 h-4"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            strokeWidth={2}
+          >
             <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>

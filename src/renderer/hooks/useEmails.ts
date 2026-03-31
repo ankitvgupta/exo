@@ -2,8 +2,14 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAppStore } from "../store";
 
 export function useEmails() {
-  const queryClient = useQueryClient();
-  const { setEmails, setLoading, setError, updateEmail, currentAccountId } = useAppStore();
+  const _queryClient = useQueryClient();
+  const {
+    setEmails,
+    setLoading: _setLoading,
+    setError: _setError,
+    updateEmail,
+    currentAccountId,
+  } = useAppStore();
 
   const fetchEmailsQuery = useQuery({
     queryKey: ["emails", currentAccountId],
@@ -45,8 +51,22 @@ export function useEmails() {
   });
 
   const createDraftMutation = useMutation({
-    mutationFn: async ({ emailId, body, accountId }: { emailId: string; body: string; accountId?: string }) => {
-      const result = await window.api.gmail.createDraft(emailId, body, undefined, undefined, accountId);
+    mutationFn: async ({
+      emailId,
+      body,
+      accountId,
+    }: {
+      emailId: string;
+      body: string;
+      accountId?: string;
+    }) => {
+      const result = await window.api.gmail.createDraft(
+        emailId,
+        body,
+        undefined,
+        undefined,
+        accountId,
+      );
       if (result.success) {
         return { emailId, draftId: result.data.draftId };
       }

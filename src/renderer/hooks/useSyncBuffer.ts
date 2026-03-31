@@ -254,7 +254,12 @@ function flush(): void {
     if (selectedEmailRemoved && state.viewMode === "full") {
       const stillExists = emails.some((e) => e.id === state.selectedEmailId);
       if (!stillExists) {
-        return { emails, viewMode: "split" as const, selectedEmailId: null, selectedThreadId: null };
+        return {
+          emails,
+          viewMode: "split" as const,
+          selectedEmailId: null,
+          selectedThreadId: null,
+        };
       }
     }
 

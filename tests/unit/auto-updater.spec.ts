@@ -62,10 +62,7 @@ class AutoUpdateService extends EventEmitter {
    * If already downloading or downloaded, return true (skip).
    */
   shouldSkipDownload(): boolean {
-    return (
-      this._status.state === "downloading" ||
-      this._status.state === "downloaded"
-    );
+    return this._status.state === "downloading" || this._status.state === "downloaded";
   }
 
   on(event: AutoUpdaterEvent, listener: (status: UpdateStatus) => void): this {
@@ -126,7 +123,11 @@ test.describe("AutoUpdateService state machine", () => {
       });
 
       expect(service.status.state).toBe("available");
-      const available = service.status as { state: "available"; version: string; releaseNotes?: string };
+      const available = service.status as {
+        state: "available";
+        version: string;
+        releaseNotes?: string;
+      };
       expect(available.version).toBe("2.0.0");
       expect(available.releaseNotes).toBe("New features");
     });
@@ -164,13 +165,7 @@ test.describe("AutoUpdateService state machine", () => {
       service.setStatus({ state: "downloading", progress: 75 });
       service.setStatus({ state: "downloaded", version: "3.0.0" });
 
-      expect(states).toEqual([
-        "checking",
-        "available",
-        "downloading",
-        "downloading",
-        "downloaded",
-      ]);
+      expect(states).toEqual(["checking", "available", "downloading", "downloading", "downloaded"]);
     });
 
     test("checking → idle (no update available)", () => {
@@ -186,7 +181,9 @@ test.describe("AutoUpdateService state machine", () => {
       service.setStatus({ state: "error", message: "Network failed" });
 
       expect(service.status.state).toBe("error");
-      expect((service.status as { state: "error"; message: string }).message).toBe("Network failed");
+      expect((service.status as { state: "error"; message: string }).message).toBe(
+        "Network failed",
+      );
     });
 
     test("error → checking (retry)", () => {

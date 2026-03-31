@@ -90,7 +90,7 @@ export function useComposeForm({
   replyToEmailId,
   forwardAttachmentSource,
 }: UseComposeFormOptions) {
-  const composeMode = explicitComposeMode ?? (isForward ? "forward" : (replyInfo ? "reply" : "new"));
+  const composeMode = explicitComposeMode ?? (isForward ? "forward" : replyInfo ? "reply" : "new");
   // --- Address state ---
   // initialTo may contain formatted addresses ("Name <email>") from draft
   // restoration. Extract bare emails for form state and display names for nameMap.
@@ -115,10 +115,12 @@ export function useComposeForm({
 
   // --- Name mapping (email → display name from autocomplete selections) ---
   // Pre-populate from formatted addresses in initialTo/initialCc/initialBcc
-  const [nameMap, setNameMap] = useState(() => buildNameMapFromAddresses([...initialTo, ...initialCc, ...initialBcc]));
+  const [nameMap, setNameMap] = useState(() =>
+    buildNameMapFromAddresses([...initialTo, ...initialCc, ...initialBcc]),
+  );
   const handleSuggestionSelected = useCallback((suggestion: ContactSuggestion) => {
     if (suggestion.name) {
-      setNameMap(prev => new Map(prev).set(suggestion.email.toLowerCase(), suggestion.name));
+      setNameMap((prev) => new Map(prev).set(suggestion.email.toLowerCase(), suggestion.name));
     }
   }, []);
 
@@ -136,34 +138,45 @@ export function useComposeForm({
     if (!forwardAttachmentSource) return;
     let cancelled = false;
     setLoadingForwardAttachments(true);
-    window.api.attachments.getForForward(forwardAttachmentSource.emailId, forwardAttachmentSource.accountId)
-      .then((result: IpcResponse<Array<{ filename: string; mimeType: string; content: string }>>) => {
-        if (cancelled || !result.success || !result.data) return;
-        setComposeAttachments(result.data.map((att, i) => ({
-          id: `fwd-${i}-${att.filename}`,
-          filename: att.filename,
-          mimeType: att.mimeType,
-          size: Math.ceil(att.content.length * 3 / 4),
-          content: att.content,
-        })));
-      })
+    window.api.attachments
+      .getForForward(forwardAttachmentSource.emailId, forwardAttachmentSource.accountId)
+      .then(
+        (result: IpcResponse<Array<{ filename: string; mimeType: string; content: string }>>) => {
+          if (cancelled || !result.success || !result.data) return;
+          setComposeAttachments(
+            result.data.map((att, i) => ({
+              id: `fwd-${i}-${att.filename}`,
+              filename: att.filename,
+              mimeType: att.mimeType,
+              size: Math.ceil((att.content.length * 3) / 4),
+              content: att.content,
+            })),
+          );
+        },
+      )
       .catch((err: unknown) => console.error("Failed to load forwarded attachments:", err))
-      .finally(() => { if (!cancelled) setLoadingForwardAttachments(false); });
-    return () => { cancelled = true; };
+      .finally(() => {
+        if (!cancelled) setLoadingForwardAttachments(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [forwardAttachmentSource?.emailId, forwardAttachmentSource?.accountId]);
 
   const handlePickFiles = useCallback(async () => {
     try {
       const result = await window.api.attachments.pickFiles();
       if (result.success && result.data?.length) {
-        const newAttachments: ComposeAttachmentItem[] = result.data.map((f: { filename: string; path: string; mimeType: string; size: number }) => ({
-          id: `local-${Date.now()}-${f.filename}`,
-          filename: f.filename,
-          mimeType: f.mimeType,
-          size: f.size,
-          path: f.path,
-        }));
-        setComposeAttachments(prev => [...prev, ...newAttachments]);
+        const newAttachments: ComposeAttachmentItem[] = result.data.map(
+          (f: { filename: string; path: string; mimeType: string; size: number }) => ({
+            id: `local-${Date.now()}-${f.filename}`,
+            filename: f.filename,
+            mimeType: f.mimeType,
+            size: f.size,
+            path: f.path,
+          }),
+        );
+        setComposeAttachments((prev) => [...prev, ...newAttachments]);
       }
     } catch (err) {
       console.error("Failed to pick files:", err);
@@ -171,23 +184,29 @@ export function useComposeForm({
   }, []);
 
   const handleRemoveAttachment = useCallback((id: string) => {
-    setComposeAttachments(prev => prev.filter(a => a.id !== id));
+    setComposeAttachments((prev) => prev.filter((a) => a.id !== id));
   }, []);
 
   // --- Signature ---
-  const { activeSignatureId, setActiveSignatureId, availableSignatures, signatureHtml } = useSignature(accountId);
+  const { activeSignatureId, setActiveSignatureId, availableSignatures, signatureHtml } =
+    useSignature(accountId);
 
   // --- Drag-and-drop between address fields ---
-  const handleRecipientDrop = useCallback((targetField: string, email: string, sourceField: string) => {
-    const setters: Record<string, React.Dispatch<React.SetStateAction<string[]>>> = {
-      to: setTo, cc: setCc, bcc: setBcc,
-    };
-    setters[sourceField]?.((prev) => prev.filter((e) => e !== email));
-    setters[targetField]?.((prev) => {
-      if (prev.some((e) => e.toLowerCase() === email.toLowerCase())) return prev;
-      return [...prev, email];
-    });
-  }, []);
+  const handleRecipientDrop = useCallback(
+    (targetField: string, email: string, sourceField: string) => {
+      const setters: Record<string, React.Dispatch<React.SetStateAction<string[]>>> = {
+        to: setTo,
+        cc: setCc,
+        bcc: setBcc,
+      };
+      setters[sourceField]?.((prev) => prev.filter((e) => e !== email));
+      setters[targetField]?.((prev) => {
+        if (prev.some((e) => e.toLowerCase() === email.toLowerCase())) return prev;
+        return [...prev, email];
+      });
+    },
+    [],
+  );
 
   const handleRecipientDragStart = useCallback(() => {
     setShowCcBcc(true);
@@ -215,20 +234,19 @@ export function useComposeForm({
       ? `${bodyWithSignature}${replyInfo.quotedBody}`
       : bodyWithSignature;
 
-    const sendAttachments = composeAttachments.length > 0
-      ? composeAttachments.map(a => ({
-          filename: a.filename,
-          mimeType: a.mimeType,
-          path: a.path,
-          content: a.content,
-          size: a.size,
-        }))
-      : undefined;
+    const sendAttachments =
+      composeAttachments.length > 0
+        ? composeAttachments.map((a) => ({
+            filename: a.filename,
+            mimeType: a.mimeType,
+            path: a.path,
+            content: a.content,
+            size: a.size,
+          }))
+        : undefined;
 
     // Convert nameMap to a plain object for IPC serialization
-    const recipientNames = nameMap.size > 0
-      ? Object.fromEntries(nameMap)
-      : undefined;
+    const recipientNames = nameMap.size > 0 ? Object.fromEntries(nameMap) : undefined;
 
     return {
       accountId,
@@ -245,10 +263,25 @@ export function useComposeForm({
       recipientNames,
       isForward: isForward || undefined,
     };
-  }, [accountId, to, cc, bcc, subject, bodyHtml, bodyText, signatureHtml, replyInfo, isForward, composeAttachments, nameMap]);
+  }, [
+    accountId,
+    to,
+    cc,
+    bcc,
+    subject,
+    bodyHtml,
+    bodyText,
+    signatureHtml,
+    replyInfo,
+    isForward,
+    composeAttachments,
+    nameMap,
+  ]);
 
   // --- Send ---
-  const send = useCallback(async (): Promise<IpcResponse<{ id: string; threadId: string }> | "undo-queued" | null> => {
+  const send = useCallback(async (): Promise<
+    IpcResponse<{ id: string; threadId: string }> | "undo-queued" | null
+  > => {
     const hasAnyRecipient = to.length > 0 || cc.length > 0 || bcc.length > 0;
     if (isSending || (!bodyText.trim() && !subject.trim()) || !hasAnyRecipient) return null;
 
@@ -294,36 +327,52 @@ export function useComposeForm({
     } finally {
       setIsSending(false);
     }
-  }, [isSending, bodyText, subject, to, cc, bcc, bodyHtml, buildSendOptions, isForward, replyInfo, composeMode, replyToEmailId]);
+  }, [
+    isSending,
+    bodyText,
+    subject,
+    to,
+    cc,
+    bcc,
+    bodyHtml,
+    buildSendOptions,
+    isForward,
+    replyInfo,
+    composeMode,
+    replyToEmailId,
+  ]);
 
   // --- Schedule send ---
-  const scheduleSend = useCallback(async (scheduledAt: number): Promise<boolean> => {
-    const hasAnyRecipient = to.length > 0 || cc.length > 0 || bcc.length > 0;
-    if (isScheduling || (!bodyText.trim() && !subject.trim()) || !hasAnyRecipient) return false;
+  const scheduleSend = useCallback(
+    async (scheduledAt: number): Promise<boolean> => {
+      const hasAnyRecipient = to.length > 0 || cc.length > 0 || bcc.length > 0;
+      if (isScheduling || (!bodyText.trim() && !subject.trim()) || !hasAnyRecipient) return false;
 
-    setIsScheduling(true);
-    setError(null);
+      setIsScheduling(true);
+      setError(null);
 
-    try {
-      const sendOptions = buildSendOptions();
-      const response = await window.api.scheduledSend.create({
-        ...sendOptions,
-        scheduledAt,
-      });
+      try {
+        const sendOptions = buildSendOptions();
+        const response = await window.api.scheduledSend.create({
+          ...sendOptions,
+          scheduledAt,
+        });
 
-      if (response.success) {
-        return true;
-      } else {
-        setError(response.error || "Failed to schedule");
+        if (response.success) {
+          return true;
+        } else {
+          setError(response.error || "Failed to schedule");
+          return false;
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to schedule");
         return false;
+      } finally {
+        setIsScheduling(false);
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to schedule");
-      return false;
-    } finally {
-      setIsScheduling(false);
-    }
-  }, [isScheduling, bodyText, subject, to, cc, bcc, buildSendOptions]);
+    },
+    [isScheduling, bodyText, subject, to, cc, bcc, buildSendOptions],
+  );
 
   // --- Computed ---
   const hasAnyRecipient = to.length > 0 || cc.length > 0 || bcc.length > 0;
@@ -331,16 +380,28 @@ export function useComposeForm({
   const canSend = hasAnyRecipient && hasContent;
 
   // --- Form state snapshot ---
-  const getFormState = useCallback((): ComposeFormState => ({
-    to, cc, bcc, subject, bodyHtml, bodyText,
-  }), [to, cc, bcc, subject, bodyHtml, bodyText]);
+  const getFormState = useCallback(
+    (): ComposeFormState => ({
+      to,
+      cc,
+      bcc,
+      subject,
+      bodyHtml,
+      bodyText,
+    }),
+    [to, cc, bcc, subject, bodyHtml, bodyText],
+  );
 
   return {
     // Address state
-    to, setTo,
-    cc, setCc,
-    bcc, setBcc,
-    showCcBcc, setShowCcBcc,
+    to,
+    setTo,
+    cc,
+    setCc,
+    bcc,
+    setBcc,
+    showCcBcc,
+    setShowCcBcc,
     nameMap,
     handleSuggestionSelected,
     handleRecipientDrop,
@@ -348,13 +409,19 @@ export function useComposeForm({
     handleMentionAddToCc,
 
     // Content state
-    subject, setSubject,
-    bodyHtml, bodyText,
+    subject,
+    setSubject,
+    bodyHtml,
+    bodyText,
     handleEditorChange,
 
     // Send state
-    isSending, isScheduling, error, setError,
-    send, scheduleSend,
+    isSending,
+    isScheduling,
+    error,
+    setError,
+    send,
+    scheduleSend,
     canSend,
     buildSendOptions,
 
@@ -365,7 +432,9 @@ export function useComposeForm({
     handleRemoveAttachment,
 
     // Signature
-    activeSignatureId, setActiveSignatureId, availableSignatures,
+    activeSignatureId,
+    setActiveSignatureId,
+    availableSignatures,
 
     // Utilities
     getFormState,

@@ -56,7 +56,7 @@ export function extractThreadNames(
         if (match) {
           const name = match[1]
             .trim()
-            .replace(/^"|"$/g, "")    // strip outer quotes only
+            .replace(/^"|"$/g, "") // strip outer quotes only
             .replace(/\\(.)/g, "$1"); // unescape \X → X
           const addr = match[2].trim().toLowerCase();
           if (name && !threadNames[addr]) threadNames[addr] = name;

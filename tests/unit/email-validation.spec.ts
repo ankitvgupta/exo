@@ -114,7 +114,9 @@ test.describe("useComposeForm — validation allows subject-only send", () => {
   });
 
   test("send checks recipients across To/Cc/Bcc", () => {
-    expect(hookCode).toContain("const hasAnyRecipient = to.length > 0 || cc.length > 0 || bcc.length > 0");
+    expect(hookCode).toContain(
+      "const hasAnyRecipient = to.length > 0 || cc.length > 0 || bcc.length > 0",
+    );
   });
 
   test("canSend derived value combines recipient and content checks", () => {
@@ -131,7 +133,10 @@ test.describe("ComposeToolbar — send button uses canSend", () => {
   let toolbarCode: string;
 
   test.beforeAll(() => {
-    toolbarCode = readFileSync(path.join(srcDir, "renderer/components/ComposeToolbar.tsx"), "utf-8");
+    toolbarCode = readFileSync(
+      path.join(srcDir, "renderer/components/ComposeToolbar.tsx"),
+      "utf-8",
+    );
   });
 
   test("send button uses canSend for disabled state", () => {
@@ -153,9 +158,7 @@ test.describe("No component blocks send on empty body alone", () => {
     const disabledMatches = code.match(/disabled=\{[^}]+\}/g) || [];
     for (const match of disabledMatches) {
       if (match.includes("!bodyText.trim()")) {
-        expect(
-          match.includes("!subject.trim()") || match.includes("!canSend")
-        ).toBe(true);
+        expect(match.includes("!subject.trim()") || match.includes("!canSend")).toBe(true);
       }
     }
   });

@@ -34,12 +34,14 @@ function sanitizeFtsQuery(query: string): string {
   }
   const ftsOperators = new Set(["AND", "OR", "NOT", "NEAR"]);
   const tokens = query.split(/\s+/).filter(Boolean);
-  return tokens.map(token => {
-    if (ftsOperators.has(token.toUpperCase())) return token.toUpperCase();
-    if (/^(subject|body_text|from_address|to_address):/.test(token)) return token;
-    if (/[*"():^{}+\-]/.test(token)) return `"${token.replace(/"/g, '""')}"`;
-    return token;
-  }).join(" ");
+  return tokens
+    .map((token) => {
+      if (ftsOperators.has(token.toUpperCase())) return token.toUpperCase();
+      if (/^(subject|body_text|from_address|to_address):/.test(token)) return token;
+      if (/[*"():^{}+\-]/.test(token)) return `"${token.replace(/"/g, '""')}"`;
+      return token;
+    })
+    .join(" ");
 }
 
 // ---- Tests ----
@@ -50,7 +52,7 @@ test.describe("stripHtmlForSearch", () => {
   });
 
   test("decodes common HTML entities", () => {
-    expect(stripHtmlForSearch("&amp; &lt; &gt; &quot; &#39;")).toBe('& < > " \'');
+    expect(stripHtmlForSearch("&amp; &lt; &gt; &quot; &#39;")).toBe("& < > \" '");
   });
 
   test("removes style blocks entirely", () => {

@@ -1,17 +1,30 @@
 import { useState, useEffect, useCallback, useRef, startTransition } from "react";
 import type { DashboardEmail } from "../../shared/types";
-import type { ExtensionPanelInfo, ExtensionEnrichmentResult, InstalledExtensionInfo } from "../../shared/extension-types";
+import type {
+  ExtensionPanelInfo,
+  ExtensionEnrichmentResult,
+  InstalledExtensionInfo,
+} from "../../shared/extension-types";
 import { unregisterExtensionPanels, onRegistryChange } from "./ExtensionPanelSlot";
 import { loadExtensionRenderer } from "./installed-extensions";
 
 // Type for window.api.extensions
 type ExtensionsAPI = {
   getPanels: () => Promise<{ success: boolean; data?: ExtensionPanelInfo[] }>;
-  getEnrichments: (emailId: string) => Promise<{ success: boolean; data?: ExtensionEnrichmentResult[] }>;
-  enrichEmail: (emailId: string) => Promise<{ success: boolean; data?: ExtensionEnrichmentResult[]; pending?: boolean; error?: string }>;
-  onEnrichmentReady: (callback: (data: { emailId: string; enrichment: ExtensionEnrichmentResult }) => void) => void;
-  onInstalled: (callback: (data: InstalledExtensionInfo) => void) => (() => void);
-  onUninstalled: (callback: (data: { extensionId: string }) => void) => (() => void);
+  getEnrichments: (
+    emailId: string,
+  ) => Promise<{ success: boolean; data?: ExtensionEnrichmentResult[] }>;
+  enrichEmail: (emailId: string) => Promise<{
+    success: boolean;
+    data?: ExtensionEnrichmentResult[];
+    pending?: boolean;
+    error?: string;
+  }>;
+  onEnrichmentReady: (
+    callback: (data: { emailId: string; enrichment: ExtensionEnrichmentResult }) => void,
+  ) => void;
+  onInstalled: (callback: (data: InstalledExtensionInfo) => void) => () => void;
+  onUninstalled: (callback: (data: { extensionId: string }) => void) => () => void;
   removeEnrichmentListeners: () => void;
 };
 
@@ -38,7 +51,7 @@ export type ExtensionPanelData = {
  */
 export function useExtensionPanels(
   email: DashboardEmail | null,
-  threadEmails: DashboardEmail[]
+  _threadEmails: DashboardEmail[],
 ): {
   panels: ExtensionPanelData[];
   isLoading: boolean;
@@ -87,14 +100,18 @@ export function useExtensionPanels(
   // Load renderer bundle on install; unregister components on uninstall.
   // The registry change listener above handles the re-render.
   useEffect(() => {
-    const removeInstalled = window.api.extensions.onInstalled(async (data: InstalledExtensionInfo) => {
-      if (data.hasRenderer) {
-        await loadExtensionRenderer(data.id);
-      }
-    });
-    const removeUninstalled = window.api.extensions.onUninstalled((data: { extensionId: string }) => {
-      unregisterExtensionPanels(data.extensionId);
-    });
+    const removeInstalled = window.api.extensions.onInstalled(
+      async (data: InstalledExtensionInfo) => {
+        if (data.hasRenderer) {
+          await loadExtensionRenderer(data.id);
+        }
+      },
+    );
+    const removeUninstalled = window.api.extensions.onUninstalled(
+      (data: { extensionId: string }) => {
+        unregisterExtensionPanels(data.extensionId);
+      },
+    );
     return () => {
       removeInstalled();
       removeUninstalled();
@@ -231,7 +248,10 @@ export function useExtensionPanels(
   useEffect(() => {
     if (!email) return;
 
-    const handleEnrichmentReady = (data: { emailId: string; enrichment: ExtensionEnrichmentResult }) => {
+    const handleEnrichmentReady = (data: {
+      emailId: string;
+      enrichment: ExtensionEnrichmentResult;
+    }) => {
       // Use the ref to get the current email ID (avoids stale closure)
       if (data.emailId === currentEmailIdRef.current) {
         // Use startTransition to avoid blocking keyboard navigation
@@ -341,7 +361,7 @@ export function useExtensionPanels(
 /**
  * Hook for badges (future use)
  */
-export function useExtensionBadges(email: DashboardEmail | null): {
+export function useExtensionBadges(_email: DashboardEmail | null): {
   badges: Array<{ id: string; label: string; color?: string }>;
 } {
   // TODO: Implement badge fetching from enrichments

@@ -60,9 +60,7 @@ function buildSearchQuery(name: string, email: string): string {
 }
 
 function stripCitations(text: string): string {
-  return text
-    .replace(/<cite[^>]*>/gi, "")
-    .replace(/<\/cite>/gi, "");
+  return text.replace(/<cite[^>]*>/gi, "").replace(/<\/cite>/gi, "");
 }
 
 interface SenderProfileData {
@@ -159,10 +157,7 @@ function parseProfileResponse(
 
   return {
     name: fallbackName,
-    summary:
-      cleanText.length > 0 && cleanText.length < 500
-        ? cleanText
-        : "No information found.",
+    summary: cleanText.length > 0 && cleanText.length < 500 ? cleanText : "No information found.",
   };
 }
 
@@ -369,10 +364,7 @@ test.describe("validateProfileData", () => {
   });
 
   test("handles linkedin_url (underscore variant)", () => {
-    const result = validateProfileData(
-      { linkedin_url: "https://linkedin.com/in/test" },
-      "Name",
-    );
+    const result = validateProfileData({ linkedin_url: "https://linkedin.com/in/test" }, "Name");
     expect(result.linkedinUrl).toBe("https://linkedin.com/in/test");
   });
 
@@ -388,10 +380,7 @@ test.describe("validateProfileData", () => {
   });
 
   test("ignores non-string values", () => {
-    const result = validateProfileData(
-      { name: 42, summary: null, title: true },
-      "Fallback",
-    );
+    const result = validateProfileData({ name: 42, summary: null, title: true }, "Fallback");
     expect(result.name).toBe("Fallback");
     expect(result.summary).toBe("No information found.");
     expect(result.title).toBeUndefined();
@@ -515,10 +504,7 @@ test.describe("reminder detection logic", () => {
 
   test("skips enrichment when all thread emails are from reminder services", () => {
     const email = { id: "1", from: "reminder@boomerangapp.com" };
-    const thread = [
-      email,
-      { id: "2", from: "noreply@another-service.com" },
-    ];
+    const thread = [email, { id: "2", from: "noreply@another-service.com" }];
 
     const result = resolveRealSender(email, thread);
     expect(result.isReminder).toBe(true);

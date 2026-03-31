@@ -1,14 +1,32 @@
 import React, { useState, useMemo, useEffect, useLayoutEffect, useRef, useCallback } from "react";
 import { useAppStore, useSplitFilteredThreads } from "../store";
 import DOMPurify from "dompurify";
-import { emailBodyCache, isHtmlContent, hasRichBackground, stripLargeDataUris } from "../services/email-body-cache";
+import {
+  emailBodyCache,
+  isHtmlContent,
+  hasRichBackground,
+  stripLargeDataUris,
+} from "../services/email-body-cache";
 import { splitAddressList, extractFirstName } from "../utils/address-parsing";
 import { splitQuotedContent } from "../services/quote-elision";
 import { ComposeEditor } from "./ComposeEditor";
 import { formatSnoozeTime } from "./SnoozeMenu";
 import { AddressInput } from "./AddressInput";
-import { EmailAttachmentList, ComposeAttachmentList, AttachmentPreviewModal } from "./AttachmentList";
-import type { DashboardEmail, ReplyInfo, IpcResponse, SnoozedEmail, ComposeMode, AttachmentMeta, LocalDraft, Memory, MemoryScope } from "../../shared/types";
+import {
+  EmailAttachmentList,
+  ComposeAttachmentList,
+  AttachmentPreviewModal,
+} from "./AttachmentList";
+import type {
+  DashboardEmail,
+  ReplyInfo,
+  IpcResponse,
+  ComposeMode,
+  AttachmentMeta,
+  LocalDraft,
+  Memory,
+  MemoryScope,
+} from "../../shared/types";
 import type { RestoredDraft } from "../store";
 import { useComposeForm } from "../hooks/useComposeForm";
 import { THREAD_NAV_EVENT } from "../hooks/useKeyboardShortcuts";
@@ -34,10 +52,18 @@ declare global {
           inReplyTo?: string;
           references?: string;
         }) => Promise<IpcResponse<{ id: string; threadId: string }>>;
-        getReplyInfo: (emailId: string, mode: "reply" | "reply-all" | "forward" | "new", accountId: string) => Promise<IpcResponse<ReplyInfo | null>>;
+        getReplyInfo: (
+          emailId: string,
+          mode: "reply" | "reply-all" | "forward" | "new",
+          accountId: string,
+        ) => Promise<IpcResponse<ReplyInfo | null>>;
       };
       contacts: {
-        suggest: (query: string, limit?: number) => Promise<IpcResponse<import("../../shared/types").ContactSuggestion[]>>;
+        suggest: (
+          query: string,
+          limit?: number,
+          // eslint-disable-next-line @typescript-eslint/consistent-type-imports
+        ) => Promise<IpcResponse<import("../../shared/types").ContactSuggestion[]>>;
       };
       sync: {
         now: (accountId: string) => Promise<void>;
@@ -55,10 +81,17 @@ declare global {
           content: string;
           senderEmail: string;
           senderDomain: string;
-        }) => Promise<IpcResponse<{ scope: MemoryScope; scopeValue: string | null; content: string }>>;
+        }) => Promise<
+          IpcResponse<{ scope: MemoryScope; scopeValue: string | null; content: string }>
+        >;
       };
       analysis: {
-        overridePriority: (emailId: string, newNeedsReply: boolean, newPriority: string | null, reason?: string) => Promise<IpcResponse<{ analysisUpdated: boolean }>>;
+        overridePriority: (
+          emailId: string,
+          newNeedsReply: boolean,
+          newPriority: string | null,
+          reason?: string,
+        ) => Promise<IpcResponse<{ analysisUpdated: boolean }>>;
       };
     };
   }
@@ -97,14 +130,18 @@ function parseAddressList(header: string): string[] {
  * placeholder — they get patched with proper Gmail Message-ID headers via
  * an async IPC call after the pane is already visible.
  */
-function computeLocalReplyInfo(email: DashboardEmail, mode: ComposeMode, userEmail?: string): ReplyInfo {
+function computeLocalReplyInfo(
+  email: DashboardEmail,
+  mode: ComposeMode,
+  userEmail?: string,
+): ReplyInfo {
   const fromMatch = email.from.match(/<([^>]+)>/) || [null, email.from];
   const fromEmail = fromMatch[1] || email.from;
 
   const toAddresses = parseAddressList(email.to);
   const ccAddresses = email.cc ? parseAddressList(email.cc) : [];
 
-  let cc: string[] = [];
+  const cc: string[] = [];
   if (mode === "reply-all") {
     const exclude = new Set([fromEmail.toLowerCase()]);
     if (userEmail) exclude.add(userEmail.toLowerCase());
@@ -170,9 +207,10 @@ function computeLocalReplyInfo(email: DashboardEmail, mode: ComposeMode, userEma
     quotedBody,
     originalBody,
     attribution,
-    ...(mode === "forward" && email.attachments?.length && {
-      forwardedAttachments: email.attachments,
-    }),
+    ...(mode === "forward" &&
+      email.attachments?.length && {
+        forwardedAttachments: email.attachments,
+      }),
   };
 }
 
@@ -184,7 +222,15 @@ function computeLocalReplyInfo(email: DashboardEmail, mode: ComposeMode, userEma
  * useLightMode: when true, renders with dark text on transparent bg (for white card containers).
  * When false, renders with light text on dark bg (for dark card containers).
  */
-function EmailBodyRenderer({ emailId, body, useLightMode }: { emailId: string; body: string; useLightMode: boolean }) {
+function EmailBodyRenderer({
+  emailId,
+  body,
+  useLightMode,
+}: {
+  emailId: string;
+  body: string;
+  useLightMode: boolean;
+}) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [iframeHeight, setIframeHeight] = useState(200);
 
@@ -215,7 +261,8 @@ function EmailBodyRenderer({ emailId, body, useLightMode }: { emailId: string; b
     return emailBodyCache.getOrCompute(`${emailId}:recovered`, decodedBody, useLightMode);
   }, [isHtml, decodedBody, emailId, useLightMode]);
 
-  const shouldRenderIframe = (isHtml && htmlContent) || (recoveredHtml?.isHtml && recoveredHtml.htmlContent);
+  const shouldRenderIframe =
+    (isHtml && htmlContent) || (recoveredHtml?.isHtml && recoveredHtml.htmlContent);
   const iframeSrcDoc = isHtml ? htmlContent : recoveredHtml?.htmlContent;
 
   // Prefetch external images from the sanitized HTML so they're in the
@@ -261,16 +308,18 @@ function EmailBodyRenderer({ emailId, body, useLightMode }: { emailId: string; b
         // Only forward Cmd+K and Cmd+, which are app-level shortcuts
         if (e.key !== "k" && e.key !== ",") return;
       }
-      window.dispatchEvent(new KeyboardEvent("keydown", {
-        key: e.key,
-        code: e.code,
-        metaKey: e.metaKey,
-        ctrlKey: e.ctrlKey,
-        altKey: e.altKey,
-        shiftKey: e.shiftKey,
-        bubbles: true,
-        cancelable: true,
-      }));
+      window.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: e.key,
+          code: e.code,
+          metaKey: e.metaKey,
+          ctrlKey: e.ctrlKey,
+          altKey: e.altKey,
+          shiftKey: e.shiftKey,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
     };
 
     const attachKeyboardForwarding = () => {
@@ -316,10 +365,10 @@ function EmailBodyRenderer({ emailId, body, useLightMode }: { emailId: string; b
         srcDoc={iframeSrcDoc}
         referrerPolicy="no-referrer"
         style={{
-          width: '100%',
+          width: "100%",
           height: `${iframeHeight}px`,
-          border: 'none',
-          display: 'block',
+          border: "none",
+          display: "block",
         }}
         title="Email content"
       />
@@ -327,7 +376,9 @@ function EmailBodyRenderer({ emailId, body, useLightMode }: { emailId: string; b
   }
 
   return (
-    <div className={`whitespace-pre-wrap text-sm leading-relaxed ${useLightMode ? 'text-gray-700' : 'text-gray-300'}`}>
+    <div
+      className={`whitespace-pre-wrap text-sm leading-relaxed ${useLightMode ? "text-gray-700" : "text-gray-300"}`}
+    >
       {decodedBody}
     </div>
   );
@@ -342,7 +393,7 @@ interface TrackingInfo {
 }
 
 function detectTrackingNumbers(bodies: string[]): TrackingInfo[] {
-  const combined = bodies.map(b => b.replace(/<[^>]*>/g, " ")).join(" ");
+  const combined = bodies.map((b) => b.replace(/<[^>]*>/g, " ")).join(" ");
   const results: TrackingInfo[] = [];
   const seen = new Set<string>();
 
@@ -355,7 +406,11 @@ function detectTrackingNumbers(bodies: string[]): TrackingInfo[] {
 
   // UPS: 1Z + 16 alphanumeric (very distinctive)
   for (const m of combined.matchAll(/\b1Z[A-Z0-9]{16}\b/gi)) {
-    addMatch("UPS", m[0].toUpperCase(), `https://www.ups.com/track?tracknum=${encodeURIComponent(m[0])}`);
+    addMatch(
+      "UPS",
+      m[0].toUpperCase(),
+      `https://www.ups.com/track?tracknum=${encodeURIComponent(m[0])}`,
+    );
   }
 
   // USPS: distinctive prefixes + 18 digits
@@ -386,7 +441,11 @@ function detectTrackingNumbers(bodies: string[]): TrackingInfo[] {
   // DHL: 10 digit numbers only when "DHL" appears in the email
   if (/\bDHL\b/i.test(combined)) {
     for (const m of combined.matchAll(/(?<!\d)\d{10}(?!\d)/g)) {
-      addMatch("DHL", m[0], `https://www.dhl.com/us-en/home/tracking/tracking-express.html?submit=1&tracking-id=${m[0]}`);
+      addMatch(
+        "DHL",
+        m[0],
+        `https://www.dhl.com/us-en/home/tracking/tracking-express.html?submit=1&tracking-id=${m[0]}`,
+      );
     }
   }
 
@@ -426,7 +485,17 @@ function detectUnsubscribeUrl(bodies: string[]): string | null {
  * Default: shows just names. Double-click toggles to show full name + email.
  * If only a bare email is available, shows the email always.
  */
-function AddressField({ header, useWhiteCard, forceExpanded, nameMap }: { header: string; useWhiteCard: boolean; forceExpanded?: boolean; nameMap?: Map<string, string> }) {
+function AddressField({
+  header,
+  useWhiteCard,
+  forceExpanded,
+  nameMap,
+}: {
+  header: string;
+  useWhiteCard: boolean;
+  forceExpanded?: boolean;
+  nameMap?: Map<string, string>;
+}) {
   const [expanded, setExpanded] = useState(false);
 
   const parsed = useMemo(() => {
@@ -452,12 +521,16 @@ function AddressField({ header, useWhiteCard, forceExpanded, nameMap }: { header
   if (forceExpanded) {
     // Always show "Name <email>" with bold name, no toggle
     return (
-      <span className={`select-all ${useWhiteCard ? "text-gray-700" : "text-gray-700 dark:text-gray-300"}`}>
+      <span
+        className={`select-all ${useWhiteCard ? "text-gray-700" : "text-gray-700 dark:text-gray-300"}`}
+      >
         {parsed.map((p, i) => (
           <React.Fragment key={`${p.email}-${i}`}>
             {i > 0 && ", "}
             {p.name ? (
-              <><span className="font-medium">{p.name}</span>{" "}&lt;{p.email}&gt;</>
+              <>
+                <span className="font-medium">{p.name}</span> &lt;{p.email}&gt;
+              </>
             ) : (
               p.email
             )}
@@ -484,8 +557,23 @@ function AddressField({ header, useWhiteCard, forceExpanded, nameMap }: { header
       role={allBare ? undefined : "button"}
       tabIndex={allBare ? undefined : 0}
       onDoubleClick={toggle}
-      onKeyDown={allBare ? undefined : (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle!(); } }}
-      title={allBare ? undefined : (showExpanded ? "Double-click to show names only" : "Double-click to show email addresses")}
+      onKeyDown={
+        allBare
+          ? undefined
+          : (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                toggle!();
+              }
+            }
+      }
+      title={
+        allBare
+          ? undefined
+          : showExpanded
+            ? "Double-click to show names only"
+            : "Double-click to show email addresses"
+      }
     >
       {display}
       {!allBare && !showExpanded && (
@@ -493,7 +581,9 @@ function AddressField({ header, useWhiteCard, forceExpanded, nameMap }: { header
           className={`inline-block ml-1 w-3 h-3 opacity-0 group-hover/addr:opacity-60 transition-opacity ${
             useWhiteCard ? "text-gray-400" : "text-gray-400 dark:text-gray-500"
           }`}
-          fill="none" stroke="currentColor" viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
         >
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
         </svg>
@@ -526,24 +616,28 @@ function buildNameMap(threadEmails: DashboardEmail[]): Map<string, string> {
 
 const firstName = extractFirstName;
 
-function parseRecipientFirstNames(header: string, currentUserEmail?: string, nameMap?: Map<string, string>): string[] {
+function parseRecipientFirstNames(
+  header: string,
+  currentUserEmail?: string,
+  nameMap?: Map<string, string>,
+): string[] {
   if (!header) return [];
-  return splitAddressList(header)
-    .map((r) => {
-      const nameMatch = r.match(/^([^<]+)</);
-      const emailMatch = r.match(/<([^>]+)>/)?.[1] || r.trim();
-      if (currentUserEmail && emailMatch.toLowerCase() === currentUserEmail.toLowerCase()) return "Me";
-      if (nameMatch) {
-        const extracted = firstName(nameMatch[1].trim().replace(/"/g, ""));
-        if (!extracted.includes("@")) return extracted;
-        // Name part is actually an email address — fall through to nameMap lookup
-      }
-      if (nameMap) {
-        const resolved = nameMap.get(emailMatch.toLowerCase());
-        if (resolved) return firstName(resolved);
-      }
-      return emailMatch;
-    });
+  return splitAddressList(header).map((r) => {
+    const nameMatch = r.match(/^([^<]+)</);
+    const emailMatch = r.match(/<([^>]+)>/)?.[1] || r.trim();
+    if (currentUserEmail && emailMatch.toLowerCase() === currentUserEmail.toLowerCase())
+      return "Me";
+    if (nameMatch) {
+      const extracted = firstName(nameMatch[1].trim().replace(/"/g, ""));
+      if (!extracted.includes("@")) return extracted;
+      // Name part is actually an email address — fall through to nameMap lookup
+    }
+    if (nameMap) {
+      const resolved = nameMap.get(emailMatch.toLowerCase());
+      if (resolved) return firstName(resolved);
+    }
+    return emailMatch;
+  });
 }
 
 /** Join names with commas and & for the last one, with overflow */
@@ -551,17 +645,29 @@ function joinNames(names: string[], maxVisible = 6): string {
   if (names.length === 0) return "";
   if (names.length === 1) return names[0];
   if (names.length === 2) return `${names[0]} & ${names[1]}`;
-  if (names.length <= maxVisible) return names.slice(0, -1).join(", ") + ` & ${names[names.length - 1]}`;
+  if (names.length <= maxVisible)
+    return names.slice(0, -1).join(", ") + ` & ${names[names.length - 1]}`;
   const remaining = names.length - maxVisible;
-  return names.slice(0, maxVisible).join(", ") + ` & ${remaining} ${remaining === 1 ? "other" : "others"}`;
+  return (
+    names.slice(0, maxVisible).join(", ") +
+    ` & ${remaining} ${remaining === 1 ? "other" : "others"}`
+  );
 }
 
 /** Build full Superhuman-style header: "Sarah to Mike & Jake" or "Me to Sarah. Bcc: Me" */
-function formatMessageHeader(email: DashboardEmail, currentUserEmail?: string, nameMap?: Map<string, string>): string {
+function formatMessageHeader(
+  email: DashboardEmail,
+  currentUserEmail?: string,
+  nameMap?: Map<string, string>,
+): string {
   const senderMatch = email.from.match(/^([^<]+)/);
   const senderEmail = email.from.match(/<([^>]+)>/)?.[1] || email.from.trim();
   const isFromMe = currentUserEmail && senderEmail.toLowerCase() === currentUserEmail.toLowerCase();
-  const senderFirst = isFromMe ? "Me" : (senderMatch ? firstName(senderMatch[1].trim().replace(/"/g, "")) : email.from);
+  const senderFirst = isFromMe
+    ? "Me"
+    : senderMatch
+      ? firstName(senderMatch[1].trim().replace(/"/g, ""))
+      : email.from;
 
   const toNames = parseRecipientFirstNames(email.to, currentUserEmail, nameMap);
   const ccNames = email.cc ? parseRecipientFirstNames(email.cc, currentUserEmail, nameMap) : [];
@@ -614,7 +720,7 @@ function ThreadMessage({
 
   // Extract sender info
   const senderMatch = email.from.match(/^([^<]+)/);
-  const senderName = senderMatch ? senderMatch[1].trim().replace(/"/g, '') : email.from;
+  const senderName = senderMatch ? senderMatch[1].trim().replace(/"/g, "") : email.from;
   const senderEmail = email.from.match(/<([^>]+)>/)?.[1] || email.from;
 
   // Check if this is from current user
@@ -654,7 +760,13 @@ function ThreadMessage({
     textarea.innerHTML = text;
     return textarea.value;
   };
-  const snippet = decodeEntities(email.snippet || (lightBody ?? "").replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').substring(0, 150));
+  const snippet = decodeEntities(
+    email.snippet ||
+      (lightBody ?? "")
+        .replace(/<[^>]*>/g, " ")
+        .replace(/\s+/g, " ")
+        .substring(0, 150),
+  );
 
   const [showHeaderDetails, setShowHeaderDetails] = useState(false);
   const [showQuotedBody, setShowQuotedBody] = useState(false);
@@ -692,16 +804,12 @@ function ThreadMessage({
 
         {/* Preview */}
         <div className="flex-1 min-w-0">
-          <span className="text-sm text-gray-500 dark:text-gray-400 truncate block">
-            {snippet}
-          </span>
+          <span className="text-sm text-gray-500 dark:text-gray-400 truncate block">{snippet}</span>
         </div>
 
         {/* Date */}
         <div className="flex-shrink-0">
-          <span className="text-sm text-gray-400 dark:text-gray-500">
-            {formatDate(email.date)}
-          </span>
+          <span className="text-sm text-gray-400 dark:text-gray-500">{formatDate(email.date)}</span>
         </div>
       </button>
     );
@@ -710,15 +818,17 @@ function ThreadMessage({
   // Expanded view - full email content
   // White card for rich HTML emails in dark mode, dark card otherwise
   return (
-    <div className={`group/msg ${
-      useWhiteCard
-        ? `bg-white rounded-lg${isFocused ? " ring-1 ring-blue-300 dark:ring-blue-500" : ""}`
-        : `relative before:absolute before:left-[-6px] before:top-0 before:bottom-0 before:rounded-full bg-gray-50/50 dark:bg-gray-800/30 ${
-            isFocused
-              ? "before:w-1 before:bg-blue-600 before:dark:bg-blue-400"
-              : "before:w-0.5 before:bg-blue-500 before:dark:bg-blue-400"
-          }`
-    }`}>
+    <div
+      className={`group/msg ${
+        useWhiteCard
+          ? `bg-white rounded-lg${isFocused ? " ring-1 ring-blue-300 dark:ring-blue-500" : ""}`
+          : `relative before:absolute before:left-[-6px] before:top-0 before:bottom-0 before:rounded-full bg-gray-50/50 dark:bg-gray-800/30 ${
+              isFocused
+                ? "before:w-1 before:bg-blue-600 before:dark:bg-blue-400"
+                : "before:w-0.5 before:bg-blue-500 before:dark:bg-blue-400"
+            }`
+      }`}
+    >
       {/* Header */}
       <button
         onClick={onToggle}
@@ -741,7 +851,9 @@ function ThreadMessage({
         >
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
         </svg>
-        <span className={`flex-shrink-0 ml-auto text-sm ${useWhiteCard ? "text-gray-400" : "text-gray-400 dark:text-gray-500"}`}>
+        <span
+          className={`flex-shrink-0 ml-auto text-sm ${useWhiteCard ? "text-gray-400" : "text-gray-400 dark:text-gray-500"}`}
+        >
           {formatDate(email.date)}
         </span>
         {/* Reply/Forward action buttons - top right, visible on hover */}
@@ -749,7 +861,10 @@ function ThreadMessage({
           <span className="flex-shrink-0 flex items-center gap-0.5 ml-2 opacity-0 group-hover/msg:opacity-100 transition-opacity">
             <span
               role="button"
-              onClick={(e) => { e.stopPropagation(); onReply(); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                onReply();
+              }}
               className={`p-1 rounded transition-colors ${
                 useWhiteCard
                   ? "text-gray-400 hover:text-gray-600 hover:bg-gray-100"
@@ -758,12 +873,20 @@ function ThreadMessage({
               title="Reply"
             >
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10l6-6m0 0v12m0-12h12a2 2 0 012 2v8a2 2 0 01-2 2H9" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M3 10l6-6m0 0v12m0-12h12a2 2 0 012 2v8a2 2 0 01-2 2H9"
+                />
               </svg>
             </span>
             <span
               role="button"
-              onClick={(e) => { e.stopPropagation(); onReplyAll(); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                onReplyAll();
+              }}
               className={`p-1 rounded transition-colors ${
                 useWhiteCard
                   ? "text-gray-400 hover:text-gray-600 hover:bg-gray-100"
@@ -772,13 +895,26 @@ function ThreadMessage({
               title="Reply All"
             >
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 10h8a8 8 0 018 8v2M7 10l6 6m-6-6l6-6" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 14l4-4-4-4" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M7 10h8a8 8 0 018 8v2M7 10l6 6m-6-6l6-6"
+                />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M3 14l4-4-4-4"
+                />
               </svg>
             </span>
             <span
               role="button"
-              onClick={(e) => { e.stopPropagation(); onForward(); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                onForward();
+              }}
               className={`p-1 rounded transition-colors ${
                 useWhiteCard
                   ? "text-gray-400 hover:text-gray-600 hover:bg-gray-100"
@@ -787,7 +923,12 @@ function ThreadMessage({
               title="Forward"
             >
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M14 5l7 7m0 0l-7 7m7-7H3"
+                />
               </svg>
             </span>
           </span>
@@ -796,34 +937,80 @@ function ThreadMessage({
 
       {/* Expandable sender details */}
       {showHeaderDetails && (
-        <div className={`mx-2 mt-1 p-2 rounded border text-xs space-y-1 ${
-          useWhiteCard
-            ? "bg-gray-50 border-gray-200"
-            : "bg-gray-100/50 dark:bg-gray-700/40 border-gray-200 dark:border-gray-600"
-        }`}>
+        <div
+          className={`mx-2 mt-1 p-2 rounded border text-xs space-y-1 ${
+            useWhiteCard
+              ? "bg-gray-50 border-gray-200"
+              : "bg-gray-100/50 dark:bg-gray-700/40 border-gray-200 dark:border-gray-600"
+          }`}
+        >
           <div className="flex group/addr">
-            <span className={`w-12 flex-shrink-0 ${useWhiteCard ? "text-gray-500" : "text-gray-500 dark:text-gray-400"}`}>From:</span>
-            <AddressField header={email.from} useWhiteCard={useWhiteCard} forceExpanded nameMap={nameMap} />
+            <span
+              className={`w-12 flex-shrink-0 ${useWhiteCard ? "text-gray-500" : "text-gray-500 dark:text-gray-400"}`}
+            >
+              From:
+            </span>
+            <AddressField
+              header={email.from}
+              useWhiteCard={useWhiteCard}
+              forceExpanded
+              nameMap={nameMap}
+            />
           </div>
           <div className="flex group/addr">
-            <span className={`w-12 flex-shrink-0 ${useWhiteCard ? "text-gray-500" : "text-gray-500 dark:text-gray-400"}`}>To:</span>
-            <AddressField header={email.to} useWhiteCard={useWhiteCard} forceExpanded nameMap={nameMap} />
+            <span
+              className={`w-12 flex-shrink-0 ${useWhiteCard ? "text-gray-500" : "text-gray-500 dark:text-gray-400"}`}
+            >
+              To:
+            </span>
+            <AddressField
+              header={email.to}
+              useWhiteCard={useWhiteCard}
+              forceExpanded
+              nameMap={nameMap}
+            />
           </div>
           {email.cc && (
             <div className="flex group/addr">
-              <span className={`w-12 flex-shrink-0 ${useWhiteCard ? "text-gray-500" : "text-gray-500 dark:text-gray-400"}`}>Cc:</span>
-              <AddressField header={email.cc} useWhiteCard={useWhiteCard} forceExpanded nameMap={nameMap} />
+              <span
+                className={`w-12 flex-shrink-0 ${useWhiteCard ? "text-gray-500" : "text-gray-500 dark:text-gray-400"}`}
+              >
+                Cc:
+              </span>
+              <AddressField
+                header={email.cc}
+                useWhiteCard={useWhiteCard}
+                forceExpanded
+                nameMap={nameMap}
+              />
             </div>
           )}
           {email.bcc && (
             <div className="flex group/addr">
-              <span className={`w-12 flex-shrink-0 ${useWhiteCard ? "text-gray-500" : "text-gray-500 dark:text-gray-400"}`}>Bcc:</span>
-              <AddressField header={email.bcc} useWhiteCard={useWhiteCard} forceExpanded nameMap={nameMap} />
+              <span
+                className={`w-12 flex-shrink-0 ${useWhiteCard ? "text-gray-500" : "text-gray-500 dark:text-gray-400"}`}
+              >
+                Bcc:
+              </span>
+              <AddressField
+                header={email.bcc}
+                useWhiteCard={useWhiteCard}
+                forceExpanded
+                nameMap={nameMap}
+              />
             </div>
           )}
           <div className="flex">
-            <span className={`w-12 flex-shrink-0 ${useWhiteCard ? "text-gray-500" : "text-gray-500 dark:text-gray-400"}`}>Date:</span>
-            <span className={`select-all ${useWhiteCard ? "text-gray-700" : "text-gray-700 dark:text-gray-300"}`}>{email.date}</span>
+            <span
+              className={`w-12 flex-shrink-0 ${useWhiteCard ? "text-gray-500" : "text-gray-500 dark:text-gray-400"}`}
+            >
+              Date:
+            </span>
+            <span
+              className={`select-all ${useWhiteCard ? "text-gray-700" : "text-gray-700 dark:text-gray-300"}`}
+            >
+              {email.date}
+            </span>
           </div>
         </div>
       )}
@@ -831,7 +1018,9 @@ function ThreadMessage({
       {/* Email body - no inner scroll. Masked in session replays via global maskTextSelector:"*" in posthog.ts. */}
       <div className="px-2 pb-4" data-ph-no-capture>
         {lightBody === null ? (
-          <div className="animate-pulse text-gray-400 dark:text-gray-500 text-sm py-4 px-2">Loading…</div>
+          <div className="animate-pulse text-gray-400 dark:text-gray-500 text-sm py-4 px-2">
+            Loading…
+          </div>
         ) : (
           <>
             {/* Cache key uses `:trimmed` suffix so stripped and full body are cached separately.
@@ -862,7 +1051,6 @@ function ThreadMessage({
             onPreview={onPreviewAttachment}
           />
         )}
-
       </div>
     </div>
   );
@@ -885,7 +1073,7 @@ interface SentMessageInfo {
 function InlineReply({
   replyInfo,
   accountId,
-  accountEmail,
+  accountEmail: _accountEmail,
   composeMode,
   replyToEmailId,
   onSend,
@@ -922,8 +1110,13 @@ function InlineReply({
 
   const form = useComposeForm({
     accountId,
-    initialTo: restoredDraft?.to !== undefined ? restoredDraft.to : (isForward ? [] : replyInfo.to),
-    initialCc: restoredDraft?.cc !== undefined ? restoredDraft.cc : (replyInfo.cc.length > 0 ? replyInfo.cc : []),
+    initialTo: restoredDraft?.to !== undefined ? restoredDraft.to : isForward ? [] : replyInfo.to,
+    initialCc:
+      restoredDraft?.cc !== undefined
+        ? restoredDraft.cc
+        : replyInfo.cc.length > 0
+          ? replyInfo.cc
+          : [],
     initialBcc: restoredDraft?.bcc !== undefined ? restoredDraft.bcc : [],
     initialBodyHtml: restoredDraft?.bodyHtml || "",
     initialBodyText: restoredDraft?.bodyText || "",
@@ -931,9 +1124,10 @@ function InlineReply({
     isForward,
     composeMode,
     replyToEmailId,
-    forwardAttachmentSource: isForward && replyInfo.forwardedAttachments?.length
-      ? { emailId: replyToEmailId, accountId }
-      : undefined,
+    forwardAttachmentSource:
+      isForward && replyInfo.forwardedAttachments?.length
+        ? { emailId: replyToEmailId, accountId }
+        : undefined,
   });
 
   // Merge external nameMap (from thread context) with autocomplete-derived nameMap
@@ -947,7 +1141,7 @@ function InlineReply({
   // Notify parent of To/Cc/Bcc changes so savePendingDraft can persist them.
   // Emit formatted "Name <email>" addresses so display names survive save/restore.
   useEffect(() => {
-    const formatted = form.to.map(email => {
+    const formatted = form.to.map((email) => {
       const name = mergedNameMap.get(email.toLowerCase());
       return name ? `${name} <${email}>` : email;
     });
@@ -955,7 +1149,7 @@ function InlineReply({
   }, [form.to, mergedNameMap, onToChange]);
 
   useEffect(() => {
-    const formatted = form.cc.map(email => {
+    const formatted = form.cc.map((email) => {
       const name = mergedNameMap.get(email.toLowerCase());
       return name ? `${name} <${email}>` : email;
     });
@@ -963,7 +1157,7 @@ function InlineReply({
   }, [form.cc, mergedNameMap, onCcChange]);
 
   useEffect(() => {
-    const formatted = form.bcc.map(email => {
+    const formatted = form.bcc.map((email) => {
       const name = mergedNameMap.get(email.toLowerCase());
       return name ? `${name} <${email}>` : email;
     });
@@ -981,17 +1175,23 @@ function InlineReply({
   }, [form.handleRecipientDragStart]);
 
   // When @mention adds to Cc, also reveal address fields
-  const handleMentionAddToCc = useCallback((email: string) => {
-    form.handleMentionAddToCc(email);
-    setShowAddressFields(true);
-  }, [form.handleMentionAddToCc]);
+  const handleMentionAddToCc = useCallback(
+    (email: string) => {
+      form.handleMentionAddToCc(email);
+      setShowAddressFields(true);
+    },
+    [form.handleMentionAddToCc],
+  );
 
   const containerRef = useRef<HTMLDivElement>(null);
 
   // AI draft refinement state
   const [refineCritique, setRefineCritique] = useState("");
   const [isRefining, setIsRefining] = useState(false);
-  const [preRefineContent, setPreRefineContent] = useState<{ bodyHtml: string; bodyText: string } | null>(null);
+  const [preRefineContent, setPreRefineContent] = useState<{
+    bodyHtml: string;
+    bodyText: string;
+  } | null>(null);
 
   // "Save as memory" state — shown after a successful refinement
   const [showSaveMemory, setShowSaveMemory] = useState(false);
@@ -1016,10 +1216,9 @@ function InlineReply({
     if (!memoryContent.trim()) return;
     setIsSavingMemory(true);
     try {
-      const scopeValue = memoryScopeValue
-        ?? (memoryScope === "person" ? senderEmail
-          : memoryScope === "domain" ? senderDomain
-          : null);
+      const scopeValue =
+        memoryScopeValue ??
+        (memoryScope === "person" ? senderEmail : memoryScope === "domain" ? senderDomain : null);
       const raw = await window.api.memory.save({
         accountId,
         scope: memoryScope,
@@ -1043,7 +1242,16 @@ function InlineReply({
     } finally {
       setIsSavingMemory(false);
     }
-  }, [memoryContent, memoryScope, memoryScopeValue, senderEmail, senderDomain, accountId, draftEmailId, replyToEmailId]);
+  }, [
+    memoryContent,
+    memoryScope,
+    memoryScopeValue,
+    senderEmail,
+    senderDomain,
+    accountId,
+    draftEmailId,
+    replyToEmailId,
+  ]);
 
   // Clean up memory-saved dismiss timer on unmount (InlineReply unmounts on thread switch)
   useEffect(() => {
@@ -1100,33 +1308,52 @@ function InlineReply({
       // Use a request counter to discard stale results if the user refines again quickly.
       const requestId = ++classifyRequestRef.current;
       setIsClassifyingMemory(true);
-      window.api.memory.classify({
-        content: critiqueText,
-        senderEmail,
-        senderDomain,
-      }).then((result: IpcResponse<{ scope: MemoryScope; scopeValue: string | null; content: string }>) => {
-        if (requestId !== classifyRequestRef.current) return; // stale
-        if (result.success && result.data) {
-          setMemoryScope(result.data.scope);
-          setMemoryScopeValue(result.data.scopeValue);
-          // Only overwrite content if the user hasn't edited it while classify was in flight
-          if (!memoryContentEditedRef.current) {
-            setMemoryContent(result.data.content);
+      window.api.memory
+        .classify({
+          content: critiqueText,
+          senderEmail,
+          senderDomain,
+        })
+        .then(
+          (
+            result: IpcResponse<{ scope: MemoryScope; scopeValue: string | null; content: string }>,
+          ) => {
+            if (requestId !== classifyRequestRef.current) return; // stale
+            if (result.success && result.data) {
+              setMemoryScope(result.data.scope);
+              setMemoryScopeValue(result.data.scopeValue);
+              // Only overwrite content if the user hasn't edited it while classify was in flight
+              if (!memoryContentEditedRef.current) {
+                setMemoryContent(result.data.content);
+              }
+            }
+          },
+        )
+        .catch(() => {
+          // Classification failed — keep defaults
+        })
+        .finally(() => {
+          if (requestId === classifyRequestRef.current) {
+            setIsClassifyingMemory(false);
           }
-        }
-      }).catch(() => {
-        // Classification failed — keep defaults
-      }).finally(() => {
-        if (requestId === classifyRequestRef.current) {
-          setIsClassifyingMemory(false);
-        }
-      });
+        });
     } catch (err) {
       form.setError(err instanceof Error ? err.message : "Failed to refine draft");
     } finally {
       setIsRefining(false);
     }
-  }, [refineCritique, draftEmailId, isRefining, form.bodyHtml, form.bodyText, onContentChange, form.setError, form.handleEditorChange, senderEmail, senderDomain]);
+  }, [
+    refineCritique,
+    draftEmailId,
+    isRefining,
+    form.bodyHtml,
+    form.bodyText,
+    onContentChange,
+    form.setError,
+    form.handleEditorChange,
+    senderEmail,
+    senderDomain,
+  ]);
 
   const handleRevertRefine = useCallback(() => {
     if (!preRefineContent) return;
@@ -1137,10 +1364,13 @@ function InlineReply({
   }, [preRefineContent, onContentChange, form.handleEditorChange]);
 
   // Wrap editor onChange to also notify parent
-  const handleEditorChange = useCallback((html: string, text: string) => {
-    form.handleEditorChange(html, text);
-    onContentChange?.({ bodyHtml: html, bodyText: text });
-  }, [form.handleEditorChange, onContentChange]);
+  const handleEditorChange = useCallback(
+    (html: string, text: string) => {
+      form.handleEditorChange(html, text);
+      onContentChange?.({ bodyHtml: html, bodyText: text });
+    },
+    [form.handleEditorChange, onContentChange],
+  );
 
   // Send with optimistic update support
   const handleSend = useCallback(async () => {
@@ -1179,9 +1409,15 @@ function InlineReply({
         subject: replyInfo.subject,
         body: sendOptions.bodyHtml,
         snippet: form.bodyText.substring(0, 150),
-        attachments: form.composeAttachments.length > 0
-          ? form.composeAttachments.map(a => ({ id: a.id, filename: a.filename, mimeType: a.mimeType, size: a.size }))
-          : undefined,
+        attachments:
+          form.composeAttachments.length > 0
+            ? form.composeAttachments.map((a) => ({
+                id: a.id,
+                filename: a.filename,
+                mimeType: a.mimeType,
+                size: a.size,
+              }))
+            : undefined,
       });
       return;
     }
@@ -1197,17 +1433,26 @@ function InlineReply({
         subject: replyInfo.subject,
         body: sendOptions.bodyHtml,
         snippet: form.bodyText.substring(0, 150),
-        attachments: form.composeAttachments.length > 0
-          ? form.composeAttachments.map(a => ({ id: a.id, filename: a.filename, mimeType: a.mimeType, size: a.size }))
-          : undefined,
+        attachments:
+          form.composeAttachments.length > 0
+            ? form.composeAttachments.map((a) => ({
+                id: a.id,
+                filename: a.filename,
+                mimeType: a.mimeType,
+                size: a.size,
+              }))
+            : undefined,
       });
     }
   }, [form, composeMode, replyToEmailId, replyInfo, isForward, onSend]);
 
-  const handleScheduleSend = useCallback(async (scheduledAt: number) => {
-    const success = await form.scheduleSend(scheduledAt);
-    if (success) onCancel();
-  }, [form.scheduleSend, onCancel]);
+  const handleScheduleSend = useCallback(
+    async (scheduledAt: number) => {
+      const success = await form.scheduleSend(scheduledAt);
+      if (success) onCancel();
+    },
+    [form.scheduleSend, onCancel],
+  );
 
   const [showQuotedContent, setShowQuotedContent] = useState(false);
 
@@ -1265,7 +1510,11 @@ function InlineReply({
   }, [form.to, form.cc, mergedNameMap, isForward]);
 
   return (
-    <div ref={containerRef} className="border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800" data-testid="inline-compose">
+    <div
+      ref={containerRef}
+      className="border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800"
+      data-testid="inline-compose"
+    >
       <div className="px-4 pt-2">
         <div className="flex items-center justify-between mb-1">
           {/* Level 1: Collapsed summary / Level 2: Header with controls */}
@@ -1280,7 +1529,8 @@ function InlineReply({
               </span>
               {(form.to.length > 0 || form.cc.length > 0) && (
                 <span className="text-gray-700 dark:text-gray-300">
-                  {" to "}{summaryText}
+                  {" to "}
+                  {summaryText}
                 </span>
               )}
             </button>
@@ -1298,8 +1548,18 @@ function InlineReply({
                     className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 p-1"
                     title="Collapse address fields"
                   >
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                    <svg
+                      className="w-3.5 h-3.5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M5 15l7-7 7 7"
+                      />
                     </svg>
                   </button>
                 )}
@@ -1321,7 +1581,12 @@ function InlineReply({
               title="Discard draft"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={1.5}
+                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                />
               </svg>
             </button>
           </div>
@@ -1337,7 +1602,9 @@ function InlineReply({
               nameMap={mergedNameMap}
               onSuggestionSelected={form.handleSuggestionSelected}
               fieldId="to"
-              onChipDrop={(email, sourceField) => form.handleRecipientDrop("to", email, sourceField)}
+              onChipDrop={(email, sourceField) =>
+                form.handleRecipientDrop("to", email, sourceField)
+              }
               onChipDragStart={handleRecipientDragStart}
             />
             {form.showCcBcc && (
@@ -1350,7 +1617,9 @@ function InlineReply({
                   nameMap={mergedNameMap}
                   onSuggestionSelected={form.handleSuggestionSelected}
                   fieldId="cc"
-                  onChipDrop={(email, sourceField) => form.handleRecipientDrop("cc", email, sourceField)}
+                  onChipDrop={(email, sourceField) =>
+                    form.handleRecipientDrop("cc", email, sourceField)
+                  }
                   onChipDragStart={handleRecipientDragStart}
                 />
                 <AddressInput
@@ -1361,7 +1630,9 @@ function InlineReply({
                   nameMap={mergedNameMap}
                   onSuggestionSelected={form.handleSuggestionSelected}
                   fieldId="bcc"
-                  onChipDrop={(email, sourceField) => form.handleRecipientDrop("bcc", email, sourceField)}
+                  onChipDrop={(email, sourceField) =>
+                    form.handleRecipientDrop("bcc", email, sourceField)
+                  }
                   onChipDragStart={handleRecipientDragStart}
                 />
               </div>
@@ -1379,15 +1650,15 @@ function InlineReply({
         />
         {/* Attachments */}
         {form.loadingForwardAttachments && (
-          <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Loading forwarded attachments...</p>
+          <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+            Loading forwarded attachments...
+          </p>
         )}
         <ComposeAttachmentList
           attachments={form.composeAttachments}
           onRemove={form.handleRemoveAttachment}
         />
-        {form.error && (
-          <p className="text-sm text-red-600 dark:text-red-400 mt-2">{form.error}</p>
-        )}
+        {form.error && <p className="text-sm text-red-600 dark:text-red-400 mt-2">{form.error}</p>}
         {/* Quoted original email — expandable via "..." button */}
         {replyInfo.quotedBody && (
           <div className="mt-1">
@@ -1414,7 +1685,13 @@ function InlineReply({
               value={refineCritique}
               onChange={(e) => setRefineCritique(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey && !e.metaKey && !e.ctrlKey && refineCritique.trim()) {
+                if (
+                  e.key === "Enter" &&
+                  !e.shiftKey &&
+                  !e.metaKey &&
+                  !e.ctrlKey &&
+                  refineCritique.trim()
+                ) {
                   e.preventDefault();
                   e.stopPropagation();
                   handleRefine();
@@ -1432,12 +1709,25 @@ function InlineReply({
               {isRefining ? (
                 <>
                   <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    />
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    />
                   </svg>
                   Refining...
                 </>
-              ) : "Refine"}
+              ) : (
+                "Refine"
+              )}
             </button>
             {preRefineContent && (
               <button
@@ -1457,7 +1747,9 @@ function InlineReply({
             ) : (
               <>
                 <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-purple-700 dark:text-purple-300 font-medium">Save as memory?</span>
+                  <span className="text-purple-700 dark:text-purple-300 font-medium">
+                    Save as memory?
+                  </span>
                   <button
                     onClick={() => {
                       if (memorySavedTimerRef.current) {
@@ -1473,9 +1765,17 @@ function InlineReply({
                 <input
                   type="text"
                   value={memoryContent}
-                  onChange={(e) => { memoryContentEditedRef.current = true; setMemoryContent(e.target.value); }}
+                  onChange={(e) => {
+                    memoryContentEditedRef.current = true;
+                    setMemoryContent(e.target.value);
+                  }}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter" && memoryContent.trim() && !isClassifyingMemory && !isSavingMemory) {
+                    if (
+                      e.key === "Enter" &&
+                      memoryContent.trim() &&
+                      !isClassifyingMemory &&
+                      !isSavingMemory
+                    ) {
                       e.preventDefault();
                       e.stopPropagation();
                       handleSaveMemory();
@@ -1486,7 +1786,9 @@ function InlineReply({
                 />
                 <div className="flex items-center gap-2 flex-wrap">
                   {isClassifyingMemory ? (
-                    <span className="text-xs text-purple-500 dark:text-purple-400 italic">Classifying scope...</span>
+                    <span className="text-xs text-purple-500 dark:text-purple-400 italic">
+                      Classifying scope...
+                    </span>
                   ) : (
                     <>
                       <span className="text-xs text-gray-500 dark:text-gray-400">Apply to:</span>
@@ -1496,7 +1798,10 @@ function InlineReply({
                             type="radio"
                             name="memory-scope"
                             checked={memoryScope === "person"}
-                            onChange={() => { setMemoryScope("person"); setMemoryScopeValue(senderEmail); }}
+                            onChange={() => {
+                              setMemoryScope("person");
+                              setMemoryScopeValue(senderEmail);
+                            }}
                             className="w-3 h-3"
                           />
                           {senderEmail}
@@ -1508,7 +1813,10 @@ function InlineReply({
                             type="radio"
                             name="memory-scope"
                             checked={memoryScope === "domain"}
-                            onChange={() => { setMemoryScope("domain"); setMemoryScopeValue(senderDomain); }}
+                            onChange={() => {
+                              setMemoryScope("domain");
+                              setMemoryScopeValue(senderDomain);
+                            }}
                             className="w-3 h-3"
                           />
                           @{senderDomain}
@@ -1519,17 +1827,26 @@ function InlineReply({
                           type="radio"
                           name="memory-scope"
                           checked={memoryScope === "category"}
-                          onChange={() => { setMemoryScope("category"); setMemoryScopeValue(null); }}
+                          onChange={() => {
+                            setMemoryScope("category");
+                            setMemoryScopeValue(null);
+                          }}
                           className="w-3 h-3"
                         />
-                        Category{memoryScope === "category" && memoryScopeValue ? `: ${memoryScopeValue}` : ""}
+                        Category
+                        {memoryScope === "category" && memoryScopeValue
+                          ? `: ${memoryScopeValue}`
+                          : ""}
                       </label>
                       <label className="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-300 cursor-pointer">
                         <input
                           type="radio"
                           name="memory-scope"
                           checked={memoryScope === "global"}
-                          onChange={() => { setMemoryScope("global"); setMemoryScopeValue(null); }}
+                          onChange={() => {
+                            setMemoryScope("global");
+                            setMemoryScopeValue(null);
+                          }}
                           className="w-3 h-3"
                         />
                         Everyone
@@ -1594,7 +1911,7 @@ function NewEmailCompose({
   // When the store's copy changes, push new content into the editor.
   const localDraftId = initialDraft?.localDraftId;
   const storeDraft = useAppStore((s) =>
-    localDraftId ? s.localDrafts.find((d) => d.id === localDraftId) : undefined
+    localDraftId ? s.localDrafts.find((d) => d.id === localDraftId) : undefined,
   );
   const storeDraftUpdatedAt = storeDraft?.updatedAt;
   const [lastAgentUpdateAt, setLastAgentUpdateAt] = useState(storeDraftUpdatedAt);
@@ -1621,7 +1938,6 @@ function NewEmailCompose({
     if (storeDraft.bcc && JSON.stringify(storeDraft.bcc) !== JSON.stringify(form.bcc)) {
       form.setBcc(storeDraft.bcc);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- trigger only on store draft timestamp changes
   }, [storeDraftUpdatedAt]);
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -1630,7 +1946,7 @@ function NewEmailCompose({
   const subjectInputRef = useRef<HTMLInputElement>(null);
 
   const focusEditor = useCallback(() => {
-    const editor = containerRef.current?.querySelector<HTMLElement>('.ProseMirror');
+    const editor = containerRef.current?.querySelector<HTMLElement>(".ProseMirror");
     editor?.focus();
   }, []);
 
@@ -1650,12 +1966,18 @@ function NewEmailCompose({
     }
   }, [form, onSend]);
 
-  const handleScheduleSend = useCallback(async (scheduledAt: number) => {
-    const success = await form.scheduleSend(scheduledAt);
-    if (success) onSend();
-  }, [form.scheduleSend, onSend]);
+  const handleScheduleSend = useCallback(
+    async (scheduledAt: number) => {
+      const success = await form.scheduleSend(scheduledAt);
+      if (success) onSend();
+    },
+    [form.scheduleSend, onSend],
+  );
 
-  const getFormState = useCallback((): ComposeFormState => form.getFormState(), [form.getFormState]);
+  const getFormState = useCallback(
+    (): ComposeFormState => form.getFormState(),
+    [form.getFormState],
+  );
 
   // Handle Cmd+Enter to send (capture phase to beat ProseMirror's Enter handler)
   useEffect(() => {
@@ -1690,7 +2012,10 @@ function NewEmailCompose({
   }, [onCancel, getFormState]);
 
   return (
-    <div ref={containerRef} className="flex-1 flex flex-col bg-white dark:bg-gray-800 overflow-hidden">
+    <div
+      ref={containerRef}
+      className="flex-1 flex flex-col bg-white dark:bg-gray-800 overflow-hidden"
+    >
       {/* Header */}
       <div className="h-9 px-4 bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700/50 flex items-center flex-shrink-0">
         <span className="text-gray-900 dark:text-gray-100 font-medium text-sm">New Message</span>
@@ -1700,7 +2025,12 @@ function NewEmailCompose({
           title="Discard draft"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={1.5}
+              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+            />
           </svg>
         </button>
       </div>
@@ -1724,7 +2054,9 @@ function NewEmailCompose({
                   else subjectInputRef.current?.focus();
                 }}
                 fieldId="to"
-                onChipDrop={(email, sourceField) => form.handleRecipientDrop("to", email, sourceField)}
+                onChipDrop={(email, sourceField) =>
+                  form.handleRecipientDrop("to", email, sourceField)
+                }
                 onChipDragStart={form.handleRecipientDragStart}
               />
             </div>
@@ -1752,7 +2084,9 @@ function NewEmailCompose({
                 inputRef={ccInputRef}
                 onTab={() => bccInputRef.current?.focus()}
                 fieldId="cc"
-                onChipDrop={(email, sourceField) => form.handleRecipientDrop("cc", email, sourceField)}
+                onChipDrop={(email, sourceField) =>
+                  form.handleRecipientDrop("cc", email, sourceField)
+                }
                 onChipDragStart={form.handleRecipientDragStart}
               />
               <AddressInput
@@ -1765,14 +2099,18 @@ function NewEmailCompose({
                 inputRef={bccInputRef}
                 onTab={() => subjectInputRef.current?.focus()}
                 fieldId="bcc"
-                onChipDrop={(email, sourceField) => form.handleRecipientDrop("bcc", email, sourceField)}
+                onChipDrop={(email, sourceField) =>
+                  form.handleRecipientDrop("bcc", email, sourceField)
+                }
                 onChipDragStart={form.handleRecipientDragStart}
               />
             </>
           )}
 
           <div className="flex items-baseline gap-2 py-1.5 border-b border-gray-200 dark:border-gray-700/50">
-            <label className="w-10 text-sm text-gray-500 dark:text-gray-400 flex-shrink-0">Subject</label>
+            <label className="w-10 text-sm text-gray-500 dark:text-gray-400 flex-shrink-0">
+              Subject
+            </label>
             <input
               ref={subjectInputRef}
               type="text"
@@ -1806,9 +2144,7 @@ function NewEmailCompose({
             onRemove={form.handleRemoveAttachment}
           />
 
-          {form.error && (
-            <p className="text-sm text-red-600 dark:text-red-400">{form.error}</p>
-          )}
+          {form.error && <p className="text-sm text-red-600 dark:text-red-400">{form.error}</p>}
 
           {/* Action bar */}
           <div className="py-2 mt-2">
@@ -1840,7 +2176,7 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
     selectedEmailId,
     selectedThreadId,
     setSelectedEmailId,
-    setSelectedThreadId,
+    setSelectedThreadId: _setSelectedThreadId,
     updateEmail,
     addEmails,
     removeEmailsAndAdvance,
@@ -1874,20 +2210,31 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
   const prevExpandedThreadIdRef = useRef<string | undefined>(undefined);
   const [, setExpandedVersion] = useState(0);
   const [inlineReplyInfo, setInlineReplyInfo] = useState<ReplyInfo | null>(null);
-  const [inlineComposeMode, setInlineComposeMode] = useState<"reply" | "reply-all" | "forward" | null>(null);
+  const [inlineComposeMode, setInlineComposeMode] = useState<
+    "reply" | "reply-all" | "forward" | null
+  >(null);
   const inlineReplyToEmailId = useAppStore((s) => s.inlineReplyToEmailId);
   const setInlineReplyToEmailId = useAppStore((s) => s.setInlineReplyToEmailId);
   const [isLoadingReplyInfo, setIsLoadingReplyInfo] = useState(false);
   const [restoredDraft, setRestoredDraft] = useState<RestoredDraft | null>(null);
   // Track inline reply content so we can save as draft on close
-  const inlineReplyContentRef = useRef<{ bodyHtml: string; bodyText: string; to?: string[]; cc?: string[]; bcc?: string[] } | null>(null);
+  const inlineReplyContentRef = useRef<{
+    bodyHtml: string;
+    bodyText: string;
+    to?: string[];
+    cc?: string[];
+    bcc?: string[];
+  } | null>(null);
   // Ref to the latest email so cleanup effects can save drafts for the correct email
   const latestEmailRef = useRef<ReturnType<typeof threadEmails.at> | null>(null);
   // Ref to current compose mode so savePendingDraft can persist it without re-creating
   const inlineComposeModeRef = useRef<"reply" | "reply-all" | "forward" | null>(null);
 
   // Attachment preview modal state
-  const [previewAttachment, setPreviewAttachment] = useState<{ attachment: AttachmentMeta; data: string } | null>(null);
+  const [previewAttachment, setPreviewAttachment] = useState<{
+    attachment: AttachmentMeta;
+    data: string;
+  } | null>(null);
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const pendingScrollTargetRef = useRef<string | null>(null);
@@ -1907,7 +2254,6 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
 
   const storeEmail = emails.find((e) => e.id === selectedEmailId);
 
-
   // Fallback: fetch from DB when email isn't in the store (e.g. search result from archived/sent mail)
   const [fetchedEmail, setFetchedEmail] = useState<DashboardEmail | null>(null);
   const isFetchingFallbackEmailRef = useRef(false);
@@ -1919,7 +2265,14 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
     }
     isFetchingFallbackEmailRef.current = true;
     let cancelled = false;
-    (window as { api: { gmail: { getEmail: (id: string) => Promise<{ success: boolean; data?: DashboardEmail }> } } }).api.gmail.getEmail(selectedEmailId)
+    (
+      window as {
+        api: {
+          gmail: { getEmail: (id: string) => Promise<{ success: boolean; data?: DashboardEmail }> };
+        };
+      }
+    ).api.gmail
+      .getEmail(selectedEmailId)
       .then((result) => {
         if (!cancelled && result.success && result.data) {
           setFetchedEmail(result.data as DashboardEmail);
@@ -1933,18 +2286,20 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
       .finally(() => {
         if (!cancelled) isFetchingFallbackEmailRef.current = false;
       });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [selectedEmailId, storeEmail, addEmails]);
 
   const selectedEmail = storeEmail ?? fetchedEmail;
 
   // Get current user email for "Me" detection
-  const currentAccount = accounts.find(a => a.id === currentAccountId);
+  const currentAccount = accounts.find((a) => a.id === currentAccountId);
   const currentUserEmail = currentAccount?.email;
 
   // State to hold full thread emails fetched from Gmail (includes sent replies)
   const [fullThreadEmails, setFullThreadEmails] = useState<DashboardEmail[]>([]);
-  const [isLoadingThread, setIsLoadingThread] = useState(false);
+  const [_isLoadingThread, setIsLoadingThread] = useState(false);
 
   // Fetch full thread when thread changes
   useEffect(() => {
@@ -1956,7 +2311,10 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
     const fetchThread = async () => {
       setIsLoadingThread(true);
       try {
-        const response = await (window as any).api.emails.getThread(selectedEmail.threadId, currentAccountId);
+        const response = await window.api.emails.getThread(
+          selectedEmail.threadId,
+          currentAccountId,
+        );
         if (response.success && response.data) {
           setFullThreadEmails(response.data);
           // Push into the store so the sidebar can also resolve these emails
@@ -1987,11 +2345,11 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
     // Merge with full thread emails. Store versions have analysis/draft info,
     // but may have empty bodies (bulk queries exclude body for performance).
     // Backfill body from fullThreadEmails when the store version lacks it.
-    const storeEmailIds = new Set(storeEmails.map(e => e.id));
-    const fullThreadMap = new Map(fullThreadEmails.map(e => [e.id, e]));
-    const mergedEmails = storeEmails.map(e => {
+    const storeEmailIds = new Set(storeEmails.map((e) => e.id));
+    const fullThreadMap = new Map(fullThreadEmails.map((e) => [e.id, e]));
+    const mergedEmails = storeEmails.map((e) => {
       const full = fullThreadMap.get(e.id);
-      return (full && !e.body) ? { ...e, body: full.body } : e;
+      return full && !e.body ? { ...e, body: full.body } : e;
     });
 
     // Add any emails from fullThreadEmails that aren't in the store.
@@ -2016,7 +2374,7 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
   // so that the user's own sent reply doesn't override the thread's analysis.
   const latestReceivedEmail = useMemo(() => {
     if (!currentUserEmail) return latestEmail;
-    const received = threadEmails.filter(e => {
+    const received = threadEmails.filter((e) => {
       const sender = e.from.match(/<(.+?)>/)?.[1] ?? e.from;
       return sender.toLowerCase() !== currentUserEmail.toLowerCase();
     });
@@ -2025,20 +2383,17 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
 
   // The email that has an AI-generated draft attached — may differ from latestEmail
   // when the agent drafted on an earlier received email and a sent reply is now the latest.
-  const draftEmail = useMemo(
-    () => threadEmails.find((e) => e.draft) ?? null,
-    [threadEmails]
-  );
+  const draftEmail = useMemo(() => threadEmails.find((e) => e.draft) ?? null, [threadEmails]);
 
   // Synchronously update the expansion ref when the thread changes — no setState,
   // no re-render, no discarded render. The ref is already correct for THIS render.
   if (latestEmail?.threadId !== prevExpandedThreadIdRef.current) {
     prevExpandedThreadIdRef.current = latestEmail?.threadId;
     if (threadEmails.length > 0) {
-      const firstUnreadIdx = threadEmails.findIndex(e => e.labelIds?.includes("UNREAD"));
+      const firstUnreadIdx = threadEmails.findIndex((e) => e.labelIds?.includes("UNREAD"));
       const isContiguousUnreadToEnd =
         firstUnreadIdx !== -1 &&
-        threadEmails.slice(firstUnreadIdx).every(e => e.labelIds?.includes("UNREAD"));
+        threadEmails.slice(firstUnreadIdx).every((e) => e.labelIds?.includes("UNREAD"));
       const target = isContiguousUnreadToEnd
         ? threadEmails[firstUnreadIdx]
         : threadEmails[threadEmails.length - 1];
@@ -2055,12 +2410,12 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
   if (
     focusedThreadEmailId &&
     !expandedMessagesRef.current.has(focusedThreadEmailId) &&
-    threadEmails.some(e => e.id === focusedThreadEmailId)
+    threadEmails.some((e) => e.id === focusedThreadEmailId)
   ) {
     const newSet = new Set(expandedMessagesRef.current);
     // Remove stale IDs no longer in the thread (e.g. the old pending-* ID)
     for (const id of newSet) {
-      if (!threadEmails.some(e => e.id === id)) {
+      if (!threadEmails.some((e) => e.id === id)) {
         newSet.delete(id);
       }
     }
@@ -2120,21 +2475,17 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
   // so that getReplyInfo can find it in the DB.
   const replyTargetEmailId = useMemo(() => {
     if (!latestEmail) return null;
-    const received = threadEmails.filter(
-      (e) => !e.labelIds?.includes("SENT")
-    );
-    return received.length > 0
-      ? received[received.length - 1].id
-      : latestEmail.id;
+    const received = threadEmails.filter((e) => !e.labelIds?.includes("SENT"));
+    return received.length > 0 ? received[received.length - 1].id : latestEmail.id;
   }, [threadEmails, latestEmail]);
 
   // Detect tracking numbers and unsubscribe links across thread emails
   const trackingNumbers = useMemo(() => {
-    return detectTrackingNumbers(threadEmails.map(e => e.body ?? "").filter(Boolean));
+    return detectTrackingNumbers(threadEmails.map((e) => e.body ?? "").filter(Boolean));
   }, [threadEmails]);
 
   const unsubscribeUrl = useMemo(() => {
-    return detectUnsubscribeUrl(threadEmails.map(e => e.body ?? "").filter(Boolean));
+    return detectUnsubscribeUrl(threadEmails.map((e) => e.body ?? "").filter(Boolean));
   }, [threadEmails]);
 
   // Save any in-progress reply content as a draft for the current thread.
@@ -2153,10 +2504,19 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
           composeMode: mode ?? undefined,
           ...(content.to !== undefined ? { to: content.to.length ? content.to : undefined } : {}),
           ...(content.cc !== undefined ? { cc: content.cc.length ? content.cc : undefined } : {}),
-          ...(content.bcc !== undefined ? { bcc: content.bcc.length ? content.bcc : undefined } : {}),
+          ...(content.bcc !== undefined
+            ? { bcc: content.bcc.length ? content.bcc : undefined }
+            : {}),
         },
       });
-      window.api.drafts.save(email.id, content.bodyText, mode ?? undefined, content.to, content.cc, content.bcc);
+      window.api.drafts.save(
+        email.id,
+        content.bodyText,
+        mode ?? undefined,
+        content.to,
+        content.cc,
+        content.bcc,
+      );
     }
     inlineReplyContentRef.current = null;
   }, [updateEmail]);
@@ -2184,10 +2544,10 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
     }
 
     // Set scroll target to the expanded email (same logic as the render-phase expansion above).
-    const firstUnreadIdx = threadEmails.findIndex(e => e.labelIds?.includes("UNREAD"));
+    const firstUnreadIdx = threadEmails.findIndex((e) => e.labelIds?.includes("UNREAD"));
     const isContiguousUnreadToEnd =
       firstUnreadIdx !== -1 &&
-      threadEmails.slice(firstUnreadIdx).every(e => e.labelIds?.includes("UNREAD"));
+      threadEmails.slice(firstUnreadIdx).every((e) => e.labelIds?.includes("UNREAD"));
     const target = isContiguousUnreadToEnd
       ? threadEmails[firstUnreadIdx]
       : threadEmails[threadEmails.length - 1];
@@ -2209,7 +2569,7 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
   useEffect(() => {
     if (!selectedThreadId || currentThreads.length === 0) return;
 
-    const currentIndex = currentThreads.findIndex(t => t.threadId === selectedThreadId);
+    const currentIndex = currentThreads.findIndex((t) => t.threadId === selectedThreadId);
     if (currentIndex === -1) return;
 
     const isDark = useAppStore.getState().resolvedTheme === "dark";
@@ -2227,17 +2587,20 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
       cancels.push(emailBodyCache.precompute(targetEmail.id, strippedBody, useLightMode));
     }
 
-    return () => { cancels.forEach(fn => fn()); };
-  // Only re-run when the selected thread changes, not on every currentThreads
-  // recalculation. currentThreads is intentionally omitted: if the list changes
-  // without a thread switch (e.g. new email arrives), the worst case is a cache
-  // miss on the next advance — the correct HTML is computed synchronously then.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => {
+      cancels.forEach((fn) => fn());
+    };
+    // Only re-run when the selected thread changes, not on every currentThreads
+    // recalculation. currentThreads is intentionally omitted: if the list changes
+    // without a thread switch (e.g. new email arrives), the worst case is a cache
+    // miss on the next advance — the correct HTML is computed synchronously then.
   }, [selectedThreadId]);
 
   // Save draft when leaving a thread (thread switch or unmount/deselect)
   useEffect(() => {
-    return () => { savePendingDraft(); };
+    return () => {
+      savePendingDraft();
+    };
   }, [latestEmail?.threadId, savePendingDraft]);
 
   // Auto-open the inline reply editor when the selected thread has a draft.
@@ -2263,7 +2626,14 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
       bcc: draftEmail.draft.bcc,
       skipAutoFocus: true,
     });
-  }, [draftEmail?.threadId, draftEmail?.draft?.body, replyTargetEmailId, inlineReplyInfo, composeState?.isOpen, openCompose]);
+  }, [
+    draftEmail?.threadId,
+    draftEmail?.draft?.body,
+    replyTargetEmailId,
+    inlineReplyInfo,
+    composeState?.isOpen,
+    openCompose,
+  ]);
 
   // Scroll to the target email before the browser paints.
   // Runs after the expansion layout effect triggers a sync re-render with the expanded content in the DOM.
@@ -2323,12 +2693,12 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
         // by composeState, not reactive to email/account changes).
         const storeState = useAppStore.getState();
         const storeEmails = storeState.emails;
-        const acct = storeState.accounts.find(a => a.id === currentAccountId);
+        const acct = storeState.accounts.find((a) => a.id === currentAccountId);
         const userEmail = acct?.email;
         // Find the email in the thread that has a draft (may not be the latest)
-        const threadId = storeEmails.find(e => e.id === composeState.replyToEmailId)?.threadId;
+        const threadId = storeEmails.find((e) => e.id === composeState.replyToEmailId)?.threadId;
         const threadDraftEmail = threadId
-          ? storeEmails.find(e => e.threadId === threadId && e.draft?.body)
+          ? storeEmails.find((e) => e.threadId === threadId && e.draft?.body)
           : undefined;
 
         // Capture restored draft before closeCompose clears composeState.
@@ -2360,12 +2730,19 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
           // Fetch proper Message-ID/References headers in the background.
           // These only matter at send time for Gmail threading — the UI is
           // already fully interactive without them.
-          window.api.compose.getReplyInfo(composeState.replyToEmailId, mode, currentAccountId)
+          window.api.compose
+            .getReplyInfo(composeState.replyToEmailId, mode, currentAccountId)
             .then((response: IpcResponse<ReplyInfo | null>) => {
               if (requestId !== composeRequestIdRef.current) return;
               if (response.success && response.data) {
                 setInlineReplyInfo((prev) =>
-                  prev ? { ...prev, inReplyTo: response.data!.inReplyTo, references: response.data!.references } : prev
+                  prev
+                    ? {
+                        ...prev,
+                        inReplyTo: response.data!.inReplyTo,
+                        references: response.data!.references,
+                      }
+                    : prev,
                 );
               }
             })
@@ -2377,7 +2754,8 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
           // Email not in store (edge case: search result or archived email).
           // Fall back to the IPC call.
           setIsLoadingReplyInfo(true);
-          window.api.compose.getReplyInfo(composeState.replyToEmailId, mode, currentAccountId)
+          window.api.compose
+            .getReplyInfo(composeState.replyToEmailId, mode, currentAccountId)
             .then((response: IpcResponse<ReplyInfo | null>) => {
               if (requestId !== composeRequestIdRef.current) return;
               if (!response.success || !response.data) {
@@ -2418,10 +2796,13 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
           // exists in the store. The latter catches cases where an email was
           // removed (by sync, setEmails, removeEmails, etc.) but
           // selectedEmailId wasn't cleared.
-          const emailGone = !s.selectedEmailId ||
-            !s.emails.some((e) => e.id === s.selectedEmailId);
+          const emailGone = !s.selectedEmailId || !s.emails.some((e) => e.id === s.selectedEmailId);
           if (emailGone) {
-            useAppStore.setState({ viewMode: "split", selectedEmailId: null, selectedThreadId: null });
+            useAppStore.setState({
+              viewMode: "split",
+              selectedEmailId: null,
+              selectedThreadId: null,
+            });
           }
         }
       });
@@ -2430,7 +2811,10 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
   }, [isFullView, selectedEmail, composeIsOpen]);
 
   const handleInlineReplySent = (sentInfo: SentMessageInfo) => {
-    trackEvent("email_sent", { type: inlineComposeMode ?? "unknown", has_attachments: (sentInfo.attachments?.length ?? 0) > 0 });
+    trackEvent("email_sent", {
+      type: inlineComposeMode ?? "unknown",
+      has_attachments: (sentInfo.attachments?.length ?? 0) > 0,
+    });
     // Add the sent email to the store optimistically.
     // Always use the current thread's threadId so forwards appear in the
     // thread view alongside the original email, just like replies do.
@@ -2537,8 +2921,19 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
     }
   };
 
-  const handleNewEmailCancel = async (formState: { to: string[]; cc: string[]; bcc: string[]; subject: string; bodyHtml: string; bodyText: string }) => {
-    const hasContent = formState.to.length > 0 || formState.subject.trim() || formState.bodyText.trim() || formState.bodyHtml.replace(/<[^>]*>/g, "").trim();
+  const handleNewEmailCancel = async (formState: {
+    to: string[];
+    cc: string[];
+    bcc: string[];
+    subject: string;
+    bodyHtml: string;
+    bodyText: string;
+  }) => {
+    const hasContent =
+      formState.to.length > 0 ||
+      formState.subject.trim() ||
+      formState.bodyText.trim() ||
+      formState.bodyHtml.replace(/<[^>]*>/g, "").trim();
     const existingDraftId = composeState?.restoredDraft?.localDraftId;
 
     if (hasContent && currentAccountId) {
@@ -2564,7 +2959,7 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
         });
       } else {
         // Save new draft
-        const result = await window.api.compose.saveLocalDraft({
+        const result = (await window.api.compose.saveLocalDraft({
           accountId: currentAccountId,
           to: formState.to,
           cc: formState.cc.length > 0 ? formState.cc : undefined,
@@ -2572,7 +2967,7 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
           subject: formState.subject,
           bodyHtml: formState.bodyHtml,
           bodyText: formState.bodyText,
-        }) as IpcResponse<LocalDraft>;
+        })) as IpcResponse<LocalDraft>;
         if (result.success && result.data) {
           addLocalDraft(result.data);
         }
@@ -2632,8 +3027,6 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
     }
   };
 
-
-
   // Decode HTML entities (Gmail API returns subjects with entities like &#39;)
   const decodeHtmlEntities = (text: string): string => {
     const textarea = document.createElement("textarea");
@@ -2647,18 +3040,18 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
   const cleanSubject = decodeHtmlEntities(
     oldestEmail.inReplyTo || /^Re:\s/i.test(oldestEmail.subject)
       ? oldestEmail.subject.replace(/^(Re:\s*)+/i, "")
-      : oldestEmail.subject
+      : oldestEmail.subject,
   );
 
   const handleBackToSplit = () => {
     setViewMode("split");
   };
 
-  const isStarred = threadEmails.some(e => e.labelIds?.includes("STARRED"));
+  const isStarred = threadEmails.some((e) => e.labelIds?.includes("STARRED"));
 
   const handleArchive = () => {
     if (!currentAccountId || !selectedThreadId) return;
-    const emailIds = threadEmails.map(e => e.id);
+    const emailIds = threadEmails.map((e) => e.id);
 
     // Find next thread before removing
     const currentIndex = currentThreads.findIndex((t) => t.threadId === selectedThreadId);
@@ -2669,7 +3062,11 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
       const nextIndex = Math.min(Math.max(currentIndex, 0), remainingThreads.length - 1);
       const nextThread = remainingThreads[nextIndex];
       if (nextThread) markThreadAsRead(nextThread.threadId);
-      removeEmailsAndAdvance(emailIds, nextThread?.threadId ?? null, nextThread?.latestEmail.id ?? null);
+      removeEmailsAndAdvance(
+        emailIds,
+        nextThread?.threadId ?? null,
+        nextThread?.latestEmail.id ?? null,
+      );
     } else {
       removeEmailsAndAdvance(emailIds, null, null);
       if (isFullView) setViewMode("split");
@@ -2689,7 +3086,7 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
 
   const handleTrash = () => {
     if (!currentAccountId || !selectedThreadId) return;
-    const emailIds = threadEmails.map(e => e.id);
+    const emailIds = threadEmails.map((e) => e.id);
 
     // Find next thread before removing (same auto-advance as archive)
     const currentIndex = currentThreads.findIndex((t) => t.threadId === selectedThreadId);
@@ -2700,7 +3097,11 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
       const nextIndex = Math.min(Math.max(currentIndex, 0), remainingThreads.length - 1);
       const nextThread = remainingThreads[nextIndex];
       if (nextThread) markThreadAsRead(nextThread.threadId);
-      removeEmailsAndAdvance(emailIds, nextThread?.threadId ?? null, nextThread?.latestEmail.id ?? null);
+      removeEmailsAndAdvance(
+        emailIds,
+        nextThread?.threadId ?? null,
+        nextThread?.latestEmail.id ?? null,
+      );
     } else {
       removeEmailsAndAdvance(emailIds, null, null);
       if (isFullView) setViewMode("split");
@@ -2757,7 +3158,7 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
       }
     } else {
       // Unstar all starred emails in the thread
-      const starredEmails = threadEmails.filter(e => e.labelIds?.includes("STARRED"));
+      const starredEmails = threadEmails.filter((e) => e.labelIds?.includes("STARRED"));
       for (const email of starredEmails) {
         const currentLabels = email.labelIds || [];
         previousLabels[email.id] = [...currentLabels];
@@ -2791,7 +3192,12 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
             className="flex items-center gap-1 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors text-sm"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M15 19l-7-7 7-7"
+              />
             </svg>
             Back
           </button>
@@ -2821,7 +3227,12 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
                   title="Archive"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 8h14M5 8a2 2 0 01-2-2V4a2 2 0 012-2h14a2 2 0 012 2v2a2 2 0 01-2 2M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={1.5}
+                      d="M5 8h14M5 8a2 2 0 01-2-2V4a2 2 0 012-2h14a2 2 0 012 2v2a2 2 0 01-2 2M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"
+                    />
                   </svg>
                 </button>
                 <button
@@ -2830,7 +3241,12 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
                   title="Delete"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={1.5}
+                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                    />
                   </svg>
                 </button>
                 <button
@@ -2839,7 +3255,12 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
                   title="Mark as unread"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={1.5}
+                      d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75"
+                    />
                   </svg>
                 </button>
                 <button
@@ -2851,8 +3272,18 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
                   }`}
                   title={isStarred ? "Unstar" : "Star"}
                 >
-                  <svg className="w-4 h-4" fill={isStarred ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.563.563 0 00-.586 0L6.982 20.54a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.563.563 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z" />
+                  <svg
+                    className="w-4 h-4"
+                    fill={isStarred ? "currentColor" : "none"}
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={1.5}
+                      d="M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.563.563 0 00-.586 0L6.982 20.54a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.563.563 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z"
+                    />
                   </svg>
                 </button>
                 {/* Snooze button */}
@@ -2866,29 +3297,59 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
                   title={snoozedThreads.has(latestEmail.threadId) ? "Snoozed" : "Snooze (h)"}
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={1.5}
+                      d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
                   </svg>
                 </button>
               </div>
               <div className="w-px h-4 bg-gray-200 dark:bg-gray-600 mx-1" />
               <div className="flex items-center">
                 <button
-                  onClick={() => openCompose("reply-all", focusedThreadEmailId ?? replyTargetEmailId ?? latestEmail.id)}
+                  onClick={() =>
+                    openCompose(
+                      "reply-all",
+                      focusedThreadEmailId ?? replyTargetEmailId ?? latestEmail.id,
+                    )
+                  }
                   className="p-1.5 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
                   title="Reply All"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 10h8a8 8 0 018 8v2M7 10l6 6m-6-6l6-6" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 14l4-4-4-4" />
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={1.5}
+                      d="M7 10h8a8 8 0 018 8v2M7 10l6 6m-6-6l6-6"
+                    />
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={1.5}
+                      d="M3 14l4-4-4-4"
+                    />
                   </svg>
                 </button>
                 <button
-                  onClick={() => openCompose("forward", focusedThreadEmailId ?? replyTargetEmailId ?? latestEmail.id)}
+                  onClick={() =>
+                    openCompose(
+                      "forward",
+                      focusedThreadEmailId ?? replyTargetEmailId ?? latestEmail.id,
+                    )
+                  }
                   className="p-1.5 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
                   title="Forward"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={1.5}
+                      d="M14 5l7 7m0 0l-7 7m7-7H3"
+                    />
                   </svg>
                 </button>
               </div>
@@ -2897,30 +3358,42 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
         </div>
 
         {/* Snooze banner */}
-        {snoozedThreads.has(latestEmail.threadId) && currentAccountId && (() => {
-          const snoozeInfo = snoozedThreads.get(latestEmail.threadId);
-          return snoozeInfo ? (
-            <div className="px-6 py-2.5 border-b border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-900/20 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <svg className="w-4 h-4 text-amber-500 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <span className="text-sm text-amber-700 dark:text-amber-300">
-                  Snoozed until {formatSnoozeTime(snoozeInfo.snoozeUntil)}
-                </span>
+        {snoozedThreads.has(latestEmail.threadId) &&
+          currentAccountId &&
+          (() => {
+            const snoozeInfo = snoozedThreads.get(latestEmail.threadId);
+            return snoozeInfo ? (
+              <div className="px-6 py-2.5 border-b border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-900/20 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <svg
+                    className="w-4 h-4 text-amber-500 dark:text-amber-400"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={1.5}
+                      d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
+                  </svg>
+                  <span className="text-sm text-amber-700 dark:text-amber-300">
+                    Snoozed until {formatSnoozeTime(snoozeInfo.snoozeUntil)}
+                  </span>
+                </div>
+                <button
+                  onClick={async () => {
+                    await window.api.snooze.unsnooze(latestEmail.threadId, currentAccountId);
+                    removeSnoozedThread(latestEmail.threadId);
+                  }}
+                  className="text-xs text-amber-600 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-200 font-medium"
+                >
+                  Unsnooze
+                </button>
               </div>
-              <button
-                onClick={async () => {
-                  await (window as any).api.snooze.unsnooze(latestEmail.threadId, currentAccountId);
-                  removeSnoozedThread(latestEmail.threadId);
-                }}
-                className="text-xs text-amber-600 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-200 font-medium"
-              >
-                Unsnooze
-              </button>
-            </div>
-          ) : null;
-        })()}
+            ) : null;
+          })()}
 
         {/* Action buttons (Track Package, Unsubscribe) */}
         {(trackingNumbers.length > 0 || unsubscribeUrl) && (
@@ -2933,7 +3406,12 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
                 title={`Track ${t.carrier} package ${t.trackingNumber}`}
               >
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
+                  />
                 </svg>
                 Track {t.carrier} Package
               </button>
@@ -2945,7 +3423,12 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
                 title="Unsubscribe from this mailing list"
               >
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"
+                  />
                 </svg>
                 Unsubscribe
               </button>
@@ -2968,7 +3451,9 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
                 currentUserEmail={currentUserEmail}
                 accountId={currentAccountId ?? undefined}
                 threadEmails={threadEmails}
-                onPreviewAttachment={(attachment, data) => setPreviewAttachment({ attachment, data })}
+                onPreviewAttachment={(attachment, data) =>
+                  setPreviewAttachment({ attachment, data })
+                }
               />
               {/* Loading indicator for inline reply — stays inside map for positioning */}
               {inlineReplyToEmailId === email.id && isLoadingReplyInfo && (
@@ -2977,26 +3462,57 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
               {/* Inline reply/forward — rendered inside the map right below the email being replied to.
                   When undo-send replaces an optimistic email ID, UndoSendToast atomically updates
                   inlineReplyToEmailId in the store so this condition keeps matching. */}
-              {inlineReplyToEmailId === email.id && inlineReplyInfo && currentAccountId && currentUserEmail && inlineComposeMode && (
-                <InlineReply
-                  key={`${inlineComposeMode}-${inlineReplyToEmailId}`}
-                  replyInfo={inlineReplyInfo}
-                  accountId={currentAccountId}
-                  accountEmail={currentUserEmail}
-                  composeMode={inlineComposeMode}
-                  replyToEmailId={inlineReplyToEmailId}
-                  onSend={handleInlineReplySent}
-                  onCancel={handleInlineReplyCancel}
-                  onContentChange={(content) => { inlineReplyContentRef.current = { ...inlineReplyContentRef.current, ...content }; }}
-                  onToChange={(to) => { if (inlineReplyContentRef.current) { inlineReplyContentRef.current.to = to; } else { inlineReplyContentRef.current = { bodyHtml: "", bodyText: "", to }; } }}
-                  onCcChange={(cc) => { if (inlineReplyContentRef.current) { inlineReplyContentRef.current.cc = cc; } else { inlineReplyContentRef.current = { bodyHtml: "", bodyText: "", cc }; } }}
-                  onBccChange={(bcc) => { if (inlineReplyContentRef.current) { inlineReplyContentRef.current.bcc = bcc; } else { inlineReplyContentRef.current = { bodyHtml: "", bodyText: "", bcc }; } }}
-                  restoredDraft={restoredDraft}
-                  draftEmailId={draftEmail?.draft && draftEmail.draft.status !== "edited" ? draftEmail.id : undefined}
-                  onDiscardDraft={handleDiscardDraft}
-                  nameMap={nameMap}
-                />
-              )}
+              {inlineReplyToEmailId === email.id &&
+                inlineReplyInfo &&
+                currentAccountId &&
+                currentUserEmail &&
+                inlineComposeMode && (
+                  <InlineReply
+                    key={`${inlineComposeMode}-${inlineReplyToEmailId}`}
+                    replyInfo={inlineReplyInfo}
+                    accountId={currentAccountId}
+                    accountEmail={currentUserEmail}
+                    composeMode={inlineComposeMode}
+                    replyToEmailId={inlineReplyToEmailId}
+                    onSend={handleInlineReplySent}
+                    onCancel={handleInlineReplyCancel}
+                    onContentChange={(content) => {
+                      inlineReplyContentRef.current = {
+                        ...inlineReplyContentRef.current,
+                        ...content,
+                      };
+                    }}
+                    onToChange={(to) => {
+                      if (inlineReplyContentRef.current) {
+                        inlineReplyContentRef.current.to = to;
+                      } else {
+                        inlineReplyContentRef.current = { bodyHtml: "", bodyText: "", to };
+                      }
+                    }}
+                    onCcChange={(cc) => {
+                      if (inlineReplyContentRef.current) {
+                        inlineReplyContentRef.current.cc = cc;
+                      } else {
+                        inlineReplyContentRef.current = { bodyHtml: "", bodyText: "", cc };
+                      }
+                    }}
+                    onBccChange={(bcc) => {
+                      if (inlineReplyContentRef.current) {
+                        inlineReplyContentRef.current.bcc = bcc;
+                      } else {
+                        inlineReplyContentRef.current = { bodyHtml: "", bodyText: "", bcc };
+                      }
+                    }}
+                    restoredDraft={restoredDraft}
+                    draftEmailId={
+                      draftEmail?.draft && draftEmail.draft.status !== "edited"
+                        ? draftEmail.id
+                        : undefined
+                    }
+                    onDiscardDraft={handleDiscardDraft}
+                    nameMap={nameMap}
+                  />
+                )}
             </div>
           ))}
         </div>
@@ -3017,7 +3533,6 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
             }}
           />
         )}
-
       </div>
 
       {/* Attachment preview modal */}

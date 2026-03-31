@@ -1,0 +1,18 @@
+{
+  "id": "draft-formal-001",
+  "description": "Formal business email requiring sign-off — vendor contract with EOD deadline",
+  "email": {
+    "id": "fixture-006",
+    "threadId": "thread-006",
+    "from": "legal@company.com",
+    "to": "user@company.com",
+    "subject": "Need your sign-off on vendor contract",
+    "body": "Hi,\n\nLegal has approved the contract with Acme Corp. We need your signature by EOD today to lock in the current pricing (they're raising rates next month).\n\nI've attached the final version with all the negotiated terms. The key changes from our discussion:\n- 2-year term with option to extend\n- Net-30 payment terms\n- Custom SLA we requested\n\nPlease review and let me know if you have any concerns.\n\nBest regards,\nJane from Legal",
+    "date": "2025-01-15T13:00:00Z",
+    "snippet": "Legal has approved the contract with Acme Corp. We need your signature..."
+  },
+  "expected": {
+    "needs_reply": true,
+    "priority": "high"
+  }
+}

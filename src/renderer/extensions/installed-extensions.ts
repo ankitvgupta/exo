@@ -41,7 +41,10 @@ interface InstalledExtensionRendererModule {
  */
 export async function loadInstalledExtensionPanels(): Promise<void> {
   try {
-    const result = await window.api.extensions.listInstalled() as { success: boolean; data?: InstalledExtensionInfo[] };
+    const result = (await window.api.extensions.listInstalled()) as {
+      success: boolean;
+      data?: InstalledExtensionInfo[];
+    };
 
     if (!result.success || !result.data) return;
 
@@ -70,33 +73,33 @@ function rewriteReactImports(code: string): string {
   // With:    const { ... } = globalThis.__MAIL_EXT_JSX_RUNTIME__
   code = code.replace(
     /import\s*\{([^}]+)\}\s*from\s*["']react\/jsx-runtime["']\s*;?/g,
-    "const {$1} = globalThis.__MAIL_EXT_JSX_RUNTIME__;"
+    "const {$1} = globalThis.__MAIL_EXT_JSX_RUNTIME__;",
   );
 
   // Replace: import { ... } from "react-dom"
   // With:    const { ... } = globalThis.__MAIL_EXT_REACT_DOM__
   code = code.replace(
     /import\s*\{([^}]+)\}\s*from\s*["']react-dom["']\s*;?/g,
-    "const {$1} = globalThis.__MAIL_EXT_REACT_DOM__;"
+    "const {$1} = globalThis.__MAIL_EXT_REACT_DOM__;",
   );
 
   // Replace: import { ... } from "react"
   // With:    const { ... } = globalThis.__MAIL_EXT_REACT__
   code = code.replace(
     /import\s*\{([^}]+)\}\s*from\s*["']react["']\s*;?/g,
-    "const {$1} = globalThis.__MAIL_EXT_REACT__;"
+    "const {$1} = globalThis.__MAIL_EXT_REACT__;",
   );
 
   // Replace: import React from "react"  (default import)
   code = code.replace(
     /import\s+(\w+)\s+from\s*["']react["']\s*;?/g,
-    "const $1 = globalThis.__MAIL_EXT_REACT__;"
+    "const $1 = globalThis.__MAIL_EXT_REACT__;",
   );
 
   // Replace: import * as React from "react"  (namespace import)
   code = code.replace(
     /import\s*\*\s*as\s+(\w+)\s+from\s*["']react["']\s*;?/g,
-    "const $1 = globalThis.__MAIL_EXT_REACT__;"
+    "const $1 = globalThis.__MAIL_EXT_REACT__;",
   );
 
   return code;
@@ -107,7 +110,11 @@ function rewriteReactImports(code: string): string {
  */
 export async function loadExtensionRenderer(extensionId: string): Promise<void> {
   try {
-    const result = await window.api.extensions.getRendererBundle(extensionId) as { success: boolean; data?: string; error?: string };
+    const result = (await window.api.extensions.getRendererBundle(extensionId)) as {
+      success: boolean;
+      data?: string;
+      error?: string;
+    };
 
     if (!result.success || !result.data) {
       console.warn(`[Extensions] No renderer bundle for ${extensionId}: ${result.error}`);
@@ -121,7 +128,7 @@ export async function loadExtensionRenderer(extensionId: string): Promise<void> 
     const blobUrl = URL.createObjectURL(blob);
 
     try {
-      const module = await import(/* @vite-ignore */ blobUrl) as InstalledExtensionRendererModule;
+      const module = (await import(/* @vite-ignore */ blobUrl)) as InstalledExtensionRendererModule;
 
       if (module.panelRegistrations) {
         for (const reg of module.panelRegistrations) {

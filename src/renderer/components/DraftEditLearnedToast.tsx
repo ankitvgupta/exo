@@ -17,13 +17,15 @@ export function DraftEditLearnedToast() {
   // Listen for draft-edit:learned events from main process
   useEffect(() => {
     if (!window.api?.memory?.onDraftEditLearned) return;
-    const cleanup = window.api.memory.onDraftEditLearned((data: {
-      promoted: Array<{ id: string; content: string; scope: string; scopeValue: string | null }>;
-      draftMemoriesCreated: number;
-      draftMemoryIds: string[];
-    }) => {
-      useAppStore.getState().setDraftEditLearned(data);
-    });
+    const cleanup = window.api.memory.onDraftEditLearned(
+      (data: {
+        promoted: Array<{ id: string; content: string; scope: string; scopeValue: string | null }>;
+        draftMemoriesCreated: number;
+        draftMemoryIds: string[];
+      }) => {
+        useAppStore.getState().setDraftEditLearned(data);
+      },
+    );
     return cleanup;
   }, []);
 
@@ -67,7 +69,12 @@ export function DraftEditLearnedToast() {
             title="Dismiss"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
             </svg>
           </button>
         </div>
@@ -78,7 +85,7 @@ export function DraftEditLearnedToast() {
   // Prominent toast for promotions — entire body clickable to navigate
   if (hasPromoted) {
     const navigateToMemories = () => {
-      setHighlightMemoryIds([...promoted.map(m => m.id), ...draftMemoryIds]);
+      setHighlightMemoryIds([...promoted.map((m) => m.id), ...draftMemoryIds]);
       clearDraftEditLearned();
       setShowSettings(true, "memories");
     };
@@ -90,18 +97,14 @@ export function DraftEditLearnedToast() {
             onClick={navigateToMemories}
             className="flex-1 min-w-0 text-left hover:opacity-90 transition-opacity cursor-pointer"
           >
-            <p className="text-xs font-medium text-purple-300 mb-1">
-              Confirmed from your edits
-            </p>
+            <p className="text-xs font-medium text-purple-300 mb-1">Confirmed from your edits</p>
             {promoted.slice(0, 2).map((m) => (
               <p key={m.id} className="text-sm truncate" title={m.content}>
                 {m.content}
               </p>
             ))}
             {promoted.length > 2 && (
-              <p className="text-xs text-purple-300 mt-0.5">
-                +{promoted.length - 2} more
-              </p>
+              <p className="text-xs text-purple-300 mt-0.5">+{promoted.length - 2} more</p>
             )}
             {draftMemoriesCreated > 0 && (
               <p className="text-xs text-purple-400 mt-1">
@@ -118,7 +121,12 @@ export function DraftEditLearnedToast() {
             title="Dismiss"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
             </svg>
           </button>
         </div>

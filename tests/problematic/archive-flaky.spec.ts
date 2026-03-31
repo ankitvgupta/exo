@@ -61,7 +61,7 @@ async function selectFirstThread(page: Page): Promise<void> {
 // This test passes individually but fails in the full suite due to demo database
 // state isolation issues. Earlier tests archive emails which affects this test's count.
 test.describe("Archive - Persistence", () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: "serial" });
   let electronApp: ElectronApplication;
   let page: Page;
 
@@ -116,7 +116,7 @@ test.describe("Archive - Persistence", () => {
 // These tests are inherently flaky due to timing-sensitive keyboard event handling
 // in Electron. The core archive functionality is tested in "Archive - Optimistic UI".
 test.describe("Archive - Rapid Succession", () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: "serial" });
   let electronApp: ElectronApplication;
   let page: Page;
 
@@ -140,7 +140,9 @@ test.describe("Archive - Rapid Succession", () => {
     expect(countBefore).toBeGreaterThan(3);
 
     for (let i = 0; i < 3; i++) {
-      await expect(page.locator(".overflow-y-auto button.bg-blue-600")).toBeVisible({ timeout: 3000 });
+      await expect(page.locator(".overflow-y-auto button.bg-blue-600")).toBeVisible({
+        timeout: 3000,
+      });
       await page.waitForTimeout(200);
 
       const before = await countInboxThreads(page);
@@ -165,7 +167,7 @@ test.describe("Archive - Rapid Succession", () => {
 // These tests are inherently flaky due to timing-sensitive keyboard event handling
 // in Electron. The core trash functionality is tested in the single-thread test.
 test.describe("Trash - Rapid Succession", () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: "serial" });
   let electronApp: ElectronApplication;
   let page: Page;
 
@@ -183,7 +185,10 @@ test.describe("Trash - Rapid Succession", () => {
 
   test("can trash multiple threads in rapid succession", async () => {
     await page.waitForTimeout(1000);
-    const isSelected = await page.locator(".overflow-y-auto button.bg-blue-600").isVisible().catch(() => false);
+    const isSelected = await page
+      .locator(".overflow-y-auto button.bg-blue-600")
+      .isVisible()
+      .catch(() => false);
     if (!isSelected) {
       await selectFirstThread(page);
     }
@@ -199,7 +204,9 @@ test.describe("Trash - Rapid Succession", () => {
     }).toPass({ timeout: 3000 });
 
     // Ensure selection is still visible before second trash
-    await expect(page.locator(".overflow-y-auto button.bg-blue-600")).toBeVisible({ timeout: 2000 });
+    await expect(page.locator(".overflow-y-auto button.bg-blue-600")).toBeVisible({
+      timeout: 2000,
+    });
     await page.waitForTimeout(200);
 
     // Trash second thread
@@ -217,7 +224,7 @@ test.describe("Trash - Rapid Succession", () => {
 // This test is flaky due to shared state with previous test in serial mode.
 // The core navigation and archive functionality is tested in other describe blocks.
 test.describe("Archive - Navigate Then Archive", () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: "serial" });
   let electronApp: ElectronApplication;
   let page: Page;
 
@@ -249,7 +256,9 @@ test.describe("Archive - Navigate Then Archive", () => {
     await page.waitForTimeout(300);
 
     // Verify selection is active before measuring count
-    await expect(page.locator(".overflow-y-auto button.bg-blue-600")).toBeVisible({ timeout: 2000 });
+    await expect(page.locator(".overflow-y-auto button.bg-blue-600")).toBeVisible({
+      timeout: 2000,
+    });
 
     const countBefore = await countInboxThreads(page);
     const selectedBefore = await getSelectedRowText(page);

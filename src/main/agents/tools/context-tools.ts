@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ToolDefinition, ToolRiskLevel } from "./types";
+import { type ToolDefinition, ToolRiskLevel } from "./types";
 
 const webSearch: ToolDefinition<{ query: string }> = {
   name: "web_search",
@@ -31,20 +31,20 @@ const getCalendar: ToolDefinition<{ accountId: string; date: string }> = {
   riskLevel: ToolRiskLevel.NONE,
   inputSchema: z.object({
     accountId: z.string().describe("The account ID"),
-    date: z
-      .string()
-      .describe("Date to get events for (YYYY-MM-DD format)"),
+    date: z.string().describe("Date to get events for (YYYY-MM-DD format)"),
   }),
   async execute(input, ctx) {
-    const events = await ctx.db(
-      "getCalendarEventsForDate",
-      input.date,
-    );
+    const events = await ctx.db("getCalendarEventsForDate", input.date);
     return events;
   },
 };
 
-const saveMemory: ToolDefinition<{ accountId: string; content: string; scope: string; scopeValue?: string }> = {
+const saveMemory: ToolDefinition<{
+  accountId: string;
+  content: string;
+  scope: string;
+  scopeValue?: string;
+}> = {
   name: "save_memory",
   description:
     "Save a persistent memory or preference that will be applied to future email handling. " +
@@ -60,7 +60,12 @@ const saveMemory: ToolDefinition<{ accountId: string; content: string; scope: st
     accountId: z.string().describe("The account ID to save the memory for"),
     content: z.string().describe("The preference or instruction to remember"),
     scope: z.enum(["person", "domain", "category", "global"]).describe("Scope of the memory"),
-    scopeValue: z.string().optional().describe("Email address (person), domain (domain), or category name (category). Not needed for global."),
+    scopeValue: z
+      .string()
+      .optional()
+      .describe(
+        "Email address (person), domain (domain), or category name (category). Not needed for global.",
+      ),
   }),
   async execute(input, ctx) {
     const { randomUUID } = await import("crypto");

@@ -4,7 +4,11 @@
  * Extracts dates mentioned in email bodies and shows calendar events
  * for those dates in the sidebar.
  */
-import type { ExtensionModule, ExtensionContext, ExtensionAPI } from "../../../shared/extension-types";
+import type {
+  ExtensionModule,
+  ExtensionContext,
+  ExtensionAPI,
+} from "../../../shared/extension-types";
 import { createCalendarProvider } from "./calendar-provider";
 
 const extension: ExtensionModule = {

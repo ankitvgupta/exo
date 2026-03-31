@@ -29,9 +29,18 @@ export interface MockMessageResponse {
 // State for the mock
 let responseQueue: Array<MockMessageResponse | Error> = [];
 let defaultResponse: MockMessageResponse | null = null;
-let capturedRequests: Array<{ model: string; messages: unknown[]; system?: unknown; max_tokens?: number; tools?: unknown[] }> = [];
+let capturedRequests: Array<{
+  model: string;
+  messages: unknown[];
+  system?: unknown;
+  max_tokens?: number;
+  tools?: unknown[];
+}> = [];
 
-function buildResponse(text: string, model: string = "claude-sonnet-4-20250514"): MockMessageResponse {
+function buildResponse(
+  text: string,
+  model: string = "claude-sonnet-4-20250514",
+): MockMessageResponse {
   return {
     id: `msg_mock_${Date.now()}`,
     type: "message",
@@ -116,7 +125,7 @@ export class MockAnthropic {
 
       // No response configured — fail loudly
       throw new Error(
-        "[MockAnthropic] No response configured. Call mockAnthropicResponse() or queueAnthropicResponses() before invoking services."
+        "[MockAnthropic] No response configured. Call mockAnthropicResponse() or queueAnthropicResponses() before invoking services.",
       );
     },
   };

@@ -6,13 +6,20 @@ declare global {
   interface Window {
     api: {
       snooze: {
-        snooze: (emailId: string, threadId: string, accountId: string, snoozeUntil: number) => Promise<IpcResponse<SnoozedEmail>>;
+        snooze: (
+          emailId: string,
+          threadId: string,
+          accountId: string,
+          snoozeUntil: number,
+        ) => Promise<IpcResponse<SnoozedEmail>>;
         unsnooze: (threadId: string, accountId: string) => Promise<IpcResponse<void>>;
         list: (accountId: string) => Promise<IpcResponse<SnoozedEmail[]>>;
         get: (threadId: string, accountId: string) => Promise<IpcResponse<SnoozedEmail | null>>;
         onUnsnoozed: (callback: (data: { emails: SnoozedEmail[] }) => void) => void;
         onSnoozed: (callback: (data: { snoozedEmail: SnoozedEmail }) => void) => void;
-        onManuallyUnsnoozed: (callback: (data: { threadId: string; accountId: string }) => void) => void;
+        onManuallyUnsnoozed: (
+          callback: (data: { threadId: string; accountId: string }) => void,
+        ) => void;
         removeAllListeners: () => void;
       };
     };
@@ -30,16 +37,46 @@ interface SnoozeOption {
 // ============================================
 
 const MONTH_NAMES: Record<string, number> = {
-  jan: 0, january: 0, feb: 1, february: 1, mar: 2, march: 2,
-  apr: 3, april: 3, may: 4, jun: 5, june: 5,
-  jul: 6, july: 6, aug: 7, august: 7, sep: 8, september: 8,
-  oct: 9, october: 9, nov: 10, november: 10, dec: 11, december: 11,
+  jan: 0,
+  january: 0,
+  feb: 1,
+  february: 1,
+  mar: 2,
+  march: 2,
+  apr: 3,
+  april: 3,
+  may: 4,
+  jun: 5,
+  june: 5,
+  jul: 6,
+  july: 6,
+  aug: 7,
+  august: 7,
+  sep: 8,
+  september: 8,
+  oct: 9,
+  october: 9,
+  nov: 10,
+  november: 10,
+  dec: 11,
+  december: 11,
 };
 
 const DAY_NAMES: Record<string, number> = {
-  sun: 0, sunday: 0, mon: 1, monday: 1, tue: 2, tuesday: 2,
-  wed: 3, wednesday: 3, thu: 4, thursday: 4, fri: 5, friday: 5,
-  sat: 6, saturday: 6,
+  sun: 0,
+  sunday: 0,
+  mon: 1,
+  monday: 1,
+  tue: 2,
+  tuesday: 2,
+  wed: 3,
+  wednesday: 3,
+  thu: 4,
+  thursday: 4,
+  fri: 5,
+  friday: 5,
+  sat: 6,
+  saturday: 6,
 };
 
 /**
@@ -63,7 +100,7 @@ export function parseSnoozeText(input: string): number | null {
   // --- Relative durations ---
   // "30s", "1 min", "5 minutes", "5m", "2 hours", "2h", "3 days", "3d", "1 week", "1w"
   const relMatch = text.match(
-    /^(\d+)\s*(s|sec|secs|seconds?|m|min|mins|minutes?|h|hr|hrs|hours?|d|days?|w|wk|wks|weeks?)$/
+    /^(\d+)\s*(s|sec|secs|seconds?|m|min|mins|minutes?|h|hr|hrs|hours?|d|days?|w|wk|wks|weeks?)$/,
   );
   if (relMatch) {
     const num = parseInt(relMatch[1], 10);
@@ -71,9 +108,11 @@ export function parseSnoozeText(input: string): number | null {
     let ms = 0;
     if (unit.startsWith("s")) ms = num * 1000;
     else if (unit === "m" || unit.startsWith("min")) ms = num * 60 * 1000;
-    else if (unit === "h" || unit.startsWith("hr") || unit.startsWith("hour")) ms = num * 3600 * 1000;
+    else if (unit === "h" || unit.startsWith("hr") || unit.startsWith("hour"))
+      ms = num * 3600 * 1000;
     else if (unit === "d" || unit.startsWith("day")) ms = num * 86400 * 1000;
-    else if (unit === "w" || unit.startsWith("wk") || unit.startsWith("week")) ms = num * 7 * 86400 * 1000;
+    else if (unit === "w" || unit.startsWith("wk") || unit.startsWith("week"))
+      ms = num * 7 * 86400 * 1000;
 
     if (ms > 0) {
       const target = now.getTime() + ms;
@@ -83,7 +122,7 @@ export function parseSnoozeText(input: string): number | null {
 
   // Also handle "in X ..." format: "in 2 hours", "in 30 min"
   const inRelMatch = text.match(
-    /^in\s+(\d+)\s*(s|sec|secs|seconds?|m|min|mins|minutes?|h|hr|hrs|hours?|d|days?|w|wk|wks|weeks?)$/
+    /^in\s+(\d+)\s*(s|sec|secs|seconds?|m|min|mins|minutes?|h|hr|hrs|hours?|d|days?|w|wk|wks|weeks?)$/,
   );
   if (inRelMatch) {
     return parseSnoozeText(`${inRelMatch[1]}${inRelMatch[2]}`);
@@ -118,7 +157,7 @@ export function parseSnoozeText(input: string): number | null {
   if (text === "this weekend") {
     const target = new Date(today);
     const dayOfWeek = target.getDay();
-    const daysUntilSat = dayOfWeek === 6 ? 7 : (6 - dayOfWeek);
+    const daysUntilSat = dayOfWeek === 6 ? 7 : 6 - dayOfWeek;
     target.setDate(target.getDate() + daysUntilSat);
     target.setHours(9, 0, 0, 0);
     return target.getTime();
@@ -127,7 +166,7 @@ export function parseSnoozeText(input: string): number | null {
   if (text === "next week") {
     const target = new Date(today);
     const dayOfWeek = target.getDay();
-    const daysUntilMon = dayOfWeek === 0 ? 1 : (8 - dayOfWeek);
+    const daysUntilMon = dayOfWeek === 0 ? 1 : 8 - dayOfWeek;
     target.setDate(target.getDate() + daysUntilMon);
     target.setHours(9, 0, 0, 0);
     return target.getTime();
@@ -179,12 +218,16 @@ export function parseSnoozeText(input: string): number | null {
     const month = MONTH_NAMES[monthName];
     if (month !== undefined) {
       const day = parseInt(monthDayMatch[2], 10);
-      let hours = 9, minutes = 0;
+      let hours = 9,
+        minutes = 0;
       if (monthDayMatch[3]) {
         const timeTs = parseTimeString(monthDayMatch[3]);
-        if (timeTs) { hours = timeTs.hours; minutes = timeTs.minutes; }
+        if (timeTs) {
+          hours = timeTs.hours;
+          minutes = timeTs.minutes;
+        }
       }
-      let year = now.getFullYear();
+      const year = now.getFullYear();
       const target = new Date(year, month, day, hours, minutes, 0, 0);
       // If the date is in the past, use next year
       if (target.getTime() <= now.getTime()) {
@@ -281,7 +324,7 @@ function getSnoozeOptions(): SnoozeOption[] {
   const thisWeekend = (): number => {
     const target = new Date(today);
     const dayOfWeek = target.getDay();
-    const daysUntilSat = dayOfWeek === 6 ? 7 : (6 - dayOfWeek);
+    const daysUntilSat = dayOfWeek === 6 ? 7 : 6 - dayOfWeek;
     target.setDate(target.getDate() + daysUntilSat);
     target.setHours(9, 0, 0, 0);
     return target.getTime();
@@ -290,7 +333,7 @@ function getSnoozeOptions(): SnoozeOption[] {
   const nextWeek = (): number => {
     const target = new Date(today);
     const dayOfWeek = target.getDay();
-    const daysUntilMon = dayOfWeek === 0 ? 1 : (8 - dayOfWeek);
+    const daysUntilMon = dayOfWeek === 0 ? 1 : 8 - dayOfWeek;
     target.setDate(target.getDate() + daysUntilMon);
     target.setHours(9, 0, 0, 0);
     return target.getTime();
@@ -421,7 +464,12 @@ export function SnoozeMenu({ emailId, threadId, accountId, onSnooze, onClose }: 
 
   const handleSnooze = async (snoozeUntil: number) => {
     setError(null);
-    const response = await window.api.snooze.snooze(emailId, threadId, accountId, snoozeUntil) as { success: boolean; data?: SnoozedEmail; error?: string };
+    const response = (await window.api.snooze.snooze(
+      emailId,
+      threadId,
+      accountId,
+      snoozeUntil,
+    )) as { success: boolean; data?: SnoozedEmail; error?: string };
     if (response.success && response.data) {
       trackEvent("email_snoozed");
       onSnooze(response.data);
@@ -482,9 +530,7 @@ export function SnoozeMenu({ emailId, threadId, accountId, onSnooze, onClose }: 
                 </button>
               </>
             ) : (
-              <span className="text-xs text-red-500 dark:text-red-400">
-                Couldn't parse that
-              </span>
+              <span className="text-xs text-red-500 dark:text-red-400">Couldn't parse that</span>
             )}
           </div>
         )}
@@ -506,9 +552,7 @@ export function SnoozeMenu({ emailId, threadId, accountId, onSnooze, onClose }: 
             className="w-full px-3 py-2 text-left hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex items-center justify-between"
           >
             <span className="text-sm text-gray-900 dark:text-gray-100">{option.label}</span>
-            {option.sublabel && (
-              <span className="text-xs text-gray-400">{option.sublabel}</span>
-            )}
+            {option.sublabel && <span className="text-xs text-gray-400">{option.sublabel}</span>}
           </button>
         ))}
       </div>
@@ -520,8 +564,18 @@ export function SnoozeMenu({ emailId, threadId, accountId, onSnooze, onClose }: 
             onClick={() => setShowDatePicker(true)}
             className="w-full px-3 py-2 text-left hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex items-center gap-2"
           >
-            <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            <svg
+              className="w-4 h-4 text-gray-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.5}
+                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+              />
             </svg>
             <span className="text-sm text-gray-900 dark:text-gray-100">Pick date & time</span>
           </button>

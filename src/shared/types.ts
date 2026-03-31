@@ -26,7 +26,7 @@ export const EmailSchema = z.object({
   labelIds: z.array(z.string()).optional(),
   attachments: z.array(AttachmentMetaSchema).optional(),
   messageIdHeader: z.string().optional(), // RFC 5322 Message-ID header
-  inReplyTo: z.string().optional(),       // RFC 5322 In-Reply-To header
+  inReplyTo: z.string().optional(), // RFC 5322 In-Reply-To header
 });
 
 export type Email = z.infer<typeof EmailSchema>;
@@ -289,12 +289,14 @@ const McpSseConfigSchema = z.object({
   headers: z.record(z.string(), z.string()).optional(),
 });
 
-export const McpServerConfigSchema = z.discriminatedUnion("type", [
-  McpHttpConfigSchema,
-  McpSseConfigSchema,
-  // stdio has type as optional, so it can't be in the discriminated union directly.
-  // We handle it as a fallback below.
-]).or(McpStdioConfigSchema);
+export const McpServerConfigSchema = z
+  .discriminatedUnion("type", [
+    McpHttpConfigSchema,
+    McpSseConfigSchema,
+    // stdio has type as optional, so it can't be in the discriminated union directly.
+    // We handle it as a fallback below.
+  ])
+  .or(McpStdioConfigSchema);
 
 export type McpServerConfig = z.infer<typeof McpServerConfigSchema>;
 
@@ -380,23 +382,29 @@ export const ConfigSchema = z.object({
   stylePrompt: z.string().optional(),
   githubToken: z.string().optional(),
   allowPrereleaseUpdates: z.boolean().optional(),
-  agentBrowser: z.object({
-    enabled: z.boolean().default(false),
-    chromeDebugPort: z.number().default(9222),
-    chromeProfilePath: z.string().optional(),
-  }).optional(),
+  agentBrowser: z
+    .object({
+      enabled: z.boolean().default(false),
+      chromeDebugPort: z.number().default(9222),
+      chromeProfilePath: z.string().optional(),
+    })
+    .optional(),
   mcpServers: z.record(z.string(), McpServerConfigSchema).optional(),
   cliTools: z.array(CliToolConfigSchema).optional(),
-  posthog: z.object({
-    enabled: z.boolean().default(false),
-    sessionReplay: z.boolean().default(false),
-  }).optional(),
+  posthog: z
+    .object({
+      enabled: z.boolean().default(false),
+      sessionReplay: z.boolean().default(false),
+    })
+    .optional(),
   keyboardBindings: z.enum(["superhuman", "gmail"]).default("superhuman"),
-  openclaw: z.object({
-    enabled: z.boolean().default(false),
-    gatewayUrl: z.string().default(""),
-    gatewayToken: z.string().default(""),
-  }).optional(),
+  openclaw: z
+    .object({
+      enabled: z.boolean().default(false),
+      gatewayUrl: z.string().default(""),
+      gatewayToken: z.string().default(""),
+    })
+    .optional(),
   configVersion: z.number().optional(),
 });
 
@@ -420,8 +428,8 @@ export type DashboardEmail = {
   labelIds?: string[]; // Gmail labels like "SENT", "INBOX", etc.
   isUnread?: boolean;
   attachments?: AttachmentMeta[];
-  messageId?: string;   // RFC 5322 Message-ID header
-  inReplyTo?: string;   // RFC 5322 In-Reply-To header
+  messageId?: string; // RFC 5322 Message-ID header
+  inReplyTo?: string; // RFC 5322 In-Reply-To header
   analysis?: {
     needsReply: boolean;
     reason: string;
@@ -474,8 +482,8 @@ export type GmailDraft = z.infer<typeof GmailDraftSchema>;
 export type ComposeAttachment = {
   filename: string;
   mimeType: string;
-  path?: string;       // local file path
-  content?: string;    // base64-encoded content (for forwarded attachments)
+  path?: string; // local file path
+  content?: string; // base64-encoded content (for forwarded attachments)
   size?: number;
 };
 
@@ -572,8 +580,8 @@ export type CorrespondentProfile = {
   emailCount: number;
   avgWordCount: number;
   dominantGreeting: string; // "hey" | "hi" | "hello" | "dear" | "none"
-  dominantSignoff: string;  // "thanks" | "best" | "cheers" | "regards" | "none"
-  formalityScore: number;   // 0.0 → 1.0
+  dominantSignoff: string; // "thanks" | "best" | "cheers" | "regards" | "none"
+  formalityScore: number; // 0.0 → 1.0
   lastComputedAt: number;
 };
 
@@ -581,7 +589,12 @@ export type CorrespondentProfile = {
 export const MemoryScopeSchema = z.enum(["global", "person", "domain", "category"]);
 export type MemoryScope = z.infer<typeof MemoryScopeSchema>;
 
-export const MemorySourceSchema = z.enum(["manual", "refinement", "draft-edit", "priority-override"]);
+export const MemorySourceSchema = z.enum([
+  "manual",
+  "refinement",
+  "draft-edit",
+  "priority-override",
+]);
 export type MemorySource = z.infer<typeof MemorySourceSchema>;
 
 export const MemoryTypeSchema = z.enum(["drafting", "analysis"]);
@@ -664,7 +677,13 @@ export type InboxSplit = z.infer<typeof InboxSplitSchema>;
 export type IpcChannels = {
   // Gmail operations
   "gmail:fetch-unread": { maxResults?: number; accountId?: string };
-  "gmail:create-draft": { emailId: string; body: string; cc?: string[]; bcc?: string[]; accountId?: string };
+  "gmail:create-draft": {
+    emailId: string;
+    body: string;
+    cc?: string[];
+    bcc?: string[];
+    accountId?: string;
+  };
   "gmail:get-email": { emailId: string };
 
   // Analysis operations
@@ -753,7 +772,7 @@ export type SnoozedEmail = {
   threadId: string;
   accountId: string;
   snoozeUntil: number; // Unix timestamp (ms)
-  snoozedAt: number;   // Unix timestamp (ms)
+  snoozedAt: number; // Unix timestamp (ms)
 };
 
 // ==============================================

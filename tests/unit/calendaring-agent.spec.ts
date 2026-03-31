@@ -1,8 +1,9 @@
 /**
  * Unit tests for CalendaringAgent service.
  *
- * Strategy: Construct the agent, then replace the internal `anthropic`
- * property with a MockAnthropic instance so we control Claude API responses.
+ * Strategy: Replace the module-level Anthropic client in anthropic-service.ts
+ * with a MockAnthropic instance via _setClientForTesting, so all services
+ * that call createMessage() go through the mock.
  */
 import { test, expect } from "@playwright/test";
 import { CalendaringAgent } from "../../src/main/services/calendaring-agent";
@@ -12,6 +13,7 @@ import {
   resetAnthropicMock,
   getCapturedRequests,
 } from "../mocks/anthropic-api-mock";
+import { _setClientForTesting } from "../../src/main/services/anthropic-service";
 import type { Email, EAConfig } from "../../src/shared/types";
 
 // ---------------------------------------------------------------------------
@@ -33,17 +35,6 @@ function makeEmail(overrides: Partial<Email> = {}): Email {
   };
 }
 
-function createAgentWithMock(): {
-  agent: CalendaringAgent;
-  mock: MockAnthropic;
-} {
-  const agent = new CalendaringAgent();
-  const mock = new MockAnthropic();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test-only mock injection into private field
-  (agent as { anthropic: unknown }).anthropic = mock;
-  return { agent, mock };
-}
-
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -51,13 +42,18 @@ function createAgentWithMock(): {
 test.describe("CalendaringAgent - analyze", () => {
   test.beforeEach(() => {
     resetAnthropicMock();
+    _setClientForTesting(new MockAnthropic());
+  });
+
+  test.afterEach(() => {
+    _setClientForTesting(null as unknown);
   });
 
   test("detects scheduling email", async () => {
     mockAnthropicResponse({
       text: '{"hasSchedulingContext": true, "action": "defer_to_ea", "reason": "Meeting request with availability question"}',
     });
-    const { agent } = createAgentWithMock();
+    const agent = new CalendaringAgent();
     const email = makeEmail();
 
     const result = await agent.analyze(email);
@@ -71,7 +67,7 @@ test.describe("CalendaringAgent - analyze", () => {
     mockAnthropicResponse({
       text: '{"hasSchedulingContext": false, "action": "none", "reason": "No scheduling context in this email"}',
     });
-    const { agent } = createAgentWithMock();
+    const agent = new CalendaringAgent();
     const email = makeEmail({
       subject: "Q3 Budget Report",
       body: "Attached is the Q3 budget report for your review.",
@@ -87,7 +83,7 @@ test.describe("CalendaringAgent - analyze", () => {
     mockAnthropicResponse({
       text: "This email is about scheduling a meeting but I cannot format it as JSON right now.",
     });
-    const { agent } = createAgentWithMock();
+    const agent = new CalendaringAgent();
     const email = makeEmail();
 
     const result = await agent.analyze(email);
@@ -101,7 +97,7 @@ test.describe("CalendaringAgent - analyze", () => {
     mockAnthropicResponse({
       text: '```json\n{"hasSchedulingContext": true, "action": "suggest_times", "reason": "Direct availability request"}\n```',
     });
-    const { agent } = createAgentWithMock();
+    const agent = new CalendaringAgent();
     const email = makeEmail();
 
     const result = await agent.analyze(email);
@@ -114,7 +110,7 @@ test.describe("CalendaringAgent - analyze", () => {
     mockAnthropicResponse({
       text: '{"hasSchedulingContext": false, "action": "none", "reason": "No scheduling"}',
     });
-    const { agent } = createAgentWithMock();
+    const agent = new CalendaringAgent();
     const email = makeEmail({
       from: "bob@corp.com",
       subject: "Quick sync?",

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ToolDefinition, ToolRiskLevel } from "./types";
+import { type ToolDefinition, ToolRiskLevel } from "./types";
 import type { DashboardEmail } from "../../../shared/types";
 import { draftBodyToHtml } from "../../../shared/draft-utils";
 
@@ -39,7 +39,14 @@ const readDraft: ToolDefinition<{ draftId: string }> = {
   },
 };
 
-const updateDraft: ToolDefinition<{ draftId: string; body?: string; subject?: string; to?: string[]; cc?: string[]; bcc?: string[] }> = {
+const updateDraft: ToolDefinition<{
+  draftId: string;
+  body?: string;
+  subject?: string;
+  to?: string[];
+  cc?: string[];
+  bcc?: string[];
+}> = {
   name: "update_draft",
   description:
     "Update an existing local draft. Use this to modify a draft the user is currently composing — for example, to make it more formal, shorter, or to change the subject. Pass the full updated body text (not a diff). Only fields you provide will be changed.",
@@ -54,7 +61,10 @@ const updateDraft: ToolDefinition<{ draftId: string; body?: string; subject?: st
     bcc: z.array(z.string()).optional().describe("Updated BCC list"),
   }),
   async execute(input, ctx) {
-    const existing = await ctx.db("getLocalDraft", input.draftId) as Record<string, unknown> | null;
+    const existing = (await ctx.db("getLocalDraft", input.draftId)) as Record<
+      string,
+      unknown
+    > | null;
     if (!existing) {
       throw new Error(`Draft not found: ${input.draftId}`);
     }
@@ -89,17 +99,10 @@ const readThread: ToolDefinition<{ threadId: string; accountId?: string }> = {
   riskLevel: ToolRiskLevel.NONE,
   inputSchema: z.object({
     threadId: z.string().describe("The thread ID to read"),
-    accountId: z
-      .string()
-      .optional()
-      .describe("Account ID to filter by (optional)"),
+    accountId: z.string().optional().describe("Account ID to filter by (optional)"),
   }),
   async execute(input, ctx) {
-    const emails = await ctx.db(
-      "getEmailsByThread",
-      input.threadId,
-      input.accountId,
-    );
+    const emails = await ctx.db("getEmailsByThread", input.threadId, input.accountId);
     return emails;
   },
 };
@@ -112,14 +115,8 @@ const searchEmails: ToolDefinition<{ query: string; accountId?: string; limit?: 
   riskLevel: ToolRiskLevel.NONE,
   inputSchema: z.object({
     query: z.string().describe("Search query"),
-    accountId: z
-      .string()
-      .optional()
-      .describe("Limit search to a specific account"),
-    limit: z
-      .number()
-      .optional()
-      .describe("Maximum results to return (default 20)"),
+    accountId: z.string().optional().describe("Limit search to a specific account"),
+    limit: z.number().optional().describe("Maximum results to return (default 20)"),
   }),
   async execute(input, ctx) {
     const results = await ctx.db("searchEmails", input.query, {
@@ -140,10 +137,7 @@ const listEmails: ToolDefinition<{ accountId: string }> = {
     accountId: z.string().describe("The account ID to list emails for"),
   }),
   async execute(input, ctx) {
-    const emails = (await ctx.db(
-      "getInboxEmails",
-      input.accountId,
-    )) as DashboardEmail[];
+    const emails = (await ctx.db("getInboxEmails", input.accountId)) as DashboardEmail[];
     // Return a summary to avoid overwhelming context
     return emails.map((e) => ({
       id: e.id,
@@ -160,7 +154,7 @@ const listEmails: ToolDefinition<{ accountId: string }> = {
   },
 };
 
-const archiveEmail: ToolDefinition<{ accountId: string; emailId: string }> = {
+const _archiveEmail: ToolDefinition<{ accountId: string; emailId: string }> = {
   name: "archive_email",
   description:
     "Archive an email by removing the INBOX label. The email remains accessible via search.",
@@ -176,7 +170,12 @@ const archiveEmail: ToolDefinition<{ accountId: string; emailId: string }> = {
   },
 };
 
-const modifyLabels: ToolDefinition<{ accountId: string; emailId: string; addLabelIds?: string[]; removeLabelIds?: string[] }> = {
+const modifyLabels: ToolDefinition<{
+  accountId: string;
+  emailId: string;
+  addLabelIds?: string[];
+  removeLabelIds?: string[];
+}> = {
   name: "modify_labels",
   description:
     "Modify Gmail labels on an email. Can add and remove labels. Common labels: UNREAD, STARRED, IMPORTANT, TRASH, SPAM. Note: removing the INBOX label (archiving) is disabled.",
@@ -185,14 +184,13 @@ const modifyLabels: ToolDefinition<{ accountId: string; emailId: string; addLabe
   inputSchema: z.object({
     accountId: z.string().describe("The account ID"),
     emailId: z.string().describe("The email ID to modify"),
-    addLabelIds: z
-      .array(z.string())
-      .optional()
-      .describe("Label IDs to add"),
+    addLabelIds: z.array(z.string()).optional().describe("Label IDs to add"),
     removeLabelIds: z
       .array(z.string())
       .optional()
-      .describe("Label IDs to remove (e.g. ['UNREAD'] to mark as read). Removing INBOX is disabled."),
+      .describe(
+        "Label IDs to remove (e.g. ['UNREAD'] to mark as read). Removing INBOX is disabled.",
+      ),
   }),
   async execute(input, ctx) {
     // Block archiving (removing INBOX label) before any mutations
@@ -224,7 +222,13 @@ const modifyLabels: ToolDefinition<{ accountId: string; emailId: string; addLabe
   },
 };
 
-const createDraft: ToolDefinition<{ accountId: string; emailId: string; body: string; cc?: string[]; bcc?: string[] }> = {
+const createDraft: ToolDefinition<{
+  accountId: string;
+  emailId: string;
+  body: string;
+  cc?: string[];
+  bcc?: string[];
+}> = {
   name: "create_draft",
   description:
     "Create a draft reply to an email. The draft is saved locally and (if Gmail is connected) synced to Gmail. The user can review and edit the draft in the app before sending.",
@@ -234,14 +238,8 @@ const createDraft: ToolDefinition<{ accountId: string; emailId: string; body: st
     accountId: z.string().describe("The account ID"),
     emailId: z.string().describe("The email ID to reply to"),
     body: z.string().describe("The draft reply body text"),
-    cc: z
-      .array(z.string())
-      .optional()
-      .describe("CC recipients to add"),
-    bcc: z
-      .array(z.string())
-      .optional()
-      .describe("BCC recipients to add"),
+    cc: z.array(z.string()).optional().describe("CC recipients to add"),
+    bcc: z.array(z.string()).optional().describe("BCC recipients to add"),
   }),
   async execute(input, ctx) {
     // Save draft locally and sync to Gmail in one call — same code path as
@@ -272,7 +270,9 @@ const generateDraft: ToolDefinition<{
     instructions: z
       .string()
       .optional()
-      .describe("Optional instructions to guide the draft content (e.g., 'decline the meeting', 'ask for more details')"),
+      .describe(
+        "Optional instructions to guide the draft content (e.g., 'decline the meeting', 'ask for more details')",
+      ),
   }),
   async execute(input, ctx) {
     const result = await ctx.db(
@@ -302,19 +302,23 @@ const composeNewEmail: ToolDefinition<{
     accountId: z.string().describe("The account ID to send from"),
     to: z.array(z.string()).describe("Recipient email addresses"),
     subject: z.string().describe("Email subject line"),
-    instructions: z.string().describe("Instructions describing what the email should say (e.g., 'ask about scheduling a meeting to discuss Q1 results', 'introduce myself and request a demo')"),
+    instructions: z
+      .string()
+      .describe(
+        "Instructions describing what the email should say (e.g., 'ask about scheduling a meeting to discuss Q1 results', 'introduce myself and request a demo')",
+      ),
     cc: z.array(z.string()).optional().describe("CC recipients"),
     bcc: z.array(z.string()).optional().describe("BCC recipients"),
   }),
   async execute(input, ctx) {
     // Generate body via the same pipeline as replies
-    const result = await ctx.db(
+    const result = (await ctx.db(
       "generateNewEmail",
       input.accountId,
       input.to,
       input.subject,
       input.instructions,
-    ) as { body: string };
+    )) as { body: string };
 
     const { randomUUID } = await import("crypto");
     const draftId = randomUUID();
@@ -365,8 +369,15 @@ const forwardEmail: ToolDefinition<{
   inputSchema: z.object({
     accountId: z.string().describe("The account ID to forward from"),
     emailId: z.string().describe("The email ID to forward"),
-    instructions: z.string().describe("Instructions describing who to forward to and why (e.g., 'forward to alice@co.com — she handles vendor invoices', 'forward to the team for awareness')"),
-    to: z.array(z.string()).optional().describe("Forward recipient email addresses (can also be left empty for user to fill in)"),
+    instructions: z
+      .string()
+      .describe(
+        "Instructions describing who to forward to and why (e.g., 'forward to alice@co.com — she handles vendor invoices', 'forward to the team for awareness')",
+      ),
+    to: z
+      .array(z.string())
+      .optional()
+      .describe("Forward recipient email addresses (can also be left empty for user to fill in)"),
     cc: z.array(z.string()).optional().describe("CC recipients"),
     bcc: z.array(z.string()).optional().describe("BCC recipients"),
   }),
@@ -398,7 +409,7 @@ interface SendReplyInput {
   references?: string;
 }
 
-const sendReply: ToolDefinition<SendReplyInput> = {
+const _sendReply: ToolDefinition<SendReplyInput> = {
   name: "send_reply",
   description:
     "Send a reply email. This is irreversible - the email will be delivered to recipients.",
@@ -413,14 +424,8 @@ const sendReply: ToolDefinition<SendReplyInput> = {
     cc: z.array(z.string()).optional().describe("CC recipients"),
     bcc: z.array(z.string()).optional().describe("BCC recipients"),
     threadId: z.string().optional().describe("Thread ID for replies"),
-    inReplyTo: z
-      .string()
-      .optional()
-      .describe("Message-ID of the email being replied to"),
-    references: z
-      .string()
-      .optional()
-      .describe("References header for threading"),
+    inReplyTo: z.string().optional().describe("Message-ID of the email being replied to"),
+    references: z.string().optional().describe("References header for threading"),
   }),
   async execute(input, ctx) {
     const { accountId, ...options } = input;
@@ -455,7 +460,7 @@ const searchGmail: ToolDefinition<{ accountId: string; query: string; maxResults
       .string()
       .describe(
         "Gmail search query (same syntax as Gmail search bar). " +
-        "Examples: 'from:alice@example.com', 'subject:quarterly report', 'from:bob after:2024/01/01'",
+          "Examples: 'from:alice@example.com', 'subject:quarterly report', 'from:bob after:2024/01/01'",
       ),
     maxResults: z
       .number()

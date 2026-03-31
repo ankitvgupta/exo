@@ -36,7 +36,7 @@ John Doe <john@example.com> wrote:
     // Attribution line stays (no content above it to return), but > lines
     // after it are stripped since the attribution is non-quoted content above them
     expect(stripQuotedContent(input)).toBe(
-      "On Mon, Jan 6, 2025 at 3:45 PM Bob <bob@example.com> wrote:"
+      "On Mon, Jan 6, 2025 at 3:45 PM Bob <bob@example.com> wrote:",
     );
   });
 });
@@ -69,9 +69,7 @@ test.describe("plain text — > quoted lines", () => {
 > Option A: Keep current vendor
 > Option B: Switch to new vendor`;
 
-    expect(stripQuotedContent(input)).toBe(
-      "Sounds good, let's go with option B."
-    );
+    expect(stripQuotedContent(input)).toBe("Sounds good, let's go with option B.");
   });
 
   test("returns original when entire email is > quoted", () => {
@@ -128,9 +126,7 @@ test.describe("HTML — Yahoo .yahoo_quoted", () => {
   test("strips yahoo_quoted div", () => {
     const input = `<div>Thanks for the info.</div><div class="yahoo_quoted"><div>Previous message</div></div>`;
 
-    expect(stripQuotedContent(input)).toBe(
-      "<div>Thanks for the info.</div>"
-    );
+    expect(stripQuotedContent(input)).toBe("<div>Thanks for the info.</div>");
   });
 });
 
@@ -142,9 +138,7 @@ test.describe("HTML — blockquote[type=cite]", () => {
   test("strips Apple Mail blockquote", () => {
     const input = `<div>That works for me.</div><br><blockquote type="cite"><div>Proposed March 15th launch</div></blockquote>`;
 
-    expect(stripQuotedContent(input)).toBe(
-      "<div>That works for me.</div><br>"
-    );
+    expect(stripQuotedContent(input)).toBe("<div>That works for me.</div><br>");
   });
 });
 
@@ -218,8 +212,7 @@ test.describe("passthrough — no quoted content", () => {
   });
 
   test("HTML without quotes returns unchanged", () => {
-    const input =
-      "<div>A simple HTML email with no quoted content.</div>";
+    const input = "<div>A simple HTML email with no quoted content.</div>";
     expect(stripQuotedContent(input)).toBe(input);
   });
 
@@ -261,7 +254,7 @@ test.describe("media stripping", () => {
   test("strips <img> tags from HTML", () => {
     const input = `<div>Check out this photo:</div><img src="cid:image001.png" width="500"><div>What do you think?</div>`;
     expect(stripQuotedContent(input)).toBe(
-      `<div>Check out this photo:</div><div>What do you think?</div>`
+      `<div>Check out this photo:</div><div>What do you think?</div>`,
     );
   });
 
@@ -272,29 +265,21 @@ test.describe("media stripping", () => {
 
   test("strips <video> tags", () => {
     const input = `<div>Watch this:</div><video src="video.mp4" controls>fallback</video><div>Cool right?</div>`;
-    expect(stripQuotedContent(input)).toBe(
-      "<div>Watch this:</div><div>Cool right?</div>"
-    );
+    expect(stripQuotedContent(input)).toBe("<div>Watch this:</div><div>Cool right?</div>");
   });
 
   test("strips <audio> tags", () => {
     const input = `<div>Listen:</div><audio src="clip.mp3" controls>fallback</audio><div>Thoughts?</div>`;
-    expect(stripQuotedContent(input)).toBe(
-      "<div>Listen:</div><div>Thoughts?</div>"
-    );
+    expect(stripQuotedContent(input)).toBe("<div>Listen:</div><div>Thoughts?</div>");
   });
 
   test("replaces base64 data URIs with placeholder", () => {
     const input = `<div>See image: data:image/png;base64,iVBORw0KGgoAAAANSUhEUg== embedded here</div>`;
-    expect(stripQuotedContent(input)).toBe(
-      "<div>See image: [media removed] embedded here</div>"
-    );
+    expect(stripQuotedContent(input)).toBe("<div>See image: [media removed] embedded here</div>");
   });
 
   test("strips multiple images at once", () => {
     const input = `<div>Photos:</div><img src="a.jpg"><img src="b.png"><div>Done</div>`;
-    expect(stripQuotedContent(input)).toBe(
-      "<div>Photos:</div><div>Done</div>"
-    );
+    expect(stripQuotedContent(input)).toBe("<div>Photos:</div><div>Done</div>");
   });
 });

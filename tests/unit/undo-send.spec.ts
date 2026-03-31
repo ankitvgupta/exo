@@ -19,7 +19,9 @@ const srcDir = path.join(__dirname, "../../src");
 // Helper: extract all composeContext object literals from source code
 // Returns an array of { file, startLine, block } objects.
 // ---------------------------------------------------------------------------
-function extractComposeContextBlocks(filePath: string): Array<{ file: string; startLine: number; block: string }> {
+function extractComposeContextBlocks(
+  filePath: string,
+): Array<{ file: string; startLine: number; block: string }> {
   const code = readFileSync(filePath, "utf-8");
   const lines = code.split("\n");
   const results: Array<{ file: string; startLine: number; block: string }> = [];
@@ -33,7 +35,10 @@ function extractComposeContextBlocks(filePath: string): Array<{ file: string; st
       for (let j = i; j < lines.length; j++) {
         const line = lines[j];
         for (const ch of line) {
-          if (ch === "{") { braceCount++; started = true; }
+          if (ch === "{") {
+            braceCount++;
+            started = true;
+          }
           if (ch === "}") braceCount--;
         }
         block += line + "\n";
@@ -49,7 +54,6 @@ function extractComposeContextBlocks(filePath: string): Array<{ file: string; st
 // Test suite 1: composeContext completeness across all send locations
 // ---------------------------------------------------------------------------
 test.describe("Undo Send - composeContext field completeness", () => {
-
   const emailDetailPath = path.join(srcDir, "renderer/components/EmailDetail.tsx");
   const useComposeFormPath = path.join(srcDir, "renderer/hooks/useComposeForm.ts");
 
@@ -80,7 +84,7 @@ test.describe("Undo Send - composeContext field completeness", () => {
       const shortFile = path.relative(srcDir, file);
       expect(
         block,
-        `composeContext at ${shortFile}:${startLine} is missing 'subject' field`
+        `composeContext at ${shortFile}:${startLine} is missing 'subject' field`,
       ).toContain("subject");
     }
   });
@@ -104,13 +108,13 @@ test.describe("Undo Send - composeContext field completeness", () => {
       for (const field of requiredFields) {
         expect(
           block,
-          `composeContext at ${shortFile}:${startLine} is missing required '${field}' field`
+          `composeContext at ${shortFile}:${startLine} is missing required '${field}' field`,
         ).toContain(field);
       }
       // subject should also be present in all blocks
       expect(
         block,
-        `composeContext at ${shortFile}:${startLine} is missing 'subject' field`
+        `composeContext at ${shortFile}:${startLine} is missing 'subject' field`,
       ).toContain("subject");
     }
   });
@@ -120,7 +124,6 @@ test.describe("Undo Send - composeContext field completeness", () => {
 // Test suite 2: UndoSendItem type and store integration
 // ---------------------------------------------------------------------------
 test.describe("Undo Send - UndoSendItem type and store", () => {
-
   test("UndoSendItem type has composeContext with subject field", () => {
     const storeCode = readFileSync(path.join(srcDir, "renderer/store/index.ts"), "utf-8");
 
@@ -157,11 +160,10 @@ test.describe("Undo Send - UndoSendItem type and store", () => {
 // Test suite 3: UndoSendToast uses subject from composeContext when restoring
 // ---------------------------------------------------------------------------
 test.describe("Undo Send - Toast restoration flow", () => {
-
   test("UndoSendToast handleUndo passes subject to openCompose", () => {
     const toastCode = readFileSync(
       path.join(srcDir, "renderer/components/UndoSendToast.tsx"),
-      "utf-8"
+      "utf-8",
     );
 
     // The handleUndo callback should pass ctx.subject to store.openCompose
@@ -172,7 +174,7 @@ test.describe("Undo Send - Toast restoration flow", () => {
   test("UndoSendToast handleUndo restores all draft fields", () => {
     const toastCode = readFileSync(
       path.join(srcDir, "renderer/components/UndoSendToast.tsx"),
-      "utf-8"
+      "utf-8",
     );
 
     // All restored fields should be passed to openCompose
@@ -186,7 +188,7 @@ test.describe("Undo Send - Toast restoration flow", () => {
   test("UndoSendToast removes optimistic email on undo", () => {
     const toastCode = readFileSync(
       path.join(srcDir, "renderer/components/UndoSendToast.tsx"),
-      "utf-8"
+      "utf-8",
     );
 
     expect(toastCode).toContain("optimisticEmailId");
@@ -196,7 +198,7 @@ test.describe("Undo Send - Toast restoration flow", () => {
   test("UndoSendToast supports keyboard shortcut for undo", () => {
     const toastCode = readFileSync(
       path.join(srcDir, "renderer/components/UndoSendToast.tsx"),
-      "utf-8"
+      "utf-8",
     );
 
     // Cmd+Z / Ctrl+Z support
@@ -209,41 +211,28 @@ test.describe("Undo Send - Toast restoration flow", () => {
 // Test suite 4: InlineReply uses restoredDraft.subject correctly
 // ---------------------------------------------------------------------------
 test.describe("Undo Send - InlineReply draft restoration", () => {
-
   test("InlineReply accepts restoredDraft prop", () => {
-    const code = readFileSync(
-      path.join(srcDir, "renderer/components/EmailDetail.tsx"),
-      "utf-8"
-    );
+    const code = readFileSync(path.join(srcDir, "renderer/components/EmailDetail.tsx"), "utf-8");
 
     // InlineReply component accepts restoredDraft as a prop
     expect(code).toContain("restoredDraft?: RestoredDraft");
   });
 
   test("InlineReply initializes 'to' from restoredDraft when present", () => {
-    const code = readFileSync(
-      path.join(srcDir, "renderer/components/EmailDetail.tsx"),
-      "utf-8"
-    );
+    const code = readFileSync(path.join(srcDir, "renderer/components/EmailDetail.tsx"), "utf-8");
 
     // Verify it uses restoredDraft?.to as initial value for toAddresses
     expect(code).toContain("restoredDraft?.to !== undefined ? restoredDraft.to :");
   });
 
   test("InlineReply initializes bodyHtml from restoredDraft when present", () => {
-    const code = readFileSync(
-      path.join(srcDir, "renderer/components/EmailDetail.tsx"),
-      "utf-8"
-    );
+    const code = readFileSync(path.join(srcDir, "renderer/components/EmailDetail.tsx"), "utf-8");
 
     expect(code).toContain('restoredDraft?.bodyHtml || ""');
   });
 
   test("EmailDetail captures restoredDraft before closing compose state", () => {
-    const code = readFileSync(
-      path.join(srcDir, "renderer/components/EmailDetail.tsx"),
-      "utf-8"
-    );
+    const code = readFileSync(path.join(srcDir, "renderer/components/EmailDetail.tsx"), "utf-8");
 
     // This is critical: the restored draft must be captured before closeCompose
     expect(code).toContain("composeState.restoredDraft ?? null");
@@ -255,22 +244,15 @@ test.describe("Undo Send - InlineReply draft restoration", () => {
 // Test suite 5: Settings UI for undo send delay
 // ---------------------------------------------------------------------------
 test.describe("Undo Send - Settings UI", () => {
-
   test("SettingsPanel exposes undo send delay options", () => {
-    const code = readFileSync(
-      path.join(srcDir, "renderer/components/SettingsPanel.tsx"),
-      "utf-8"
-    );
+    const code = readFileSync(path.join(srcDir, "renderer/components/SettingsPanel.tsx"), "utf-8");
 
     expect(code).toContain("undoSendDelaySeconds");
     expect(code).toContain("setUndoSendDelay");
   });
 
   test("SettingsPanel has preset delay values (0, 5, 10, 15, 30)", () => {
-    const code = readFileSync(
-      path.join(srcDir, "renderer/components/SettingsPanel.tsx"),
-      "utf-8"
-    );
+    const code = readFileSync(path.join(srcDir, "renderer/components/SettingsPanel.tsx"), "utf-8");
 
     // Check for all preset button values
     expect(code).toContain('"Off"');
@@ -281,10 +263,7 @@ test.describe("Undo Send - Settings UI", () => {
   });
 
   test("SettingsPanel persists delay via settings API", () => {
-    const code = readFileSync(
-      path.join(srcDir, "renderer/components/SettingsPanel.tsx"),
-      "utf-8"
-    );
+    const code = readFileSync(path.join(srcDir, "renderer/components/SettingsPanel.tsx"), "utf-8");
 
     expect(code).toContain("window.api.settings.set");
     expect(code).toContain("undoSendDelay");

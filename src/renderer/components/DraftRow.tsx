@@ -54,9 +54,10 @@ export function DraftRow({ draft, isSelected, density, onClick }: DraftRowProps)
       className={`
         w-full ${ds.row} flex items-center text-left
         border-b border-gray-100 dark:border-gray-700/50 transition-colors group
-        ${isSelected
-          ? "bg-blue-600 text-white"
-          : "hover:bg-gray-50 dark:hover:bg-gray-700/50 text-gray-900 dark:text-gray-100"
+        ${
+          isSelected
+            ? "bg-blue-600 text-white"
+            : "hover:bg-gray-50 dark:hover:bg-gray-700/50 text-gray-900 dark:text-gray-100"
         }
       `}
     >
@@ -66,36 +67,49 @@ export function DraftRow({ draft, isSelected, density, onClick }: DraftRowProps)
       </div>
 
       {/* Recipients */}
-      <div className={`${ds.recipientWidth} truncate font-medium flex-shrink-0 ${
-        isSelected ? "text-white" : "text-gray-600 dark:text-gray-400"
-      }`}>
+      <div
+        className={`${ds.recipientWidth} truncate font-medium flex-shrink-0 ${
+          isSelected ? "text-white" : "text-gray-600 dark:text-gray-400"
+        }`}
+      >
         {recipients || "(no recipients)"}
       </div>
 
       {/* Draft badge */}
-      <span className={`
+      <span
+        className={`
         ${ds.badge} rounded flex-shrink-0 uppercase font-medium
-        ${isSelected
-          ? "bg-white/20 text-white"
-          : "bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300"
+        ${
+          isSelected
+            ? "bg-white/20 text-white"
+            : "bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300"
         }
-      `}>
+      `}
+      >
         Draft
       </span>
 
       {/* Subject + Snippet */}
-      <div className={`flex-1 min-w-0 flex items-center ${density === "compact" ? "gap-1.5" : "gap-2"}`}>
-        <span className={`font-medium truncate ${
-          isSelected ? "text-white" : "text-gray-700 dark:text-gray-300"
-        }`}>
+      <div
+        className={`flex-1 min-w-0 flex items-center ${density === "compact" ? "gap-1.5" : "gap-2"}`}
+      >
+        <span
+          className={`font-medium truncate ${
+            isSelected ? "text-white" : "text-gray-700 dark:text-gray-300"
+          }`}
+        >
           {draft.subject || "(no subject)"}
         </span>
         {snippet && (
           <>
-            <span className={`flex-shrink-0 ${isSelected ? "text-white/40" : "text-gray-300 dark:text-gray-600"}`}>
+            <span
+              className={`flex-shrink-0 ${isSelected ? "text-white/40" : "text-gray-300 dark:text-gray-600"}`}
+            >
               —
             </span>
-            <span className={`truncate ${isSelected ? "text-white/60" : "text-gray-400 dark:text-gray-500"}`}>
+            <span
+              className={`truncate ${isSelected ? "text-white/60" : "text-gray-400 dark:text-gray-500"}`}
+            >
               {snippet}
             </span>
           </>
@@ -103,9 +117,11 @@ export function DraftRow({ draft, isSelected, density, onClick }: DraftRowProps)
       </div>
 
       {/* Time */}
-      <span className={`${ds.time} text-right flex-shrink-0 tabular-nums ${
-        isSelected ? "text-white/60" : "text-gray-400 dark:text-gray-500"
-      }`}>
+      <span
+        className={`${ds.time} text-right flex-shrink-0 tabular-nums ${
+          isSelected ? "text-white/60" : "text-gray-400 dark:text-gray-500"
+        }`}
+      >
         {time}
       </span>
     </button>

@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { createMessage } from "../../../main/services/anthropic-service";
 import type {
   ExtensionContext,
   EnrichmentProvider,
@@ -83,9 +83,7 @@ export interface SenderProfileData {
  * Citations look like: <cite index="2-1,7-3">text</cite>
  */
 function stripCitations(text: string): string {
-  return text
-    .replace(/<cite[^>]*>/gi, "")
-    .replace(/<\/cite>/gi, "");
+  return text.replace(/<cite[^>]*>/gi, "").replace(/<\/cite>/gi, "");
 }
 
 /**
@@ -96,7 +94,7 @@ function stripCitations(text: string): string {
 function parseProfileResponse(
   responseText: string,
   fallbackName: string,
-  context: ExtensionContext
+  context: ExtensionContext,
 ): Partial<SenderProfileData> {
   // Strip citation markup from web search responses before parsing
   const text = stripCitations(responseText).trim();
@@ -143,15 +141,13 @@ function parseProfileResponse(
   // Try to extract meaningful sentences for summary
   const cleanText = text
     .replace(/```[\s\S]*?```/g, "") // Remove code blocks
-    .replace(/[{}"[\]]/g, " ")       // Remove JSON characters
-    .replace(/\s+/g, " ")            // Normalize whitespace
+    .replace(/[{}"[\]]/g, " ") // Remove JSON characters
+    .replace(/\s+/g, " ") // Normalize whitespace
     .trim();
 
   return {
     name: fallbackName,
-    summary: cleanText.length > 0 && cleanText.length < 500
-      ? cleanText
-      : "No information found.",
+    summary: cleanText.length > 0 && cleanText.length < 500 ? cleanText : "No information found.",
   };
 }
 
@@ -161,7 +157,7 @@ function parseProfileResponse(
  */
 function validateProfileData(
   data: Record<string, unknown>,
-  fallbackName: string
+  fallbackName: string,
 ): Partial<SenderProfileData> {
   const getString = (val: unknown): string | undefined => {
     if (typeof val === "string" && val.trim().length > 0) {
@@ -187,8 +183,6 @@ export function createWebSearchProvider(
   context: ExtensionContext,
   getModelId: () => string,
 ): EnrichmentProvider {
-  const client = new Anthropic();
-
   return {
     id: "sender-lookup",
     panelId: "sender-profile",
@@ -201,7 +195,7 @@ export function createWebSearchProvider(
 
     async enrich(
       email: DashboardEmail,
-      threadEmails: DashboardEmail[]
+      threadEmails: DashboardEmail[],
     ): Promise<EnrichmentData | null> {
       // Determine the real sender (handle reminder services)
       let realSenderEmail = extractSenderEmail(email.from);
@@ -249,20 +243,21 @@ export function createWebSearchProvider(
         // Use Claude with web search to find information
         const searchQuery = buildSearchQuery(senderName, realSenderEmail);
 
-        const response = await client.messages.create({
-          model: getModelId(),
-          max_tokens: 200, // Responses are ~100 tokens
-          tools: [
-            {
-              type: "web_search_20250305",
-              name: "web_search",
-              max_uses: 1, // 1 search is usually enough
-            },
-          ],
-          messages: [
-            {
-              role: "user",
-              content: `I received an email from "${senderName}" with email address "${realSenderEmail}".
+        const response = await createMessage(
+          {
+            model: getModelId(),
+            max_tokens: 200, // Responses are ~100 tokens
+            tools: [
+              {
+                type: "web_search_20250305",
+                name: "web_search",
+                max_uses: 1, // 1 search is usually enough
+              },
+            ],
+            messages: [
+              {
+                role: "user",
+                content: `I received an email from "${senderName}" with email address "${realSenderEmail}".
 
 Please search the web to find information about who this person is. Look for:
 - Their professional role/title
@@ -285,9 +280,11 @@ If you can't find specific information, return:
   "name": "${senderName}",
   "summary": "No public information found for this person."
 }`,
-            },
-          ],
-        });
+              },
+            ],
+          },
+          { caller: "web-search-sender-lookup" },
+        );
 
         // Extract the text response
         let jsonText = "";

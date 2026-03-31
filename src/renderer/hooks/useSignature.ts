@@ -22,18 +22,16 @@ export function useSignature(accountId: string) {
 
   const availableSignatures = useMemo(
     () => allSignatures.filter((s: Signature) => !s.accountId || s.accountId === accountId),
-    [allSignatures, accountId]
+    [allSignatures, accountId],
   );
 
   // Auto-select default signature on mount only (not after user explicitly changes selection)
   useEffect(() => {
     if (hasUserChosen || availableSignatures.length === 0) return;
     const accountDefault = availableSignatures.find(
-      (s: Signature) => s.accountId === accountId && s.isDefault
+      (s: Signature) => s.accountId === accountId && s.isDefault,
     );
-    const globalDefault = availableSignatures.find(
-      (s: Signature) => !s.accountId && s.isDefault
-    );
+    const globalDefault = availableSignatures.find((s: Signature) => !s.accountId && s.isDefault);
     const defaultSig = accountDefault ?? globalDefault;
     if (defaultSig) {
       setActiveSignatureId(defaultSig.id);
@@ -45,9 +43,7 @@ export function useSignature(accountId: string) {
     setActiveSignatureId(id);
   }, []);
 
-  const activeSignature = availableSignatures.find(
-    (s: Signature) => s.id === activeSignatureId
-  );
+  const activeSignature = availableSignatures.find((s: Signature) => s.id === activeSignatureId);
 
   const signatureHtml = activeSignature?.bodyHtml
     ? `<div class="email-signature"><br><div>--</div>${activeSignature.bodyHtml}</div>`

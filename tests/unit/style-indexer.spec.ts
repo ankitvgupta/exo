@@ -120,10 +120,7 @@ function computeFormalityScore(opts: {
     0,
     Math.min(
       1,
-      greetingScore * 0.3 +
-        signoffScore * 0.3 +
-        lengthFactor * 0.2 +
-        frequencyFactor * 0.2,
+      greetingScore * 0.3 + signoffScore * 0.3 + lengthFactor * 0.2 + frequencyFactor * 0.2,
     ),
   );
 }
@@ -360,7 +357,7 @@ test.describe("computeFormalityScore", () => {
     });
     // greeting=0.5*0.3 + signoff=0.5*0.3 + length=0.5*0.2 + freq=0.5*0.2
     // = 0.15 + 0.15 + 0.10 + 0.10 = 0.50
-    expect(score).toBeCloseTo(0.50, 2);
+    expect(score).toBeCloseTo(0.5, 2);
   });
 });
 
@@ -379,8 +376,7 @@ test.describe("signal extraction → formality score integration", () => {
     const signals = emails.map(extractEmailSignals);
     const dominantGreeting = mostCommon(signals.map((s) => s.greeting));
     const dominantSignoff = mostCommon(signals.map((s) => s.signoff));
-    const avgWordCount =
-      signals.reduce((sum, s) => sum + s.wordCount, 0) / signals.length;
+    const avgWordCount = signals.reduce((sum, s) => sum + s.wordCount, 0) / signals.length;
 
     expect(dominantGreeting).toBe("hey");
     expect(dominantSignoff).toBe("none");
@@ -404,8 +400,7 @@ test.describe("signal extraction → formality score integration", () => {
     const signals = emails.map(extractEmailSignals);
     const dominantGreeting = mostCommon(signals.map((s) => s.greeting));
     const dominantSignoff = mostCommon(signals.map((s) => s.signoff));
-    const avgWordCount =
-      signals.reduce((sum, s) => sum + s.wordCount, 0) / signals.length;
+    const avgWordCount = signals.reduce((sum, s) => sum + s.wordCount, 0) / signals.length;
 
     expect(dominantGreeting).toBe("dear");
     expect(dominantSignoff).toBe("regards");
@@ -429,8 +424,7 @@ test.describe("signal extraction → formality score integration", () => {
     const signals = emails.map(extractEmailSignals);
     const dominantGreeting = mostCommon(signals.map((s) => s.greeting));
     const dominantSignoff = mostCommon(signals.map((s) => s.signoff));
-    const avgWordCount =
-      signals.reduce((sum, s) => sum + s.wordCount, 0) / signals.length;
+    const avgWordCount = signals.reduce((sum, s) => sum + s.wordCount, 0) / signals.length;
 
     const score = computeFormalityScore({
       dominantGreeting,
@@ -451,18 +445,14 @@ test.describe("formality lookup tables", () => {
   test("greetings are ordered from informal to formal", () => {
     const order = ["none", "hey", "hi", "hello", "dear"];
     for (let i = 1; i < order.length; i++) {
-      expect(GREETING_FORMALITY[order[i]]).toBeGreaterThan(
-        GREETING_FORMALITY[order[i - 1]],
-      );
+      expect(GREETING_FORMALITY[order[i]]).toBeGreaterThan(GREETING_FORMALITY[order[i - 1]]);
     }
   });
 
   test("signoffs are ordered from informal to formal", () => {
     const order = ["none", "cheers", "thanks", "best", "regards"];
     for (let i = 1; i < order.length; i++) {
-      expect(SIGNOFF_FORMALITY[order[i]]).toBeGreaterThan(
-        SIGNOFF_FORMALITY[order[i - 1]],
-      );
+      expect(SIGNOFF_FORMALITY[order[i]]).toBeGreaterThan(SIGNOFF_FORMALITY[order[i - 1]]);
     }
   });
 

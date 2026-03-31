@@ -31,11 +31,11 @@ function UndoSendToastItem({ item }: { item: UndoSendItem }) {
       const ctx = item.composeContext;
       if (ctx?.optimisticEmailId && response.data?.id && !response.data.queued) {
         const state = useAppStore.getState();
-        const optimistic = state.emails.find(e => e.id === ctx.optimisticEmailId);
+        const optimistic = state.emails.find((e) => e.id === ctx.optimisticEmailId);
         if (optimistic) {
           useAppStore.setState((s) => ({
             emails: [
-              ...s.emails.filter(e => e.id !== ctx.optimisticEmailId),
+              ...s.emails.filter((e) => e.id !== ctx.optimisticEmailId),
               { ...optimistic, id: response.data!.id },
             ],
             // Update focusedThreadEmailId so subsequent Reply All clicks
@@ -96,7 +96,9 @@ function UndoSendToastItem({ item }: { item: UndoSendItem }) {
   // Register cancel handler so parent / keyboard shortcut can trigger undo
   useEffect(() => {
     cancelHandlers.set(item.id, handleUndo);
-    return () => { cancelHandlers.delete(item.id); };
+    return () => {
+      cancelHandlers.delete(item.id);
+    };
   }, [item.id, handleUndo]);
 
   useEffect(() => {
@@ -115,11 +117,7 @@ function UndoSendToastItem({ item }: { item: UndoSendItem }) {
   return (
     <div className="bg-gray-900 dark:bg-gray-700 text-white rounded-lg shadow-lg flex items-center justify-between px-4 py-3 min-w-[280px]">
       <span className="text-sm">
-        {sendError ? (
-          <span className="text-red-400">{sendError}</span>
-        ) : (
-          "Message sent."
-        )}
+        {sendError ? <span className="text-red-400">{sendError}</span> : "Message sent."}
       </span>
       {!sentRef.current && !sendError && (
         <button

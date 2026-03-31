@@ -14,7 +14,7 @@ let electronApp: ElectronApplication;
 let page: Page;
 
 test.describe("Email Body Rendering", () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: "serial" });
 
   test.beforeAll(async ({}, testInfo) => {
     const result = await launchElectronApp({ workerIndex: testInfo.workerIndex });
@@ -36,7 +36,10 @@ test.describe("Email Body Rendering", () => {
 
   test("renders plain text email correctly", async () => {
     // Wait for email list to populate (use senders known to not be pre-snoozed)
-    const emailItem = page.locator("button").filter({ hasText: /Garry|HR Team|Product Team|Amazon/i }).first();
+    const emailItem = page
+      .locator("button")
+      .filter({ hasText: /Garry|HR Team|Product Team|Amazon/i })
+      .first();
     await expect(emailItem).toBeVisible({ timeout: 15000 });
 
     // Click on an email to show detail in split view
@@ -50,21 +53,32 @@ test.describe("Email Body Rendering", () => {
     // Check that either the iframe or inline text body is present.
     const iframe = page.locator("iframe[title='Email content']");
     const textBody = page.locator("div.whitespace-pre-wrap");
-    const hasIframe = await iframe.first().isVisible().catch(() => false);
-    const hasTextBody = await textBody.first().isVisible().catch(() => false);
+    const hasIframe = await iframe
+      .first()
+      .isVisible()
+      .catch(() => false);
+    const hasTextBody = await textBody
+      .first()
+      .isVisible()
+      .catch(() => false);
     expect(hasIframe || hasTextBody).toBe(true);
   });
 
   test("renders HTML email without showing raw tags", async () => {
     // Click on the HTML formatted email (Weekly Product Update)
-    const htmlEmailButton = page.locator("button").filter({ hasText: "Weekly Product Update" }).first();
+    const htmlEmailButton = page
+      .locator("button")
+      .filter({ hasText: "Weekly Product Update" })
+      .first();
 
     if (await htmlEmailButton.isVisible()) {
       await htmlEmailButton.click();
       await page.keyboard.press("Enter");
 
       // Should show the email subject
-      await expect(page.locator("h1").filter({ hasText: /Weekly Product Update/ })).toBeVisible({ timeout: 5000 });
+      await expect(page.locator("h1").filter({ hasText: /Weekly Product Update/ })).toBeVisible({
+        timeout: 5000,
+      });
 
       // Check for the email body container
       const bodyContainer = page.locator("iframe[title='Email content']");
@@ -83,7 +97,10 @@ test.describe("Email Body Rendering", () => {
 
   test("HTML email iframe renders content inside", async () => {
     // Click on the HTML formatted email
-    const htmlEmailButton = page.locator("button").filter({ hasText: "Weekly Product Update" }).first();
+    const htmlEmailButton = page
+      .locator("button")
+      .filter({ hasText: "Weekly Product Update" })
+      .first();
 
     if (await htmlEmailButton.isVisible()) {
       await htmlEmailButton.click();

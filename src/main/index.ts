@@ -1,44 +1,20 @@
 import { app, BrowserWindow, ipcMain, session, nativeTheme } from "electron";
 import { join } from "path";
 import { execSync } from "child_process";
-import { readFileSync, existsSync, createWriteStream, mkdirSync } from "fs";
-import { electronApp, optimizer, is } from "@electron-toolkit/utils";
+import { readFileSync, existsSync } from "fs";
+import { electronApp, optimizer } from "@electron-toolkit/utils";
 
 import { getDataDir, initDevData } from "./data-dir";
+import { createLogger, flushLogs } from "./services/logger";
 
 initDevData();
 
-// File-based logging: tee console output to a log file for debugging
-const logDir = join(getDataDir(), "logs");
-try { mkdirSync(logDir, { recursive: true }); } catch { /* ignore */ }
-const logStream = createWriteStream(join(logDir, "main.log"), { flags: "a" });
-logStream.on("error", () => { /* swallow write errors to prevent crashing the app */ });
-const origLog = console.log.bind(console);
-const origError = console.error.bind(console);
-const origWarn = console.warn.bind(console);
-const timestamp = () => new Date().toISOString();
-const safeStringify = (obj: unknown): string => {
-  try { return JSON.stringify(obj); }
-  catch { return String(obj); }
-};
-logStream.write(`\n--- Session started at ${timestamp()} ---\n`);
-console.log = (...args: unknown[]) => {
-  const msg = args.map(a => typeof a === "string" ? a : safeStringify(a)).join(" ");
-  logStream.write(`[${timestamp()}] ${msg}\n`);
-  origLog(...args);
-};
-console.error = (...args: unknown[]) => {
-  const msg = args.map(a => typeof a === "string" ? a : (a instanceof Error ? a.stack || a.message : safeStringify(a))).join(" ");
-  logStream.write(`[${timestamp()}] ERROR: ${msg}\n`);
-  origError(...args);
-};
-console.warn = (...args: unknown[]) => {
-  const msg = args.map(a => typeof a === "string" ? a : safeStringify(a)).join(" ");
-  logStream.write(`[${timestamp()}] WARN: ${msg}\n`);
-  origWarn(...args);
-};
+const log = createLogger("app");
+
 // Temporary debug IPC: renderer → main stdout/log
-ipcMain.on("debug:log", (_, msg: string) => { console.log(`[renderer] ${msg}`); });
+ipcMain.on("debug:log", (_, msg: string) => {
+  log.info(`[renderer] ${msg}`);
+});
 
 import { ExtensionManifestSchema } from "../shared/extension-types";
 import webSearchPackageJson from "../extensions/mail-ext-web-search/package.json";
@@ -93,7 +69,10 @@ if (process.platform === "darwin") {
 if (app.isPackaged && process.platform === "darwin") {
   try {
     const userShell = process.env.SHELL || "/bin/zsh";
-    const output = execSync(`${userShell} -lc 'echo $PATH'`, { encoding: "utf8", timeout: 5000 }).trim();
+    const output = execSync(`${userShell} -lc 'echo $PATH'`, {
+      encoding: "utf8",
+      timeout: 5000,
+    }).trim();
     const shellPath = output.split("\n").pop() || "";
     if (shellPath) process.env.PATH = shellPath;
   } catch {
@@ -130,9 +109,9 @@ if (envFile) {
         }
       }
     }
-    console.log("[Config] Loaded .env file");
+    log.info("[Config] Loaded .env file");
   } catch (e) {
-    console.warn("[Config] Failed to load .env file:", e);
+    log.warn({ err: e }, "[Config] Failed to load .env file");
   }
 }
 
@@ -151,7 +130,7 @@ if (process.platform !== "darwin" && !isTestMode) {
   } else {
     // Cold-start: scan process.argv for a mailto URL passed by the OS when launching
     // the first instance (second-instance only fires for subsequent launches).
-    const mailtoArg = process.argv.find(arg => arg.toLowerCase().startsWith("mailto:"));
+    const mailtoArg = process.argv.find((arg) => arg.toLowerCase().startsWith("mailto:"));
     if (mailtoArg) {
       pendingMailtoUrl = mailtoArg;
     }
@@ -162,27 +141,57 @@ if (process.platform !== "darwin" && !isTestMode) {
 
 // Parse a mailto: URL into structured fields.
 // Supports: mailto:addr?subject=...&cc=...&bcc=...&body=...
-function parseMailtoUrl(raw: string): { to: string[]; cc: string[]; bcc: string[]; subject: string; body: string } {
-  const result = { to: [] as string[], cc: [] as string[], bcc: [] as string[], subject: "", body: "" };
+function parseMailtoUrl(raw: string): {
+  to: string[];
+  cc: string[];
+  bcc: string[];
+  subject: string;
+  body: string;
+} {
+  const result = {
+    to: [] as string[],
+    cc: [] as string[],
+    bcc: [] as string[],
+    subject: "",
+    body: "",
+  };
   try {
     // Use URL parser — mailto: is a valid scheme.
     const url = new URL(raw);
     // The pathname contains the primary recipients (before the ?).
     // URL encodes spaces etc, so decode it.
-    const primaryTo = decodeURIComponent(url.pathname).split(",").map(s => s.trim()).filter(Boolean);
+    const primaryTo = decodeURIComponent(url.pathname)
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
     result.to.push(...primaryTo);
 
     // Query params: to (additional), cc, bcc, subject, body
     for (const [key, value] of url.searchParams) {
       switch (key.toLowerCase()) {
         case "to":
-          result.to.push(...value.split(",").map(s => s.trim()).filter(Boolean));
+          result.to.push(
+            ...value
+              .split(",")
+              .map((s) => s.trim())
+              .filter(Boolean),
+          );
           break;
         case "cc":
-          result.cc.push(...value.split(",").map(s => s.trim()).filter(Boolean));
+          result.cc.push(
+            ...value
+              .split(",")
+              .map((s) => s.trim())
+              .filter(Boolean),
+          );
           break;
         case "bcc":
-          result.bcc.push(...value.split(",").map(s => s.trim()).filter(Boolean));
+          result.bcc.push(
+            ...value
+              .split(",")
+              .map((s) => s.trim())
+              .filter(Boolean),
+          );
           break;
         case "subject":
           result.subject = value;
@@ -194,7 +203,10 @@ function parseMailtoUrl(raw: string): { to: string[]; cc: string[]; bcc: string[
     }
   } catch {
     // If URL parsing fails, try to extract a bare email from the string
-    const bare = raw.replace(/^mailto:/i, "").split("?")[0].trim();
+    const bare = raw
+      .replace(/^mailto:/i, "")
+      .split("?")[0]
+      .trim();
     if (bare) result.to.push(bare);
   }
   return result;
@@ -243,7 +255,7 @@ app.on("second-instance", (_event, argv) => {
     if (win.isMinimized()) win.restore();
     win.focus();
   }
-  const mailtoArg = argv.find(arg => arg.toLowerCase().startsWith("mailto:"));
+  const mailtoArg = argv.find((arg) => arg.toLowerCase().startsWith("mailto:"));
   if (mailtoArg) {
     handleMailtoUrl(mailtoArg);
   }
@@ -276,7 +288,11 @@ ipcMain.handle("default-mail-app:get-pending", () => {
 });
 
 // Initialize database on startup
-initDatabase();
+const _db = initDatabase();
+
+// Wire up AnthropicService cost tracking
+import { setAnthropicServiceDb } from "./services/anthropic-service";
+setAnthropicServiceDb(_db);
 
 // If no ANTHROPIC_API_KEY in env (e.g. packaged app with no .env), read from stored config
 // so that services using `new Anthropic()` pick it up automatically.
@@ -308,12 +324,12 @@ app.whenReady().then(async () => {
 
   // Set up outbox service client resolver (gets GmailClient for account)
   outboxService.setClientResolver((accountId) =>
-    getEmailSyncService().getClientForAccount(accountId)
+    getEmailSyncService().getClientForAccount(accountId),
   );
 
   // Set up scheduled send service client resolver and start background timer
   scheduledSendService.setClientResolver((accountId) =>
-    getEmailSyncService().getClientForAccount(accountId)
+    getEmailSyncService().getClientForAccount(accountId),
   );
   scheduledSendService.start();
 
@@ -331,14 +347,14 @@ app.whenReady().then(async () => {
   // Many image servers block requests based on Referer or Origin headers
   // This strips those headers for image requests to allow loading
   const imageExtensions = [".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg", ".ico", ".bmp"];
-  const imageContentTypes = ["image/"];
+  const _imageContentTypes = ["image/"];
 
   session.defaultSession.webRequest.onBeforeSendHeaders(
     { urls: ["http://*/*", "https://*/*"] },
     (details, callback) => {
       const url = details.url.toLowerCase();
-      const isImageUrl = imageExtensions.some(ext => url.includes(ext)) ||
-        details.resourceType === "image";
+      const isImageUrl =
+        imageExtensions.some((ext) => url.includes(ext)) || details.resourceType === "image";
 
       if (isImageUrl) {
         // Remove headers that cause image servers to block requests
@@ -351,17 +367,18 @@ app.whenReady().then(async () => {
       }
 
       callback({ requestHeaders: details.requestHeaders });
-    }
+    },
   );
 
   // Also handle response headers to allow images from any origin
   session.defaultSession.webRequest.onHeadersReceived(
     { urls: ["http://*/*", "https://*/*"] },
     (details, callback) => {
-      const contentType = details.responseHeaders?.["content-type"]?.[0] ||
-        details.responseHeaders?.["Content-Type"]?.[0] || "";
-      const isImage = contentType.startsWith("image/") ||
-        details.resourceType === "image";
+      const contentType =
+        details.responseHeaders?.["content-type"]?.[0] ||
+        details.responseHeaders?.["Content-Type"]?.[0] ||
+        "";
+      const isImage = contentType.startsWith("image/") || details.resourceType === "image";
 
       if (isImage) {
         // Remove restrictive CORS headers for images
@@ -374,7 +391,7 @@ app.whenReady().then(async () => {
       }
 
       callback({ responseHeaders: details.responseHeaders });
-    }
+    },
   );
 
   // Register IPC handlers
@@ -424,15 +441,16 @@ app.whenReady().then(async () => {
   Promise.all([
     extensionHost.registerBundledExtensionFull(webSearchManifest, webSearchExtension),
     extensionHost.registerBundledExtensionFull(calendarManifest, calendarExtension),
-  ]).then(() => {
-    console.log("[Extensions] Bundled extensions activated");
-  }).catch((error) => {
-    console.error("[Extensions] Failed to activate bundled extensions:", error);
-  });
+  ])
+    .then(() => {
+      log.info("[Extensions] Bundled extensions activated");
+    })
+    .catch((error) => {
+      log.error({ err: error }, "[Extensions] Failed to activate bundled extensions");
+    });
 
   // Load private extensions (optional, discovered at build time via import.meta.glob)
-  registerPrivateExtensions(extensionHost)
-    .catch(() => {}); // Ignore errors - private extensions are optional
+  registerPrivateExtensions(extensionHost).catch(() => {}); // Ignore errors - private extensions are optional
 
   // Wire up agent coordinator so installed extensions can load agent providers
   extensionHost.setAgentCoordinator(agentCoordinator);
@@ -441,7 +459,7 @@ app.whenReady().then(async () => {
   const installedExtensionsDir = join(getDataDir(), "extensions");
   extensionHost.setInstalledExtensionsDir(installedExtensionsDir);
   extensionHost.loadInstalledExtensions().catch((error) => {
-    console.error("[Extensions] Failed to load installed extensions:", error);
+    log.error({ err: error }, "[Extensions] Failed to load installed extensions");
   });
 
   // Listen for OS theme changes — broadcast to renderer when preference is "system"
@@ -486,5 +504,6 @@ const walCheckpointInterval = setInterval(() => {
 // WAL file and lost if the file is corrupted or removed during an update.
 app.on("before-quit", () => {
   clearInterval(walCheckpointInterval);
+  flushLogs();
   closeDatabase();
 });

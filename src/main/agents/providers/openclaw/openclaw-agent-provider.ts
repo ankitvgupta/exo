@@ -62,14 +62,14 @@ export function execOpenClaw(
     }
 
     // Define onAbort early so execFile callback can remove it on completion
-    let child: ReturnType<typeof execFile>;
+    const childRef: { current: ReturnType<typeof execFile> | null } = { current: null };
     const onAbort = () => {
       if (slowTimer) clearTimeout(slowTimer);
-      child?.kill("SIGTERM");
+      childRef.current?.kill("SIGTERM");
     };
     signal.addEventListener("abort", onAbort, { once: true });
 
-    child = execFile(
+    childRef.current = execFile(
       "openclaw",
       ["agent", "--agent", "main", "--message", message, "--json"],
       { timeout: TIMEOUT_MS, env: { ...process.env, NO_COLOR: "1", ...extraEnv } },
@@ -84,11 +84,21 @@ export function execOpenClaw(
         if (error) {
           const combined = (stderr || "") + (stdout || "");
           if (combined.includes("No API key")) {
-            reject(new Error("OpenClaw: No API key configured — run `openclaw configure` to set up credentials"));
+            reject(
+              new Error(
+                "OpenClaw: No API key configured — run `openclaw configure` to set up credentials",
+              ),
+            );
             return;
           }
-          if (combined.includes("ECONNREFUSED") || combined.includes("not reachable") || combined.includes("gateway")) {
-            reject(new Error("OpenClaw: Gateway not running — start it with `openclaw gateway run`"));
+          if (
+            combined.includes("ECONNREFUSED") ||
+            combined.includes("not reachable") ||
+            combined.includes("gateway")
+          ) {
+            reject(
+              new Error("OpenClaw: Gateway not running — start it with `openclaw gateway run`"),
+            );
             return;
           }
           if (error.killed || combined.includes("ETIMEDOUT")) {
@@ -101,7 +111,13 @@ export function execOpenClaw(
 
         // Parse JSON output to extract the response text
         const parsed = OpenClawAgentResponseSchema.safeParse(
-          (() => { try { return JSON.parse(stdout); } catch { return null; } })(),
+          (() => {
+            try {
+              return JSON.parse(stdout);
+            } catch {
+              return null;
+            }
+          })(),
         );
         if (!parsed.success) {
           // Not valid JSON or doesn't match schema — return raw stdout
@@ -110,7 +126,11 @@ export function execOpenClaw(
         }
         const data = parsed.data;
         if (data.status !== "ok") {
-          reject(new Error(`OpenClaw: Agent returned status "${data.status}" — ${data.summary ?? "unknown error"}`));
+          reject(
+            new Error(
+              `OpenClaw: Agent returned status "${data.status}" — ${data.summary ?? "unknown error"}`,
+            ),
+          );
           return;
         }
         const text = data.result?.payloads
@@ -192,7 +212,10 @@ export class OpenClawAgentProvider implements AgentProvider {
         const id = setTimeout(() => resolve(slowWarning), SLOW_WARNING_MS);
         // If CLI finishes first (success or failure), cancel the timer.
         // Use .then(fn, fn) instead of .finally() to avoid dangling unhandled rejections.
-        cliPromise.then(() => clearTimeout(id), () => clearTimeout(id));
+        cliPromise.then(
+          () => clearTimeout(id),
+          () => clearTimeout(id),
+        );
       });
 
       let response: string;
@@ -260,10 +283,7 @@ Pass a natural language question as the 'query' parameter. Be specific about wha
 
   // --- Private ---
 
-  private async queryOpenClaw(
-    query: string,
-    signal: AbortSignal,
-  ): Promise<string> {
+  private async queryOpenClaw(query: string, signal: AbortSignal): Promise<string> {
     // Use canned responses only in demo mode when OpenClaw is NOT enabled.
     // When the user has explicitly enabled OpenClaw, always use the real CLI
     // even in demo mode — this allows testing the real integration with mock Gmail data.

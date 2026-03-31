@@ -127,7 +127,9 @@ test.describe("Archive Ready — Split Tab", () => {
     expect(count).toBeGreaterThan(0);
 
     // Archive Ready tab should no longer be visible (count is 0, tabs bar hidden)
-    await expect(page.locator("button:has-text('Archive Ready')")).not.toBeVisible({ timeout: 3000 });
+    await expect(page.locator("button:has-text('Archive Ready')")).not.toBeVisible({
+      timeout: 3000,
+    });
   });
 });
 

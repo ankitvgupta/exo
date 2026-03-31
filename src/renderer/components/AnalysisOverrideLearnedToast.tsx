@@ -14,12 +14,14 @@ export function AnalysisOverrideLearnedToast() {
   // Listen for analysis-override:learned events from main process
   useEffect(() => {
     if (!window.api?.memory?.onAnalysisOverrideLearned) return;
-    const cleanup = window.api.memory.onAnalysisOverrideLearned((payload: {
-      promoted: Array<{ id: string; content: string; scope: string; scopeValue: string | null }>;
-      draftMemoriesCreated: number;
-    }) => {
-      useAppStore.getState().setAnalysisOverrideLearned(payload);
-    });
+    const cleanup = window.api.memory.onAnalysisOverrideLearned(
+      (payload: {
+        promoted: Array<{ id: string; content: string; scope: string; scopeValue: string | null }>;
+        draftMemoriesCreated: number;
+      }) => {
+        useAppStore.getState().setAnalysisOverrideLearned(payload);
+      },
+    );
     return cleanup;
   }, []);
 
@@ -52,7 +54,12 @@ export function AnalysisOverrideLearnedToast() {
             title="Dismiss"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
             </svg>
           </button>
         </div>
@@ -63,7 +70,7 @@ export function AnalysisOverrideLearnedToast() {
   // Prominent toast for promoted memories (saved as classification rules)
   if (hasPromoted) {
     const navigateToMemories = () => {
-      setHighlightMemoryIds(promoted.map(m => m.id));
+      setHighlightMemoryIds(promoted.map((m) => m.id));
       clear();
       setShowSettings(true, "memories");
     };
@@ -75,18 +82,14 @@ export function AnalysisOverrideLearnedToast() {
             onClick={navigateToMemories}
             className="flex-1 min-w-0 text-left hover:opacity-90 transition-opacity cursor-pointer"
           >
-            <p className="text-xs font-medium text-purple-300 mb-1">
-              Saved classification rule
-            </p>
+            <p className="text-xs font-medium text-purple-300 mb-1">Saved classification rule</p>
             {promoted.slice(0, 2).map((m) => (
               <p key={m.id} className="text-sm truncate" title={m.content}>
                 {m.content}
               </p>
             ))}
             {promoted.length > 2 && (
-              <p className="text-xs text-purple-300 mt-0.5">
-                +{promoted.length - 2} more
-              </p>
+              <p className="text-xs text-purple-300 mt-0.5">+{promoted.length - 2} more</p>
             )}
             {draftMemoriesCreated > 0 && (
               <p className="text-xs text-purple-400 mt-1">
@@ -103,7 +106,12 @@ export function AnalysisOverrideLearnedToast() {
             title="Dismiss"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
             </svg>
           </button>
         </div>

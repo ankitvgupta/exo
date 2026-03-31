@@ -174,7 +174,9 @@ test.describe("Reply and Forward Workflows", () => {
 
     // Recipient should appear as a chip
     await expect(
-      inlineCompose.locator("[data-testid='address-chip']").filter({ hasText: "forward-recipient@example.com" })
+      inlineCompose
+        .locator("[data-testid='address-chip']")
+        .filter({ hasText: "forward-recipient@example.com" }),
     ).toBeVisible({ timeout: 3000 });
 
     // Type a message in the editor

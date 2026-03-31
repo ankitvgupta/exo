@@ -22,7 +22,9 @@ const registryListeners = new Set<() => void>();
 
 export function onRegistryChange(listener: () => void): () => void {
   registryListeners.add(listener);
-  return () => { registryListeners.delete(listener); };
+  return () => {
+    registryListeners.delete(listener);
+  };
 }
 
 function notifyRegistryListeners(): void {
@@ -35,7 +37,7 @@ function notifyRegistryListeners(): void {
 export function registerPanelComponent(
   extensionId: string,
   panelId: string,
-  component: PanelComponent
+  component: PanelComponent,
 ): void {
   const key = `${extensionId}:${panelId}`;
   panelComponentRegistry.set(key, component);
@@ -57,10 +59,7 @@ export function unregisterExtensionPanels(extensionId: string): void {
 /**
  * Get a registered panel component
  */
-export function getPanelComponent(
-  extensionId: string,
-  panelId: string
-): PanelComponent | null {
+export function getPanelComponent(extensionId: string, panelId: string): PanelComponent | null {
   const key = `${extensionId}:${panelId}`;
   return panelComponentRegistry.get(key) ?? null;
 }
@@ -97,7 +96,9 @@ export function ExtensionPanelSlot({
   }
 
   return (
-    <div className={`flex flex-col overflow-hidden ${!isFirst ? "border-t border-gray-200 dark:border-gray-700" : ""}`}>
+    <div
+      className={`flex flex-col overflow-hidden ${!isFirst ? "border-t border-gray-200 dark:border-gray-700" : ""}`}
+    >
       <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700/50 bg-gray-50 dark:bg-gray-800/50">
         <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
           {title}

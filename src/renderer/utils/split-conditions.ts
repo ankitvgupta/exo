@@ -25,19 +25,22 @@ function extractEmailAddress(fromField: string): string {
 }
 
 // Evaluate a split condition against an email
-export function evaluateCondition(email: DashboardEmail, condition: InboxSplit["conditions"][0]): boolean {
+export function evaluateCondition(
+  email: DashboardEmail,
+  condition: InboxSplit["conditions"][0],
+): boolean {
   let matches = false;
   switch (condition.type) {
     case "from": {
       const emailAddr = extractEmailAddress(email.from);
-      matches = matchesPattern(email.from, condition.value) ||
-                matchesPattern(emailAddr, condition.value);
+      matches =
+        matchesPattern(email.from, condition.value) || matchesPattern(emailAddr, condition.value);
       break;
     }
     case "to": {
       const emailAddr = extractEmailAddress(email.to);
-      matches = matchesPattern(email.to, condition.value) ||
-                matchesPattern(emailAddr, condition.value);
+      matches =
+        matchesPattern(email.to, condition.value) || matchesPattern(emailAddr, condition.value);
       break;
     }
     case "subject": {
@@ -49,7 +52,8 @@ export function evaluateCondition(email: DashboardEmail, condition: InboxSplit["
       break;
     }
     case "has_attachment": {
-      matches = email.attachments?.some((a) => matchesPattern(a.filename, condition.value)) ?? false;
+      matches =
+        email.attachments?.some((a) => matchesPattern(a.filename, condition.value)) ?? false;
       break;
     }
   }
@@ -60,7 +64,5 @@ export function evaluateCondition(email: DashboardEmail, condition: InboxSplit["
 // Takes the email to evaluate against (typically the latest email in the thread).
 export function emailMatchesSplit(email: DashboardEmail, split: InboxSplit): boolean {
   const results = split.conditions.map((c) => evaluateCondition(email, c));
-  return split.conditionLogic === "and"
-    ? results.every(Boolean)
-    : results.some(Boolean);
+  return split.conditionLogic === "and" ? results.every(Boolean) : results.some(Boolean);
 }

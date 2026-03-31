@@ -8,7 +8,14 @@ import { trackEvent } from "../services/posthog";
  */
 
 export function batchArchive() {
-  const { selectedThreadIds, emails, removeEmails, clearSelectedThreads, addUndoAction, currentAccountId } = useAppStore.getState();
+  const {
+    selectedThreadIds,
+    emails,
+    removeEmails,
+    clearSelectedThreads,
+    addUndoAction,
+    currentAccountId,
+  } = useAppStore.getState();
   if (!currentAccountId || selectedThreadIds.size === 0) return;
 
   const threadIds = Array.from(selectedThreadIds);
@@ -23,7 +30,7 @@ export function batchArchive() {
   }
 
   // Optimistic UI: remove all emails from selected threads
-  const allEmails = threadIds.flatMap(tid => emailsByThread.get(tid) || []);
+  const allEmails = threadIds.flatMap((tid) => emailsByThread.get(tid) || []);
   removeEmails(allEmailIds);
   clearSelectedThreads();
 
@@ -42,7 +49,14 @@ export function batchArchive() {
 }
 
 export function batchTrash() {
-  const { selectedThreadIds, emails, removeEmails, clearSelectedThreads, addUndoAction, currentAccountId } = useAppStore.getState();
+  const {
+    selectedThreadIds,
+    emails,
+    removeEmails,
+    clearSelectedThreads,
+    addUndoAction,
+    currentAccountId,
+  } = useAppStore.getState();
   if (!currentAccountId || selectedThreadIds.size === 0) return;
 
   const threadIds = Array.from(selectedThreadIds);
@@ -56,7 +70,7 @@ export function batchTrash() {
     }
   }
 
-  const allEmails = threadIds.flatMap(tid => emailsByThread.get(tid) || []);
+  const allEmails = threadIds.flatMap((tid) => emailsByThread.get(tid) || []);
   removeEmails(allEmailIds);
   clearSelectedThreads();
 
@@ -75,7 +89,14 @@ export function batchTrash() {
 }
 
 export function batchToggleStar() {
-  const { selectedThreadIds, emails, clearSelectedThreads, updateEmail, addUndoAction, currentAccountId } = useAppStore.getState();
+  const {
+    selectedThreadIds,
+    emails,
+    clearSelectedThreads,
+    updateEmail,
+    addUndoAction,
+    currentAccountId,
+  } = useAppStore.getState();
   if (!currentAccountId || selectedThreadIds.size === 0) return;
 
   // Group emails by thread for the selected threads
@@ -87,7 +108,7 @@ export function batchToggleStar() {
 
   // If any thread is unstarred, star all; otherwise unstar all
   const anyUnstarred = selectedThreadEmails.some(
-    (t) => !t.emails.some((e) => e.labelIds?.includes("STARRED"))
+    (t) => !t.emails.some((e) => e.labelIds?.includes("STARRED")),
   );
 
   const changedEmails: DashboardEmail[] = [];
@@ -129,13 +150,22 @@ export function batchToggleStar() {
       delayMs: 5000,
       previousLabels,
     });
-    const changedThreadCount = new Set(changedEmails.map(e => e.threadId)).size;
-    trackEvent(anyUnstarred ? "email_starred" : "email_unstarred", { thread_count: changedThreadCount });
+    const changedThreadCount = new Set(changedEmails.map((e) => e.threadId)).size;
+    trackEvent(anyUnstarred ? "email_starred" : "email_unstarred", {
+      thread_count: changedThreadCount,
+    });
   }
 }
 
 export function batchMarkUnread() {
-  const { selectedThreadIds, emails, clearSelectedThreads, updateEmail, addUndoAction, currentAccountId } = useAppStore.getState();
+  const {
+    selectedThreadIds,
+    emails,
+    clearSelectedThreads,
+    updateEmail,
+    addUndoAction,
+    currentAccountId,
+  } = useAppStore.getState();
   if (!currentAccountId || selectedThreadIds.size === 0) return;
 
   const changedEmails: DashboardEmail[] = [];
@@ -145,7 +175,7 @@ export function batchMarkUnread() {
     const threadEmails = emails.filter((e) => e.threadId === threadId);
     if (threadEmails.length === 0) continue;
     const latestEmail = threadEmails.reduce((a, b) =>
-      new Date(a.date).getTime() >= new Date(b.date).getTime() ? a : b
+      new Date(a.date).getTime() >= new Date(b.date).getTime() ? a : b,
     );
     const currentLabels = latestEmail.labelIds || ["INBOX"];
     // Only mark emails that aren't already unread
@@ -169,6 +199,8 @@ export function batchMarkUnread() {
       delayMs: 5000,
       previousLabels,
     });
-    trackEvent("email_marked_unread", { thread_count: new Set(changedEmails.map(e => e.threadId)).size });
+    trackEvent("email_marked_unread", {
+      thread_count: new Set(changedEmails.map((e) => e.threadId)).size,
+    });
   }
 }

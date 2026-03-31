@@ -46,6 +46,8 @@ export function mergeAndThreadSearchResults(
   // Re-sort by latest email date (including sent) for search results.
   // groupByThread sorts by latestReceivedDate (for inbox), but search results
   // should sort by overall recency to match the displayed time.
-  threads.sort((a, b) => new Date(b.latestEmail.date).getTime() - new Date(a.latestEmail.date).getTime());
+  threads.sort(
+    (a, b) => new Date(b.latestEmail.date).getTime() - new Date(a.latestEmail.date).getTime(),
+  );
   return threads;
 }

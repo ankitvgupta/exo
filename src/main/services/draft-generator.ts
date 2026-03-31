@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { createMessage } from "./anthropic-service";
 import type { GmailClient } from "./gmail-client";
 import { CalendaringAgent } from "./calendaring-agent";
 import { getEnrichmentBySender } from "../extensions/enrichment-store";
@@ -11,35 +11,44 @@ import {
   type EAConfig,
   type GeneratedDraftResponse,
 } from "../../shared/types";
+import { createLogger } from "./logger";
+
+const log = createLogger("draft-generator");
 
 /**
  * Extract reply-all CC recipients from an email's To/CC fields,
  * excluding the sender and the user's own email address.
  */
-function extractReplyAllCc(email: { from: string; to: string; cc?: string }, userEmail: string): string[] {
+function extractReplyAllCc(
+  email: { from: string; to: string; cc?: string },
+  userEmail: string,
+): string[] {
   const parseAddresses = (field: string): string[] =>
-    (field.match(/[\w.+-]+@[\w.-]+\.\w+/g) || []).map(e => e.toLowerCase());
+    (field.match(/[\w.+-]+@[\w.-]+\.\w+/g) || []).map((e) => e.toLowerCase());
 
   const senderEmail = parseAddresses(email.from)[0];
   const exclude = new Set([senderEmail, userEmail.toLowerCase()].filter(Boolean));
 
   const seen = new Set<string>();
-  return [...parseAddresses(email.to), ...(email.cc ? parseAddresses(email.cc) : [])]
-    .filter(addr => {
+  return [...parseAddresses(email.to), ...(email.cc ? parseAddresses(email.cc) : [])].filter(
+    (addr) => {
       const dominated = exclude.has(addr) || seen.has(addr);
       seen.add(addr);
       return !dominated;
-    });
+    },
+  );
 }
 
 export class DraftGenerator {
-  private anthropic: Anthropic;
   private model: string;
   private calendaringModel: string;
   private prompt: string;
 
-  constructor(model: string = "claude-sonnet-4-20250514", prompt: string = DEFAULT_DRAFT_PROMPT, calendaringModel?: string) {
-    this.anthropic = new Anthropic();
+  constructor(
+    model: string = "claude-sonnet-4-20250514",
+    prompt: string = DEFAULT_DRAFT_PROMPT,
+    calendaringModel?: string,
+  ) {
     this.model = model;
     this.calendaringModel = calendaringModel ?? model;
     // Always append format suffix so the user can't accidentally remove it
@@ -50,9 +59,9 @@ export class DraftGenerator {
     email: Email,
     analysis: AnalysisResult,
     eaConfig?: EAConfig,
-    options?: { enableSenderLookup?: boolean; userEmail?: string }
+    options?: { enableSenderLookup?: boolean; userEmail?: string },
   ): Promise<GeneratedDraftResponse> {
-    let cc: string[] = [];
+    const cc: string[] = [];
 
     // Default to reply-all: include all original To/CC recipients except sender and user
     if (options?.userEmail) {
@@ -74,7 +83,7 @@ export class DraftGenerator {
 SENDER CONTEXT (from web search):
 ${profile.summary}
 ---`;
-          console.log(`[DraftGenerator] Using cached sender context for ${senderEmail}`);
+          log.info(`[DraftGenerator] Using cached sender context for ${senderEmail}`);
         }
       }
     }
@@ -84,10 +93,7 @@ ${profile.summary}
       const calAgent = new CalendaringAgent(this.calendaringModel);
       calendaringResult = await calAgent.analyze(email);
 
-      if (
-        calendaringResult.hasSchedulingContext &&
-        calendaringResult.action === "defer_to_ea"
-      ) {
+      if (calendaringResult.hasSchedulingContext && calendaringResult.action === "defer_to_ea") {
         cc.push(eaConfig.email);
         const deferralLanguage = calAgent.generateEADeferralLanguage(eaConfig);
         calendaringContext = `
@@ -98,13 +104,14 @@ Do NOT propose specific times yourself - defer to the assistant.`;
       }
     }
 
-    const response = await this.anthropic.messages.create({
-      model: this.model,
-      max_tokens: 1024,
-      messages: [
-        {
-          role: "user",
-          content: `${this.prompt}
+    const response = await createMessage(
+      {
+        model: this.model,
+        max_tokens: 1024,
+        messages: [
+          {
+            role: "user",
+            content: `${this.prompt}
 ${senderContext}
 ${calendaringContext}
 ---
@@ -121,9 +128,11 @@ Subject: ${email.subject}
 Date: ${email.date}
 
 ${email.body}`,
-        },
-      ],
-    });
+          },
+        ],
+      },
+      { caller: "draft-generator", emailId: email.id },
+    );
 
     const textBlock = response.content.find((block) => block.type === "text");
     if (!textBlock || textBlock.type !== "text") {
@@ -141,7 +150,7 @@ ${email.body}`,
     to: string[],
     subject: string,
     instructions: string,
-    options?: { enableSenderLookup?: boolean }
+    options?: { enableSenderLookup?: boolean },
   ): Promise<GeneratedDraftResponse> {
     let recipientContext = "";
 
@@ -158,19 +167,20 @@ ${email.body}`,
 RECIPIENT CONTEXT (${recipient}, from web search):
 ${profile.summary}
 ---`;
-            console.log(`[DraftGenerator] Using cached recipient context for ${recipientEmail}`);
+            log.info(`[DraftGenerator] Using cached recipient context for ${recipientEmail}`);
           }
         }
       }
     }
 
-    const response = await this.anthropic.messages.create({
-      model: this.model,
-      max_tokens: 1024,
-      messages: [
-        {
-          role: "user",
-          content: `${this.prompt}
+    const response = await createMessage(
+      {
+        model: this.model,
+        max_tokens: 1024,
+        messages: [
+          {
+            role: "user",
+            content: `${this.prompt}
 ${recipientContext}
 ---
 Compose a new email (not a reply to an existing thread).
@@ -180,9 +190,11 @@ Subject: ${subject}
 
 INSTRUCTIONS:
 ${instructions}`,
-        },
-      ],
-    });
+          },
+        ],
+      },
+      { caller: "draft-generator-compose" },
+    );
 
     const textBlock = response.content.find((block) => block.type === "text");
     if (!textBlock || textBlock.type !== "text") {
@@ -195,7 +207,7 @@ ${instructions}`,
   async generateForward(
     email: Email,
     instructions: string,
-    options?: { enableSenderLookup?: boolean }
+    options?: { enableSenderLookup?: boolean },
   ): Promise<GeneratedDraftResponse> {
     let recipientContext = "";
 
@@ -211,23 +223,25 @@ ${instructions}`,
 ORIGINAL SENDER CONTEXT (${email.from}, from web search):
 ${profile.summary}
 ---`;
-          console.log(`[DraftGenerator] Using cached sender context for forward from ${senderEmail}`);
+          log.info(`[DraftGenerator] Using cached sender context for forward from ${senderEmail}`);
         }
       }
     }
 
     const lowerSubject = email.subject.toLowerCase();
-    const subject = (lowerSubject.startsWith("fwd:") || lowerSubject.startsWith("fw:"))
-      ? email.subject
-      : `Fwd: ${email.subject}`;
+    const subject =
+      lowerSubject.startsWith("fwd:") || lowerSubject.startsWith("fw:")
+        ? email.subject
+        : `Fwd: ${email.subject}`;
 
-    const response = await this.anthropic.messages.create({
-      model: this.model,
-      max_tokens: 1024,
-      messages: [
-        {
-          role: "user",
-          content: `${this.prompt}
+    const response = await createMessage(
+      {
+        model: this.model,
+        max_tokens: 1024,
+        messages: [
+          {
+            role: "user",
+            content: `${this.prompt}
 ${recipientContext}
 ---
 Write the text for a forwarded email. The original email will be automatically appended as quoted content, so do not reproduce it.
@@ -244,9 +258,11 @@ Subject: ${email.subject}
 Date: ${email.date}
 
 ${email.body}`,
-        },
-      ],
-    });
+          },
+        ],
+      },
+      { caller: "draft-generator-forward", emailId: email.id },
+    );
 
     const textBlock = response.content.find((block) => block.type === "text");
     if (!textBlock || textBlock.type !== "text") {
@@ -260,22 +276,25 @@ ${email.body}`,
     gmailClient: GmailClient,
     email: Email,
     draftBody: string,
-    dryRun: boolean = false
+    dryRun: boolean = false,
   ): Promise<DraftResult> {
     // Extract reply-to address (or use from address)
     const replyTo = this.extractReplyAddress(email.from);
 
     // Format subject with Re: if not already present
-    const subject = email.subject.startsWith("Re:")
-      ? email.subject
-      : `Re: ${email.subject}`;
+    const subject = email.subject.startsWith("Re:") ? email.subject : `Re: ${email.subject}`;
 
     if (dryRun) {
-      console.log("\n[DRY RUN] Would create draft:");
-      console.log(`  To: ${replyTo}`);
-      console.log(`  Subject: ${subject}`);
-      console.log(`  Thread: ${email.threadId}`);
-      console.log(`  Body:\n${draftBody.split("\n").map((l) => "    " + l).join("\n")}`);
+      log.info("\n[DRY RUN] Would create draft:");
+      log.info(`  To: ${replyTo}`);
+      log.info(`  Subject: ${subject}`);
+      log.info(`  Thread: ${email.threadId}`);
+      log.info(
+        `  Body:\n${draftBody
+          .split("\n")
+          .map((l) => "    " + l)
+          .join("\n")}`,
+      );
 
       return {
         emailId: email.id,

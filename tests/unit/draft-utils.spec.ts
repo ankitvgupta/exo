@@ -18,15 +18,11 @@ test.describe("draftBodyToHtml", () => {
   });
 
   test("converts single newlines within a block to <br>", () => {
-    expect(draftBodyToHtml("Line one\nLine two")).toBe(
-      "<p>Line one<br>Line two</p>"
-    );
+    expect(draftBodyToHtml("Line one\nLine two")).toBe("<p>Line one<br>Line two</p>");
   });
 
   test("splits on double newlines into separate paragraphs", () => {
-    expect(draftBodyToHtml("Para one\n\nPara two")).toBe(
-      "<p>Para one</p><p>Para two</p>"
-    );
+    expect(draftBodyToHtml("Para one\n\nPara two")).toBe("<p>Para one</p><p>Para two</p>");
   });
 
   test("handles triple+ newlines as block separator", () => {
@@ -39,14 +35,12 @@ test.describe("draftBodyToHtml", () => {
 
   test("converts **bold** markers to <strong>", () => {
     expect(draftBodyToHtml("This is **bold** text")).toBe(
-      "<p>This is <strong>bold</strong> text</p>"
+      "<p>This is <strong>bold</strong> text</p>",
     );
   });
 
   test("converts *italic* markers to <em>", () => {
-    expect(draftBodyToHtml("This is *italic* text")).toBe(
-      "<p>This is <em>italic</em> text</p>"
-    );
+    expect(draftBodyToHtml("This is *italic* text")).toBe("<p>This is <em>italic</em> text</p>");
   });
 
   test("handles both bold and italic in the same line", () => {
@@ -70,27 +64,17 @@ test.describe("draftBodyToHtml", () => {
   });
 
   test("converts <b>/<strong> tags to bold markers before stripping", () => {
-    expect(draftBodyToHtml("<b>Bold</b> text")).toBe(
-      "<p><strong>Bold</strong> text</p>"
-    );
-    expect(draftBodyToHtml("<strong>Bold</strong> text")).toBe(
-      "<p><strong>Bold</strong> text</p>"
-    );
+    expect(draftBodyToHtml("<b>Bold</b> text")).toBe("<p><strong>Bold</strong> text</p>");
+    expect(draftBodyToHtml("<strong>Bold</strong> text")).toBe("<p><strong>Bold</strong> text</p>");
   });
 
   test("converts <i>/<em> tags to italic markers before stripping", () => {
-    expect(draftBodyToHtml("<i>Italic</i> text")).toBe(
-      "<p><em>Italic</em> text</p>"
-    );
-    expect(draftBodyToHtml("<em>Italic</em> text")).toBe(
-      "<p><em>Italic</em> text</p>"
-    );
+    expect(draftBodyToHtml("<i>Italic</i> text")).toBe("<p><em>Italic</em> text</p>");
+    expect(draftBodyToHtml("<em>Italic</em> text")).toBe("<p><em>Italic</em> text</p>");
   });
 
   test("strips arbitrary HTML tags like <span>, <a>, <br>", () => {
-    const result = draftBodyToHtml(
-      '<span class="foo">Hello</span> <a href="x">link</a>'
-    );
+    const result = draftBodyToHtml('<span class="foo">Hello</span> <a href="x">link</a>');
     expect(result).not.toContain("<span");
     expect(result).not.toContain("<a ");
     expect(result).toContain("Hello");
@@ -105,7 +89,7 @@ test.describe("draftBodyToHtml", () => {
     // Input has HTML entities (as if from stripped HTML)
     // &#39; -> ' -> output stays as ' (no HTML entity needed)
     const result = draftBodyToHtml("It&#39;s a &quot;test&quot;");
-    expect(result).toBe("<p>It's a \"test\"</p>");
+    expect(result).toBe('<p>It\'s a "test"</p>');
   });
 
   test("escapes literal & in plain text to prevent HTML injection", () => {
@@ -142,9 +126,7 @@ test.describe("draftBodyToHtml", () => {
   test("converts lines starting with '- ' into a <ul>", () => {
     const input = "- Item one\n- Item two\n- Item three";
     const result = draftBodyToHtml(input);
-    expect(result).toBe(
-      "<ul><li>Item one</li><li>Item two</li><li>Item three</li></ul>"
-    );
+    expect(result).toBe("<ul><li>Item one</li><li>Item two</li><li>Item three</li></ul>");
   });
 
   test("converts lines starting with '• ' into a <ul>", () => {
@@ -167,9 +149,7 @@ test.describe("draftBodyToHtml", () => {
   test("converts lines starting with 'N. ' into an <ol>", () => {
     const input = "1. First\n2. Second\n3. Third";
     const result = draftBodyToHtml(input);
-    expect(result).toBe(
-      "<ol><li>First</li><li>Second</li><li>Third</li></ol>"
-    );
+    expect(result).toBe("<ol><li>First</li><li>Second</li><li>Third</li></ol>");
   });
 
   test("converts lines starting with 'N) ' into an <ol>", () => {
@@ -192,17 +172,13 @@ test.describe("draftBodyToHtml", () => {
   test("handles paragraph followed by bullet list", () => {
     const input = "Here are the items:\n\n- Item A\n- Item B";
     const result = draftBodyToHtml(input);
-    expect(result).toBe(
-      "<p>Here are the items:</p><ul><li>Item A</li><li>Item B</li></ul>"
-    );
+    expect(result).toBe("<p>Here are the items:</p><ul><li>Item A</li><li>Item B</li></ul>");
   });
 
   test("handles numbered list followed by paragraph", () => {
     const input = "1. Step one\n2. Step two\n\nThat's all.";
     const result = draftBodyToHtml(input);
-    expect(result).toBe(
-      "<ol><li>Step one</li><li>Step two</li></ol><p>That's all.</p>"
-    );
+    expect(result).toBe("<ol><li>Step one</li><li>Step two</li></ol><p>That's all.</p>");
   });
 
   // ---------------------------------------------------------------------------
@@ -221,8 +197,6 @@ test.describe("draftBodyToHtml", () => {
 
   test("handles multiple bold markers in one line", () => {
     const result = draftBodyToHtml("**A** then **B**");
-    expect(result).toBe(
-      "<p><strong>A</strong> then <strong>B</strong></p>"
-    );
+    expect(result).toBe("<p><strong>A</strong> then <strong>B</strong></p>");
   });
 });

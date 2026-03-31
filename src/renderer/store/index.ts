@@ -2,11 +2,42 @@ import { useMemo } from "react";
 import { create } from "zustand";
 import { clearPendingLabelUpdates } from "../hooks-bridge";
 import { applyOptimisticReads, addOptimisticReads } from "../optimistic-reads";
-import type { DashboardEmail, ComposeMode, OutboxStats, InboxSplit, ThemePreference, InboxDensity, SnoozedEmail, ScheduledMessageStats, SendMessageOptions, LocalDraft } from "../../shared/types";
+import type {
+  DashboardEmail,
+  ComposeMode,
+  OutboxStats,
+  InboxSplit,
+  ThemePreference,
+  InboxDensity,
+  SnoozedEmail,
+  ScheduledMessageStats,
+  SendMessageOptions,
+  LocalDraft,
+} from "../../shared/types";
 import { emailMatchesSplit } from "../utils/split-conditions";
-import type { AgentProviderConfig, AgentTaskInfo, AgentProviderRun, AgentTaskHistoryEntry, ScopedAgentEvent, PendingConfirmation, AgentContext } from "../../shared/agent-types";
+import type {
+  AgentProviderConfig,
+  AgentTaskInfo,
+  AgentProviderRun,
+  AgentTaskHistoryEntry,
+  ScopedAgentEvent,
+  AgentContext,
+} from "../../shared/agent-types";
 
-export type SettingsTab = "general" | "accounts" | "calendar" | "splits" | "signatures" | "prompts" | "style" | "assistant" | "memories" | "queue" | "agents" | "analytics" | "extensions";
+export type SettingsTab =
+  | "general"
+  | "accounts"
+  | "calendar"
+  | "splits"
+  | "signatures"
+  | "prompts"
+  | "style"
+  | "assistant"
+  | "memories"
+  | "queue"
+  | "agents"
+  | "analytics"
+  | "extensions";
 
 // Draft content for undo-send restoration or local draft editing
 export type RestoredDraft = {
@@ -16,7 +47,7 @@ export type RestoredDraft = {
   cc?: string[];
   bcc?: string[];
   subject?: string;
-  localDraftId?: string;  // Set when editing a local_draft (compose_new_email)
+  localDraftId?: string; // Set when editing a local_draft (compose_new_email)
   /** When true, skip auto-focusing the compose editor (e.g. auto-opened pre-existing drafts). */
   skipAutoFocus?: boolean;
 };
@@ -275,10 +306,10 @@ interface AppState {
   selectedAgentIds: string[];
   defaultAgentIds: string[];
   availableProviders: AgentProviderConfig[];
-  agentTasks: Record<string, AgentTaskInfo>;  // keyed by emailId (or "__global__" for non-email tasks)
-  agentTaskIdMap: Record<string, string>;     // taskId -> emailId (or "__global__")
+  agentTasks: Record<string, AgentTaskInfo>; // keyed by emailId (or "__global__" for non-email tasks)
+  agentTaskIdMap: Record<string, string>; // taskId -> emailId (or "__global__")
   agentTaskHistory: AgentTaskHistoryEntry[];
-  globalAgentTaskKey: string | null;          // non-null when a non-email agent task is active
+  globalAgentTaskKey: string | null; // non-null when a non-email agent task is active
 
   // Local drafts state (new emails composed by agent or user, not tied to threads)
   localDrafts: LocalDraft[];
@@ -294,7 +325,11 @@ interface AppState {
   addEmails: (emails: DashboardEmail[]) => void;
   removeEmails: (emailIds: string[]) => void;
   /** Atomically remove emails and update selection in one render — prevents flicker during archive/trash. */
-  removeEmailsAndAdvance: (emailIds: string[], nextThreadId: string | null, nextEmailId: string | null) => void;
+  removeEmailsAndAdvance: (
+    emailIds: string[],
+    nextThreadId: string | null,
+    nextEmailId: string | null,
+  ) => void;
   setSelectedEmailId: (id: string | null) => void;
   setSelectedThreadId: (id: string | null) => void;
   setFocusedThreadEmailId: (id: string | null) => void;
@@ -441,11 +476,24 @@ interface AppState {
   setSelectedAgentIds: (ids: string[]) => void;
   setDefaultAgentIds: (ids: string[]) => void;
   setAvailableProviders: (providers: AgentProviderConfig[]) => void;
-  startAgentTask: (taskId: string, emailId: string, providerIds: string[], prompt: string, context: AgentContext) => void;
+  startAgentTask: (
+    taskId: string,
+    emailId: string,
+    providerIds: string[],
+    prompt: string,
+    context: AgentContext,
+  ) => void;
   followUpAgentTask: (emailId: string, prompt: string) => void;
   appendAgentEvent: (taskId: string, event: ScopedAgentEvent) => void;
   // Replay a full agent trace in a single store update (avoids O(n²) from N individual appendAgentEvent calls)
-  replayAgentTrace: (taskId: string, emailId: string, providerIds: string[], prompt: string, context: AgentContext, events: ScopedAgentEvent[]) => void;
+  replayAgentTrace: (
+    taskId: string,
+    emailId: string,
+    providerIds: string[],
+    prompt: string,
+    context: AgentContext,
+    events: ScopedAgentEvent[],
+  ) => void;
   completeAgentTask: (taskId: string, summary: string) => void;
   cancelAgentTask: (taskId: string) => void;
   updateAgentTaskId: (emailId: string, newTaskId: string) => void;
@@ -620,9 +668,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       for (const arr of state.pendingRemovals.values()) {
         for (const e of arr) pendingIds.add(e.id);
       }
-      const filtered = pendingIds.size > 0
-        ? emails.filter((e) => !pendingIds.has(e.id))
-        : emails;
+      const filtered = pendingIds.size > 0 ? emails.filter((e) => !pendingIds.has(e.id)) : emails;
       const patched = applyOptimisticReads(filtered);
       if (
         state.viewMode === "full" &&
@@ -630,7 +676,12 @@ export const useAppStore = create<AppState>((set, get) => ({
         state.emails.some((e) => e.id === state.selectedEmailId) &&
         !patched.some((e) => e.id === state.selectedEmailId)
       ) {
-        return { emails: patched, viewMode: "split" as const, selectedEmailId: null, selectedThreadId: null };
+        return {
+          emails: patched,
+          viewMode: "split" as const,
+          selectedEmailId: null,
+          selectedThreadId: null,
+        };
       }
       return { emails: patched };
     });
@@ -649,9 +700,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       for (const arr of state.pendingRemovals.values()) {
         for (const e of arr) pendingIds.add(e.id);
       }
-      const filteredNewEmails = pendingIds.size > 0
-        ? newEmails.filter((e) => !pendingIds.has(e.id))
-        : newEmails;
+      const filteredNewEmails =
+        pendingIds.size > 0 ? newEmails.filter((e) => !pendingIds.has(e.id)) : newEmails;
       // Merge new emails: add new ones, update existing ones (e.g. triage adds analysis)
       const existingMap = new Map(state.emails.map((e) => [e.id, e]));
       const toAdd: DashboardEmail[] = [];
@@ -694,7 +744,12 @@ export const useAppStore = create<AppState>((set, get) => ({
         state.selectedEmailId &&
         idsToRemove.has(state.selectedEmailId)
       ) {
-        return { emails, viewMode: "split" as const, selectedEmailId: null, selectedThreadId: null };
+        return {
+          emails,
+          viewMode: "split" as const,
+          selectedEmailId: null,
+          selectedThreadId: null,
+        };
       }
       return { emails };
     }),
@@ -724,14 +779,17 @@ export const useAppStore = create<AppState>((set, get) => ({
   setAnalyzing: (analyzing) => set({ isAnalyzing: analyzing }),
   setError: (error) => set({ error }),
   setShowSkipped: (show) => set({ showSkipped: show }),
-  setShowSettings: (show, initialTab) => set({ showSettings: show, settingsInitialTab: show ? initialTab : undefined, highlightMemoryIds: show ? get().highlightMemoryIds : [] }),
+  setShowSettings: (show, initialTab) =>
+    set({
+      showSettings: show,
+      settingsInitialTab: show ? initialTab : undefined,
+      highlightMemoryIds: show ? get().highlightMemoryIds : [],
+    }),
   updateEmail: (id, updates) =>
     set((state) => ({
-      emails: state.emails.map((email) =>
-        email.id === id ? { ...email, ...updates } : email
-      ),
+      emails: state.emails.map((email) => (email.id === id ? { ...email, ...updates } : email)),
       sentEmails: state.sentEmails.map((email) =>
-        email.id === id ? { ...email, ...updates } : email
+        email.id === id ? { ...email, ...updates } : email,
       ),
     })),
   // Multi-account actions
@@ -740,10 +798,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       accounts,
       // Set current to primary or first account if not set
       currentAccountId:
-        get().currentAccountId ||
-        accounts.find((a) => a.isPrimary)?.id ||
-        accounts[0]?.id ||
-        null,
+        get().currentAccountId || accounts.find((a) => a.isPrimary)?.id || accounts[0]?.id || null,
     }),
   addAccount: (account) =>
     set((state) => {
@@ -759,8 +814,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       // If removing current account, switch to primary or first
       let newCurrentId = state.currentAccountId;
       if (state.currentAccountId === accountId) {
-        newCurrentId =
-          newAccounts.find((a) => a.isPrimary)?.id || newAccounts[0]?.id || null;
+        newCurrentId = newAccounts.find((a) => a.isPrimary)?.id || newAccounts[0]?.id || null;
       }
       return {
         accounts: newAccounts,
@@ -772,10 +826,23 @@ export const useAppStore = create<AppState>((set, get) => ({
     // Reset account-scoped and conditionally-rendered splits. Only preserve
     // virtual splits that are always visible regardless of account data.
     // Default to __priority__ when resetting (matches main's convention).
-    const ALWAYS_VISIBLE_SPLITS = new Set(["__priority__", "__other__", "__archive-ready__", "__sent__"]);
+    const ALWAYS_VISIBLE_SPLITS = new Set([
+      "__priority__",
+      "__other__",
+      "__archive-ready__",
+      "__sent__",
+    ]);
     const { currentSplitId } = get();
-    const nextSplitId = currentSplitId !== null && !ALWAYS_VISIBLE_SPLITS.has(currentSplitId) ? "__priority__" : currentSplitId;
-    set({ currentAccountId: accountId, selectedEmailId: null, globalAgentTaskKey: null, currentSplitId: nextSplitId });
+    const nextSplitId =
+      currentSplitId !== null && !ALWAYS_VISIBLE_SPLITS.has(currentSplitId)
+        ? "__priority__"
+        : currentSplitId;
+    set({
+      currentAccountId: accountId,
+      selectedEmailId: null,
+      globalAgentTaskKey: null,
+      currentSplitId: nextSplitId,
+    });
   },
   setSyncStatus: (accountId, status) =>
     set((state) => {
@@ -798,9 +865,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   getBackgroundSyncProgress: (accountId) => get().backgroundSyncProgress.get(accountId),
 
   // Initial sync progress actions
-  setSyncProgress: (accountId, progress) => set((state) => ({
-    syncProgress: { ...state.syncProgress, [accountId]: progress },
-  })),
+  setSyncProgress: (accountId, progress) =>
+    set((state) => ({
+      syncProgress: { ...state.syncProgress, [accountId]: progress },
+    })),
 
   // Compose actions
   openCompose: (mode, replyToEmailId, restoredDraft) =>
@@ -818,26 +886,28 @@ export const useAppStore = create<AppState>((set, get) => ({
   // Search actions
   openSearch: () => set({ isSearchOpen: true }),
   closeSearch: () => set({ isSearchOpen: false }),
-  setActiveSearch: (query, results) => set({
-    activeSearchQuery: query,
-    activeSearchResults: results,
-    isSearchOpen: false,
-    remoteSearchResults: [],
-    remoteSearchStatus: "searching",
-    remoteSearchError: null,
-    remoteSearchNextPageToken: null,
-    remoteSearchLoadingMore: false,
-  }),
+  setActiveSearch: (query, results) =>
+    set({
+      activeSearchQuery: query,
+      activeSearchResults: results,
+      isSearchOpen: false,
+      remoteSearchResults: [],
+      remoteSearchStatus: "searching",
+      remoteSearchError: null,
+      remoteSearchNextPageToken: null,
+      remoteSearchLoadingMore: false,
+    }),
   setActiveSearchResults: (results) => set({ activeSearchResults: results }),
-  clearActiveSearch: () => set({
-    activeSearchQuery: null,
-    activeSearchResults: [],
-    remoteSearchResults: [],
-    remoteSearchStatus: "idle",
-    remoteSearchError: null,
-    remoteSearchNextPageToken: null,
-    remoteSearchLoadingMore: false,
-  }),
+  clearActiveSearch: () =>
+    set({
+      activeSearchQuery: null,
+      activeSearchResults: [],
+      remoteSearchResults: [],
+      remoteSearchStatus: "idle",
+      remoteSearchError: null,
+      remoteSearchNextPageToken: null,
+      remoteSearchLoadingMore: false,
+    }),
   removeSearchResult: (emailId) =>
     set((state) => ({
       activeSearchResults: state.activeSearchResults.filter((e) => e.id !== emailId),
@@ -854,15 +924,17 @@ export const useAppStore = create<AppState>((set, get) => ({
         remoteSearchError: null,
       };
     }),
-  setRemoteSearchError: (error) => set({
-    remoteSearchStatus: "error",
-    remoteSearchError: error,
-  }),
-  setRemoteSearching: () => set({
-    remoteSearchStatus: "searching",
-    remoteSearchResults: [],
-    remoteSearchError: null,
-  }),
+  setRemoteSearchError: (error) =>
+    set({
+      remoteSearchStatus: "error",
+      remoteSearchError: error,
+    }),
+  setRemoteSearching: () =>
+    set({
+      remoteSearchStatus: "searching",
+      remoteSearchResults: [],
+      remoteSearchError: null,
+    }),
   setRemoteSearchNextPageToken: (token) => set({ remoteSearchNextPageToken: token }),
   appendRemoteSearchResults: (results) =>
     set((state) => {
@@ -938,15 +1010,13 @@ export const useAppStore = create<AppState>((set, get) => ({
       selectedThreadIds: new Set(threadIds),
       lastSelectedThreadId: threadIds.length > 0 ? threadIds[threadIds.length - 1] : null,
     })),
-  clearSelectedThreads: () =>
-    set({ selectedThreadIds: new Set(), lastSelectedThreadId: null }),
+  clearSelectedThreads: () => set({ selectedThreadIds: new Set(), lastSelectedThreadId: null }),
   selectAllThreads: (threadIds) =>
     set(() => ({
       selectedThreadIds: new Set(threadIds),
       lastSelectedThreadId: threadIds.length > 0 ? threadIds[threadIds.length - 1] : null,
     })),
-  setLastSelectedThreadId: (threadId) =>
-    set({ lastSelectedThreadId: threadId }),
+  setLastSelectedThreadId: (threadId) => set({ lastSelectedThreadId: threadId }),
 
   // Scheduled send actions
   setScheduledMessageStats: (stats) => set({ scheduledMessageStats: stats }),
@@ -1084,8 +1154,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   // Undo send actions
   setUndoSendDelay: (seconds) => set({ undoSendDelaySeconds: seconds }),
-  addUndoSend: (item) =>
-    set((state) => ({ undoSendQueue: [...state.undoSendQueue, item] })),
+  addUndoSend: (item) => set((state) => ({ undoSendQueue: [...state.undoSendQueue, item] })),
   removeUndoSend: (id) =>
     set((state) => ({ undoSendQueue: state.undoSendQueue.filter((i) => i.id !== id) })),
 
@@ -1124,9 +1193,7 @@ export const useAppStore = create<AppState>((set, get) => ({
               : undefined,
         };
         return {
-          undoActionQueue: state.undoActionQueue.map((i) =>
-            i.id === existing.id ? merged : i,
-          ),
+          undoActionQueue: state.undoActionQueue.map((i) => (i.id === existing.id ? merged : i)),
         };
       }
       return { undoActionQueue: [...state.undoActionQueue, item] };
@@ -1472,15 +1539,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   // Local drafts actions
   setLocalDrafts: (drafts) => set({ localDrafts: drafts }),
-  addLocalDraft: (draft) =>
-    set((state) => ({ localDrafts: [draft, ...state.localDrafts] })),
+  addLocalDraft: (draft) => set((state) => ({ localDrafts: [draft, ...state.localDrafts] })),
   removeLocalDraft: (draftId) =>
     set((state) => ({ localDrafts: state.localDrafts.filter((d) => d.id !== draftId) })),
   updateLocalDraft: (draftId, updates) =>
     set((state) => ({
-      localDrafts: state.localDrafts.map((d) =>
-        d.id === draftId ? { ...d, ...updates } : d
-      ),
+      localDrafts: state.localDrafts.map((d) => (d.id === draftId ? { ...d, ...updates } : d)),
     })),
   setSelectedDraftId: (id) => set({ selectedDraftId: id }),
 
@@ -1518,21 +1582,20 @@ export const useAppStore = create<AppState>((set, get) => ({
       emails: s.emails.map((email) =>
         unreadIds.has(email.id)
           ? { ...email, labelIds: (email.labelIds || ["INBOX"]).filter((l) => l !== "UNREAD") }
-          : email
+          : email,
       ),
       sentEmails: s.sentEmails.map((email) =>
         unreadIds.has(email.id)
           ? { ...email, labelIds: (email.labelIds || ["INBOX"]).filter((l) => l !== "UNREAD") }
-          : email
+          : email,
       ),
     }));
 
     // Fire-and-forget Gmail API calls
     for (const email of unreadEmails) {
-      window.api.emails.setRead(email.id, accountId, true)
-        .catch((err: Error) => {
-          console.error("Failed to mark email as read:", err);
-        });
+      window.api.emails.setRead(email.id, accountId, true).catch((err: Error) => {
+        console.error("Failed to mark email as read:", err);
+      });
     }
   },
 }));
@@ -1581,7 +1644,12 @@ export function getAppStateSnapshot(): Record<string, unknown> {
   };
 
   if (s.outboxStats) {
-    state.outbox = { pending: s.outboxStats.pending, sending: s.outboxStats.sending, failed: s.outboxStats.failed, total: s.outboxStats.total };
+    state.outbox = {
+      pending: s.outboxStats.pending,
+      sending: s.outboxStats.sending,
+      failed: s.outboxStats.failed,
+      total: s.outboxStats.total,
+    };
   }
 
   state.expired_account_count = s.expiredAccountIds.size;
@@ -1634,10 +1702,9 @@ export function groupByThread(emails: DashboardEmail[], currentUserEmail?: strin
     const latestEmail = threadEmails[threadEmails.length - 1];
 
     // Find the latest RECEIVED email (not sent by user) for inbox sorting
-    const receivedEmails = threadEmails.filter(e => !isSentEmail(e, currentUserEmail));
-    const latestReceivedEmail = receivedEmails.length > 0
-      ? receivedEmails[receivedEmails.length - 1]
-      : latestEmail; // Fallback to latest if all are sent
+    const receivedEmails = threadEmails.filter((e) => !isSentEmail(e, currentUserEmail));
+    const latestReceivedEmail =
+      receivedEmails.length > 0 ? receivedEmails[receivedEmails.length - 1] : latestEmail; // Fallback to latest if all are sent
 
     // Determine if the user was the last to reply
     const userReplied = isSentEmail(latestEmail, currentUserEmail);
@@ -1650,7 +1717,9 @@ export function groupByThread(emails: DashboardEmail[], currentUserEmail?: strin
       displaySender = latestReceivedEmail.from;
     } else {
       // latestReceivedEmail is from user - find any non-self email
-      const nonSelfEmail = [...threadEmails].reverse().find(e => !isSentEmail(e, currentUserEmail));
+      const nonSelfEmail = [...threadEmails]
+        .reverse()
+        .find((e) => !isSentEmail(e, currentUserEmail));
       if (nonSelfEmail) {
         displaySender = nonSelfEmail.from;
       } else {
@@ -1663,8 +1732,7 @@ export function groupByThread(emails: DashboardEmail[], currentUserEmail?: strin
     // This ensures sent replies don't reset the thread's analyzed status
     // For drafts, check all emails in the thread — the agent may draft on
     // an email that isn't the latestReceivedEmail.
-    const threadDraft = latestReceivedEmail.draft
-      ?? threadEmails.find((e) => e.draft)?.draft;
+    const threadDraft = latestReceivedEmail.draft ?? threadEmails.find((e) => e.draft)?.draft;
 
     threads.push({
       threadId,
@@ -1675,11 +1743,12 @@ export function groupByThread(emails: DashboardEmail[], currentUserEmail?: strin
       // Use oldest email's subject. Strip Re: if the oldest email is a reply
       // (has inReplyTo, or subject starts with Re: for pre-backfill data).
       // Fwd: is never stripped — a forward IS the original from the recipient's view.
-      subject: threadEmails[0].inReplyTo || /^Re:\s/i.test(threadEmails[0].subject)
-        ? threadEmails[0].subject.replace(/^(Re:\s*)+/i, "")
-        : threadEmails[0].subject,
+      subject:
+        threadEmails[0].inReplyTo || /^Re:\s/i.test(threadEmails[0].subject)
+          ? threadEmails[0].subject.replace(/^(Re:\s*)+/i, "")
+          : threadEmails[0].subject,
       hasMultipleEmails: threadEmails.length > 1,
-      isUnread: threadEmails.some(e => e.labelIds?.includes("UNREAD")),
+      isUnread: threadEmails.some((e) => e.labelIds?.includes("UNREAD")),
       analysis: latestReceivedEmail.analysis,
       draft: threadDraft,
       userReplied,
@@ -1707,7 +1776,7 @@ export function useThreadedEmails() {
   const recentlyRepliedThreadIds = useAppStore((state) => state.recentlyRepliedThreadIds);
 
   // Get current user's email for sent detection
-  const currentAccount = accounts.find(a => a.id === currentAccountId);
+  const currentAccount = accounts.find((a) => a.id === currentAccountId);
   const currentUserEmail = currentAccount?.email;
 
   // Memoize the expensive thread computation. j/k navigation only changes
@@ -1723,15 +1792,19 @@ export function useThreadedEmails() {
     };
 
     const accountEmails = currentAccountId
-      ? emails.filter((e) => e.accountId === currentAccountId && (isInboxEmail(e) || e.labelIds?.includes("SENT")))
+      ? emails.filter(
+          (e) =>
+            e.accountId === currentAccountId && (isInboxEmail(e) || e.labelIds?.includes("SENT")),
+        )
       : emails.filter((e) => isInboxEmail(e) || e.labelIds?.includes("SENT"));
 
     // Group into threads first, passing current user email for sent detection
     // Then filter out sent-only threads — threads where no email has the INBOX label.
     // Sent emails within inbox threads are kept (for conversation context), but threads
     // consisting solely of sent emails belong in the Sent view, not the inbox.
-    const allThreads = groupByThread(accountEmails, currentUserEmail)
-      .filter((t) => t.emails.some((e) => !e.labelIds || e.labelIds.includes("INBOX")));
+    const allThreads = groupByThread(accountEmails, currentUserEmail).filter((t) =>
+      t.emails.some((e) => !e.labelIds || e.labelIds.includes("INBOX")),
+    );
 
     // Separate snoozed threads from active threads
     const activeThreads = allThreads.filter((t) => !snoozedThreadIds.has(t.threadId));
@@ -1755,13 +1828,13 @@ export function useThreadedEmails() {
     // they stay there until a new received email arrives or archive-ready re-analysis runs.
     // Exception: threads within the reply grace period keep their current position.
     const needsReply = activeThreads.filter(
-      (t) => t.analysis?.needsReply && t.draft?.status !== "created" && !effectiveUserReplied(t)
+      (t) => t.analysis?.needsReply && t.draft?.status !== "created" && !effectiveUserReplied(t),
     );
     const done = activeThreads.filter(
-      (t) => t.analysis?.needsReply && t.draft?.status === "created" && !effectiveUserReplied(t)
+      (t) => t.analysis?.needsReply && t.draft?.status === "created" && !effectiveUserReplied(t),
     );
     const skipped = activeThreads.filter(
-      (t) => (t.analysis && !t.analysis.needsReply) || effectiveUserReplied(t)
+      (t) => (t.analysis && !t.analysis.needsReply) || effectiveUserReplied(t),
     );
     const unanalyzed = activeThreads.filter((t) => !t.analysis && !effectiveUserReplied(t));
 
@@ -1774,12 +1847,7 @@ export function useThreadedEmails() {
     });
 
     // Ordered threads: unanalyzed → needs reply (by priority) → done → skipped
-    const threads = [
-      ...unanalyzed,
-      ...sortedNeedsReply,
-      ...done,
-      ...skipped,
-    ];
+    const threads = [...unanalyzed, ...sortedNeedsReply, ...done, ...skipped];
 
     return {
       threads,
@@ -1820,9 +1888,10 @@ export function useSplitFilteredThreads() {
     const exclusiveSplits = splits.filter((s) => s.exclusive);
     const excludeExclusive = (threads: EmailThread[]) => {
       if (exclusiveSplits.length === 0) return threads;
-      return threads.filter((t) =>
-        recentlyUnsnoozedThreadIds.has(t.threadId) ||
-        !exclusiveSplits.some((s) => threadMatchesSplit(t, s))
+      return threads.filter(
+        (t) =>
+          recentlyUnsnoozedThreadIds.has(t.threadId) ||
+          !exclusiveSplits.some((s) => threadMatchesSplit(t, s)),
       );
     };
 
@@ -1842,13 +1911,14 @@ export function useSplitFilteredThreads() {
 
     // Handle sent virtual split — show sent emails grouped by thread
     if (currentSplitId === "__sent__") {
-      const currentAccount = accounts.find(a => a.id === currentAccountId);
+      const currentAccount = accounts.find((a) => a.id === currentAccountId);
       const currentUserEmail = currentAccount?.email;
       const sentAccountEmails = currentAccountId
-        ? sentEmails.filter(e => e.accountId === currentAccountId)
+        ? sentEmails.filter((e) => e.accountId === currentAccountId)
         : sentEmails;
-      const sentThreads = groupByThread(sentAccountEmails, currentUserEmail)
-        .sort((a, b) => new Date(b.latestEmail.date).getTime() - new Date(a.latestEmail.date).getTime());
+      const sentThreads = groupByThread(sentAccountEmails, currentUserEmail).sort(
+        (a, b) => new Date(b.latestEmail.date).getTime() - new Date(a.latestEmail.date).getTime(),
+      );
 
       return {
         threads: sentThreads,
@@ -1935,11 +2005,14 @@ export function useSplitFilteredThreads() {
     // "Other" tab: everything in All minus Priority (needsReply + done)
     if (currentSplitId === "__other__") {
       const priorityThreadIds = new Set(
-        [...excludeExclusive(baseResult.needsReply), ...excludeExclusive(baseResult.done)].map((t) => t.threadId)
+        [...excludeExclusive(baseResult.needsReply), ...excludeExclusive(baseResult.done)].map(
+          (t) => t.threadId,
+        ),
       );
 
-      let otherThreads = excludeExclusive(baseResult.chronologicalThreads)
-        .filter((t) => !priorityThreadIds.has(t.threadId));
+      let otherThreads = excludeExclusive(baseResult.chronologicalThreads).filter(
+        (t) => !priorityThreadIds.has(t.threadId),
+      );
 
       if (unsnoozedReturnTimes.size > 0) {
         otherThreads = [...otherThreads].sort((a, b) => {
@@ -1988,7 +2061,17 @@ export function useSplitFilteredThreads() {
       snoozed: baseResult.snoozed,
       snoozedCount: baseResult.snoozedCount,
     };
-  }, [baseResult, allSplits, currentAccountId, accounts, currentSplitId, archiveReadyThreadIds, recentlyUnsnoozedThreadIds, unsnoozedReturnTimes, sentEmails]);
+  }, [
+    baseResult,
+    allSplits,
+    currentAccountId,
+    accounts,
+    currentSplitId,
+    archiveReadyThreadIds,
+    recentlyUnsnoozedThreadIds,
+    unsnoozedReturnTimes,
+    sentEmails,
+  ]);
 }
 
 // Legacy selector for backwards compatibility
@@ -1998,16 +2081,14 @@ export function useFilteredEmails() {
 
   // Sort by date (most recent first)
   const sortedEmails = [...emails].sort(
-    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
   );
 
   // Separate emails by category
   const needsReply = sortedEmails.filter(
-    (e) => e.analysis?.needsReply && e.draft?.status !== "created"
+    (e) => e.analysis?.needsReply && e.draft?.status !== "created",
   );
-  const done = sortedEmails.filter(
-    (e) => e.analysis?.needsReply && e.draft?.status === "created"
-  );
+  const done = sortedEmails.filter((e) => e.analysis?.needsReply && e.draft?.status === "created");
   const skipped = sortedEmails.filter((e) => e.analysis && !e.analysis.needsReply);
   const unanalyzed = sortedEmails.filter((e) => !e.analysis);
 

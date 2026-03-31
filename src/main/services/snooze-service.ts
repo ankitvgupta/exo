@@ -9,6 +9,9 @@ import {
 } from "../db";
 import type { SnoozedEmail } from "../../shared/types";
 import { randomUUID } from "crypto";
+import { createLogger } from "./logger";
+
+const log = createLogger("snooze");
 
 const CHECK_INTERVAL_MS = 30_000; // Check every 30 seconds
 
@@ -31,7 +34,7 @@ class SnoozeService {
   start(): void {
     if (this.intervalId) return;
 
-    console.log("[Snooze] Starting snooze service (check interval: 30s)");
+    log.info("[Snooze] Starting snooze service (check interval: 30s)");
     // Don't check immediately — no renderer windows exist yet to receive
     // the unsnoozed IPC event. The renderer's snooze:list call handles
     // expired snoozes on startup. The periodic timer handles ongoing expiry.
@@ -47,7 +50,7 @@ class SnoozeService {
     if (this.intervalId) {
       clearInterval(this.intervalId);
       this.intervalId = null;
-      console.log("[Snooze] Snooze service stopped");
+      log.info("[Snooze] Snooze service stopped");
     }
   }
 
@@ -55,19 +58,14 @@ class SnoozeService {
    * Snooze a thread until the specified time.
    * Purely local — hides the thread in-app without touching Gmail labels.
    */
-  snooze(
-    emailId: string,
-    threadId: string,
-    accountId: string,
-    snoozeUntil: number
-  ): SnoozedEmail {
+  snooze(emailId: string, threadId: string, accountId: string, snoozeUntil: number): SnoozedEmail {
     const id = randomUUID();
     // Remove any existing snooze for this thread first
     dbUnsnoozeByThread(threadId, accountId);
     dbSnoozeEmail(id, emailId, threadId, accountId, snoozeUntil);
 
     const snoozeDate = new Date(snoozeUntil);
-    console.log(`[Snooze] Snoozed thread ${threadId} until ${snoozeDate.toLocaleString()}`);
+    log.info(`[Snooze] Snoozed thread ${threadId} until ${snoozeDate.toLocaleString()}`);
 
     return {
       id,
@@ -84,7 +82,7 @@ class SnoozeService {
    */
   unsnooze(threadId: string, accountId: string): void {
     dbUnsnoozeByThread(threadId, accountId);
-    console.log(`[Snooze] Manually unsnoozed thread ${threadId}`);
+    log.info(`[Snooze] Manually unsnoozed thread ${threadId}`);
   }
 
   /**
@@ -119,7 +117,7 @@ class SnoozeService {
       if (snoozeInfo) {
         dbUnsnoozeByThread(threadId, accountId);
         unsnoozed.push(snoozeInfo);
-        console.log(`[Snooze] Unsnoozed thread ${threadId} — new reply received`);
+        log.info(`[Snooze] Unsnoozed thread ${threadId} — new reply received`);
       }
     }
     if (unsnoozed.length > 0 && this.onUnsnooze) {
@@ -135,7 +133,7 @@ class SnoozeService {
     const dueEmails = getDueSnoozedEmails();
     if (dueEmails.length === 0) return;
 
-    console.log(`[Snooze] ${dueEmails.length} snoozed email(s) are due`);
+    log.info(`[Snooze] ${dueEmails.length} snoozed email(s) are due`);
 
     for (const snoozed of dueEmails) {
       unsnoozeEmail(snoozed.id);

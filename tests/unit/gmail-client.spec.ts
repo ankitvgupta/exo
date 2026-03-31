@@ -26,13 +26,8 @@ import {
  * Extract a header value from a Gmail API message payload.
  * Case-insensitive lookup, returns empty string if not found.
  */
-function getHeader(
-  headers: Array<{ name?: string; value?: string }>,
-  name: string,
-): string {
-  const header = headers.find(
-    (h) => h.name?.toLowerCase() === name.toLowerCase(),
-  );
+function getHeader(headers: Array<{ name?: string; value?: string }>, name: string): string {
+  const header = headers.find((h) => h.name?.toLowerCase() === name.toLowerCase());
   return header?.value || "";
 }
 
@@ -84,27 +79,16 @@ function extractBody(payload: Record<string, unknown> | null | undefined): strin
 function collectInlineImages(
   payload: Record<string, unknown>,
 ): Map<string, { mimeType: string; data?: string; attachmentId?: string }> {
-  const images = new Map<
-    string,
-    { mimeType: string; data?: string; attachmentId?: string }
-  >();
+  const images = new Map<string, { mimeType: string; data?: string; attachmentId?: string }>();
 
   const walk = (part: Record<string, unknown>) => {
     const headers: Array<{ name?: string; value?: string }> =
       (part.headers as Array<{ name?: string; value?: string }>) || [];
-    const contentId = headers.find(
-      (h) => h.name?.toLowerCase() === "content-id",
-    )?.value;
+    const contentId = headers.find((h) => h.name?.toLowerCase() === "content-id")?.value;
 
-    if (
-      contentId &&
-      typeof part.mimeType === "string" &&
-      part.mimeType.startsWith("image/")
-    ) {
+    if (contentId && typeof part.mimeType === "string" && part.mimeType.startsWith("image/")) {
       const cid = contentId.replace(/^<|>$/g, "");
-      const body = part.body as
-        | { data?: string; attachmentId?: string }
-        | undefined;
+      const body = part.body as { data?: string; attachmentId?: string } | undefined;
       images.set(cid, {
         mimeType: part.mimeType,
         data: body?.data,
@@ -112,9 +96,7 @@ function collectInlineImages(
       });
     }
 
-    const childParts = part.parts as
-      | Array<Record<string, unknown>>
-      | undefined;
+    const childParts = part.parts as Array<Record<string, unknown>> | undefined;
     if (childParts) {
       for (const child of childParts) {
         walk(child);
@@ -138,23 +120,16 @@ interface AttachmentMeta {
  * Extract attachment metadata from a Gmail message payload.
  * Recursively walks multipart MIME structure to find parts with a filename.
  */
-function extractAttachments(
-  payload: Record<string, unknown> | null | undefined,
-): AttachmentMeta[] {
+function extractAttachments(payload: Record<string, unknown> | null | undefined): AttachmentMeta[] {
   const attachments: AttachmentMeta[] = [];
   if (!payload) return attachments;
   collectAttachments(payload, attachments);
   return attachments;
 }
 
-function collectAttachments(
-  part: Record<string, unknown>,
-  result: AttachmentMeta[],
-): void {
+function collectAttachments(part: Record<string, unknown>, result: AttachmentMeta[]): void {
   const filename = part.filename as string | undefined;
-  const body = part.body as
-    | { attachmentId?: string; size?: number }
-    | undefined;
+  const body = part.body as { attachmentId?: string; size?: number } | undefined;
   if (filename && filename.length > 0 && body?.attachmentId) {
     result.push({
       id: `${(part.partId as string) || "0"}-${filename}`,
@@ -179,10 +154,7 @@ function collectAttachments(
 function isAuthError(error: unknown): boolean {
   if (!(error instanceof Error)) return false;
   const msg = error.message.toLowerCase();
-  if (
-    msg.includes("invalid_grant") ||
-    msg.includes("token has been expired or revoked")
-  ) {
+  if (msg.includes("invalid_grant") || msg.includes("token has been expired or revoked")) {
     return true;
   }
   const anyErr = error as unknown as Record<string, unknown>;
@@ -205,10 +177,7 @@ function isTokenExpired(expiryDate: number | undefined): boolean {
  */
 function resolveInlineImagesSync(
   html: string,
-  inlineImages: Map<
-    string,
-    { mimeType: string; data?: string; attachmentId?: string }
-  >,
+  inlineImages: Map<string, { mimeType: string; data?: string; attachmentId?: string }>,
 ): string {
   if (inlineImages.size === 0) return html;
 
@@ -228,15 +197,10 @@ function resolveInlineImagesSync(
     if (!imageInfo || !imageInfo.data) continue;
 
     // Convert base64url to standard base64
-    let standardBase64 = imageInfo.data
-      .replace(/-/g, "+")
-      .replace(/_/g, "/");
+    let standardBase64 = imageInfo.data.replace(/-/g, "+").replace(/_/g, "/");
     const pad = standardBase64.length % 4;
     if (pad) standardBase64 += "=".repeat(4 - pad);
-    replacements.set(
-      `cid:${cid}`,
-      `data:${imageInfo.mimeType};base64,${standardBase64}`,
-    );
+    replacements.set(`cid:${cid}`, `data:${imageInfo.mimeType};base64,${standardBase64}`);
   }
 
   let result = html;
@@ -249,15 +213,10 @@ function resolveInlineImagesSync(
 /**
  * Format sender address with display name (RFC 5322).
  */
-function getSenderAddress(
-  email: string,
-  displayName: string | null,
-): string {
+function getSenderAddress(email: string, displayName: string | null): string {
   if (displayName) {
     const needsQuoting = /[",.<>@;:\\[\]()]/.test(displayName);
-    const formatted = needsQuoting
-      ? `"${displayName.replace(/["\\]/g, "\\$&")}"`
-      : displayName;
+    const formatted = needsQuoting ? `"${displayName.replace(/["\\]/g, "\\$&")}"` : displayName;
     return `${formatted} <${email}>`;
   }
   return email;
@@ -339,16 +298,10 @@ test.describe("getHeader", () => {
   test("extracts all standard email headers", () => {
     expect(getHeader(headers, "to")).toBe("bob@example.com");
     expect(getHeader(headers, "subject")).toBe("Hello World");
-    expect(getHeader(headers, "date")).toBe(
-      "Mon, 6 Jan 2025 15:45:00 -0800",
-    );
-    expect(getHeader(headers, "message-id")).toBe(
-      "<abc123@mail.gmail.com>",
-    );
+    expect(getHeader(headers, "date")).toBe("Mon, 6 Jan 2025 15:45:00 -0800");
+    expect(getHeader(headers, "message-id")).toBe("<abc123@mail.gmail.com>");
     expect(getHeader(headers, "cc")).toBe("charlie@example.com");
-    expect(getHeader(headers, "in-reply-to")).toBe(
-      "<parent123@mail.gmail.com>",
-    );
+    expect(getHeader(headers, "in-reply-to")).toBe("<parent123@mail.gmail.com>");
   });
 
   test("handles empty headers array", () => {
@@ -445,9 +398,7 @@ test.describe("extractBody", () => {
             {
               mimeType: "text/html",
               body: {
-                data: Buffer.from("<p>Nested HTML</p>").toString(
-                  "base64url",
-                ),
+                data: Buffer.from("<p>Nested HTML</p>").toString("base64url"),
               },
             },
           ],
@@ -649,9 +600,7 @@ test.describe("collectInlineImages", () => {
         {
           mimeType: "text/html",
           body: {
-            data: Buffer.from(
-              '<img src="cid:image001@domain">',
-            ).toString("base64url"),
+            data: Buffer.from('<img src="cid:image001@domain">').toString("base64url"),
           },
         },
         {
@@ -682,9 +631,7 @@ test.describe("collectInlineImages", () => {
       parts: [
         {
           mimeType: "image/jpeg",
-          headers: [
-            { name: "Content-ID", value: "<photo@domain>" },
-          ],
+          headers: [{ name: "Content-ID", value: "<photo@domain>" }],
           body: {
             attachmentId: "ANGjdJ_abc",
             size: 50000,
@@ -704,9 +651,7 @@ test.describe("collectInlineImages", () => {
       parts: [
         {
           mimeType: "application/pdf",
-          headers: [
-            { name: "Content-ID", value: "<doc@domain>" },
-          ],
+          headers: [{ name: "Content-ID", value: "<doc@domain>" }],
           body: { attachmentId: "att-1", size: 100 },
         },
       ],
@@ -722,9 +667,7 @@ test.describe("collectInlineImages", () => {
       parts: [
         {
           mimeType: "image/gif",
-          headers: [
-            { name: "Content-ID", value: "<animation@domain>" },
-          ],
+          headers: [{ name: "Content-ID", value: "<animation@domain>" }],
           body: { data: "R0lGODlh" },
         },
       ],
@@ -754,12 +697,7 @@ test.describe("collectInlineImages", () => {
 test.describe("resolveInlineImagesSync", () => {
   test("replaces cid: references with data: URIs", () => {
     const html = '<img src="cid:image001@domain">';
-    const images = new Map([
-      [
-        "image001@domain",
-        { mimeType: "image/png", data: "iVBORw0KGgo" },
-      ],
-    ]);
+    const images = new Map([["image001@domain", { mimeType: "image/png", data: "iVBORw0KGgo" }]]);
 
     const result = resolveInlineImagesSync(html, images);
     expect(result).toContain("data:image/png;base64,");
@@ -771,9 +709,7 @@ test.describe("resolveInlineImagesSync", () => {
     // standard base64 chars: + and /
     const html = '<img src="cid:test@domain">';
     const data = "abc-def_ghi"; // 11 chars → needs 1 pad char
-    const images = new Map([
-      ["test@domain", { mimeType: "image/jpeg", data }],
-    ]);
+    const images = new Map([["test@domain", { mimeType: "image/jpeg", data }]]);
 
     const result = resolveInlineImagesSync(html, images);
     // base64url → standard: - → +, _ → /
@@ -788,9 +724,7 @@ test.describe("resolveInlineImagesSync", () => {
 
   test("returns html unchanged when no cid: references found", () => {
     const html = '<img src="https://example.com/image.png">';
-    const images = new Map([
-      ["unused@domain", { mimeType: "image/png", data: "data" }],
-    ]);
+    const images = new Map([["unused@domain", { mimeType: "image/png", data: "data" }]]);
     const result = resolveInlineImagesSync(html, images);
     expect(result).toBe(html);
   });
@@ -808,11 +742,8 @@ test.describe("resolveInlineImagesSync", () => {
   });
 
   test("skips cid references not found in images map", () => {
-    const html =
-      '<img src="cid:found@d"><img src="cid:notfound@d">';
-    const images = new Map([
-      ["found@d", { mimeType: "image/png", data: "AAAA" }],
-    ]);
+    const html = '<img src="cid:found@d"><img src="cid:notfound@d">';
+    const images = new Map([["found@d", { mimeType: "image/png", data: "AAAA" }]]);
     const result = resolveInlineImagesSync(html, images);
     expect(result).toContain("data:image/png;base64,AAAA");
     expect(result).toContain("cid:notfound@d");
@@ -820,9 +751,7 @@ test.describe("resolveInlineImagesSync", () => {
 
   test("skips images with no data and no attachmentId", () => {
     const html = '<img src="cid:nodata@d">';
-    const images = new Map([
-      ["nodata@d", { mimeType: "image/png" }],
-    ]);
+    const images = new Map([["nodata@d", { mimeType: "image/png" }]]);
     const result = resolveInlineImagesSync(html, images);
     // No data available, cid reference remains
     expect(result).toBe(html);
@@ -839,9 +768,7 @@ test.describe("isAuthError", () => {
   });
 
   test("detects token expired or revoked error", () => {
-    expect(
-      isAuthError(new Error("Token has been expired or revoked")),
-    ).toBe(true);
+    expect(isAuthError(new Error("Token has been expired or revoked"))).toBe(true);
   });
 
   test("detects HTTP 401 via code property", () => {
@@ -919,15 +846,11 @@ test.describe("isTokenExpired", () => {
 
 test.describe("getSenderAddress", () => {
   test("returns just email when no display name", () => {
-    expect(getSenderAddress("user@example.com", null)).toBe(
-      "user@example.com",
-    );
+    expect(getSenderAddress("user@example.com", null)).toBe("user@example.com");
   });
 
   test("formats with display name", () => {
-    expect(getSenderAddress("user@example.com", "John Doe")).toBe(
-      "John Doe <user@example.com>",
-    );
+    expect(getSenderAddress("user@example.com", "John Doe")).toBe("John Doe <user@example.com>");
   });
 
   test("quotes display name with special characters", () => {
@@ -937,9 +860,9 @@ test.describe("getSenderAddress", () => {
   });
 
   test("quotes display name containing angle brackets", () => {
-    expect(
-      getSenderAddress("user@example.com", "Name <tag>"),
-    ).toBe('"Name <tag>" <user@example.com>');
+    expect(getSenderAddress("user@example.com", "Name <tag>")).toBe(
+      '"Name <tag>" <user@example.com>',
+    );
   });
 
   test("quotes display name containing @ symbol", () => {
@@ -949,15 +872,15 @@ test.describe("getSenderAddress", () => {
   });
 
   test("escapes quotes inside display name that needs quoting", () => {
-    expect(
-      getSenderAddress("user@example.com", 'John "The Man" Doe, Jr'),
-    ).toBe('"John \\"The Man\\" Doe, Jr" <user@example.com>');
+    expect(getSenderAddress("user@example.com", 'John "The Man" Doe, Jr')).toBe(
+      '"John \\"The Man\\" Doe, Jr" <user@example.com>',
+    );
   });
 
   test("escapes backslashes inside display name that needs quoting", () => {
-    expect(
-      getSenderAddress("user@example.com", "Path\\Name, Inc."),
-    ).toBe('"Path\\\\Name, Inc." <user@example.com>');
+    expect(getSenderAddress("user@example.com", "Path\\Name, Inc.")).toBe(
+      '"Path\\\\Name, Inc." <user@example.com>',
+    );
   });
 
   test("does not quote simple display names", () => {
@@ -983,12 +906,8 @@ test.describe("parseGmailMessage", () => {
     expect(parsed.to).toBe("user@example.com");
     expect(parsed.subject).toBe("Project Status Update Request");
     expect(parsed.labelIds).toEqual(["INBOX", "UNREAD"]);
-    expect(parsed.body).toContain(
-      "could you send me a status update",
-    );
-    expect(parsed.messageIdHeader).toBe(
-      "<msg-001@mail.gmail.com>",
-    );
+    expect(parsed.body).toContain("could you send me a status update");
+    expect(parsed.messageIdHeader).toBe("<msg-001@mail.gmail.com>");
   });
 
   test("parses all fixture messages", () => {
@@ -1086,9 +1005,7 @@ test.describe("parseGmailMessage", () => {
           {
             mimeType: "text/plain",
             body: {
-              data: Buffer.from("See the attached file").toString(
-                "base64url",
-              ),
+              data: Buffer.from("See the attached file").toString("base64url"),
               size: 21,
             },
           },
@@ -1140,9 +1057,7 @@ test.describe("Gmail API interactions (MSW)", () => {
       }),
     );
 
-    const response = await fetch(
-      `${GMAIL_BASE}/messages?q=in%3Ainbox`,
-    );
+    const response = await fetch(`${GMAIL_BASE}/messages?q=in%3Ainbox`);
     const data = await response.json();
     expect(capturedQuery).toBe("in:inbox");
     expect(data.messages).toHaveLength(3);
@@ -1194,32 +1109,23 @@ test.describe("Gmail API interactions (MSW)", () => {
       }),
     );
 
-    const response = await fetch(
-      `${GMAIL_BASE}/history?startHistoryId=99999`,
-    );
+    const response = await fetch(`${GMAIL_BASE}/history?startHistoryId=99999`);
     const data = await response.json();
     expect(capturedStartId).toBe("99999");
     expect(data.historyId).toBe("100001");
     expect(data.history).toHaveLength(1);
     expect(data.history[0].messagesAdded).toHaveLength(1);
-    expect(data.history[0].messagesAdded[0].message.id).toBe(
-      "msg-new-001",
-    );
+    expect(data.history[0].messagesAdded[0].message.id).toBe("msg-new-001");
   });
 
   test("messages.get returns 404 for non-existent message", async () => {
     server.use(
       http.get(`${GMAIL_BASE}/messages/:messageId`, () => {
-        return HttpResponse.json(
-          { error: { code: 404, message: "Not Found" } },
-          { status: 404 },
-        );
+        return HttpResponse.json({ error: { code: 404, message: "Not Found" } }, { status: 404 });
       }),
     );
 
-    const response = await fetch(
-      `${GMAIL_BASE}/messages/nonexistent`,
-    );
+    const response = await fetch(`${GMAIL_BASE}/messages/nonexistent`);
     expect(response.status).toBe(404);
   });
 
@@ -1263,9 +1169,7 @@ test.describe("Gmail API interactions (MSW)", () => {
       }),
     );
 
-    const response = await fetch(
-      `${GMAIL_BASE}/history?startHistoryId=1`,
-    );
+    const response = await fetch(`${GMAIL_BASE}/history?startHistoryId=1`);
     expect(response.status).toBe(404);
   });
 
@@ -1279,18 +1183,14 @@ test.describe("Gmail API interactions (MSW)", () => {
         if (!pageToken) {
           page = 1;
           return HttpResponse.json({
-            messages: [
-              { id: "msg-page1", threadId: "thread-1" },
-            ],
+            messages: [{ id: "msg-page1", threadId: "thread-1" }],
             nextPageToken: "token-page2",
             resultSizeEstimate: 2,
           });
         } else {
           page = 2;
           return HttpResponse.json({
-            messages: [
-              { id: "msg-page2", threadId: "thread-2" },
-            ],
+            messages: [{ id: "msg-page2", threadId: "thread-2" }],
             resultSizeEstimate: 2,
           });
         }
@@ -1305,9 +1205,7 @@ test.describe("Gmail API interactions (MSW)", () => {
     expect(page).toBe(1);
 
     // Second page
-    const r2 = await fetch(
-      `${GMAIL_BASE}/messages?q=in:inbox&pageToken=token-page2`,
-    );
+    const r2 = await fetch(`${GMAIL_BASE}/messages?q=in:inbox&pageToken=token-page2`);
     const d2 = await r2.json();
     expect(d2.messages).toHaveLength(1);
     expect(d2.nextPageToken).toBeUndefined();
@@ -1315,29 +1213,22 @@ test.describe("Gmail API interactions (MSW)", () => {
   });
 
   test("attachments.get returns base64url data", async () => {
-    const attachmentData = Buffer.from("fake PDF content").toString(
-      "base64url",
-    );
+    const attachmentData = Buffer.from("fake PDF content").toString("base64url");
 
     let capturedMessageId: string | readonly string[] | undefined;
     let capturedAttachmentId: string | readonly string[] | undefined;
     server.use(
-      http.get(
-        `${GMAIL_BASE}/messages/:messageId/attachments/:attachmentId`,
-        ({ params }) => {
-          capturedMessageId = params.messageId;
-          capturedAttachmentId = params.attachmentId;
-          return HttpResponse.json({
-            size: 16,
-            data: attachmentData,
-          });
-        },
-      ),
+      http.get(`${GMAIL_BASE}/messages/:messageId/attachments/:attachmentId`, ({ params }) => {
+        capturedMessageId = params.messageId;
+        capturedAttachmentId = params.attachmentId;
+        return HttpResponse.json({
+          size: 16,
+          data: attachmentData,
+        });
+      }),
     );
 
-    const response = await fetch(
-      `${GMAIL_BASE}/messages/msg-001/attachments/att-123`,
-    );
+    const response = await fetch(`${GMAIL_BASE}/messages/msg-001/attachments/att-123`);
     const data = await response.json();
     expect(capturedMessageId).toBe("msg-001");
     expect(capturedAttachmentId).toBe("att-123");
@@ -1357,16 +1248,13 @@ test.describe("Gmail API interactions (MSW)", () => {
       }),
     );
 
-    const response = await fetch(
-      "https://oauth2.googleapis.com/token",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-        body: "grant_type=refresh_token&refresh_token=old-refresh-token&client_id=test&client_secret=test",
+    const response = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
       },
-    );
+      body: "grant_type=refresh_token&refresh_token=old-refresh-token&client_id=test&client_secret=test",
+    });
 
     const data = await response.json();
     expect(capturedBody).toContain("grant_type=refresh_token");
@@ -1376,31 +1264,24 @@ test.describe("Gmail API interactions (MSW)", () => {
 
   test("OAuth token refresh returns invalid_grant for revoked token", async () => {
     server.use(
-      http.post(
-        "https://oauth2.googleapis.com/token",
-        () => {
-          return HttpResponse.json(
-            {
-              error: "invalid_grant",
-              error_description:
-                "Token has been expired or revoked.",
-            },
-            { status: 400 },
-          );
-        },
-      ),
+      http.post("https://oauth2.googleapis.com/token", () => {
+        return HttpResponse.json(
+          {
+            error: "invalid_grant",
+            error_description: "Token has been expired or revoked.",
+          },
+          { status: 400 },
+        );
+      }),
     );
 
-    const response = await fetch(
-      "https://oauth2.googleapis.com/token",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-        body: "grant_type=refresh_token&refresh_token=revoked-token",
+    const response = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
       },
-    );
+      body: "grant_type=refresh_token&refresh_token=revoked-token",
+    });
 
     const data = await response.json();
     expect(data.error).toBe("invalid_grant");
@@ -1489,27 +1370,21 @@ test.describe("Gmail API interactions (MSW)", () => {
     let capturedModifyMessageId: string | readonly string[] | undefined;
     let capturedModifyBody: Record<string, unknown> | undefined;
     server.use(
-      http.post(
-        `${GMAIL_BASE}/messages/:messageId/modify`,
-        async ({ request, params }) => {
-          capturedModifyBody = (await request.json()) as Record<string, unknown>;
-          capturedModifyMessageId = params.messageId;
-          return HttpResponse.json({
-            id: "msg-001",
-            labelIds: ["UNREAD"], // INBOX removed
-          });
-        },
-      ),
+      http.post(`${GMAIL_BASE}/messages/:messageId/modify`, async ({ request, params }) => {
+        capturedModifyBody = (await request.json()) as Record<string, unknown>;
+        capturedModifyMessageId = params.messageId;
+        return HttpResponse.json({
+          id: "msg-001",
+          labelIds: ["UNREAD"], // INBOX removed
+        });
+      }),
     );
 
-    const response = await fetch(
-      `${GMAIL_BASE}/messages/msg-001/modify`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ removeLabelIds: ["INBOX"] }),
-      },
-    );
+    const response = await fetch(`${GMAIL_BASE}/messages/msg-001/modify`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ removeLabelIds: ["INBOX"] }),
+    });
 
     const data = await response.json();
     expect(capturedModifyMessageId).toBe("msg-001");
@@ -1559,9 +1434,7 @@ test.describe("Gmail API interactions (MSW)", () => {
       }),
     );
 
-    const response = await fetch(
-      `${GMAIL_BASE}/threads/thread-001`,
-    );
+    const response = await fetch(`${GMAIL_BASE}/threads/thread-001`);
     const data = await response.json();
 
     // Simulate the DRAFT filtering logic from getThread()
@@ -1570,11 +1443,9 @@ test.describe("Gmail API interactions (MSW)", () => {
     );
 
     expect(nonDraftMessages).toHaveLength(2);
-    expect(
-      nonDraftMessages.every(
-        (m: GmailApiMessage) => !m.labelIds.includes("DRAFT"),
-      ),
-    ).toBe(true);
+    expect(nonDraftMessages.every((m: GmailApiMessage) => !m.labelIds.includes("DRAFT"))).toBe(
+      true,
+    );
 
     // Verify parsing works on filtered messages
     for (const msg of nonDraftMessages) {
@@ -1621,36 +1492,23 @@ test.describe("History change deduplication", () => {
   ) {
     const newSet = new Set(newMessageIds);
     const deletedSet = new Set(deletedMessageIds);
-    const filterHandled = (id: string) =>
-      !newSet.has(id) && !deletedSet.has(id);
+    const filterHandled = (id: string) => !newSet.has(id) && !deletedSet.has(id);
 
     return {
       newMessageIds: [...newSet],
       deletedMessageIds: [...deletedSet],
       readMessageIds: [...new Set(readMessageIds)].filter(filterHandled),
-      unreadMessageIds: [...new Set(unreadMessageIds)].filter(
-        filterHandled,
-      ),
+      unreadMessageIds: [...new Set(unreadMessageIds)].filter(filterHandled),
     };
   }
 
   test("deduplicates new message IDs", () => {
-    const result = deduplicateHistoryChanges(
-      ["msg-1", "msg-1", "msg-2"],
-      [],
-      [],
-      [],
-    );
+    const result = deduplicateHistoryChanges(["msg-1", "msg-1", "msg-2"], [], [], []);
     expect(result.newMessageIds).toEqual(["msg-1", "msg-2"]);
   });
 
   test("deduplicates deleted message IDs", () => {
-    const result = deduplicateHistoryChanges(
-      [],
-      ["msg-1", "msg-1"],
-      [],
-      [],
-    );
+    const result = deduplicateHistoryChanges([], ["msg-1", "msg-1"], [], []);
     expect(result.deletedMessageIds).toEqual(["msg-1"]);
   });
 
@@ -1804,17 +1662,13 @@ test.describe("Body extraction edge cases", () => {
                 {
                   mimeType: "text/plain",
                   body: {
-                    data: Buffer.from("Plain deep").toString(
-                      "base64url",
-                    ),
+                    data: Buffer.from("Plain deep").toString("base64url"),
                   },
                 },
                 {
                   mimeType: "text/html",
                   body: {
-                    data: Buffer.from(
-                      "<div>HTML deep</div>",
-                    ).toString("base64url"),
+                    data: Buffer.from("<div>HTML deep</div>").toString("base64url"),
                   },
                 },
               ],
@@ -1846,8 +1700,7 @@ test.describe("Body extraction edge cases", () => {
   });
 
   test("handles HTML entities in body", () => {
-    const html =
-      "<p>Price: $100 &amp; tax &lt;10%&gt;</p>";
+    const html = "<p>Price: $100 &amp; tax &lt;10%&gt;</p>";
     const payload = {
       body: { data: Buffer.from(html).toString("base64url") },
     };
@@ -1903,10 +1756,7 @@ test.describe("makeGmailMessage fixture helper", () => {
       body,
     });
 
-    const decoded = Buffer.from(
-      msg.payload.body.data!,
-      "base64url",
-    ).toString("utf-8");
+    const decoded = Buffer.from(msg.payload.body.data!, "base64url").toString("utf-8");
     expect(decoded).toBe(body);
   });
 });

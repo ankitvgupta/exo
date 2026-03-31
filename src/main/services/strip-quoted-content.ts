@@ -8,7 +8,9 @@
  */
 
 function isHtml(body: string): boolean {
-  return /<(div|span|p|br|html|body|table|tr|td|a|img|ul|ol|li|h[1-6]|blockquote|style|head|meta|link)(\s|>|\/)/i.test(body);
+  return /<(div|span|p|br|html|body|table|tr|td|a|img|ul|ol|li|h[1-6]|blockquote|style|head|meta|link)(\s|>|\/)/i.test(
+    body,
+  );
 }
 
 export function stripQuotedContent(body: string): string {
@@ -22,14 +24,16 @@ export function stripQuotedContent(body: string): string {
 // ---------------------------------------------------------------------------
 
 function stripMediaContent(body: string): string {
-  return body
-    // <img> tags (inline images, tracking pixels, CID-embedded images)
-    .replace(/<img\s[^>]*>/gi, "")
-    // <video>...</video> and <audio>...</audio>
-    .replace(/<video\s[^>]*>[\s\S]*?<\/video>/gi, "")
-    .replace(/<audio\s[^>]*>[\s\S]*?<\/audio>/gi, "")
-    // Base64 data URIs that may appear in src attributes or plain text
-    .replace(/data:(image|video|audio)\/[^;]+;base64,[A-Za-z0-9+/=]+/g, "[media removed]");
+  return (
+    body
+      // <img> tags (inline images, tracking pixels, CID-embedded images)
+      .replace(/<img\s[^>]*>/gi, "")
+      // <video>...</video> and <audio>...</audio>
+      .replace(/<video\s[^>]*>[\s\S]*?<\/video>/gi, "")
+      .replace(/<audio\s[^>]*>[\s\S]*?<\/audio>/gi, "")
+      // Base64 data URIs that may appear in src attributes or plain text
+      .replace(/data:(image|video|audio)\/[^;]+;base64,[A-Za-z0-9+/=]+/g, "[media removed]")
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -70,7 +74,9 @@ function stripHtmlQuoted(html: string): string {
   // Fallback: "On ... wrote:" pattern (common in HTML replies without a class marker).
   // Anchored to a line boundary (start of string, or after <br>/<div>/<p>) to avoid
   // matching mid-sentence occurrences like "On this point, engineers wrote:".
-  const wroteMatch = /(?:^|<br\s*\/?>|<\/div>|<\/p>)\s*On\s.+?\swrote:\s*(<br\s*\/?>|\n|$)/i.exec(html);
+  const wroteMatch = /(?:^|<br\s*\/?>|<\/div>|<\/p>)\s*On\s.+?\swrote:\s*(<br\s*\/?>|\n|$)/i.exec(
+    html,
+  );
   if (wroteMatch) {
     // Cut at the "On" itself, not the preceding tag
     const onIndex = html.toLowerCase().indexOf("on", wroteMatch.index);

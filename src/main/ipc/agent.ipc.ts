@@ -42,7 +42,7 @@ export function registerAgentIpc(): void {
         providerIds: string[];
         prompt: string;
         context: AgentContext;
-      }
+      },
     ): Promise<IpcResponse<{ taskId: string }>> => {
       try {
         // Interactive agent tasks use the agentChat model (defaults to opus)
@@ -55,7 +55,7 @@ export function registerAgentIpc(): void {
           error: error instanceof Error ? error.message : "Unknown error",
         };
       }
-    }
+    },
   );
 
   ipcMain.handle(
@@ -70,14 +70,14 @@ export function registerAgentIpc(): void {
           error: error instanceof Error ? error.message : "Unknown error",
         };
       }
-    }
+    },
   );
 
   ipcMain.handle(
     "agent:confirm",
     async (
       _,
-      { toolCallId, approved }: { toolCallId: string; approved: boolean }
+      { toolCallId, approved }: { toolCallId: string; approved: boolean },
     ): Promise<IpcResponse<void>> => {
       try {
         agentCoordinator.resolveConfirmation(toolCallId, approved);
@@ -88,29 +88,26 @@ export function registerAgentIpc(): void {
           error: error instanceof Error ? error.message : "Unknown error",
         };
       }
-    }
+    },
   );
 
-  ipcMain.handle(
-    "agent:providers",
-    async (): Promise<IpcResponse<void>> => {
-      try {
-        agentCoordinator.listProviders();
-        return { success: true, data: undefined };
-      } catch (error) {
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : "Unknown error",
-        };
-      }
+  ipcMain.handle("agent:providers", async (): Promise<IpcResponse<void>> => {
+    try {
+      agentCoordinator.listProviders();
+      return { success: true, data: undefined };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
     }
-  );
+  });
 
   ipcMain.handle(
     "agent:authenticate",
     async (
       _,
-      { providerId }: { providerId: string }
+      { providerId }: { providerId: string },
     ): Promise<IpcResponse<{ success: boolean }>> => {
       try {
         const success = await authenticateProvider(providerId);
@@ -121,38 +118,55 @@ export function registerAgentIpc(): void {
           error: error instanceof Error ? error.message : "Unknown error",
         };
       }
-    }
+    },
   );
 
   // Check if Claude CLI is available and whether it has stored OAuth credentials
   ipcMain.handle(
     "agent:claude-auth-status",
-    async (): Promise<IpcResponse<{ cliAvailable: boolean; authenticated: boolean; email?: string; authMethod?: string }>> => {
+    async (): Promise<
+      IpcResponse<{
+        cliAvailable: boolean;
+        authenticated: boolean;
+        email?: string;
+        authMethod?: string;
+      }>
+    > => {
       try {
         if (!isClaudeCliAvailable()) {
           return { success: true, data: { cliAvailable: false, authenticated: false } };
         }
-        const result = await new Promise<{ cliAvailable: boolean; authenticated: boolean; email?: string; authMethod?: string }>((resolve) => {
+        const result = await new Promise<{
+          cliAvailable: boolean;
+          authenticated: boolean;
+          email?: string;
+          authMethod?: string;
+        }>((resolve) => {
           // Strip CLAUDECODE env var to avoid "nested session" error
           const env = { ...process.env };
           delete env.CLAUDECODE;
-          execFile("claude", ["auth", "status", "--json"], { env, timeout: 10000 }, (error, stdout) => {
-            if (error) {
-              resolve({ cliAvailable: true, authenticated: false });
-              return;
-            }
-            try {
-              const parsed = JSON.parse(stdout.trim());
-              resolve({
-                cliAvailable: true,
-                authenticated: Boolean(parsed.loggedIn),
-                email: parsed.email,
-                authMethod: parsed.authMethod,
-              });
-            } catch {
-              resolve({ cliAvailable: true, authenticated: false });
-            }
-          });
+          execFile(
+            "claude",
+            ["auth", "status", "--json"],
+            { env, timeout: 10000 },
+            (error, stdout) => {
+              if (error) {
+                resolve({ cliAvailable: true, authenticated: false });
+                return;
+              }
+              try {
+                const parsed = JSON.parse(stdout.trim());
+                resolve({
+                  cliAvailable: true,
+                  authenticated: Boolean(parsed.loggedIn),
+                  email: parsed.email,
+                  authMethod: parsed.authMethod,
+                });
+              } catch {
+                resolve({ cliAvailable: true, authenticated: false });
+              }
+            },
+          );
         });
         return { success: true, data: result };
       } catch (error) {
@@ -161,7 +175,7 @@ export function registerAgentIpc(): void {
           error: error instanceof Error ? error.message : "Unknown error",
         };
       }
-    }
+    },
   );
 
   // Load persisted agent trace events from DB (for viewing auto-draft traces after restart)
@@ -169,7 +183,7 @@ export function registerAgentIpc(): void {
     "agent:get-trace",
     async (
       _,
-      { taskId }: { taskId: string }
+      { taskId }: { taskId: string },
     ): Promise<IpcResponse<{ events: ScopedAgentEvent[] }>> => {
       try {
         const mirror = getAgentTrace(taskId);
@@ -214,7 +228,7 @@ export function registerAgentIpc(): void {
           error: error instanceof Error ? error.message : "Unknown error",
         };
       }
-    }
+    },
   );
 
   // Launch Claude Code OAuth login flow
@@ -226,13 +240,18 @@ export function registerAgentIpc(): void {
           const env = { ...process.env };
           delete env.CLAUDECODE;
           // `claude auth login` opens a browser for OAuth — wait for it to complete
-          const child = execFile("claude", ["auth", "login"], { env, timeout: 120000 }, (error, _stdout, stderr) => {
-            if (error) {
-              resolve({ success: false, error: stderr?.trim() || error.message });
-            } else {
-              resolve({ success: true });
-            }
-          });
+          const child = execFile(
+            "claude",
+            ["auth", "login"],
+            { env, timeout: 120000 },
+            (error, _stdout, stderr) => {
+              if (error) {
+                resolve({ success: false, error: stderr?.trim() || error.message });
+              } else {
+                resolve({ success: true });
+              }
+            },
+          );
           child.stdin?.end();
         });
         return { success: true, data: result };
@@ -242,6 +261,6 @@ export function registerAgentIpc(): void {
           error: error instanceof Error ? error.message : "Unknown error",
         };
       }
-    }
+    },
   );
 }

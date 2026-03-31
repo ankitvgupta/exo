@@ -67,11 +67,14 @@ test.describe("Compose Quoting - Reply Info Extraction", () => {
     const expectedAttributionPattern = /On.*Jan.*20.*2025.*Sarah Johnson.*wrote:/;
 
     // This tests the expected format - actual implementation test below
-    expect("On Mon, Jan 20, 2025 at 10:30 AM, Sarah Johnson <sarah@example.com> wrote:").toMatch(expectedAttributionPattern);
+    expect("On Mon, Jan 20, 2025 at 10:30 AM, Sarah Johnson <sarah@example.com> wrote:").toMatch(
+      expectedAttributionPattern,
+    );
   });
 
   test("forward header should include full email metadata", async () => {
-    const expectedForwardPattern = /---------- Forwarded message ---------.*From:.*Date:.*Subject:.*To:/s;
+    const expectedForwardPattern =
+      /---------- Forwarded message ---------.*From:.*Date:.*Subject:.*To:/s;
 
     const forwardHeader = `---------- Forwarded message ---------
 From: Sarah Johnson <sarah@example.com>
@@ -89,7 +92,8 @@ To: me@example.com`;
     //   <blockquote class="gmail_quote">original content</blockquote>
     // </div>
 
-    const expectedStructure = /<div class="gmail_quote">.*<div.*class="gmail_attr">.*wrote:.*<\/div>.*<blockquote.*gmail_quote/s;
+    const expectedStructure =
+      /<div class="gmail_quote">.*<div.*class="gmail_attr">.*wrote:.*<\/div>.*<blockquote.*gmail_quote/s;
 
     const sampleQuotedBody = `<br><br><div class="gmail_quote"><div dir="ltr" class="gmail_attr">On Mon, Jan 20, 2025, Sarah wrote:</div><blockquote class="gmail_quote" style="margin:0px 0px 0px 0.8ex;border-left:1px solid rgb(204,204,204);padding-left:1ex"><div>Hello</div></blockquote></div>`;
 

@@ -51,7 +51,7 @@ test.describe("Draft Generation and Refinement", () => {
     // Look for the Generate Draft button
     const generateButton = page.locator("button:has-text('Generate Draft')");
 
-    if (!await generateButton.isVisible()) {
+    if (!(await generateButton.isVisible())) {
       // In demo mode, Generate Draft button may not be available
       test.skip();
       return;
@@ -70,7 +70,7 @@ test.describe("Draft Generation and Refinement", () => {
   test("draft editor contains generated content", async () => {
     const inlineCompose = page.locator("[data-testid='inline-compose']");
 
-    if (!await inlineCompose.isVisible()) {
+    if (!(await inlineCompose.isVisible())) {
       test.skip();
       return;
     }
@@ -87,9 +87,11 @@ test.describe("Draft Generation and Refinement", () => {
 
   test("can enter a refinement critique and submit it", async () => {
     // Look for the refine input field
-    const refineInput = page.locator("input[placeholder*='Refine'], input[placeholder*='refine'], input[placeholder*='critique'], input[placeholder*='feedback']");
+    const refineInput = page.locator(
+      "input[placeholder*='Refine'], input[placeholder*='refine'], input[placeholder*='critique'], input[placeholder*='feedback']",
+    );
 
-    if (!await refineInput.isVisible()) {
+    if (!(await refineInput.isVisible())) {
       test.skip();
       return;
     }
@@ -116,9 +118,11 @@ test.describe("Draft Generation and Refinement", () => {
   });
 
   test("can enter a second refinement critique", async () => {
-    const refineInput = page.locator("input[placeholder*='Refine'], input[placeholder*='refine'], input[placeholder*='critique'], input[placeholder*='feedback']");
+    const refineInput = page.locator(
+      "input[placeholder*='Refine'], input[placeholder*='refine'], input[placeholder*='critique'], input[placeholder*='feedback']",
+    );
 
-    if (!await refineInput.isVisible()) {
+    if (!(await refineInput.isVisible())) {
       test.skip();
       return;
     }
@@ -139,9 +143,11 @@ test.describe("Draft Generation and Refinement", () => {
   });
 
   test("refinement input clears after submission", async () => {
-    const refineInput = page.locator("input[placeholder*='Refine'], input[placeholder*='refine'], input[placeholder*='critique'], input[placeholder*='feedback']");
+    const refineInput = page.locator(
+      "input[placeholder*='Refine'], input[placeholder*='refine'], input[placeholder*='critique'], input[placeholder*='feedback']",
+    );
 
-    if (!await refineInput.isVisible()) {
+    if (!(await refineInput.isVisible())) {
       test.skip();
       return;
     }
@@ -175,7 +181,7 @@ test.describe("Draft Generation - Multiple Emails", () => {
     const highPriorityEmails = page.locator("button").filter({ hasText: "HIGH" });
     const firstEmail = highPriorityEmails.first();
 
-    if (!await firstEmail.isVisible()) {
+    if (!(await firstEmail.isVisible())) {
       test.skip();
       return;
     }
@@ -224,7 +230,7 @@ test.describe("Draft Generation - From Full View", () => {
     // Select a HIGH priority email
     const highPriorityEmail = page.locator("button").filter({ hasText: "HIGH" }).first();
 
-    if (!await highPriorityEmail.isVisible()) {
+    if (!(await highPriorityEmail.isVisible())) {
       test.skip();
       return;
     }

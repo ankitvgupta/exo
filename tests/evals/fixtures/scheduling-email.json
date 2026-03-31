@@ -1,0 +1,18 @@
+{
+  "id": "scheduling-001",
+  "description": "Meeting coordination request — colleague asking to find a time to sync",
+  "email": {
+    "id": "fixture-005",
+    "threadId": "thread-005",
+    "from": "pm@company.com",
+    "to": "user@company.com",
+    "subject": "Sync on project timeline?",
+    "body": "Hey! I was reviewing our project roadmap and noticed we're a bit behind on the API integration milestone. Would you be available for a quick 30-min call tomorrow or Wednesday to discuss? I want to make sure we're aligned on priorities and can adjust timelines if needed. Let me know what works for you!",
+    "date": "2025-01-15T09:45:00Z",
+    "snippet": "Hey! I was reviewing our project roadmap and noticed we're a bit behind..."
+  },
+  "expected": {
+    "needs_reply": true,
+    "priority": "medium"
+  }
+}

@@ -21,7 +21,10 @@ test.describe("Inline Images - Reading", () => {
   let page: Page;
 
   test.beforeAll(async ({}, testInfo) => {
-    const result = await launchElectronApp({ workerIndex: testInfo.workerIndex, waitAfterLoad: 1000 });
+    const result = await launchElectronApp({
+      workerIndex: testInfo.workerIndex,
+      waitAfterLoad: 1000,
+    });
     electronApp = result.app;
     page = result.page;
 
@@ -40,7 +43,10 @@ test.describe("Inline Images - Reading", () => {
 
   test("email with inline images displays images correctly", async () => {
     // Find and click the email with inline images
-    const emailItem = page.locator("button").filter({ hasText: /Surbhi|Landing Page Mockups/i }).first();
+    const emailItem = page
+      .locator("button")
+      .filter({ hasText: /Surbhi|Landing Page Mockups/i })
+      .first();
     await expect(emailItem).toBeVisible({ timeout: 10000 });
     await emailItem.click();
     await page.waitForTimeout(1500);
@@ -74,7 +80,12 @@ test.describe("Inline Images - Reading", () => {
     }
 
     // Take screenshot of the email with inline images
-    await takeScreenshot(electronApp, page, "inline-images-reading", "Email with inline data: URI images displayed in body");
+    await takeScreenshot(
+      electronApp,
+      page,
+      "inline-images-reading",
+      "Email with inline data: URI images displayed in body",
+    );
   });
 
   test("rich HTML email with external image also displays", async () => {
@@ -83,7 +94,10 @@ test.describe("Inline Images - Reading", () => {
     await page.waitForTimeout(500);
 
     // Click the Q3 report email which has an external image (https://via.placeholder.com)
-    const emailItem = page.locator("button").filter({ hasText: /Garry|Q3 Quarterly/i }).first();
+    const emailItem = page
+      .locator("button")
+      .filter({ hasText: /Garry|Q3 Quarterly/i })
+      .first();
     await expect(emailItem).toBeVisible({ timeout: 10000 });
     await emailItem.click();
     await page.waitForTimeout(1500);
@@ -100,7 +114,12 @@ test.describe("Inline Images - Reading", () => {
     console.log(`Found ${imgCount} images in the Q3 report email`);
     expect(imgCount).toBeGreaterThanOrEqual(1);
 
-    await takeScreenshot(electronApp, page, "inline-images-external", "Email with external image (TechCorp logo)");
+    await takeScreenshot(
+      electronApp,
+      page,
+      "inline-images-external",
+      "Email with external image (TechCorp logo)",
+    );
   });
 });
 
@@ -113,7 +132,10 @@ test.describe("Inline Images - Composing", () => {
   let page: Page;
 
   test.beforeAll(async ({}, testInfo) => {
-    const result = await launchElectronApp({ workerIndex: testInfo.workerIndex, waitAfterLoad: 1000 });
+    const result = await launchElectronApp({
+      workerIndex: testInfo.workerIndex,
+      waitAfterLoad: 1000,
+    });
     electronApp = result.app;
     page = result.page;
 
@@ -145,7 +167,12 @@ test.describe("Inline Images - Composing", () => {
     const fileInput = page.locator("input[type='file'][accept='image/*']");
     await expect(fileInput).toBeAttached();
 
-    await takeScreenshot(electronApp, page, "inline-images-compose-toolbar", "Compose toolbar with Insert image button");
+    await takeScreenshot(
+      electronApp,
+      page,
+      "inline-images-compose-toolbar",
+      "Compose toolbar with Insert image button",
+    );
 
     // Close compose
     const discardButton = page.locator("button:has-text('Discard')");
@@ -195,7 +222,12 @@ test.describe("Inline Images - Composing", () => {
       expect(src).toBeTruthy();
       expect(src!.startsWith("data:image/")).toBe(true);
 
-      await takeScreenshot(electronApp, page, "inline-images-compose-inserted", "Compose editor with inserted inline image");
+      await takeScreenshot(
+        electronApp,
+        page,
+        "inline-images-compose-inserted",
+        "Compose editor with inserted inline image",
+      );
     } finally {
       // Clean up test image
       if (fs.existsSync(testImagePath)) {

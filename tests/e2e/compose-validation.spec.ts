@@ -8,7 +8,7 @@ import { launchElectronApp } from "./launch-helpers";
  */
 
 test.describe("Compose validation — send with subject only (no body)", () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: "serial" });
   let electronApp: ElectronApplication;
   let page: Page;
 
@@ -182,7 +182,7 @@ test.describe("Compose validation — send with subject only (no body)", () => {
 });
 
 test.describe("Compose validation — Cc-only and Bcc-only sends", () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: "serial" });
   let electronApp: ElectronApplication;
   let page: Page;
 

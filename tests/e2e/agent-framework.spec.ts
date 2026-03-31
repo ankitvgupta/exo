@@ -2,7 +2,7 @@ import { test, expect, Page, ElectronApplication } from "@playwright/test";
 import { launchElectronApp } from "./launch-helpers";
 
 test.describe("Agent Framework", () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: "serial" });
   let electronApp: ElectronApplication;
   let page: Page;
 
@@ -109,7 +109,10 @@ test.describe("Agent Framework", () => {
 
     // Close settings
     const closeButton = page.locator('[title="Close settings"]').or(
-      page.locator("button svg").filter({ has: page.locator('path[d*="M6 18L18 6"]') }).first()
+      page
+        .locator("button svg")
+        .filter({ has: page.locator('path[d*="M6 18L18 6"]') })
+        .first(),
     );
     if (await closeButton.isVisible()) {
       await closeButton.click();
@@ -141,15 +144,21 @@ test.describe("Agent Framework", () => {
 
   test("window.api.agent namespace exists in preload", async () => {
     const hasAgentApi = await page.evaluate(() => {
-      return typeof (window as Record<string, unknown>).api === "object" &&
-        typeof ((window as Record<string, unknown>).api as Record<string, unknown>).agent === "object";
+      return (
+        typeof (window as Record<string, unknown>).api === "object" &&
+        typeof ((window as Record<string, unknown>).api as Record<string, unknown>).agent ===
+          "object"
+      );
     });
     expect(hasAgentApi).toBe(true);
   });
 
   test("window.api.agent has expected methods", async () => {
     const methods = await page.evaluate(() => {
-      const api = (window as Record<string, unknown>).api as Record<string, Record<string, unknown>>;
+      const api = (window as Record<string, unknown>).api as Record<
+        string,
+        Record<string, unknown>
+      >;
       const agent = api.agent;
       return {
         hasRun: typeof agent.run === "function",
@@ -170,7 +179,9 @@ test.describe("Agent Framework", () => {
 
   test("store has agent state slice", async () => {
     const storeState = await page.evaluate(() => {
-      const store = (window as Record<string, unknown>).__ZUSTAND_STORE__ as { getState?: () => Record<string, unknown> };
+      const store = (window as Record<string, unknown>).__ZUSTAND_STORE__ as {
+        getState?: () => Record<string, unknown>;
+      };
       if (!store || typeof store.getState !== "function") return null;
       const state = store.getState();
       return {

@@ -11,7 +11,7 @@ import { launchElectronApp } from "./launch-helpers";
  */
 
 test.describe("Compose - New Email", () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: "serial" });
   let electronApp: ElectronApplication;
   let page: Page;
 
@@ -92,7 +92,9 @@ test.describe("Compose - New Email", () => {
     await toField.press("Enter");
 
     // The recipient should appear as a chip/tag
-    await expect(page.locator("[data-testid='address-chip']").filter({ hasText: "test@example.com" })).toBeVisible({ timeout: 3000 });
+    await expect(
+      page.locator("[data-testid='address-chip']").filter({ hasText: "test@example.com" }),
+    ).toBeVisible({ timeout: 3000 });
 
     // Close compose via Back button
     const backButton = page.locator("button:has-text('Back')");
@@ -134,7 +136,9 @@ test.describe("Compose - New Email", () => {
     const ccInput = ccField.locator("input[type='text']");
     await ccInput.fill("cc-test@example.com");
     await ccInput.press("Enter");
-    await expect(page.locator("[data-testid='address-chip']").filter({ hasText: "cc-test@example.com" })).toBeVisible({ timeout: 3000 });
+    await expect(
+      page.locator("[data-testid='address-chip']").filter({ hasText: "cc-test@example.com" }),
+    ).toBeVisible({ timeout: 3000 });
 
     // Close compose via Back button
     const backButton = page.locator("button:has-text('Back')");
@@ -183,7 +187,9 @@ test.describe("Compose - New Email", () => {
 
     const editor = page.locator(".ProseMirror").first();
     await editor.click();
-    await editor.pressSequentially("This email is sent in demo mode and will not actually be delivered.");
+    await editor.pressSequentially(
+      "This email is sent in demo mode and will not actually be delivered.",
+    );
 
     // Click Send
     const sendButton = page.locator("button").filter({ hasText: /^Send/ }).first();
@@ -195,7 +201,7 @@ test.describe("Compose - New Email", () => {
 });
 
 test.describe("Compose - Reply", () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: "serial" });
   let electronApp: ElectronApplication;
   let page: Page;
 
@@ -286,7 +292,7 @@ test.describe("Compose - Reply", () => {
 });
 
 test.describe("Compose - Forward", () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: "serial" });
   let electronApp: ElectronApplication;
   let page: Page;
 
@@ -372,7 +378,7 @@ test.describe("Compose - Forward", () => {
 });
 
 test.describe("Compose - Rich Text Editor", () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: "serial" });
   let electronApp: ElectronApplication;
   let page: Page;
 
@@ -441,7 +447,7 @@ test.describe("Compose - Rich Text Editor", () => {
 });
 
 test.describe("Compose - Save Draft", () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: "serial" });
   let electronApp: ElectronApplication;
   let page: Page;
 

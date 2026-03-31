@@ -19,12 +19,24 @@ declare global {
   interface Window {
     api: {
       search: {
-        query: (query: string, options?: { accountId?: string; limit?: number }) => Promise<IpcResponse<SearchResult[]>>;
+        query: (
+          query: string,
+          options?: { accountId?: string; limit?: number },
+        ) => Promise<IpcResponse<SearchResult[]>>;
         suggestions: (query: string, limit?: number) => Promise<IpcResponse<string[]>>;
       };
       emails: {
-        search: (query: string, accountId: string, maxResults?: number) => Promise<IpcResponse<DashboardEmail[]>>;
-        searchRemote: (query: string, accountId: string, maxResults?: number, pageToken?: string) => Promise<IpcResponse<{ emails: DashboardEmail[]; nextPageToken?: string }>>;
+        search: (
+          query: string,
+          accountId: string,
+          maxResults?: number,
+        ) => Promise<IpcResponse<DashboardEmail[]>>;
+        searchRemote: (
+          query: string,
+          accountId: string,
+          maxResults?: number,
+          pageToken?: string,
+        ) => Promise<IpcResponse<{ emails: DashboardEmail[]; nextPageToken?: string }>>;
       };
     };
   }
@@ -128,7 +140,8 @@ export function SearchBar({ isOpen, onClose }: SearchBarProps) {
     setActiveSearch(query, []);
 
     // Fire local search — results stream into the store when ready
-    window.api.emails.search(query, currentAccountId, 500)
+    window.api.emails
+      .search(query, currentAccountId, 500)
       .then((localResponse: IpcResponse<DashboardEmail[]>) => {
         if (useAppStore.getState().activeSearchQuery !== query) return;
         if (localResponse.success && localResponse.data) {
@@ -141,16 +154,25 @@ export function SearchBar({ isOpen, onClose }: SearchBarProps) {
 
     // Fire remote search (slow) — results stream into the store when ready
     if (isOnline) {
-      window.api.emails.searchRemote(query, currentAccountId, 500)
-        .then((response: { success: boolean; data?: { emails: DashboardEmail[]; nextPageToken?: string }; error?: string }) => {
-          if (useAppStore.getState().activeSearchQuery !== query) return;
-          if (response.success && response.data) {
-            setRemoteSearchResults(response.data.emails);
-            useAppStore.getState().setRemoteSearchNextPageToken(response.data.nextPageToken ?? null);
-          } else {
-            setRemoteSearchError(response.error || "Gmail search failed");
-          }
-        })
+      window.api.emails
+        .searchRemote(query, currentAccountId, 500)
+        .then(
+          (response: {
+            success: boolean;
+            data?: { emails: DashboardEmail[]; nextPageToken?: string };
+            error?: string;
+          }) => {
+            if (useAppStore.getState().activeSearchQuery !== query) return;
+            if (response.success && response.data) {
+              setRemoteSearchResults(response.data.emails);
+              useAppStore
+                .getState()
+                .setRemoteSearchNextPageToken(response.data.nextPageToken ?? null);
+            } else {
+              setRemoteSearchError(response.error || "Gmail search failed");
+            }
+          },
+        )
         .catch((err: unknown) => {
           if (useAppStore.getState().activeSearchQuery !== query) return;
           setRemoteSearchError(err instanceof Error ? err.message : "Gmail search failed");
@@ -158,7 +180,16 @@ export function SearchBar({ isOpen, onClose }: SearchBarProps) {
     } else {
       setRemoteSearchResults([]);
     }
-  }, [query, currentAccountId, isOnline, setActiveSearch, setRemoteSearchResults, setRemoteSearchError, setCurrentSplitId, onClose]);
+  }, [
+    query,
+    currentAccountId,
+    isOnline,
+    setActiveSearch,
+    setRemoteSearchResults,
+    setRemoteSearchError,
+    setCurrentSplitId,
+    onClose,
+  ]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -179,7 +210,12 @@ export function SearchBar({ isOpen, onClose }: SearchBarProps) {
           break;
         case "Enter":
           e.preventDefault();
-          if (hasNavigated && selectedIndex >= 0 && selectedIndex < results.length && results[selectedIndex]) {
+          if (
+            hasNavigated &&
+            selectedIndex >= 0 &&
+            selectedIndex < results.length &&
+            results[selectedIndex]
+          ) {
             // User explicitly navigated to a result, select it
             setSelectedEmailId(results[selectedIndex].id);
             setViewMode("full");
@@ -193,7 +229,17 @@ export function SearchBar({ isOpen, onClose }: SearchBarProps) {
           break;
       }
     },
-    [results, selectedIndex, hasNavigated, searchAllMailIndex, setSelectedEmailId, setViewMode, onClose, query, performFullSearch]
+    [
+      results,
+      selectedIndex,
+      hasNavigated,
+      searchAllMailIndex,
+      setSelectedEmailId,
+      setViewMode,
+      onClose,
+      query,
+      performFullSearch,
+    ],
   );
 
   const handleResultClick = (result: SearchResult) => {
@@ -230,9 +276,10 @@ export function SearchBar({ isOpen, onClose }: SearchBarProps) {
   };
 
   // Determine footer hint text
-  const footerHint = hasNavigated && selectedIndex >= 0 && selectedIndex < results.length
-    ? "Enter to open"
-    : "Enter to search all mail";
+  const footerHint =
+    hasNavigated && selectedIndex >= 0 && selectedIndex < results.length
+      ? "Enter to open"
+      : "Enter to search all mail";
 
   if (!isOpen) return null;
 
@@ -269,11 +316,24 @@ export function SearchBar({ isOpen, onClose }: SearchBarProps) {
           />
           {isSearching && (
             <svg className="w-5 h-5 text-blue-500 animate-spin" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              <circle
+                className="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth="4"
+              />
+              <path
+                className="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+              />
             </svg>
           )}
-          <kbd className="px-2 py-1 text-xs text-gray-400 bg-gray-100 dark:bg-gray-700 rounded">esc</kbd>
+          <kbd className="px-2 py-1 text-xs text-gray-400 bg-gray-100 dark:bg-gray-700 rounded">
+            esc
+          </kbd>
         </div>
 
         {/* Results */}
@@ -285,7 +345,9 @@ export function SearchBar({ isOpen, onClose }: SearchBarProps) {
                   key={result.id}
                   onClick={() => handleResultClick(result)}
                   className={`w-full px-4 py-3 text-left transition-colors ${
-                    index === selectedIndex && selectedIndex >= 0 ? "bg-blue-50 dark:bg-blue-900/30" : "hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                    index === selectedIndex && selectedIndex >= 0
+                      ? "bg-blue-50 dark:bg-blue-900/30"
+                      : "hover:bg-gray-50 dark:hover:bg-gray-700/50"
                   }`}
                 >
                   <div className="flex items-start justify-between gap-4">
@@ -294,11 +356,17 @@ export function SearchBar({ isOpen, onClose }: SearchBarProps) {
                         <span className="font-medium text-gray-900 dark:text-gray-100 truncate">
                           {getSenderName(result.from)}
                         </span>
-                        <span className="text-sm text-gray-400 dark:text-gray-500">{formatDate(result.date)}</span>
+                        <span className="text-sm text-gray-400 dark:text-gray-500">
+                          {formatDate(result.date)}
+                        </span>
                       </div>
-                      <div className="text-sm text-gray-700 dark:text-gray-300 truncate mt-0.5">{result.subject}</div>
+                      <div className="text-sm text-gray-700 dark:text-gray-300 truncate mt-0.5">
+                        {result.subject}
+                      </div>
                       {result.snippet && (
-                        <div className="text-sm text-gray-500 dark:text-gray-400 truncate mt-0.5">{decodeHtmlEntities(result.snippet)}</div>
+                        <div className="text-sm text-gray-500 dark:text-gray-400 truncate mt-0.5">
+                          {decodeHtmlEntities(result.snippet)}
+                        </div>
                       )}
                     </div>
                   </div>
@@ -309,12 +377,24 @@ export function SearchBar({ isOpen, onClose }: SearchBarProps) {
                 <button
                   onClick={performFullSearch}
                   className={`w-full px-4 py-3 text-left transition-colors border-t border-gray-100 dark:border-gray-700/50 ${
-                    selectedIndex === searchAllMailIndex ? "bg-blue-50 dark:bg-blue-900/30" : "hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                    selectedIndex === searchAllMailIndex
+                      ? "bg-blue-50 dark:bg-blue-900/30"
+                      : "hover:bg-gray-50 dark:hover:bg-gray-700/50"
                   }`}
                 >
                   <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
-                    <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    <svg
+                      className="w-4 h-4 flex-shrink-0"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                      />
                     </svg>
                     <span className="text-sm font-medium">
                       Search all mail for &quot;{query}&quot;
@@ -332,12 +412,24 @@ export function SearchBar({ isOpen, onClose }: SearchBarProps) {
               <button
                 onClick={performFullSearch}
                 className={`w-full px-4 py-3 text-left transition-colors border-t border-gray-100 dark:border-gray-700/50 ${
-                  selectedIndex === searchAllMailIndex ? "bg-blue-50 dark:bg-blue-900/30" : "hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                  selectedIndex === searchAllMailIndex
+                    ? "bg-blue-50 dark:bg-blue-900/30"
+                    : "hover:bg-gray-50 dark:hover:bg-gray-700/50"
                 }`}
               >
                 <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
-                  <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  <svg
+                    className="w-4 h-4 flex-shrink-0"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                    />
                   </svg>
                   <span className="text-sm font-medium">
                     Search all mail for &quot;{query}&quot;
@@ -349,11 +441,30 @@ export function SearchBar({ isOpen, onClose }: SearchBarProps) {
             <div className="px-4 py-6 text-sm text-gray-500 dark:text-gray-400">
               <div className="font-medium mb-2">Search operators:</div>
               <ul className="space-y-1">
-                <li><code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">from:email@example.com</code> - Search by sender</li>
-                <li><code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">to:email@example.com</code> - Search by recipient</li>
-                <li><code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">subject:keyword</code> - Search in subject</li>
-                <li><code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">"exact phrase"</code> - Search exact phrase</li>
-                <li><code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">in:draft</code> - View drafts</li>
+                <li>
+                  <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">
+                    from:email@example.com
+                  </code>{" "}
+                  - Search by sender
+                </li>
+                <li>
+                  <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">
+                    to:email@example.com
+                  </code>{" "}
+                  - Search by recipient
+                </li>
+                <li>
+                  <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">subject:keyword</code>{" "}
+                  - Search in subject
+                </li>
+                <li>
+                  <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">"exact phrase"</code>{" "}
+                  - Search exact phrase
+                </li>
+                <li>
+                  <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">in:draft</code> - View
+                  drafts
+                </li>
               </ul>
             </div>
           ) : null}
@@ -361,9 +472,16 @@ export function SearchBar({ isOpen, onClose }: SearchBarProps) {
 
         {/* Footer hints */}
         <div className="flex items-center gap-4 px-4 py-2 text-xs text-gray-400 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
-          <span><kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 rounded">↑↓</kbd> to navigate</span>
-          <span><kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 rounded">Enter</kbd> {footerHint}</span>
-          <span><kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 rounded">Esc</kbd> to close</span>
+          <span>
+            <kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 rounded">↑↓</kbd> to navigate
+          </span>
+          <span>
+            <kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 rounded">Enter</kbd>{" "}
+            {footerHint}
+          </span>
+          <span>
+            <kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 rounded">Esc</kbd> to close
+          </span>
         </div>
       </div>
     </div>

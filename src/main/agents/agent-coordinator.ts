@@ -1,4 +1,4 @@
-import { utilityProcess, MessageChannelMain, BrowserWindow, net } from "electron";
+import { utilityProcess, MessageChannelMain, type BrowserWindow, net } from "electron";
 import path from "path";
 import { existsSync } from "fs";
 import type {
@@ -18,6 +18,9 @@ import { generateDraftForEmail, generateForwardForEmail } from "../services/draf
 import { saveDraftAndSync } from "../services/gmail-draft-sync";
 import { DEFAULT_STYLE_PROMPT } from "../../shared/types";
 import { populatePrivateProviderConfig } from "./private-providers-main";
+import { createLogger } from "../services/logger";
+
+const log = createLogger("agent-coordinator");
 
 /**
  * Coordinates the agent utility process from the main process.
@@ -36,8 +39,19 @@ export class AgentCoordinator {
   /** Installed provider paths for re-loading on worker respawn */
   private installedProviders = new Map<string, string>();
 
-  private providerLoadCallbacks = new Map<string, { resolve: (result: { success: boolean; error?: string }) => void }>();
-  private providerHealthCallbacks = new Map<string, { resolve: (result: { status: "connected" | "not_configured" | "error"; message?: string }) => void }>();
+  private providerLoadCallbacks = new Map<
+    string,
+    { resolve: (result: { success: boolean; error?: string }) => void }
+  >();
+  private providerHealthCallbacks = new Map<
+    string,
+    {
+      resolve: (result: {
+        status: "connected" | "not_configured" | "error";
+        message?: string;
+      }) => void;
+    }
+  >();
 
   // DB proxy methods available to the worker.
   // No explicit Record type — each method retains its specific signature.
@@ -49,46 +63,63 @@ export class AgentCoordinator {
     getEmailsByIds: (ids: string[]) => db.getEmailsByIds(ids),
     getInboxEmails: (accountId?: string) => db.getInboxEmails(accountId),
     getAllEmails: (accountId?: string) => db.getAllEmails(accountId),
-    searchEmails: (query: string, options?: db.SearchOptions) =>
-      db.searchEmails(query, options),
+    searchEmails: (query: string, options?: db.SearchOptions) => db.searchEmails(query, options),
     saveAnalysis: (emailId: string, needsReply: boolean, reason: string, priority?: string) =>
       db.saveAnalysis(emailId, needsReply, reason, priority),
-    saveDraft: (emailId: string, draftBody: string, status?: string, gmailDraftId?: string, options?: { cc?: string[]; bcc?: string[] }) =>
-      db.saveDraft(emailId, draftBody, status, gmailDraftId, options),
-    saveDraftAndSync: (emailId: string, body: string, status: string, cc?: string[], bcc?: string[]) =>
-      saveDraftAndSync(emailId, body, status, cc, bcc),
+    saveDraft: (
+      emailId: string,
+      draftBody: string,
+      status?: string,
+      gmailDraftId?: string,
+      options?: { cc?: string[]; bcc?: string[] },
+    ) => db.saveDraft(emailId, draftBody, status, gmailDraftId, options),
+    saveDraftAndSync: (
+      emailId: string,
+      body: string,
+      status: string,
+      cc?: string[],
+      bcc?: string[],
+    ) => saveDraftAndSync(emailId, body, status, cc, bcc),
     getSenderProfile: (email: string) => db.getSenderProfile(email),
     saveSenderProfile: (profile: db.SenderProfile) => db.saveSenderProfile(profile),
     getAccounts: () => db.getAccounts(),
     // Audit log methods
-    saveAuditEntry: (...args: unknown[]) => db.saveAuditEntry(args[0] as Parameters<typeof db.saveAuditEntry>[0]),
+    saveAuditEntry: (...args: unknown[]) =>
+      db.saveAuditEntry(args[0] as Parameters<typeof db.saveAuditEntry>[0]),
     getAuditEntries: (taskId: string) => db.getAuditEntries(taskId),
     cleanupExpiredAudit: () => db.cleanupExpiredAudit(),
     // Conversation mirror methods
     upsertConversationMirror: (...args: unknown[]) =>
-      db.upsertConversationMirror(args[0] as string, args[1] as string, args[2] as Parameters<typeof db.upsertConversationMirror>[2]),
+      db.upsertConversationMirror(
+        args[0] as string,
+        args[1] as string,
+        args[2] as Parameters<typeof db.upsertConversationMirror>[2],
+      ),
     getConversationMirror: (providerId: string, conversationId: string) =>
       db.getConversationMirror(providerId, conversationId),
-    listConversationMirrors: (providerId?: string) =>
-      db.listConversationMirrors(providerId),
-    getCalendarEventsForDate: (dateStr: string) =>
-      db.getCalendarEventsForDate(dateStr),
+    listConversationMirrors: (providerId?: string) => db.listConversationMirrors(providerId),
+    getCalendarEventsForDate: (dateStr: string) => db.getCalendarEventsForDate(dateStr),
     // Memory methods for agent save_memory tool
-    saveMemory: (...args: unknown[]) => db.saveMemory(args[0] as Parameters<typeof db.saveMemory>[0]),
+    saveMemory: (...args: unknown[]) =>
+      db.saveMemory(args[0] as Parameters<typeof db.saveMemory>[0]),
     getMemories: (accountId: string) => db.getMemories(accountId),
     // Local drafts (new emails not tied to threads)
     saveLocalDraft: (...args: unknown[]) =>
       db.saveLocalDraft(args[0] as Parameters<typeof db.saveLocalDraft>[0]),
     getLocalDraft: (draftId: string) => db.getLocalDraft(draftId),
-    getLocalDrafts: (accountId?: string) =>
-      db.getLocalDrafts(accountId),
+    getLocalDrafts: (accountId?: string) => db.getLocalDrafts(accountId),
     // Generate a draft reply using the exact same pipeline as the "Generate Draft" button.
     // Runs DraftGenerator with the user's configured model, style context, EA config, and sender enrichment.
     generateDraft: async (emailId: string, accountId: string, instructions?: string) =>
       generateDraftForEmail({ emailId, accountId, instructions }),
     // Generate a new email (not a reply) using the same DraftGenerator pipeline.
     // Style context is based on the primary recipient.
-    generateNewEmail: async (accountId: string, to: string[], subject: string, instructions: string) => {
+    generateNewEmail: async (
+      accountId: string,
+      to: string[],
+      subject: string,
+      instructions: string,
+    ) => {
       const config = getConfig();
 
       // Style context based on primary recipient — extract bare email from "Name <email>" format
@@ -97,7 +128,12 @@ export class AgentCoordinator {
       const primaryEmail = emailMatch ? emailMatch[1] : primaryRecipient;
       const gmailClient = getEmailSyncService().getClientForAccount(accountId);
       const styleContext = primaryEmail
-        ? await buildStyleContext(primaryEmail, accountId, config.stylePrompt ?? DEFAULT_STYLE_PROMPT, gmailClient)
+        ? await buildStyleContext(
+            primaryEmail,
+            accountId,
+            config.stylePrompt ?? DEFAULT_STYLE_PROMPT,
+            gmailClient,
+          )
         : "";
 
       let prompt = config.draftPrompt;
@@ -106,11 +142,21 @@ export class AgentCoordinator {
       }
 
       const enableSenderLookup = config.enableSenderLookup ?? true;
-      const generator = new DraftGenerator(getModelIdForFeature("drafts"), prompt, getModelIdForFeature("calendaring"));
+      const generator = new DraftGenerator(
+        getModelIdForFeature("drafts"),
+        prompt,
+        getModelIdForFeature("calendaring"),
+      );
       return generator.composeNewEmail(to, subject, instructions, { enableSenderLookup });
     },
-    generateForward: async (emailId: string, accountId: string, instructions: string, to?: string[], cc?: string[], bcc?: string[]) =>
-      generateForwardForEmail({ emailId, accountId, instructions, to, cc, bcc }),
+    generateForward: async (
+      emailId: string,
+      accountId: string,
+      instructions: string,
+      to?: string[],
+      cc?: string[],
+      bcc?: string[],
+    ) => generateForwardForEmail({ emailId, accountId, instructions, to, cc, bcc }),
   } as const;
 
   start(mainWindow: BrowserWindow): void {
@@ -124,7 +170,9 @@ export class AgentCoordinator {
     // Worker lives in out/worker/, one level up from out/main/ where __dirname points
     const workerPath = path.join(__dirname, "..", "worker", "agent-worker.cjs");
     if (!existsSync(workerPath)) {
-      console.warn(`[AgentCoordinator] Worker not found at ${workerPath} — agent commands will fail until the worker is built`);
+      log.warn(
+        `[AgentCoordinator] Worker not found at ${workerPath} — agent commands will fail until the worker is built`,
+      );
       return;
     }
     this.worker = utilityProcess.fork(workerPath, [], { stdio: ["ignore", "pipe", "pipe"] });
@@ -134,13 +182,13 @@ export class AgentCoordinator {
     this.worker.stdout?.on("data", (data: Buffer) => {
       const lines = data.toString().trimEnd().split("\n");
       for (const line of lines) {
-        console.log(`[AgentWorker:out] ${line}`);
+        log.info(`[AgentWorker:out] ${line}`);
       }
     });
     this.worker.stderr?.on("data", (data: Buffer) => {
       const lines = data.toString().trimEnd().split("\n");
       for (const line of lines) {
-        console.error(`[AgentWorker:err] ${line}`);
+        log.error(`[AgentWorker:err] ${line}`);
       }
     });
 
@@ -149,7 +197,7 @@ export class AgentCoordinator {
     });
 
     this.worker.on("exit", (code) => {
-      console.log(`[AgentCoordinator] Worker exited with code ${code}`);
+      log.info(`[AgentCoordinator] Worker exited with code ${code}`);
       this.worker = null;
       // Close all active MessagePorts to prevent resource leaks
       for (const [, port] of this.activePorts) {
@@ -176,11 +224,13 @@ export class AgentCoordinator {
     const baseConfig: AgentFrameworkConfig = {
       model: getModelIdForFeature("agentDrafter"),
       anthropicApiKey: apiKey,
-      browserConfig: browser ? {
-        enabled: browser.enabled,
-        chromeDebugPort: browser.chromeDebugPort,
-        chromeProfilePath: browser.chromeProfilePath,
-      } : undefined,
+      browserConfig: browser
+        ? {
+            enabled: browser.enabled,
+            chromeDebugPort: browser.chromeDebugPort,
+            chromeProfilePath: browser.chromeProfilePath,
+          }
+        : undefined,
       mcpServers: appConfig.mcpServers,
       cliTools: appConfig.cliTools,
       providers: {
@@ -192,22 +242,27 @@ export class AgentCoordinator {
       },
     };
     this.workerReady = populatePrivateProviderConfig(baseConfig).then(
-      (enrichedConfig) => { this.initWorker(enrichedConfig); },
-      () => { this.initWorker(baseConfig); }, // Fallback to base config on error
+      (enrichedConfig) => {
+        this.initWorker(enrichedConfig);
+      },
+      () => {
+        this.initWorker(baseConfig);
+      }, // Fallback to base config on error
     );
 
     // After worker init, re-load any installed providers (respawn recovery)
     if (this.installedProviders.size > 0) {
       this.workerReady = this.workerReady.then(() => {
         for (const [providerId, providerPath] of this.installedProviders) {
-          console.log(`[AgentCoordinator] Re-loading installed provider on respawn: ${providerId}`);
+          log.info(`[AgentCoordinator] Re-loading installed provider on respawn: ${providerId}`);
           this.sendToWorker({
             type: "load_provider",
             providerId,
             providerPath,
             config: {
               model: getModelIdForFeature("agentDrafter"),
-              anthropicApiKey: getConfig().anthropicApiKey || process.env.ANTHROPIC_API_KEY || undefined,
+              anthropicApiKey:
+                getConfig().anthropicApiKey || process.env.ANTHROPIC_API_KEY || undefined,
             },
           });
         }
@@ -220,7 +275,9 @@ export class AgentCoordinator {
       this.spawnWorker();
     }
     if (!this.worker) {
-      throw new Error("Agent worker failed to start — worker file may be missing. Run 'npm run build:worker' first.");
+      throw new Error(
+        "Agent worker failed to start — worker file may be missing. Run 'npm run build:worker' first.",
+      );
     }
     return this.worker;
   }
@@ -241,7 +298,10 @@ export class AgentCoordinator {
   private taskEvents = new Map<string, ScopedAgentEvent[]>();
 
   // Track task completion so callers can await agent finishing (not just starting)
-  private taskCompletionResolvers = new Map<string, { resolve: () => void; reject: (err: Error) => void }>();
+  private taskCompletionResolvers = new Map<
+    string,
+    { resolve: () => void; reject: (err: Error) => void }
+  >();
   private taskCompletionPromises = new Map<string, Promise<void>>();
 
   /** Start an agent task, setting up a MessagePort for streaming events to the renderer */
@@ -263,7 +323,10 @@ export class AgentCoordinator {
     // and attach it to context so the worker can include it in the system prompt
     if (context.memoryContext === undefined) {
       const senderEmail = context.emailFrom
-        ? (context.emailFrom.match(/<([^>]+)>/)?.[1] ?? context.emailFrom.match(/([^\s<]+@[^\s>]+)/)?.[1])?.toLowerCase()
+        ? (
+            context.emailFrom.match(/<([^>]+)>/)?.[1] ??
+            context.emailFrom.match(/([^\s<]+@[^\s>]+)/)?.[1]
+          )?.toLowerCase()
         : undefined;
       context.memoryContext = buildAgentMemoryContext(context.accountId, senderEmail);
     }
@@ -304,7 +367,9 @@ export class AgentCoordinator {
       if (
         !agentEvent.nestedRunId &&
         agentEvent.type === "state" &&
-        (agentEvent.state === "completed" || agentEvent.state === "failed" || agentEvent.state === "cancelled")
+        (agentEvent.state === "completed" ||
+          agentEvent.state === "failed" ||
+          agentEvent.state === "cancelled")
       ) {
         this.persistTaskEvents(taskId, agentEvent.state);
         this.closePort(taskId);
@@ -314,10 +379,9 @@ export class AgentCoordinator {
     port1.start();
 
     // Send the run command with port2 to the worker
-    worker.postMessage(
-      { type: "run", taskId, providerIds, prompt, context, modelOverride },
-      [port2]
-    );
+    worker.postMessage({ type: "run", taskId, providerIds, prompt, context, modelOverride }, [
+      port2,
+    ]);
   }
 
   /**
@@ -358,9 +422,9 @@ export class AgentCoordinator {
         status: state,
         messagesJson: JSON.stringify(events),
       });
-      console.log(`[AgentCoordinator] Persisted ${events.length} events for task ${taskId}`);
+      log.info(`[AgentCoordinator] Persisted ${events.length} events for task ${taskId}`);
     } catch (err) {
-      console.error(`[AgentCoordinator] Failed to persist events for task ${taskId}:`, err);
+      log.error({ err: err }, `[AgentCoordinator] Failed to persist events for task ${taskId}`);
     }
 
     this.taskEvents.delete(taskId);
@@ -419,7 +483,10 @@ export class AgentCoordinator {
    * Load an installed agent provider into the worker.
    * Sends config_update first, then load_provider.
    */
-  async loadProvider(providerId: string, providerPath: string): Promise<{ success: boolean; error?: string }> {
+  async loadProvider(
+    providerId: string,
+    providerPath: string,
+  ): Promise<{ success: boolean; error?: string }> {
     // Ensure worker is spawned, then wait for it to be ready (config enrichment + orchestrator init)
     // Note: we add to installedProviders AFTER ensureWorker to avoid the respawn recovery
     // path in spawnWorker() from double-loading the provider we're about to load here.
@@ -465,7 +532,9 @@ export class AgentCoordinator {
   /**
    * Check health of an installed provider.
    */
-  async checkProviderHealth(providerId: string): Promise<{ status: "connected" | "not_configured" | "error"; message?: string }> {
+  async checkProviderHealth(
+    providerId: string,
+  ): Promise<{ status: "connected" | "not_configured" | "error"; message?: string }> {
     if (!this.worker) {
       return { status: "error", message: "Worker not running" };
     }
@@ -526,7 +595,7 @@ export class AgentCoordinator {
           cb.resolve({ success: false, error: msg.error });
           this.providerLoadCallbacks.delete(msg.providerId);
         }
-        console.error(`[AgentCoordinator] Provider ${msg.providerId} load error: ${msg.error}`);
+        log.error(`[AgentCoordinator] Provider ${msg.providerId} load error: ${msg.error}`);
         break;
       }
       case "provider_health": {
@@ -590,9 +659,10 @@ export class AgentCoordinator {
     if ((method === "saveDraft" || method === "saveDraftAndSync") && args.length >= 2) {
       const [emailId, draftBody, status] = args as [string, string, string?];
       // Extract cc/bcc: saveDraft passes them in options (arg 4), saveDraftAndSync as args 3/4
-      const options = method === "saveDraft"
-        ? (args[4] as { cc?: string[]; bcc?: string[] } | undefined)
-        : { cc: args[3] as string[] | undefined, bcc: args[4] as string[] | undefined };
+      const options =
+        method === "saveDraft"
+          ? (args[4] as { cc?: string[]; bcc?: string[] } | undefined)
+          : { cc: args[3] as string[] | undefined, bcc: args[4] as string[] | undefined };
       this.mainWindow?.webContents.send("agent:draft-saved", {
         emailId,
         draft: {
@@ -666,7 +736,7 @@ export class AgentCoordinator {
     requestId: string,
     method: string,
     accountId: string,
-    args: unknown[]
+    args: unknown[],
   ): Promise<void> {
     try {
       if (!this.allowedGmailMethods.has(method)) {
@@ -724,9 +794,13 @@ export class AgentCoordinator {
     }
     const host = parsed.hostname;
     if (
-      host === "localhost" || host === "::1" || host === "[::1]" ||
-      host.startsWith("127.") || host.startsWith("10.") ||
-      host.startsWith("192.168.") || host.startsWith("169.254.") ||
+      host === "localhost" ||
+      host === "::1" ||
+      host === "[::1]" ||
+      host.startsWith("127.") ||
+      host.startsWith("10.") ||
+      host.startsWith("192.168.") ||
+      host.startsWith("169.254.") ||
       /^172\.(1[6-9]|2\d|3[01])\./.test(host)
     ) {
       throw new Error(`net.fetch proxy blocked private address: ${host}`);

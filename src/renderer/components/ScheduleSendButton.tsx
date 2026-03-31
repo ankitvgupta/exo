@@ -78,7 +78,12 @@ export function ScheduleSendButton({ onSchedule, disabled, className }: Schedule
         title="Schedule send"
       >
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+          />
         </svg>
         <span>Schedule</span>
         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -103,7 +108,9 @@ export function ScheduleSendButton({ onSchedule, disabled, className }: Schedule
                     className="w-full flex items-center justify-between px-3 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
                   >
                     <span className="text-gray-900 dark:text-gray-100">{preset.label}</span>
-                    <span className="text-gray-400 dark:text-gray-500 text-xs">{preset.description}</span>
+                    <span className="text-gray-400 dark:text-gray-500 text-xs">
+                      {preset.description}
+                    </span>
                   </button>
                 ))}
               </div>
@@ -112,8 +119,18 @@ export function ScheduleSendButton({ onSchedule, disabled, className }: Schedule
                   onClick={() => setShowCustom(true)}
                   className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
                 >
-                  <svg className="w-4 h-4 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  <svg
+                    className="w-4 h-4 text-gray-400 dark:text-gray-500"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                    />
                   </svg>
                   <span>Pick date & time</span>
                 </button>
@@ -127,10 +144,17 @@ export function ScheduleSendButton({ onSchedule, disabled, className }: Schedule
                   className="p-1 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M15 19l-7-7 7-7"
+                    />
                   </svg>
                 </button>
-                <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Custom date & time</p>
+                <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                  Custom date & time
+                </p>
               </div>
               <div className="space-y-2">
                 <input
@@ -251,23 +275,21 @@ function formatDateShort(date: Date): string {
 /**
  * Inline scheduled messages list shown below compose areas.
  */
-export function ScheduledMessagesList({
-  accountId,
-}: {
-  accountId: string;
-}) {
-  const [messages, setMessages] = useState<Array<{
-    id: string;
-    to: string[];
-    subject: string;
-    scheduledAt: number;
-    status: string;
-  }>>([]);
+export function ScheduledMessagesList({ accountId }: { accountId: string }) {
+  const [messages, setMessages] = useState<
+    Array<{
+      id: string;
+      to: string[];
+      subject: string;
+      scheduledAt: number;
+      status: string;
+    }>
+  >([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const loadMessages = async () => {
     try {
-      const result = await (window as any).api.scheduledSend.list(accountId);
+      const result = await window.api.scheduledSend.list(accountId);
       if (result.success) {
         setMessages(result.data);
       }
@@ -282,18 +304,18 @@ export function ScheduledMessagesList({
     loadMessages();
 
     // Listen for stats changes to refresh
-    (window as any).api.scheduledSend.onStatsChanged(() => {
+    window.api.scheduledSend.onStatsChanged(() => {
       loadMessages();
     });
 
     return () => {
-      (window as any).api.scheduledSend.removeAllListeners();
+      window.api.scheduledSend.removeAllListeners();
     };
   }, [accountId]);
 
   const handleCancel = async (id: string) => {
     try {
-      await (window as any).api.scheduledSend.cancel(id);
+      await window.api.scheduledSend.cancel(id);
       setMessages((prev) => prev.filter((m) => m.id !== id));
     } catch (e) {
       console.error("Failed to cancel scheduled message:", e);
@@ -345,5 +367,8 @@ function formatScheduledTime(timestamp: number): string {
 
   if (isToday) return `Today at ${time}`;
   if (isTomorrow) return `Tomorrow at ${time}`;
-  return date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }) + ` at ${time}`;
+  return (
+    date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }) +
+    ` at ${time}`
+  );
 }

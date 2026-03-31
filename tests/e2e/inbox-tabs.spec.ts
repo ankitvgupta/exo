@@ -50,7 +50,10 @@ async function getTabLabels(page: Page): Promise<string[]> {
   for (let i = 0; i < count; i++) {
     const text = await buttons.nth(i).innerText();
     // Normalize: "Priority11" or "Archive Ready\n6" → "Priority" / "Archive Ready"
-    const label = text.replace(/\s*\d+\s*$/, "").trim().replace(/\s+/g, " ");
+    const label = text
+      .replace(/\s*\d+\s*$/, "")
+      .trim()
+      .replace(/\s+/g, " ");
     labels.push(label);
   }
   return labels;
@@ -58,7 +61,9 @@ async function getTabLabels(page: Page): Promise<string[]> {
 
 /** Get thread count from a tab button's count badge */
 async function getTabCount(page: Page, tabName: string): Promise<number> {
-  const tab = tabBar(page).locator("button").filter({ hasText: new RegExp(`^${tabName}`) });
+  const tab = tabBar(page)
+    .locator("button")
+    .filter({ hasText: new RegExp(`^${tabName}`) });
   const text = await tab.innerText();
   // Extract the number from text like "Priority11" or "All18"
   const match = text.match(/(\d+)\s*$/);
@@ -90,7 +95,10 @@ test.describe("Inbox Tabs - Default and Ordering", () => {
     await expect(tabBar(page)).toBeVisible({ timeout: 10000 });
 
     // Priority tab should have the active styling (border-blue-500)
-    const priorityTab = tabBar(page).locator("button").filter({ hasText: /^Priority/ }).first();
+    const priorityTab = tabBar(page)
+      .locator("button")
+      .filter({ hasText: /^Priority/ })
+      .first();
     await expect(priorityTab).toBeVisible({ timeout: 5000 });
 
     // Check it has the active class (blue border)
@@ -132,7 +140,10 @@ test.describe("Inbox Tabs - Default and Ordering", () => {
   });
 
   test("clicking Other tab shows non-priority emails", async () => {
-    const otherTab = tabBar(page).locator("button").filter({ hasText: /^Other/ }).first();
+    const otherTab = tabBar(page)
+      .locator("button")
+      .filter({ hasText: /^Other/ })
+      .first();
 
     await otherTab.click();
     await page.waitForTimeout(500);
@@ -142,7 +153,10 @@ test.describe("Inbox Tabs - Default and Ordering", () => {
     expect(classes).toContain("border-blue-500");
 
     // Priority tab should no longer be active
-    const priorityTab = tabBar(page).locator("button").filter({ hasText: /^Priority/ }).first();
+    const priorityTab = tabBar(page)
+      .locator("button")
+      .filter({ hasText: /^Priority/ })
+      .first();
     const priorityClasses = await priorityTab.getAttribute("class");
     expect(priorityClasses).toContain("border-transparent");
   });
@@ -173,7 +187,10 @@ test.describe("Inbox Tabs - Default and Ordering", () => {
   });
 
   test("clicking Priority tab filters back to priority emails", async () => {
-    const priorityTab = tabBar(page).locator("button").filter({ hasText: /^Priority/ }).first();
+    const priorityTab = tabBar(page)
+      .locator("button")
+      .filter({ hasText: /^Priority/ })
+      .first();
 
     await priorityTab.click();
     await page.waitForTimeout(500);
@@ -204,7 +221,10 @@ test.describe("Inbox Tabs - Default and Ordering", () => {
 
     // Rapidly switch between tabs
     for (const tabName of tabs) {
-      const tab = tabBar(page).locator("button").filter({ hasText: new RegExp(`^${tabName}`) }).first();
+      const tab = tabBar(page)
+        .locator("button")
+        .filter({ hasText: new RegExp(`^${tabName}`) })
+        .first();
       await tab.click();
       await page.waitForTimeout(200);
     }

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ToolDefinition, ToolRiskLevel, ProxyContext } from "./types";
+import { type ToolDefinition, type ToolRiskLevel } from "./types";
 import type { AgentToolSpec } from "../types";
 
 type ToolFilter = {
@@ -69,9 +69,7 @@ export class ToolRegistry {
   }
 
   /** Convert to OpenAI function calling format */
-  toOpenAIFormat(
-    filter?: ToolFilter,
-  ): Array<{
+  toOpenAIFormat(filter?: ToolFilter): Array<{
     type: "function";
     function: { name: string; description: string; parameters: object };
   }> {

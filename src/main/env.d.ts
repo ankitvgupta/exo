@@ -4,9 +4,6 @@ interface ImportMetaGlobOptions {
 }
 
 interface ImportMeta {
-  glob<T = unknown>(
-    pattern: string,
-    options?: ImportMetaGlobOptions
-  ): Record<string, T>;
+  glob<T = unknown>(pattern: string, options?: ImportMetaGlobOptions): Record<string, T>;
   readonly env: Record<string, string | undefined>;
 }

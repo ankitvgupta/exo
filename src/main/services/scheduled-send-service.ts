@@ -6,6 +6,9 @@ import {
   type ScheduledMessageRow,
 } from "../db";
 import type { GmailClient } from "./gmail-client";
+import { createLogger } from "./logger";
+
+const log = createLogger("scheduled-send");
 
 // Check interval: 30 seconds
 const CHECK_INTERVAL = 30_000;
@@ -30,7 +33,7 @@ class ScheduledSendService extends EventEmitter {
    */
   start(): void {
     if (this.timer) return;
-    console.log("[ScheduledSend] Starting background check (30s interval)");
+    log.info("[ScheduledSend] Starting background check (30s interval)");
     this.timer = setInterval(() => this.processDueMessages(), CHECK_INTERVAL);
     // Also check immediately on start
     this.processDueMessages();
@@ -43,7 +46,7 @@ class ScheduledSendService extends EventEmitter {
     if (this.timer) {
       clearInterval(this.timer);
       this.timer = null;
-      console.log("[ScheduledSend] Stopped background check");
+      log.info("[ScheduledSend] Stopped background check");
     }
   }
 
@@ -65,13 +68,13 @@ class ScheduledSendService extends EventEmitter {
       const due = getDueScheduledMessages(10);
       if (due.length === 0) return;
 
-      console.log(`[ScheduledSend] ${due.length} message(s) due for sending`);
+      log.info(`[ScheduledSend] ${due.length} message(s) due for sending`);
 
       for (const item of due) {
         await this.sendMessage(item);
       }
     } catch (error) {
-      console.error("[ScheduledSend] Error processing due messages:", error);
+      log.error({ err: error }, "[ScheduledSend] Error processing due messages");
     } finally {
       this.processing = false;
     }
@@ -83,7 +86,7 @@ class ScheduledSendService extends EventEmitter {
   private async sendMessage(item: ScheduledMessageRow): Promise<void> {
     const client = this.clientResolver?.(item.accountId);
     if (!client) {
-      console.error(`[ScheduledSend] No client for account ${item.accountId}`);
+      log.error(`[ScheduledSend] No client for account ${item.accountId}`);
       updateScheduledMessageStatus(item.id, "failed", "Account not connected");
       this.emit("failed", { id: item.id, error: "Account not connected" });
       this.emit("statsChanged", this.getStats());
@@ -108,28 +111,28 @@ class ScheduledSendService extends EventEmitter {
       });
 
       updateScheduledMessageStatus(item.id, "sent");
-      console.log(`[ScheduledSend] Sent message ${item.id}, Gmail ID: ${result.id}`);
+      log.info(`[ScheduledSend] Sent message ${item.id}, Gmail ID: ${result.id}`);
       this.emit("sent", { id: item.id, gmailId: result.id, threadId: result.threadId });
       this.emit("statsChanged", this.getStats());
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Send failed";
       updateScheduledMessageStatus(item.id, "failed", errorMessage);
-      console.error(`[ScheduledSend] Failed to send ${item.id}: ${errorMessage}`);
+      log.error(`[ScheduledSend] Failed to send ${item.id}: ${errorMessage}`);
       this.emit("failed", { id: item.id, error: errorMessage });
       this.emit("statsChanged", this.getStats());
     }
   }
 
   // Type-safe event methods
-  on(event: ScheduledSendEvent, listener: (...args: any[]) => void): this {
+  on(event: ScheduledSendEvent, listener: (...args: unknown[]) => void): this {
     return super.on(event, listener);
   }
 
-  off(event: ScheduledSendEvent, listener: (...args: any[]) => void): this {
+  off(event: ScheduledSendEvent, listener: (...args: unknown[]) => void): this {
     return super.off(event, listener);
   }
 
-  emit(event: ScheduledSendEvent, ...args: any[]): boolean {
+  emit(event: ScheduledSendEvent, ...args: unknown[]): boolean {
     return super.emit(event, ...args);
   }
 }

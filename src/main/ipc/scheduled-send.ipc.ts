@@ -13,8 +13,16 @@ import {
 } from "../db";
 import { scheduledSendService } from "../services/scheduled-send-service";
 import { getEmailSyncService } from "./sync.ipc";
-import type { IpcResponse, ScheduledMessage, ScheduledMessageStats, SendMessageOptions } from "../../shared/types";
+import type {
+  IpcResponse,
+  ScheduledMessage,
+  ScheduledMessageStats,
+  SendMessageOptions,
+} from "../../shared/types";
 import { formatAddressesWithNames, extractThreadNames } from "../utils/address-formatting";
+import { createLogger } from "../services/logger";
+
+const log = createLogger("scheduled-send-ipc");
 
 const isTestMode = process.env.EXO_TEST_MODE === "true";
 const isDemoMode = process.env.EXO_DEMO_MODE === "true";
@@ -49,10 +57,13 @@ export function registerScheduledSendIpc(): void {
     "scheduled-send:create",
     async (
       _,
-      options: SendMessageOptions & { accountId: string; scheduledAt: number }
+      options: SendMessageOptions & { accountId: string; scheduledAt: number },
     ): Promise<IpcResponse<ScheduledMessage>> => {
       if (useFakeData) {
-        console.log("[DEMO] Scheduling message to:", options.to, "at", new Date(options.scheduledAt));
+        log.info(
+          { to: options.to, scheduledAt: new Date(options.scheduledAt).toISOString() },
+          "[DEMO] Scheduling message",
+        );
         const msg: ScheduledMessage = {
           id: `demo-scheduled-${Date.now()}`,
           accountId: options.accountId,
@@ -103,7 +114,9 @@ export function registerScheduledSendIpc(): void {
           createdAt: now,
         });
 
-        console.log(`[ScheduledSend] Scheduled message ${id} for ${new Date(options.scheduledAt).toISOString()}`);
+        log.info(
+          `[ScheduledSend] Scheduled message ${id} for ${new Date(options.scheduledAt).toISOString()}`,
+        );
 
         const row = getScheduledMessage(id);
         if (!row) {
@@ -120,7 +133,7 @@ export function registerScheduledSendIpc(): void {
           error: error instanceof Error ? error.message : "Failed to schedule message",
         };
       }
-    }
+    },
   );
 
   // List scheduled messages for an account
@@ -136,7 +149,7 @@ export function registerScheduledSendIpc(): void {
           error: error instanceof Error ? error.message : "Failed to list scheduled messages",
         };
       }
-    }
+    },
   );
 
   // Cancel a scheduled message (converts it to a Gmail draft so content isn't lost)
@@ -170,15 +183,18 @@ export function registerScheduledSendIpc(): void {
               references: row.references || undefined,
             });
             draftId = draft.id;
-            console.log(`[ScheduledSend] Created Gmail draft ${draftId} from cancelled message ${id}`);
+            log.info(`[ScheduledSend] Created Gmail draft ${draftId} from cancelled message ${id}`);
           } catch (draftError) {
             // Draft creation is best-effort; still cancel the scheduled message
-            console.warn(`[ScheduledSend] Failed to create draft for cancelled message ${id}:`, draftError);
+            log.warn(
+              { err: draftError },
+              `[ScheduledSend] Failed to create draft for cancelled message ${id}`,
+            );
           }
         }
 
         updateScheduledMessageStatus(id, "cancelled");
-        console.log(`[ScheduledSend] Cancelled message ${id}`);
+        log.info(`[ScheduledSend] Cancelled message ${id}`);
         broadcastStatsChanged();
         return { success: true, data: { draftId } };
       } catch (error) {
@@ -187,13 +203,16 @@ export function registerScheduledSendIpc(): void {
           error: error instanceof Error ? error.message : "Failed to cancel scheduled message",
         };
       }
-    }
+    },
   );
 
   // Reschedule a message (update time)
   ipcMain.handle(
     "scheduled-send:reschedule",
-    async (_, { id, scheduledAt }: { id: string; scheduledAt: number }): Promise<IpcResponse<ScheduledMessage>> => {
+    async (
+      _,
+      { id, scheduledAt }: { id: string; scheduledAt: number },
+    ): Promise<IpcResponse<ScheduledMessage>> => {
       try {
         const row = getScheduledMessage(id);
         if (!row) {
@@ -204,7 +223,9 @@ export function registerScheduledSendIpc(): void {
         }
 
         updateScheduledMessageTime(id, scheduledAt);
-        console.log(`[ScheduledSend] Rescheduled message ${id} to ${new Date(scheduledAt).toISOString()}`);
+        log.info(
+          `[ScheduledSend] Rescheduled message ${id} to ${new Date(scheduledAt).toISOString()}`,
+        );
 
         const updated = getScheduledMessage(id);
         if (!updated) {
@@ -219,7 +240,7 @@ export function registerScheduledSendIpc(): void {
           error: error instanceof Error ? error.message : "Failed to reschedule message",
         };
       }
-    }
+    },
   );
 
   // Delete a scheduled message (remove entirely)
@@ -236,13 +257,16 @@ export function registerScheduledSendIpc(): void {
           error: error instanceof Error ? error.message : "Failed to delete scheduled message",
         };
       }
-    }
+    },
   );
 
   // Get stats
   ipcMain.handle(
     "scheduled-send:stats",
-    async (_, { accountId }: { accountId?: string }): Promise<IpcResponse<ScheduledMessageStats>> => {
+    async (
+      _,
+      { accountId }: { accountId?: string },
+    ): Promise<IpcResponse<ScheduledMessageStats>> => {
       try {
         const stats = getScheduledMessageStats(accountId);
         return { success: true, data: stats };
@@ -252,7 +276,7 @@ export function registerScheduledSendIpc(): void {
           error: error instanceof Error ? error.message : "Failed to get stats",
         };
       }
-    }
+    },
   );
 
   // Wire up service events to broadcast to renderer

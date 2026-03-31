@@ -110,7 +110,11 @@ test.describe("Dark Mode Visual Audit", () => {
     page = result.page;
 
     page.on("console", (msg) => {
-      if (msg.type() === "error" && !msg.text().includes("407") && !msg.text().includes("ERR_TUNNEL")) {
+      if (
+        msg.type() === "error" &&
+        !msg.text().includes("407") &&
+        !msg.text().includes("ERR_TUNNEL")
+      ) {
         console.error(`[Console Error]: ${msg.text()}`);
       }
     });
@@ -139,7 +143,7 @@ test.describe("Dark Mode Visual Audit", () => {
     await page.waitForTimeout(500);
 
     const hasDarkClass = await page.evaluate(() =>
-      document.documentElement.classList.contains("dark")
+      document.documentElement.classList.contains("dark"),
     );
     expect(hasDarkClass).toBe(true);
 
@@ -167,10 +171,13 @@ test.describe("Dark Mode Visual Audit", () => {
     // Scroll email list
     const listContainer = page.locator("div.flex-1.overflow-y-auto").first();
     if (await listContainer.isVisible()) {
-      await listContainer.evaluate(el => el.scrollTop = 400);
+      await listContainer.evaluate((el) => (el.scrollTop = 400));
       await page.waitForTimeout(300);
-      await screenshot("email-list-scrolled", "Email list scrolled to show more emails in dark mode");
-      await listContainer.evaluate(el => el.scrollTop = 0);
+      await screenshot(
+        "email-list-scrolled",
+        "Email list scrolled to show more emails in dark mode",
+      );
+      await listContainer.evaluate((el) => (el.scrollTop = 0));
       await page.waitForTimeout(200);
     }
 
@@ -323,7 +330,7 @@ test.describe("Dark Mode Visual Audit", () => {
     await editor.click();
     await editor.type(
       "Hi team,\n\nThis is a test email to verify the compose editor looks correct in dark mode.\n\n- Item 1\n- Item 2\n- Item 3\n\nBest regards",
-      { delay: 3 }
+      { delay: 3 },
     );
     await page.waitForTimeout(300);
     await screenshot("compose-filled", "Fully composed email with subject and body in dark mode");
@@ -581,7 +588,10 @@ test.describe("Dark Mode Visual Audit", () => {
     // ==========================================
 
     // Double-click to enter full view
-    const dblClickTarget = page.locator("div[data-thread-id] button").filter({ hasText: "Meeting Follow-up" }).first();
+    const dblClickTarget = page
+      .locator("div[data-thread-id] button")
+      .filter({ hasText: "Meeting Follow-up" })
+      .first();
     if (await dblClickTarget.isVisible({ timeout: 2000 }).catch(() => false)) {
       await dblClickTarget.dblclick();
       await page.waitForTimeout(500);

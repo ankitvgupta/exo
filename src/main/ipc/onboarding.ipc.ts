@@ -65,7 +65,7 @@ export function registerOnboardingIpc(): void {
         // Ensure account is in the DB (startOAuth should have saved it,
         // but handle the edge case where it wasn't)
         const accounts = getAccounts();
-        if (!accounts.some(a => a.id === accountId)) {
+        if (!accounts.some((a) => a.id === accountId)) {
           const isPrimary = accounts.length === 0;
           saveAccount(accountId, accountInfo.email, accountInfo.displayName, isPrimary);
         }
@@ -96,7 +96,7 @@ export function registerOnboardingIpc(): void {
           error: error instanceof Error ? error.message : "Unknown error",
         };
       }
-    }
+    },
   );
 
   /**
@@ -105,7 +105,10 @@ export function registerOnboardingIpc(): void {
    */
   ipcMain.handle(
     "onboarding:start-processing",
-    async (_, { accountId, recentEmailIds }: { accountId: string; recentEmailIds: string[] }): Promise<IpcResponse<void>> => {
+    async (
+      _,
+      { accountId, recentEmailIds }: { accountId: string; recentEmailIds: string[] },
+    ): Promise<IpcResponse<void>> => {
       if (useFakeData) {
         return { success: true, data: undefined };
       }
@@ -119,6 +122,6 @@ export function registerOnboardingIpc(): void {
           error: error instanceof Error ? error.message : "Unknown error",
         };
       }
-    }
+    },
   );
 }

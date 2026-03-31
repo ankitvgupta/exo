@@ -70,7 +70,11 @@ export class MockGmailClient {
     return ["search_emails", "read_email", "create_draft"];
   }
 
-  async searchEmails(query: string, maxResults: number = 50, _pageToken?: string): Promise<{ results: EmailSearchResult[]; nextPageToken?: string }> {
+  async searchEmails(
+    query: string,
+    maxResults: number = 50,
+    _pageToken?: string,
+  ): Promise<{ results: EmailSearchResult[]; nextPageToken?: string }> {
     // Filter emails based on simple query matching
     let emails = FAKE_INBOX_EMAILS;
 
@@ -165,7 +169,9 @@ export class MockGmailClient {
   /**
    * MOCK: Create a full draft with compose options
    */
-  async createFullDraft(options: ComposeMessageOptions): Promise<{ id: string; messageId: string }> {
+  async createFullDraft(
+    options: ComposeMessageOptions,
+  ): Promise<{ id: string; messageId: string }> {
     this.draftCounter++;
     const draftId = `mock-draft-${this.draftCounter}`;
     const messageId = `mock-draft-msg-${this.draftCounter}`;
@@ -188,7 +194,10 @@ export class MockGmailClient {
   /**
    * MOCK: Update an existing draft
    */
-  async updateDraft(draftId: string, options: ComposeMessageOptions): Promise<{ id: string; messageId: string }> {
+  async updateDraft(
+    draftId: string,
+    options: ComposeMessageOptions,
+  ): Promise<{ id: string; messageId: string }> {
     if (!this.drafts.has(draftId)) {
       throw new Error(`Draft ${draftId} not found`);
     }
@@ -242,7 +251,9 @@ export class MockGmailClient {
   /**
    * MOCK: List all drafts
    */
-  async listDrafts(maxResults: number = 100): Promise<Array<{ id: string; message: { id: string; threadId: string } }>> {
+  async listDrafts(
+    maxResults: number = 100,
+  ): Promise<Array<{ id: string; message: { id: string; threadId: string } }>> {
     const drafts = Array.from(this.drafts.values())
       .slice(0, maxResults)
       .map((d) => ({
@@ -304,7 +315,9 @@ export class MockGmailClient {
   /**
    * MOCK: Get message headers for reply threading
    */
-  async getMessageHeaders(messageId: string): Promise<{ messageId: string; references: string; subject: string } | null> {
+  async getMessageHeaders(
+    messageId: string,
+  ): Promise<{ messageId: string; references: string; subject: string } | null> {
     const email = FAKE_INBOX_EMAILS.find((e) => e.id === messageId);
     if (!email) return null;
 

@@ -11,7 +11,7 @@ async function screenshot(pg: Page, name: string) {
 }
 
 test.describe("Command Palette (Cmd+K)", () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: "serial" });
   let electronApp: ElectronApplication;
   let page: Page;
 

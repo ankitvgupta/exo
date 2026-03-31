@@ -11,10 +11,7 @@ import {
 } from "../../src/renderer/optimistic-reads";
 
 /** Helper to build a minimal DashboardEmail with the given labels. */
-function makeEmail(
-  id: string,
-  labelIds: string[] = ["INBOX", "UNREAD"]
-): DashboardEmail {
+function makeEmail(id: string, labelIds: string[] = ["INBOX", "UNREAD"]): DashboardEmail {
   return {
     id,
     threadId: `thread-${id}`,

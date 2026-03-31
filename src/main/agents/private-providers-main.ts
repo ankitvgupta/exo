@@ -1,4 +1,7 @@
-import type { AgentFrameworkConfig } from './types';
+import type { AgentFrameworkConfig } from "./types";
+import { createLogger } from "../services/logger";
+
+const log = createLogger("private-providers");
 
 export type MainSetup = {
   populateConfig?: (config: AgentFrameworkConfig) => Promise<AgentFrameworkConfig>;
@@ -7,7 +10,10 @@ export type MainSetup = {
   displayName?: string;
 };
 
-const modules = import.meta.glob('../../agents-private/*/main-setup.ts', { eager: true }) as Record<string, MainSetup>;
+const modules = import.meta.glob("../../agents-private/*/main-setup.ts", { eager: true }) as Record<
+  string,
+  MainSetup
+>;
 
 /**
  * Build a map of providerId → auth function from discovered private providers.
@@ -16,7 +22,10 @@ const modules = import.meta.glob('../../agents-private/*/main-setup.ts', { eager
 const authHandlers = new Map<string, () => Promise<boolean>>();
 const authCheckers = new Map<string, () => Promise<boolean>>();
 const providerDisplayNames = new Map<string, string>();
-const installedConfigEnrichers = new Map<string, (config: AgentFrameworkConfig) => Promise<AgentFrameworkConfig>>();
+const installedConfigEnrichers = new Map<
+  string,
+  (config: AgentFrameworkConfig) => Promise<AgentFrameworkConfig>
+>();
 
 for (const [path, mod] of Object.entries(modules)) {
   // Extract directory name: "../../agents-private/my-agent/main-setup.ts" → "my-agent"
@@ -35,14 +44,16 @@ for (const [path, mod] of Object.entries(modules)) {
   }
 }
 
-export async function populatePrivateProviderConfig(config: AgentFrameworkConfig): Promise<AgentFrameworkConfig> {
+export async function populatePrivateProviderConfig(
+  config: AgentFrameworkConfig,
+): Promise<AgentFrameworkConfig> {
   let enriched = config;
   for (const [modulePath, mod] of Object.entries(modules)) {
     if (mod.populateConfig) {
       try {
         enriched = await mod.populateConfig(enriched);
       } catch (err) {
-        console.warn(`[PrivateProviders] Config enrichment failed for ${modulePath}:`, err);
+        log.warn({ err: err }, `[PrivateProviders] Config enrichment failed for ${modulePath}`);
       }
     }
   }
@@ -52,7 +63,10 @@ export async function populatePrivateProviderConfig(config: AgentFrameworkConfig
     try {
       enriched = await enricher(enriched);
     } catch (err) {
-      console.warn(`[PrivateProviders] Config enrichment failed for installed provider ${id}:`, err);
+      log.warn(
+        { err: err },
+        `[PrivateProviders] Config enrichment failed for installed provider ${id}`,
+      );
     }
   }
 
@@ -88,7 +102,7 @@ export async function getProvidersNeedingAuth(): Promise<
     try {
       needsAuth = !(await checker());
     } catch (error) {
-      console.error(`[PrivateProviders] checkAuth failed for ${id}:`, error);
+      log.error({ err: error }, `[PrivateProviders] checkAuth failed for ${id}`);
     }
     results.push({ providerId: id, displayName: name, needsAuth });
   }
@@ -99,10 +113,7 @@ export async function getProvidersNeedingAuth(): Promise<
  * Register auth/config handlers for an installed (non-bundled) agent provider.
  * Called by ExtensionHost when loading a provider's main-setup.js.
  */
-export function registerProviderAuth(
-  id: string,
-  setup: MainSetup
-): void {
+export function registerProviderAuth(id: string, setup: MainSetup): void {
   if (setup.openAuthWindow) {
     authHandlers.set(id, setup.openAuthWindow);
   }
@@ -115,7 +126,7 @@ export function registerProviderAuth(
   if (setup.populateConfig) {
     installedConfigEnrichers.set(id, setup.populateConfig);
   }
-  console.log(`[PrivateProviders] Registered installed provider auth: ${id}`);
+  log.info(`[PrivateProviders] Registered installed provider auth: ${id}`);
 }
 
 /**
@@ -127,5 +138,5 @@ export function unregisterProviderAuth(id: string): void {
   authCheckers.delete(id);
   providerDisplayNames.delete(id);
   installedConfigEnrichers.delete(id);
-  console.log(`[PrivateProviders] Unregistered installed provider auth: ${id}`);
+  log.info(`[PrivateProviders] Unregistered installed provider auth: ${id}`);
 }

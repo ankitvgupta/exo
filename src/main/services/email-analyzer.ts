@@ -1,10 +1,20 @@
-import Anthropic from "@anthropic-ai/sdk";
-import { AnalysisResultSchema, ANALYSIS_JSON_FORMAT, DEFAULT_ANALYSIS_PROMPT, type AnalysisResult, type Email } from "../../shared/types";
+import { createMessage } from "./anthropic-service";
+import {
+  AnalysisResultSchema,
+  ANALYSIS_JSON_FORMAT,
+  DEFAULT_ANALYSIS_PROMPT,
+  type AnalysisResult,
+  type Email,
+} from "../../shared/types";
 import { stripQuotedContent } from "./strip-quoted-content";
 import { stripJsonFences } from "../../shared/strip-json-fences";
+import { createLogger } from "./logger";
+
+const log = createLogger("analyzer");
 // Lazy-imported to avoid pulling in ../db → electron at module load time,
 // which breaks unit tests running under plain Node (not Electron).
-let _buildAnalysisMemoryContext: typeof import("./memory-context").buildAnalysisMemoryContext | null = null;
+let _buildAnalysisMemoryContext: // eslint-disable-next-line @typescript-eslint/consistent-type-imports
+  typeof import("./memory-context").buildAnalysisMemoryContext | null = null;
 async function getBuildAnalysisMemoryContext() {
   if (!_buildAnalysisMemoryContext) {
     const mod = await import("./memory-context");
@@ -126,12 +136,10 @@ Output: {"needs_reply": true, "reason": "Time-sensitive contract requiring sign-
 Now analyze the following email:`;
 
 export class EmailAnalyzer {
-  private anthropic: Anthropic;
   private model: string;
   private customPrompt: string | null;
 
   constructor(model: string = "claude-sonnet-4-20250514", prompt?: string) {
-    this.anthropic = new Anthropic();
     this.model = model;
     // Only use custom prompt if it differs from default
     this.customPrompt = prompt && prompt !== DEFAULT_ANALYSIS_PROMPT ? prompt : null;
@@ -159,32 +167,37 @@ export class EmailAnalyzer {
     }
 
     // Prompt caching enabled via cache_control (requires 1024+ tokens in system)
-    const response = await this.anthropic.messages.create({
-      model: this.model,
-      max_tokens: 256,
-      system: [
-        {
-          type: "text",
-          text: systemPrompt,
-          cache_control: { type: "ephemeral" },
-        },
-      ],
-      messages: [
-        {
-          role: "user",
-          content: `${userIdentityLine}From: ${email.from}
+    const response = await createMessage(
+      {
+        model: this.model,
+        max_tokens: 256,
+        system: [
+          {
+            type: "text",
+            text: systemPrompt,
+            cache_control: { type: "ephemeral" },
+          },
+        ],
+        messages: [
+          {
+            role: "user",
+            content: `${userIdentityLine}From: ${email.from}
 To: ${email.to}
 Subject: ${email.subject}
 Date: ${email.date}
 
 ${emailContent}${analysisMemoryContext}`,
-        },
-      ],
-    });
+          },
+        ],
+      },
+      { caller: "email-analyzer", emailId: email.id, accountId },
+    );
 
     // Log cache performance
     const usage = response.usage as unknown as Record<string, number>;
-    console.log(`[Analyzer] Usage: input=${usage.input_tokens}, output=${usage.output_tokens}, cache_read=${usage.cache_read_input_tokens || 0}, cache_create=${usage.cache_creation_input_tokens || 0}`);
+    log.info(
+      `[Analyzer] Usage: input=${usage.input_tokens}, output=${usage.output_tokens}, cache_read=${usage.cache_read_input_tokens || 0}, cache_create=${usage.cache_creation_input_tokens || 0}`,
+    );
 
     const textBlock = response.content.find((block) => block.type === "text");
     if (!textBlock || textBlock.type !== "text") {
@@ -194,8 +207,8 @@ ${emailContent}${analysisMemoryContext}`,
     try {
       const parsed = JSON.parse(stripJsonFences(textBlock.text));
       return AnalysisResultSchema.parse(parsed);
-    } catch (error) {
-      console.error("Failed to parse analysis response:", textBlock.text);
+    } catch (_error) {
+      log.error({ err: textBlock.text }, "Failed to parse analysis response");
       // Default to not needing reply if parsing fails
       return {
         needs_reply: false,

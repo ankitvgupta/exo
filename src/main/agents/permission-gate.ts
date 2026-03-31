@@ -1,4 +1,4 @@
-import { ToolDefinition, ToolRiskLevel } from "./tools/types";
+import { type ToolDefinition, ToolRiskLevel } from "./tools/types";
 
 export type PermissionDecision =
   | { action: "auto"; tier: 0 }
@@ -12,10 +12,7 @@ export type PermissionDecision =
     };
 
 export class PermissionGate {
-  checkPermission(
-    tool: ToolDefinition,
-    input: unknown,
-  ): PermissionDecision {
+  checkPermission(tool: ToolDefinition, input: unknown): PermissionDecision {
     switch (tool.riskLevel) {
       case ToolRiskLevel.NONE:
         return { action: "auto", tier: 0 };

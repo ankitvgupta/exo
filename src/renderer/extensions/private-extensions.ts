@@ -19,7 +19,7 @@ import { registerPanelComponent, type PanelComponentProps } from "./ExtensionPan
 // by the time the sidebar tries to render it
 const privateExtensionModules = import.meta.glob(
   "../../extensions-private/*/src/renderer/index.ts",
-  { eager: true }
+  { eager: true },
 );
 
 interface PanelRegistration {

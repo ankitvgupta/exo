@@ -31,7 +31,7 @@ async function ensureInList(page: Page) {
 }
 
 test.describe("Email Action Buttons", () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: "serial" });
   let electronApp: ElectronApplication;
   let page: Page;
 
@@ -41,7 +41,11 @@ test.describe("Email Action Buttons", () => {
     page = result.page;
 
     // Wait for email list to populate
-    await page.locator("button").filter({ hasText: /High|Medium|Low/ }).first().waitFor({ timeout: 10000 });
+    await page
+      .locator("button")
+      .filter({ hasText: /High|Medium|Low/ })
+      .first()
+      .waitFor({ timeout: 10000 });
 
     page.on("console", (msg) => {
       if (msg.type() === "error") {

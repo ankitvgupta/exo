@@ -1,5 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
-import type { InstalledExtensionInfo, ExtensionManifest, SettingDefinition } from "../../shared/extension-types";
+import type {
+  InstalledExtensionInfo,
+  ExtensionManifest,
+  SettingDefinition,
+} from "../../shared/extension-types";
 import { loadExtensionRenderer } from "../extensions/installed-extensions";
 // useStore not needed — OpenClaw config uses window.api.settings directly
 
@@ -19,18 +23,32 @@ export function ExtensionsTab() {
   const [installError, setInstallError] = useState<string | null>(null);
   const [installSuccess, setInstallSuccess] = useState<string | null>(null);
   const [uninstallingId, setUninstallingId] = useState<string | null>(null);
-  const [confirmUninstall, setConfirmUninstall] = useState<{ id: string; displayName: string } | null>(null);
-  const [healthStatuses, setHealthStatuses] = useState<Record<string, { status: string; message?: string }>>({});
-  const [providerSettings, setProviderSettings] = useState<Record<string, Record<string, unknown>>>({});
+  const [confirmUninstall, setConfirmUninstall] = useState<{
+    id: string;
+    displayName: string;
+  } | null>(null);
+  const [healthStatuses, setHealthStatuses] = useState<
+    Record<string, { status: string; message?: string }>
+  >({});
+  const [providerSettings, setProviderSettings] = useState<Record<string, Record<string, unknown>>>(
+    {},
+  );
   const [savingSettings, setSavingSettings] = useState<string | null>(null);
-  const [settingsSaveMessage, setSettingsSaveMessage] = useState<{ id: string; type: "success" | "error"; text: string } | null>(null);
+  const [settingsSaveMessage, setSettingsSaveMessage] = useState<{
+    id: string;
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
   const [retryingProvider, setRetryingProvider] = useState<string | null>(null);
 
   // OpenClaw agent provider settings
   const [openclawEnabled, setOpenclawEnabled] = useState(false);
   const [openclawGatewayUrl, setOpenclawGatewayUrl] = useState("");
   const [openclawGatewayToken, setOpenclawGatewayToken] = useState("");
-  const [openclawTestResult, setOpenclawTestResult] = useState<{ success: boolean; error?: string } | null>(null);
+  const [openclawTestResult, setOpenclawTestResult] = useState<{
+    success: boolean;
+    error?: string;
+  } | null>(null);
   const [openclawTesting, setOpenclawTesting] = useState(false);
 
   const loadExtensions = useCallback(async () => {
@@ -57,30 +75,36 @@ export function ExtensionsTab() {
     for (const ext of installedExtensions) {
       if (ext.hasAgentProvider) {
         try {
-          const result = await window.api.extensions.checkProviderHealth(ext.id) as {
+          const result = (await window.api.extensions.checkProviderHealth(ext.id)) as {
             success: boolean;
             data?: { status: string; message?: string };
           };
           if (result.success && result.data) {
-            setHealthStatuses(prev => ({ ...prev, [ext.id]: result.data! }));
+            setHealthStatuses((prev) => ({ ...prev, [ext.id]: result.data! }));
           }
-        } catch { /* ignore */ }
+        } catch {
+          /* ignore */
+        }
       }
     }
   }, [installedExtensions]);
 
   const loadProviderSettings = useCallback(async (ext: InstalledExtensionInfo) => {
     if (!ext.agentProviderManifest?.contributes?.settings) return;
-    const settingIds = ext.agentProviderManifest.contributes.settings.map((s: SettingDefinition) => s.id);
+    const settingIds = ext.agentProviderManifest.contributes.settings.map(
+      (s: SettingDefinition) => s.id,
+    );
     try {
-      const result = await window.api.extensions.getProviderSettings(ext.id, settingIds) as {
+      const result = (await window.api.extensions.getProviderSettings(ext.id, settingIds)) as {
         success: boolean;
         data?: Record<string, unknown>;
       };
       if (result.success && result.data) {
-        setProviderSettings(prev => ({ ...prev, [ext.id]: result.data! }));
+        setProviderSettings((prev) => ({ ...prev, [ext.id]: result.data! }));
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }, []);
 
   const handleSaveSettings = async (extensionId: string) => {
@@ -88,25 +112,33 @@ export function ExtensionsTab() {
     setSettingsSaveMessage(null);
     try {
       const settings = providerSettings[extensionId] ?? {};
-      const result = await window.api.extensions.saveProviderSettings(extensionId, settings) as {
+      const result = (await window.api.extensions.saveProviderSettings(extensionId, settings)) as {
         success: boolean;
         error?: string;
       };
       if (result.success) {
         setSettingsSaveMessage({ id: extensionId, type: "success", text: "Settings saved" });
         // Re-check health after saving
-        const healthResult = await window.api.extensions.checkProviderHealth(extensionId) as {
+        const healthResult = (await window.api.extensions.checkProviderHealth(extensionId)) as {
           success: boolean;
           data?: { status: string; message?: string };
         };
         if (healthResult.success && healthResult.data) {
-          setHealthStatuses(prev => ({ ...prev, [extensionId]: healthResult.data! }));
+          setHealthStatuses((prev) => ({ ...prev, [extensionId]: healthResult.data! }));
         }
       } else {
-        setSettingsSaveMessage({ id: extensionId, type: "error", text: result.error ?? "Save failed" });
+        setSettingsSaveMessage({
+          id: extensionId,
+          type: "error",
+          text: result.error ?? "Save failed",
+        });
       }
     } catch (error) {
-      setSettingsSaveMessage({ id: extensionId, type: "error", text: error instanceof Error ? error.message : "Save failed" });
+      setSettingsSaveMessage({
+        id: extensionId,
+        type: "error",
+        text: error instanceof Error ? error.message : "Save failed",
+      });
     } finally {
       setSavingSettings(null);
     }
@@ -116,12 +148,12 @@ export function ExtensionsTab() {
     setRetryingProvider(extensionId);
     try {
       // Re-install triggers reload — for now just re-check health
-      const result = await window.api.extensions.checkProviderHealth(extensionId) as {
+      const result = (await window.api.extensions.checkProviderHealth(extensionId)) as {
         success: boolean;
         data?: { status: string; message?: string };
       };
       if (result.success && result.data) {
-        setHealthStatuses(prev => ({ ...prev, [extensionId]: result.data! }));
+        setHealthStatuses((prev) => ({ ...prev, [extensionId]: result.data! }));
       }
     } finally {
       setRetryingProvider(null);
@@ -141,12 +173,14 @@ export function ExtensionsTab() {
     loadExtensions();
 
     // Listen for install/uninstall events
-    const removeInstalled = window.api.extensions.onInstalled(async (data: Record<string, unknown>) => {
-      if (data.hasRenderer && typeof data.id === "string") {
-        await loadExtensionRenderer(data.id);
-      }
-      loadExtensions();
-    });
+    const removeInstalled = window.api.extensions.onInstalled(
+      async (data: Record<string, unknown>) => {
+        if (data.hasRenderer && typeof data.id === "string") {
+          await loadExtensionRenderer(data.id);
+        }
+        loadExtensions();
+      },
+    );
     const removeUninstalled = window.api.extensions.onUninstalled(() => {
       loadExtensions();
     });
@@ -160,8 +194,11 @@ export function ExtensionsTab() {
   // Load OpenClaw config from app settings
   useEffect(() => {
     (async () => {
-      const result = await window.api.settings.get() as { success: boolean; data?: Record<string, unknown> };
-      const config = result.data ?? result as Record<string, unknown>;
+      const result = (await window.api.settings.get()) as {
+        success: boolean;
+        data?: Record<string, unknown>;
+      };
+      const config = result.data ?? (result as Record<string, unknown>);
       const oc = config.openclaw as Record<string, unknown> | undefined;
       if (oc) {
         setOpenclawEnabled(Boolean(oc.enabled));
@@ -177,7 +214,7 @@ export function ExtensionsTab() {
     setInstallSuccess(null);
 
     try {
-      const result = await window.api.extensions.install() as {
+      const result = (await window.api.extensions.install()) as {
         success: boolean;
         data?: InstalledExtensionInfo;
         error?: string;
@@ -204,7 +241,7 @@ export function ExtensionsTab() {
     setConfirmUninstall(null);
     setUninstallingId(extensionId);
     try {
-      const result = await window.api.extensions.uninstall(extensionId) as {
+      const result = (await window.api.extensions.uninstall(extensionId)) as {
         success: boolean;
         error?: string;
       };
@@ -299,15 +336,21 @@ export function ExtensionsTab() {
                     )}
                     {ext.hasAgentProvider && healthStatuses[ext.id] && (
                       <div className="flex items-center gap-1.5 mt-1">
-                        <span className={`inline-block w-2 h-2 rounded-full ${
-                          healthStatuses[ext.id].status === "connected" ? "bg-green-500" :
-                          healthStatuses[ext.id].status === "not_configured" ? "bg-yellow-500" :
-                          "bg-red-500"
-                        }`} />
+                        <span
+                          className={`inline-block w-2 h-2 rounded-full ${
+                            healthStatuses[ext.id].status === "connected"
+                              ? "bg-green-500"
+                              : healthStatuses[ext.id].status === "not_configured"
+                                ? "bg-yellow-500"
+                                : "bg-red-500"
+                          }`}
+                        />
                         <span className="text-xs text-gray-500 dark:text-gray-400">
-                          {healthStatuses[ext.id].status === "connected" ? "Connected" :
-                           healthStatuses[ext.id].status === "not_configured" ? "Not configured" :
-                           `Error${healthStatuses[ext.id].message ? `: ${healthStatuses[ext.id].message}` : ""}`}
+                          {healthStatuses[ext.id].status === "connected"
+                            ? "Connected"
+                            : healthStatuses[ext.id].status === "not_configured"
+                              ? "Not configured"
+                              : `Error${healthStatuses[ext.id].message ? `: ${healthStatuses[ext.id].message}` : ""}`}
                         </span>
                       </div>
                     )}
@@ -329,42 +372,68 @@ export function ExtensionsTab() {
                           Provider Settings
                         </h5>
                         <div className="space-y-2">
-                          {ext.agentProviderManifest.contributes.settings.map((setting: SettingDefinition) => (
-                            <div key={setting.id}>
-                              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-0.5">
-                                {setting.title}
-                                {setting.required && <span className="text-red-500 ml-0.5">*</span>}
-                              </label>
-                              {setting.description && (
-                                <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">{setting.description}</p>
-                              )}
-                              {setting.type === "boolean" ? (
-                                <input
-                                  type="checkbox"
-                                  checked={!!providerSettings[ext.id]?.[setting.id]}
-                                  onChange={(e) => setProviderSettings(prev => ({
-                                    ...prev,
-                                    [ext.id]: { ...prev[ext.id], [setting.id]: e.target.checked },
-                                  }))}
-                                  className="rounded border-gray-300 dark:border-gray-600"
-                                />
-                              ) : (
-                                <input
-                                  type={setting.sensitive ? "password" : setting.type === "number" ? "number" : "text"}
-                                  value={String(providerSettings[ext.id]?.[setting.id] ?? setting.default ?? "")}
-                                  placeholder={setting.placeholder}
-                                  onChange={(e) => setProviderSettings(prev => ({
-                                    ...prev,
-                                    [ext.id]: {
-                                      ...prev[ext.id],
-                                      [setting.id]: setting.type === "number" ? Number(e.target.value) : e.target.value,
-                                    },
-                                  }))}
-                                  className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                                />
-                              )}
-                            </div>
-                          ))}
+                          {ext.agentProviderManifest.contributes.settings.map(
+                            (setting: SettingDefinition) => (
+                              <div key={setting.id}>
+                                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-0.5">
+                                  {setting.title}
+                                  {setting.required && (
+                                    <span className="text-red-500 ml-0.5">*</span>
+                                  )}
+                                </label>
+                                {setting.description && (
+                                  <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">
+                                    {setting.description}
+                                  </p>
+                                )}
+                                {setting.type === "boolean" ? (
+                                  <input
+                                    type="checkbox"
+                                    checked={!!providerSettings[ext.id]?.[setting.id]}
+                                    onChange={(e) =>
+                                      setProviderSettings((prev) => ({
+                                        ...prev,
+                                        [ext.id]: {
+                                          ...prev[ext.id],
+                                          [setting.id]: e.target.checked,
+                                        },
+                                      }))
+                                    }
+                                    className="rounded border-gray-300 dark:border-gray-600"
+                                  />
+                                ) : (
+                                  <input
+                                    type={
+                                      setting.sensitive
+                                        ? "password"
+                                        : setting.type === "number"
+                                          ? "number"
+                                          : "text"
+                                    }
+                                    value={String(
+                                      providerSettings[ext.id]?.[setting.id] ??
+                                        setting.default ??
+                                        "",
+                                    )}
+                                    placeholder={setting.placeholder}
+                                    onChange={(e) =>
+                                      setProviderSettings((prev) => ({
+                                        ...prev,
+                                        [ext.id]: {
+                                          ...prev[ext.id],
+                                          [setting.id]:
+                                            setting.type === "number"
+                                              ? Number(e.target.value)
+                                              : e.target.value,
+                                        },
+                                      }))
+                                    }
+                                    className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                                  />
+                                )}
+                              </div>
+                            ),
+                          )}
                         </div>
                         <div className="flex items-center gap-2 mt-2">
                           <button
@@ -375,7 +444,9 @@ export function ExtensionsTab() {
                             {savingSettings === ext.id ? "Saving..." : "Save"}
                           </button>
                           {settingsSaveMessage?.id === ext.id && (
-                            <span className={`text-xs ${settingsSaveMessage.type === "success" ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
+                            <span
+                              className={`text-xs ${settingsSaveMessage.type === "success" ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}
+                            >
                               {settingsSaveMessage.text}
                             </span>
                           )}
@@ -400,7 +471,9 @@ export function ExtensionsTab() {
                     </div>
                   ) : (
                     <button
-                      onClick={() => setConfirmUninstall({ id: ext.id, displayName: ext.displayName })}
+                      onClick={() =>
+                        setConfirmUninstall({ id: ext.id, displayName: ext.displayName })
+                      }
                       disabled={uninstallingId === ext.id}
                       className="ml-4 px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/40 rounded-lg transition-colors disabled:opacity-50"
                     >
@@ -431,9 +504,7 @@ export function ExtensionsTab() {
                     <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100">
                       {ext.displayName}
                     </h4>
-                    <span className="text-xs text-gray-400 dark:text-gray-500">
-                      v{ext.version}
-                    </span>
+                    <span className="text-xs text-gray-400 dark:text-gray-500">v{ext.version}</span>
                     <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400">
                       Built-in
                     </span>
@@ -457,7 +528,9 @@ export function ExtensionsTab() {
       <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600 p-6">
         <div className="flex items-center justify-between mb-3">
           <div>
-            <h4 className="text-base font-medium text-gray-900 dark:text-gray-100">OpenClaw Agent</h4>
+            <h4 className="text-base font-medium text-gray-900 dark:text-gray-100">
+              OpenClaw Agent
+            </h4>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
               Connect a local or remote OpenClaw agent for richer context during email drafting.
             </p>
@@ -470,7 +543,13 @@ export function ExtensionsTab() {
               onChange={async (e) => {
                 const val = e.target.checked;
                 setOpenclawEnabled(val);
-                await window.api.settings.set({ openclaw: { enabled: val, gatewayUrl: openclawGatewayUrl, gatewayToken: openclawGatewayToken } });
+                await window.api.settings.set({
+                  openclaw: {
+                    enabled: val,
+                    gatewayUrl: openclawGatewayUrl,
+                    gatewayToken: openclawGatewayToken,
+                  },
+                });
               }}
             />
             <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-500 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:after:border-gray-600 peer-checked:bg-blue-600" />
@@ -481,7 +560,8 @@ export function ExtensionsTab() {
           <div className="space-y-3 mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Gateway URL <span className="text-gray-400 font-normal">(optional — blank = local)</span>
+                Gateway URL{" "}
+                <span className="text-gray-400 font-normal">(optional — blank = local)</span>
               </label>
               <input
                 type="text"
@@ -511,10 +591,19 @@ export function ExtensionsTab() {
                 disabled={openclawTesting}
                 onClick={async () => {
                   // Save first, then test
-                  await window.api.settings.set({ openclaw: { enabled: openclawEnabled, gatewayUrl: openclawGatewayUrl, gatewayToken: openclawGatewayToken } });
+                  await window.api.settings.set({
+                    openclaw: {
+                      enabled: openclawEnabled,
+                      gatewayUrl: openclawGatewayUrl,
+                      gatewayToken: openclawGatewayToken,
+                    },
+                  });
                   setOpenclawTesting(true);
                   setOpenclawTestResult(null);
-                  const result = await window.api.settings.testOpenclawConnection() as { success: boolean; error?: string };
+                  const result = (await window.api.settings.testOpenclawConnection()) as {
+                    success: boolean;
+                    error?: string;
+                  };
                   setOpenclawTestResult(result);
                   setOpenclawTesting(false);
                 }}
@@ -525,15 +614,25 @@ export function ExtensionsTab() {
               <button
                 className="px-4 py-2 text-sm font-medium text-white bg-blue-600 dark:bg-blue-500 rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors"
                 onClick={async () => {
-                  await window.api.settings.set({ openclaw: { enabled: openclawEnabled, gatewayUrl: openclawGatewayUrl, gatewayToken: openclawGatewayToken } });
+                  await window.api.settings.set({
+                    openclaw: {
+                      enabled: openclawEnabled,
+                      gatewayUrl: openclawGatewayUrl,
+                      gatewayToken: openclawGatewayToken,
+                    },
+                  });
                 }}
               >
                 Save
               </button>
 
               {openclawTestResult && (
-                <span className={`text-sm ${openclawTestResult.success ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
-                  {openclawTestResult.success ? "✓ Connected" : openclawTestResult.error ?? "Connection failed"}
+                <span
+                  className={`text-sm ${openclawTestResult.success ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}
+                >
+                  {openclawTestResult.success
+                    ? "✓ Connected"
+                    : (openclawTestResult.error ?? "Connection failed")}
                 </span>
               )}
             </div>
@@ -545,12 +644,16 @@ export function ExtensionsTab() {
       <div className="bg-gray-50 dark:bg-gray-800/50 p-4 rounded-lg text-sm text-gray-700 dark:text-gray-300">
         <p className="font-medium mb-2">Installing extensions</p>
         <p>
-          Extensions are distributed as <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">.zip</code> files.
-          Click "Install Extension" to select a file and install it. Packages can add sidebar panels,
+          Extensions are distributed as{" "}
+          <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">.zip</code> files. Click
+          "Install Extension" to select a file and install it. Packages can add sidebar panels,
           email enrichment providers, and agent providers.
         </p>
         <p className="mt-2 text-gray-500 dark:text-gray-400">
-          To build an extension, run: <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">node scripts/build-extension.mjs &lt;extension-dir&gt;</code>
+          To build an extension, run:{" "}
+          <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">
+            node scripts/build-extension.mjs &lt;extension-dir&gt;
+          </code>
         </p>
       </div>
     </div>

@@ -11,6 +11,9 @@ import { app } from "electron";
 import { join } from "path";
 import { existsSync, mkdirSync, copyFileSync, readdirSync, writeFileSync } from "fs";
 import { is } from "@electron-toolkit/utils";
+import { createLogger } from "./services/logger";
+
+const log = createLogger("data-dir");
 
 let _devDataDir: string | null = null;
 const BOOTSTRAP_MARKER = ".bootstrapped";
@@ -46,11 +49,11 @@ export function initDevData(): void {
     // re-check on every startup.
     mkdirSync(devDir, { recursive: true });
     writeFileSync(join(devDir, BOOTSTRAP_MARKER), new Date().toISOString());
-    console.log("[DataDir] No production data found, created empty dev data directory");
+    log.info("[DataDir] No production data found, created empty dev data directory");
     return;
   }
 
-  console.log(`[DataDir] Bootstrapping dev data directory: ${devDir}`);
+  log.info(`[DataDir] Bootstrapping dev data directory: ${devDir}`);
   mkdirSync(devDir, { recursive: true });
 
   // Copy top-level config/credential files
@@ -63,7 +66,9 @@ export function initDevData(): void {
         filesToCopy.push(entry);
       }
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 
   for (const file of filesToCopy) {
     const src = join(prodDir, file);
@@ -71,9 +76,9 @@ export function initDevData(): void {
     if (existsSync(src) && !existsSync(dst)) {
       try {
         copyFileSync(src, dst);
-        console.log(`[DataDir]   Copied ${file}`);
+        log.info(`[DataDir]   Copied ${file}`);
       } catch (e) {
-        console.warn(`[DataDir]   Failed to copy ${file}:`, e);
+        log.warn({ err: e }, `[DataDir]   Failed to copy ${file}`);
       }
     }
   }
@@ -93,9 +98,9 @@ export function initDevData(): void {
       if (existsSync(src) && !existsSync(dst)) {
         try {
           copyFileSync(src, dst);
-          console.log(`[DataDir]   Copied data/${dbFile}`);
+          log.info(`[DataDir]   Copied data/${dbFile}`);
         } catch (e) {
-          console.warn(`[DataDir]   Failed to copy data/${dbFile}:`, e);
+          log.warn({ err: e }, `[DataDir]   Failed to copy data/${dbFile}`);
         }
       }
     }
@@ -109,9 +114,9 @@ export function initDevData(): void {
     if (existsSync(storeSrc) && !existsSync(storeDst)) {
       try {
         copyFileSync(storeSrc, storeDst);
-        console.log(`[DataDir]   Copied ${storeFile}`);
+        log.info(`[DataDir]   Copied ${storeFile}`);
       } catch (e) {
-        console.warn(`[DataDir]   Failed to copy ${storeFile}:`, e);
+        log.warn({ err: e }, `[DataDir]   Failed to copy ${storeFile}`);
       }
     }
   }
@@ -119,5 +124,5 @@ export function initDevData(): void {
   // Write marker so we don't re-bootstrap on next launch
   writeFileSync(join(devDir, BOOTSTRAP_MARKER), new Date().toISOString());
 
-  console.log("[DataDir] Dev data directory bootstrapped");
+  log.info("[DataDir] Dev data directory bootstrapped");
 }

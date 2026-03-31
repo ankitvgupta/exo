@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ToolDefinition, ToolRiskLevel } from "./types";
+import { type ToolDefinition, ToolRiskLevel } from "./types";
 
 /**
  * Browse the web via a headless/local browser.
@@ -58,7 +58,10 @@ const batchModifyLabels: ToolDefinition<{
   inputSchema: z.object({
     emailIds: z.array(z.string()).min(1).describe("Array of email IDs to modify"),
     addLabelIds: z.array(z.string()).optional().describe("Label IDs to add (e.g. ['STARRED'])"),
-    removeLabelIds: z.array(z.string()).optional().describe("Label IDs to remove (e.g. ['UNREAD'] to mark as read)"),
+    removeLabelIds: z
+      .array(z.string())
+      .optional()
+      .describe("Label IDs to remove (e.g. ['UNREAD'] to mark as read)"),
     accountId: z.string().describe("The account ID that owns these emails"),
   }),
   async execute(input, ctx) {

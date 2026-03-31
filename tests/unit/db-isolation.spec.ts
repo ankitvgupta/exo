@@ -41,28 +41,51 @@ function createDb(dbPath: string) {
 }
 
 // Helper: insert a test email
-function insertEmail(db: ReturnType<typeof Database>, id: string, accountId: string, subject: string) {
-  db.prepare(`
+function insertEmail(
+  db: ReturnType<typeof Database>,
+  id: string,
+  accountId: string,
+  subject: string,
+) {
+  db.prepare(
+    `
     INSERT INTO emails (id, account_id, thread_id, subject, from_address, to_address, body, date, fetched_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(id, accountId, `thread-${id}`, subject, "test@example.com", "me@example.com", "<p>body</p>", "2025-01-01", Date.now());
+  `,
+  ).run(
+    id,
+    accountId,
+    `thread-${id}`,
+    subject,
+    "test@example.com",
+    "me@example.com",
+    "<p>body</p>",
+    "2025-01-01",
+    Date.now(),
+  );
 }
 
 // Helper: count emails in a database
 function countEmails(db: ReturnType<typeof Database>, accountId?: string): number {
   if (accountId) {
-    return (db.prepare("SELECT COUNT(*) as c FROM emails WHERE account_id = ?").get(accountId) as { c: number }).c;
+    return (
+      db.prepare("SELECT COUNT(*) as c FROM emails WHERE account_id = ?").get(accountId) as {
+        c: number;
+      }
+    ).c;
   }
   return (db.prepare("SELECT COUNT(*) as c FROM emails").get() as { c: number }).c;
 }
 
 // Helper: get all email subjects
 function getEmailSubjects(db: ReturnType<typeof Database>): string[] {
-  return (db.prepare("SELECT subject FROM emails ORDER BY subject").all() as { subject: string }[]).map(r => r.subject);
+  return (
+    db.prepare("SELECT subject FROM emails ORDER BY subject").all() as { subject: string }[]
+  ).map((r) => r.subject);
 }
 
 test.describe("Database isolation between demo and production modes", () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: "serial" });
   let tmpDir: string;
   let prodDbPath: string;
   let demoDbPath: string;
@@ -85,7 +108,7 @@ test.describe("Database isolation between demo and production modes", () => {
   test("demo and production use different file paths", () => {
     // Reproduce the logic from initDatabase()
     function getDbFilename(isDemoMode: boolean, isTestMode: boolean): string {
-      return (isDemoMode || isTestMode) ? "exo-demo.db" : "exo.db";
+      return isDemoMode || isTestMode ? "exo-demo.db" : "exo.db";
     }
 
     expect(getDbFilename(false, false)).toBe("exo.db");
@@ -148,10 +171,14 @@ test.describe("Database isolation between demo and production modes", () => {
     const demoDb = createDb(demoDbPath);
 
     // Save an analysis to demo DB
-    demoDb.prepare(`
+    demoDb
+      .prepare(
+        `
       INSERT OR REPLACE INTO analyses (email_id, needs_reply, reason, priority, analyzed_at)
       VALUES (?, ?, ?, ?, ?)
-    `).run("demo-1", 1, "Demo analysis", "high", Date.now());
+    `,
+      )
+      .run("demo-1", 1, "Demo analysis", "high", Date.now());
 
     const demoAnalysis = demoDb.prepare("SELECT * FROM analyses WHERE email_id = ?").get("demo-1");
     expect(demoAnalysis).toBeTruthy();
@@ -168,10 +195,14 @@ test.describe("Database isolation between demo and production modes", () => {
     const demoDb = createDb(demoDbPath);
 
     // Save a draft to demo DB
-    demoDb.prepare(`
+    demoDb
+      .prepare(
+        `
       INSERT OR REPLACE INTO drafts (email_id, draft_body, status, created_at)
       VALUES (?, ?, ?, ?)
-    `).run("demo-1", "Thanks for the demo email!", "pending", Date.now());
+    `,
+      )
+      .run("demo-1", "Thanks for the demo email!", "pending", Date.now());
 
     const demoDraft = demoDb.prepare("SELECT * FROM drafts WHERE email_id = ?").get("demo-1");
     expect(demoDraft).toBeTruthy();
@@ -187,15 +218,23 @@ test.describe("Database isolation between demo and production modes", () => {
     const prodDb = createDb(prodDbPath);
     const demoDb = createDb(demoDbPath);
 
-    demoDb.prepare(`
+    demoDb
+      .prepare(
+        `
       INSERT OR REPLACE INTO sender_profiles (email, name, summary, lookup_at)
       VALUES (?, ?, ?, ?)
-    `).run("demo@example.com", "Demo User", "A demo sender profile", Date.now());
+    `,
+      )
+      .run("demo@example.com", "Demo User", "A demo sender profile", Date.now());
 
-    const demoProfile = demoDb.prepare("SELECT * FROM sender_profiles WHERE email = ?").get("demo@example.com");
+    const demoProfile = demoDb
+      .prepare("SELECT * FROM sender_profiles WHERE email = ?")
+      .get("demo@example.com");
     expect(demoProfile).toBeTruthy();
 
-    const prodProfile = prodDb.prepare("SELECT * FROM sender_profiles WHERE email = ?").get("demo@example.com");
+    const prodProfile = prodDb
+      .prepare("SELECT * FROM sender_profiles WHERE email = ?")
+      .get("demo@example.com");
     expect(prodProfile).toBeUndefined();
 
     prodDb.close();
@@ -228,9 +267,21 @@ test.describe("Database isolation between demo and production modes", () => {
     const demoDb = createDb(demoDbPath);
 
     // Write to every major table in demo DB
-    demoDb.prepare("INSERT OR REPLACE INTO accounts (id, email, is_primary, added_at) VALUES (?, ?, ?, ?)").run("demo-account", "demo@example.com", 1, Date.now());
-    demoDb.prepare("INSERT OR REPLACE INTO sync_state (account_id, history_id, last_sync_at) VALUES (?, ?, ?)").run("demo-account", "12345", Date.now());
-    demoDb.prepare("INSERT OR REPLACE INTO sent_emails (id, to_address, subject, body, date, indexed_at) VALUES (?, ?, ?, ?, ?, ?)").run("sent-demo-1", "other@example.com", "Demo sent", "body", "2025-01-01", Date.now());
+    demoDb
+      .prepare(
+        "INSERT OR REPLACE INTO accounts (id, email, is_primary, added_at) VALUES (?, ?, ?, ?)",
+      )
+      .run("demo-account", "demo@example.com", 1, Date.now());
+    demoDb
+      .prepare(
+        "INSERT OR REPLACE INTO sync_state (account_id, history_id, last_sync_at) VALUES (?, ?, ?)",
+      )
+      .run("demo-account", "12345", Date.now());
+    demoDb
+      .prepare(
+        "INSERT OR REPLACE INTO sent_emails (id, to_address, subject, body, date, indexed_at) VALUES (?, ?, ?, ?, ?, ?)",
+      )
+      .run("sent-demo-1", "other@example.com", "Demo sent", "body", "2025-01-01", Date.now());
 
     // Verify all exist in demo DB
     expect(demoDb.prepare("SELECT COUNT(*) as c FROM accounts").get()).toEqual({ c: 1 });
@@ -238,9 +289,15 @@ test.describe("Database isolation between demo and production modes", () => {
     expect(demoDb.prepare("SELECT COUNT(*) as c FROM sent_emails").get()).toEqual({ c: 1 });
 
     // Verify none exist in production DB (accounts may have prod data, check for demo-account specifically)
-    expect(prodDb.prepare("SELECT * FROM accounts WHERE id = ?").get("demo-account")).toBeUndefined();
-    expect(prodDb.prepare("SELECT * FROM sync_state WHERE account_id = ?").get("demo-account")).toBeUndefined();
-    expect(prodDb.prepare("SELECT * FROM sent_emails WHERE id = ?").get("sent-demo-1")).toBeUndefined();
+    expect(
+      prodDb.prepare("SELECT * FROM accounts WHERE id = ?").get("demo-account"),
+    ).toBeUndefined();
+    expect(
+      prodDb.prepare("SELECT * FROM sync_state WHERE account_id = ?").get("demo-account"),
+    ).toBeUndefined();
+    expect(
+      prodDb.prepare("SELECT * FROM sent_emails WHERE id = ?").get("sent-demo-1"),
+    ).toBeUndefined();
 
     prodDb.close();
     demoDb.close();

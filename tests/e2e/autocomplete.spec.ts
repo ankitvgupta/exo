@@ -13,7 +13,7 @@ let electronApp: ElectronApplication;
 let page: Page;
 
 test.describe("Email Autocomplete Dropdown", () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: "serial" });
 
   test.beforeAll(async ({}, testInfo) => {
     const result = await launchElectronApp({ workerIndex: testInfo.workerIndex });
@@ -84,7 +84,9 @@ test.describe("Email Autocomplete Dropdown", () => {
     await toField.fill("ali");
 
     // Wait for dropdown
-    await expect(page.locator("[data-testid='autocomplete-dropdown']")).toBeVisible({ timeout: 3000 });
+    await expect(page.locator("[data-testid='autocomplete-dropdown']")).toBeVisible({
+      timeout: 3000,
+    });
 
     // ArrowDown to select first item, Enter to confirm
     await toField.press("ArrowDown");
@@ -108,7 +110,9 @@ test.describe("Email Autocomplete Dropdown", () => {
     await toField.fill("bob");
 
     // Wait for dropdown with Bob Smith
-    const suggestion = page.locator("[data-testid='autocomplete-suggestion']").filter({ hasText: "Bob Smith" });
+    const suggestion = page
+      .locator("[data-testid='autocomplete-suggestion']")
+      .filter({ hasText: "Bob Smith" });
     await expect(suggestion).toBeVisible({ timeout: 3000 });
 
     // Click the suggestion (uses mousedown internally)
@@ -149,12 +153,16 @@ test.describe("Email Autocomplete Dropdown", () => {
 
     // First add alice via keyboard
     await toField.fill("ali");
-    await expect(page.locator("[data-testid='autocomplete-dropdown']")).toBeVisible({ timeout: 3000 });
+    await expect(page.locator("[data-testid='autocomplete-dropdown']")).toBeVisible({
+      timeout: 3000,
+    });
     await toField.press("ArrowDown");
     await toField.press("Enter");
 
     // Verify alice chip exists (shows name from autocomplete selection)
-    await expect(page.locator("[data-testid='address-chip']").filter({ hasText: "Alice Johnson" })).toBeVisible();
+    await expect(
+      page.locator("[data-testid='address-chip']").filter({ hasText: "Alice Johnson" }),
+    ).toBeVisible();
 
     // Now type "alice" again — she should be filtered out
     await toField.fill("alice");
@@ -194,7 +202,9 @@ test.describe("Email Autocomplete Dropdown", () => {
     await toField.fill("bob");
 
     // Wait for dropdown
-    await expect(page.locator("[data-testid='autocomplete-dropdown']")).toBeVisible({ timeout: 3000 });
+    await expect(page.locator("[data-testid='autocomplete-dropdown']")).toBeVisible({
+      timeout: 3000,
+    });
 
     // ArrowDown to highlight Bob, Tab to confirm
     await toField.press("ArrowDown");
@@ -226,14 +236,18 @@ test.describe("Email Autocomplete Dropdown", () => {
     await ccInput.fill("ali");
 
     // Wait for dropdown
-    await expect(page.locator("[data-testid='autocomplete-dropdown']")).toBeVisible({ timeout: 3000 });
+    await expect(page.locator("[data-testid='autocomplete-dropdown']")).toBeVisible({
+      timeout: 3000,
+    });
 
     // ArrowDown + Tab to select Alice
     await ccInput.press("ArrowDown");
     await ccInput.press("Tab");
 
     // Alice should appear as a chip showing her name inside the CC field wrapper
-    const ccChip = page.locator("[data-testid='address-input-cc'] [data-testid='address-chip']").filter({ hasText: "Alice Johnson" });
+    const ccChip = page
+      .locator("[data-testid='address-input-cc'] [data-testid='address-chip']")
+      .filter({ hasText: "Alice Johnson" });
     await expect(ccChip).toBeVisible({ timeout: 2000 });
 
     await closeCompose();
@@ -255,14 +269,18 @@ test.describe("Email Autocomplete Dropdown", () => {
     await ccInput.fill("bob");
 
     // Wait for Bob's suggestion
-    const suggestion = page.locator("[data-testid='autocomplete-suggestion']").filter({ hasText: "Bob Smith" });
+    const suggestion = page
+      .locator("[data-testid='autocomplete-suggestion']")
+      .filter({ hasText: "Bob Smith" });
     await expect(suggestion).toBeVisible({ timeout: 3000 });
 
     // Click the suggestion
     await suggestion.click();
 
     // Bob should appear as a chip showing his name in the CC field
-    const ccChip = page.locator("[data-testid='address-input-cc'] [data-testid='address-chip']").filter({ hasText: "Bob Smith" });
+    const ccChip = page
+      .locator("[data-testid='address-input-cc'] [data-testid='address-chip']")
+      .filter({ hasText: "Bob Smith" });
     await expect(ccChip).toBeVisible({ timeout: 2000 });
 
     await closeCompose();

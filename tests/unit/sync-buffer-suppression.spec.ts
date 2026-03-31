@@ -83,27 +83,32 @@ test.describe("sync buffer suppression for undo action queue", () => {
   test("emails in undo archive queue are suppressed from sync adds", () => {
     // Simulate: user batch-archived 3 threads (6 emails)
     const archivedEmails = [
-      makeEmail("e1", "t1"), makeEmail("e2", "t1"),
-      makeEmail("e3", "t2"), makeEmail("e4", "t2"),
-      makeEmail("e5", "t3"), makeEmail("e6", "t3"),
+      makeEmail("e1", "t1"),
+      makeEmail("e2", "t1"),
+      makeEmail("e3", "t2"),
+      makeEmail("e4", "t2"),
+      makeEmail("e5", "t3"),
+      makeEmail("e6", "t3"),
     ];
 
-    const undoQueue: UndoActionItem[] = [{
-      id: "archive-batch-123",
-      type: "archive",
-      emails: archivedEmails,
-      threadCount: 3,
-      accountId: "account-1",
-      scheduledAt: Date.now(),
-      delayMs: 5000,
-    }];
+    const undoQueue: UndoActionItem[] = [
+      {
+        id: "archive-batch-123",
+        type: "archive",
+        emails: archivedEmails,
+        threadCount: 3,
+        accountId: "account-1",
+        scheduledAt: Date.now(),
+        delayMs: 5000,
+      },
+    ];
 
     // Store is empty (emails were removed optimistically)
     const storeEmails: DashboardEmail[] = [];
     const pendingRemovals = new Map<string, DashboardEmail[]>();
 
     // Sync tries to add these emails back
-    const syncAdds = archivedEmails.map(e => ({ ...e }));
+    const syncAdds = archivedEmails.map((e) => ({ ...e }));
 
     const { brandNew } = filterSyncAdds(syncAdds, storeEmails, pendingRemovals, undoQueue);
 
@@ -114,18 +119,20 @@ test.describe("sync buffer suppression for undo action queue", () => {
   test("emails in undo trash queue are suppressed from sync adds", () => {
     const trashedEmails = [makeEmail("e1", "t1"), makeEmail("e2", "t2")];
 
-    const undoQueue: UndoActionItem[] = [{
-      id: "trash-batch-123",
-      type: "trash",
-      emails: trashedEmails,
-      threadCount: 2,
-      accountId: "account-1",
-      scheduledAt: Date.now(),
-      delayMs: 5000,
-    }];
+    const undoQueue: UndoActionItem[] = [
+      {
+        id: "trash-batch-123",
+        type: "trash",
+        emails: trashedEmails,
+        threadCount: 2,
+        accountId: "account-1",
+        scheduledAt: Date.now(),
+        delayMs: 5000,
+      },
+    ];
 
     const { brandNew } = filterSyncAdds(
-      trashedEmails.map(e => ({ ...e })),
+      trashedEmails.map((e) => ({ ...e })),
       [],
       new Map(),
       undoQueue,
@@ -138,18 +145,20 @@ test.describe("sync buffer suppression for undo action queue", () => {
     const emails = [makeEmail("e1", "t1")];
 
     // mark-unread should not suppress
-    const undoQueue: UndoActionItem[] = [{
-      id: "mark-unread-batch-123",
-      type: "mark-unread",
-      emails,
-      threadCount: 1,
-      accountId: "account-1",
-      scheduledAt: Date.now(),
-      delayMs: 5000,
-    }];
+    const undoQueue: UndoActionItem[] = [
+      {
+        id: "mark-unread-batch-123",
+        type: "mark-unread",
+        emails,
+        threadCount: 1,
+        accountId: "account-1",
+        scheduledAt: Date.now(),
+        delayMs: 5000,
+      },
+    ];
 
     const { brandNew } = filterSyncAdds(
-      emails.map(e => ({ ...e })),
+      emails.map((e) => ({ ...e })),
       [],
       new Map(),
       undoQueue,
@@ -163,18 +172,20 @@ test.describe("sync buffer suppression for undo action queue", () => {
     const archivedEmails = [makeEmail("e1", "t1"), makeEmail("e2", "t1")];
     const newEmail = makeEmail("e-new", "t-new");
 
-    const undoQueue: UndoActionItem[] = [{
-      id: "archive-batch-123",
-      type: "archive",
-      emails: archivedEmails,
-      threadCount: 1,
-      accountId: "account-1",
-      scheduledAt: Date.now(),
-      delayMs: 5000,
-    }];
+    const undoQueue: UndoActionItem[] = [
+      {
+        id: "archive-batch-123",
+        type: "archive",
+        emails: archivedEmails,
+        threadCount: 1,
+        accountId: "account-1",
+        scheduledAt: Date.now(),
+        delayMs: 5000,
+      },
+    ];
 
     // Sync adds both the archived emails AND a genuinely new one
-    const syncAdds = [...archivedEmails.map(e => ({ ...e })), { ...newEmail }];
+    const syncAdds = [...archivedEmails.map((e) => ({ ...e })), { ...newEmail }];
 
     const { brandNew } = filterSyncAdds(syncAdds, [], new Map(), undoQueue);
 
@@ -209,7 +220,7 @@ test.describe("sync buffer suppression for undo action queue", () => {
 
     const allEmails = [...batch1, ...batch2];
     const { brandNew } = filterSyncAdds(
-      allEmails.map(e => ({ ...e })),
+      allEmails.map((e) => ({ ...e })),
       [],
       new Map(),
       undoQueue,
@@ -238,20 +249,22 @@ test.describe("sync buffer suppression for undo action queue", () => {
     // The actual bug scenario: 30+ emails archived at once
     const emailCount = 35;
     const emails = Array.from({ length: emailCount }, (_, i) =>
-      makeEmail(`e${i}`, `t${Math.floor(i / 2)}`)
+      makeEmail(`e${i}`, `t${Math.floor(i / 2)}`),
     );
 
-    const undoQueue: UndoActionItem[] = [{
-      id: "archive-batch-big",
-      type: "archive",
-      emails,
-      threadCount: Math.ceil(emailCount / 2),
-      accountId: "account-1",
-      scheduledAt: Date.now(),
-      delayMs: 5000,
-    }];
+    const undoQueue: UndoActionItem[] = [
+      {
+        id: "archive-batch-big",
+        type: "archive",
+        emails,
+        threadCount: Math.ceil(emailCount / 2),
+        accountId: "account-1",
+        scheduledAt: Date.now(),
+        delayMs: 5000,
+      },
+    ];
 
-    const syncAdds = emails.map(e => ({ ...e }));
+    const syncAdds = emails.map((e) => ({ ...e }));
     const { brandNew } = filterSyncAdds(syncAdds, [], new Map(), undoQueue);
 
     expect(brandNew).toHaveLength(0);

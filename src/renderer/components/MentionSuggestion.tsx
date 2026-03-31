@@ -1,10 +1,4 @@
-import {
-  forwardRef,
-  useEffect,
-  useImperativeHandle,
-  useState,
-  useCallback,
-} from "react";
+import { forwardRef, useEffect, useImperativeHandle, useState, useCallback } from "react";
 import { Extension } from "@tiptap/core";
 import { ReactRenderer } from "@tiptap/react";
 import Suggestion from "@tiptap/suggestion";
@@ -25,73 +19,71 @@ export interface MentionListRef {
   onKeyDown: (props: { event: KeyboardEvent }) => boolean;
 }
 
-const MentionList = forwardRef<MentionListRef, MentionListProps>(
-  ({ items, command }, ref) => {
-    const [selectedIndex, setSelectedIndex] = useState(0);
+const MentionList = forwardRef<MentionListRef, MentionListProps>(({ items, command }, ref) => {
+  const [selectedIndex, setSelectedIndex] = useState(0);
 
-    useEffect(() => {
-      setSelectedIndex(0);
-    }, [items]);
+  useEffect(() => {
+    setSelectedIndex(0);
+  }, [items]);
 
-    const selectItem = useCallback(
-      (index: number) => {
-        const item = items[index];
-        if (item) command(item);
-      },
-      [items, command]
-    );
+  const selectItem = useCallback(
+    (index: number) => {
+      const item = items[index];
+      if (item) command(item);
+    },
+    [items, command],
+  );
 
-    useImperativeHandle(ref, () => ({
-      onKeyDown: ({ event }: { event: KeyboardEvent }) => {
-        if (event.key === "ArrowUp") {
-          setSelectedIndex((i) => (i <= 0 ? items.length - 1 : i - 1));
-          return true;
-        }
-        if (event.key === "ArrowDown") {
-          setSelectedIndex((i) => (i >= items.length - 1 ? 0 : i + 1));
-          return true;
-        }
-        if (event.key === "Enter" || event.key === "Tab") {
-          selectItem(selectedIndex);
-          return true;
-        }
-        return false;
-      },
-    }));
+  useImperativeHandle(ref, () => ({
+    onKeyDown: ({ event }: { event: KeyboardEvent }) => {
+      if (event.key === "ArrowUp") {
+        setSelectedIndex((i) => (i <= 0 ? items.length - 1 : i - 1));
+        return true;
+      }
+      if (event.key === "ArrowDown") {
+        setSelectedIndex((i) => (i >= items.length - 1 ? 0 : i + 1));
+        return true;
+      }
+      if (event.key === "Enter" || event.key === "Tab") {
+        selectItem(selectedIndex);
+        return true;
+      }
+      return false;
+    },
+  }));
 
-    if (items.length === 0) return null;
+  if (items.length === 0) return null;
 
-    return (
-      <div
-        className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg dark:shadow-xl dark:shadow-black/50 max-h-60 overflow-y-auto z-50"
-        data-testid="mention-dropdown"
-      >
-        {items.map((item, index) => (
-          <div
-            key={item.email}
-            className={`px-4 py-2.5 cursor-pointer text-sm flex items-center justify-between gap-4 ${
-              index === selectedIndex
-                ? "bg-blue-50 dark:bg-gray-700"
-                : "hover:bg-gray-100 dark:hover:bg-gray-700/50"
-            }`}
-            onClick={() => selectItem(index)}
-            onMouseEnter={() => setSelectedIndex(index)}
-            data-testid="mention-suggestion"
-          >
-            <span className="text-gray-900 dark:text-gray-100 truncate">
-              {item.name || item.email}
+  return (
+    <div
+      className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg dark:shadow-xl dark:shadow-black/50 max-h-60 overflow-y-auto z-50"
+      data-testid="mention-dropdown"
+    >
+      {items.map((item, index) => (
+        <div
+          key={item.email}
+          className={`px-4 py-2.5 cursor-pointer text-sm flex items-center justify-between gap-4 ${
+            index === selectedIndex
+              ? "bg-blue-50 dark:bg-gray-700"
+              : "hover:bg-gray-100 dark:hover:bg-gray-700/50"
+          }`}
+          onClick={() => selectItem(index)}
+          onMouseEnter={() => setSelectedIndex(index)}
+          data-testid="mention-suggestion"
+        >
+          <span className="text-gray-900 dark:text-gray-100 truncate">
+            {item.name || item.email}
+          </span>
+          {item.name && (
+            <span className="text-gray-500 dark:text-gray-500 text-sm truncate flex-shrink-0">
+              {item.email}
             </span>
-            {item.name && (
-              <span className="text-gray-500 dark:text-gray-500 text-sm truncate flex-shrink-0">
-                {item.email}
-              </span>
-            )}
-          </div>
-        ))}
-      </div>
-    );
-  }
-);
+          )}
+        </div>
+      ))}
+    </div>
+  );
+});
 
 MentionList.displayName = "MentionList";
 
@@ -156,7 +148,7 @@ function createSuggestionRender() {
 function createSuggestionConfig(
   char: string,
   pluginKey: PluginKey,
-  onAddToCcRef: React.RefObject<((email: string) => void) | null>
+  onAddToCcRef: React.RefObject<((email: string) => void) | null>,
 ): Omit<SuggestionOptions<ContactSuggestion>, "editor"> {
   return {
     char,
@@ -166,10 +158,9 @@ function createSuggestionConfig(
     items: async ({ query }): Promise<ContactSuggestion[]> => {
       if (!query.trim()) return [];
       try {
-        const response = (await window.api.contacts.suggest(
-          query,
-          8
-        )) as IpcResponse<ContactSuggestion[]>;
+        const response = (await window.api.contacts.suggest(query, 8)) as IpcResponse<
+          ContactSuggestion[]
+        >;
         if (response.success) return response.data;
       } catch {
         // Autocomplete is non-critical

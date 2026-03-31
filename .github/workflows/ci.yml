@@ -9,6 +9,25 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  lint:
+    name: Lint & Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: ESLint
+        run: npm run lint
+
+      - name: Prettier format check
+        run: npm run format:check
+
   typecheck:
     name: Type Check
     runs-on: ubuntu-latest

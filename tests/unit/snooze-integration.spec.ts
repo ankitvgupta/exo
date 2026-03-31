@@ -72,11 +72,20 @@ function createTestDb() {
   return db;
 }
 
-function snoozeEmail(db: any, id: string, emailId: string, threadId: string, accountId: string, snoozeUntil: number): void {
-  db.prepare(`
+function snoozeEmail(
+  db: any,
+  id: string,
+  emailId: string,
+  threadId: string,
+  accountId: string,
+  snoozeUntil: number,
+): void {
+  db.prepare(
+    `
     INSERT OR REPLACE INTO snoozed_emails (id, email_id, thread_id, account_id, snooze_until, snoozed_at)
     VALUES (?, ?, ?, ?, ?, ?)
-  `).run(id, emailId, threadId, accountId, snoozeUntil, Date.now());
+  `,
+  ).run(id, emailId, threadId, accountId, snoozeUntil, Date.now());
 }
 
 function unsnoozeEmail(db: any, id: string): void {
@@ -84,40 +93,61 @@ function unsnoozeEmail(db: any, id: string): void {
 }
 
 function unsnoozeByThread(db: any, threadId: string, accountId: string): void {
-  db.prepare("DELETE FROM snoozed_emails WHERE thread_id = ? AND account_id = ?").run(threadId, accountId);
+  db.prepare("DELETE FROM snoozed_emails WHERE thread_id = ? AND account_id = ?").run(
+    threadId,
+    accountId,
+  );
 }
 
 function getSnoozedEmails(db: any, accountId: string): SnoozedEmail[] {
-  return db.prepare(`
+  return db
+    .prepare(
+      `
     SELECT id, email_id as emailId, thread_id as threadId, account_id as accountId,
            snooze_until as snoozeUntil, snoozed_at as snoozedAt
     FROM snoozed_emails WHERE account_id = ? ORDER BY snooze_until ASC
-  `).all(accountId) as SnoozedEmail[];
+  `,
+    )
+    .all(accountId) as SnoozedEmail[];
 }
 
 function getAllSnoozedEmails(db: any): SnoozedEmail[] {
-  return db.prepare(`
+  return db
+    .prepare(
+      `
     SELECT id, email_id as emailId, thread_id as threadId, account_id as accountId,
            snooze_until as snoozeUntil, snoozed_at as snoozedAt
     FROM snoozed_emails ORDER BY snooze_until ASC
-  `).all() as SnoozedEmail[];
+  `,
+    )
+    .all() as SnoozedEmail[];
 }
 
 function getDueSnoozedEmails(db: any): SnoozedEmail[] {
   const now = Date.now();
-  return db.prepare(`
+  return db
+    .prepare(
+      `
     SELECT id, email_id as emailId, thread_id as threadId, account_id as accountId,
            snooze_until as snoozeUntil, snoozed_at as snoozedAt
     FROM snoozed_emails WHERE snooze_until <= ? ORDER BY snooze_until ASC
-  `).all(now) as SnoozedEmail[];
+  `,
+    )
+    .all(now) as SnoozedEmail[];
 }
 
 function getSnoozedByThread(db: any, threadId: string, accountId: string): SnoozedEmail | null {
-  return db.prepare(`
+  return (
+    (db
+      .prepare(
+        `
     SELECT id, email_id as emailId, thread_id as threadId, account_id as accountId,
            snooze_until as snoozeUntil, snoozed_at as snoozedAt
     FROM snoozed_emails WHERE thread_id = ? AND account_id = ? LIMIT 1
-  `).get(threadId, accountId) as SnoozedEmail || null;
+  `,
+      )
+      .get(threadId, accountId) as SnoozedEmail) || null
+  );
 }
 
 // ============================================
@@ -416,7 +446,10 @@ test.describe("Snooze DB — Re-snooze and edge cases", () => {
     expect(getDueSnoozedEmails(db)).toHaveLength(0);
 
     // Simulate time passing by inserting with a past time
-    db.prepare("UPDATE snoozed_emails SET snooze_until = ? WHERE id = ?").run(Date.now() - 100, "snz-1");
+    db.prepare("UPDATE snoozed_emails SET snooze_until = ? WHERE id = ?").run(
+      Date.now() - 100,
+      "snz-1",
+    );
 
     // Now it's due
     expect(getDueSnoozedEmails(db)).toHaveLength(1);
@@ -424,14 +457,23 @@ test.describe("Snooze DB — Re-snooze and edge cases", () => {
 
   test("large batch: 100 snoozed emails", () => {
     for (let i = 0; i < 100; i++) {
-      snoozeEmail(db, `snz-${i}`, `msg-${i}`, `thread-${i}`, "acc-1", Date.now() + (i + 1) * 60_000);
+      snoozeEmail(
+        db,
+        `snz-${i}`,
+        `msg-${i}`,
+        `thread-${i}`,
+        "acc-1",
+        Date.now() + (i + 1) * 60_000,
+      );
     }
 
     expect(getSnoozedEmails(db, "acc-1")).toHaveLength(100);
     expect(getDueSnoozedEmails(db)).toHaveLength(0);
 
     // Make first 50 due
-    db.prepare("UPDATE snoozed_emails SET snooze_until = ? WHERE CAST(SUBSTR(id, 5) AS INTEGER) < 50").run(Date.now() - 1000);
+    db.prepare(
+      "UPDATE snoozed_emails SET snooze_until = ? WHERE CAST(SUBSTR(id, 5) AS INTEGER) < 50",
+    ).run(Date.now() - 1000);
 
     const due = getDueSnoozedEmails(db);
     expect(due).toHaveLength(50);

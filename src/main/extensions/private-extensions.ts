@@ -9,18 +9,21 @@
 
 import type { ExtensionHost } from "./extension-host";
 import { ExtensionManifestSchema, type ExtensionModule } from "../../shared/extension-types";
+import { createLogger } from "../services/logger";
+
+const log = createLogger("private-extensions");
 
 // Use Vite's import.meta.glob to discover private extension modules at build time
 // This will be an empty object if extensions-private doesn't exist
 const privateExtensionModules = import.meta.glob<ExtensionModule>(
   "../../extensions-private/*/src/index.ts",
-  { eager: true }
+  { eager: true },
 );
 
 // Glob the package.json files to get full manifest data
 const privateExtensionPackages = import.meta.glob<{ mailExtension?: Record<string, unknown> }>(
   "../../extensions-private/*/package.json",
-  { eager: true }
+  { eager: true },
 );
 
 /**
@@ -35,9 +38,7 @@ function getPackageJson(modulePath: string): { mailExtension?: Record<string, un
  * Register all private extension modules with the extension host.
  * Uses build-time discovery via import.meta.glob — no filesystem access needed.
  */
-export async function registerPrivateExtensions(
-  extensionHost: ExtensionHost
-): Promise<void> {
+export async function registerPrivateExtensions(extensionHost: ExtensionHost): Promise<void> {
   const modulePaths = Object.keys(privateExtensionModules);
 
   if (modulePaths.length === 0) {
@@ -48,16 +49,16 @@ export async function registerPrivateExtensions(
     try {
       const pkg = getPackageJson(path);
       if (!pkg?.mailExtension) {
-        console.warn(`[Extensions] Private extension at ${path} missing mailExtension`);
+        log.warn(`[Extensions] Private extension at ${path} missing mailExtension`);
         continue;
       }
 
       const manifest = ExtensionManifestSchema.parse(pkg.mailExtension);
       const module = privateExtensionModules[path];
       await extensionHost.registerBundledExtensionFull(manifest, module);
-      console.log(`[Extensions] Registered private extension: ${manifest.id}`);
+      log.info(`[Extensions] Registered private extension: ${manifest.id}`);
     } catch (e) {
-      console.warn(`[Extensions] Failed to load private extension from ${path}:`, e);
+      log.warn({ err: e }, `[Extensions] Failed to load private extension from ${path}`);
     }
   }
 }

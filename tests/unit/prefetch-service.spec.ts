@@ -150,14 +150,12 @@ function buildProgress(
   status: PrefetchStatus,
   queueLength: number,
   processedCounts: PrefetchProgress["processed"],
-  currentTask?: PrefetchTask
+  currentTask?: PrefetchTask,
 ): PrefetchProgress {
   return {
     status,
     queueLength,
-    currentTask: currentTask
-      ? { emailId: currentTask.emailId, type: currentTask.type }
-      : undefined,
+    currentTask: currentTask ? { emailId: currentTask.emailId, type: currentTask.type } : undefined,
     processed: { ...processedCounts },
   };
 }
@@ -168,7 +166,7 @@ function buildProgress(
 
 function assignSenderProfilePriority(
   needsReply: boolean,
-  analysisPriority?: "high" | "medium" | "low" | "skip"
+  analysisPriority?: "high" | "medium" | "low" | "skip",
 ): number {
   let priority = 40; // Default: no reply needed
   if (needsReply) {
@@ -193,9 +191,7 @@ function assignSenderProfilePriority(
 
 test.describe("extractSenderEmail", () => {
   test("extracts email from angle bracket format", () => {
-    expect(extractSenderEmail("Alice Smith <alice@example.com>")).toBe(
-      "alice@example.com"
-    );
+    expect(extractSenderEmail("Alice Smith <alice@example.com>")).toBe("alice@example.com");
   });
 
   test("handles bare email address", () => {
@@ -203,9 +199,7 @@ test.describe("extractSenderEmail", () => {
   });
 
   test("lowercases the result", () => {
-    expect(extractSenderEmail("Alice <ALICE@Example.COM>")).toBe(
-      "alice@example.com"
-    );
+    expect(extractSenderEmail("Alice <ALICE@Example.COM>")).toBe("alice@example.com");
   });
 
   test("lowercases bare email", () => {
@@ -213,9 +207,7 @@ test.describe("extractSenderEmail", () => {
   });
 
   test("handles name with special characters", () => {
-    expect(
-      extractSenderEmail('"O\'Brien, John" <john@example.com>')
-    ).toBe("john@example.com");
+    expect(extractSenderEmail('"O\'Brien, John" <john@example.com>')).toBe("john@example.com");
   });
 
   test("handles empty string", () => {
@@ -435,7 +427,7 @@ test.describe("buildProgress", () => {
       "running",
       5,
       { analysis: 3, senderProfile: 1, draft: 0, extensionEnrichment: 2 },
-      task
+      task,
     );
 
     expect(progress.status).toBe("running");
@@ -559,7 +551,7 @@ test.describe("queueSenderProfiles sorting", () => {
 test.describe("autoDraft priority filtering", () => {
   function shouldAutoDraft(
     emailPriority: string | undefined,
-    allowedPriorities: string[]
+    allowedPriorities: string[],
   ): boolean {
     return allowedPriorities.includes(emailPriority || "low");
   }
@@ -627,11 +619,7 @@ test.describe("archive-ready composite key", () => {
 
 test.describe("agent draft priority values", () => {
   function getAgentDraftPriority(analysisPriority?: string): number {
-    return analysisPriority === "high"
-      ? 5
-      : analysisPriority === "medium"
-        ? 15
-        : 25;
+    return analysisPriority === "high" ? 5 : analysisPriority === "medium" ? 15 : 25;
   }
 
   test("high priority emails get draft priority 5", () => {
@@ -652,9 +640,7 @@ test.describe("agent draft priority values", () => {
 
   test("agent drafts have higher priority (lower number) than sender profiles", () => {
     // Agent draft high (5) < sender profile high (10)
-    expect(getAgentDraftPriority("high")).toBeLessThan(
-      assignSenderProfilePriority(true, "high")
-    );
+    expect(getAgentDraftPriority("high")).toBeLessThan(assignSenderProfilePriority(true, "high"));
   });
 
   test("analysis (0) has highest priority of all", () => {

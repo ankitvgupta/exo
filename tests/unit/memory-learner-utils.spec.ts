@@ -2,7 +2,12 @@
  * Unit tests for memory-learner-utils.ts — shared utilities for memory learners.
  */
 import { test, expect } from "@playwright/test";
-import { parseJsonArray, normalizeScope, CONSUMER_DOMAINS, VALID_MEMORY_SCOPES } from "../../src/main/services/memory-learner-utils";
+import {
+  parseJsonArray,
+  normalizeScope,
+  CONSUMER_DOMAINS,
+  VALID_MEMORY_SCOPES,
+} from "../../src/main/services/memory-learner-utils";
 
 // ============================================================
 // parseJsonArray
@@ -36,7 +41,7 @@ test.describe("parseJsonArray", () => {
 
   test("handles nested objects within array", () => {
     const result = parseJsonArray<{ scope: string; nested: { value: number } }>(
-      '[{"scope": "global", "nested": {"value": 42}}]'
+      '[{"scope": "global", "nested": {"value": 42}}]',
     );
     expect(result).toEqual([{ scope: "global", nested: { value: 42 } }]);
   });
@@ -84,7 +89,12 @@ test.describe("normalizeScope", () => {
   });
 
   test("category scope preserves explicit scopeValue", () => {
-    const result = normalizeScope("category", "recruiter-outreach", "alice@example.com", "example.com");
+    const result = normalizeScope(
+      "category",
+      "recruiter-outreach",
+      "alice@example.com",
+      "example.com",
+    );
     expect(result).toEqual({ scope: "category", scopeValue: "recruiter-outreach" });
   });
 
@@ -94,7 +104,12 @@ test.describe("normalizeScope", () => {
   });
 
   test("global scope ignores provided scopeValue", () => {
-    const result = normalizeScope("global", "should-be-ignored", "alice@example.com", "example.com");
+    const result = normalizeScope(
+      "global",
+      "should-be-ignored",
+      "alice@example.com",
+      "example.com",
+    );
     expect(result).toEqual({ scope: "global", scopeValue: null });
   });
 

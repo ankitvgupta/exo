@@ -1,4 +1,8 @@
-import type { ExtensionContext, ExtensionAPI, ExtensionModule } from "../../../shared/extension-types";
+import type {
+  ExtensionContext,
+  ExtensionAPI,
+  ExtensionModule,
+} from "../../../shared/extension-types";
 import { getModelIdForFeature } from "../../../main/ipc/settings.ipc";
 import { createWebSearchProvider } from "./web-search-provider";
 

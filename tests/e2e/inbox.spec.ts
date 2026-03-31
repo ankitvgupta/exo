@@ -9,7 +9,7 @@ import { launchElectronApp } from "./launch-helpers";
  */
 
 test.describe("Exo E2E - Inbox View", () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: "serial" });
   let electronApp: ElectronApplication;
   let page: Page;
 
@@ -38,7 +38,10 @@ test.describe("Exo E2E - Inbox View", () => {
     await expect(inboxHeader).toBeVisible({ timeout: 10000 });
 
     // Should show at least one email item with a priority badge (High/Medium/Low)
-    const emailWithPriority = page.locator("button").filter({ hasText: /High|Medium|Low/ }).first();
+    const emailWithPriority = page
+      .locator("button")
+      .filter({ hasText: /High|Medium|Low/ })
+      .first();
     await expect(emailWithPriority).toBeVisible({ timeout: 10000 });
   });
 
@@ -55,7 +58,9 @@ test.describe("Exo E2E - Inbox View", () => {
 
   test("sorts emails with most recent first", async () => {
     // Get all visible email items in the list
-    const emailItems = page.locator("[class*='border-b']").filter({ hasText: /\d+[mhd]|Jan|Feb|Mar/ });
+    const emailItems = page
+      .locator("[class*='border-b']")
+      .filter({ hasText: /\d+[mhd]|Jan|Feb|Mar/ });
     const count = await emailItems.count();
 
     // Should have multiple emails
@@ -70,7 +75,9 @@ test.describe("Exo E2E - Inbox View", () => {
       await firstEmail.click();
 
       // The email detail should show the subject
-      await expect(page.locator("h1").filter({ hasText: /Project Alpha/ })).toBeVisible({ timeout: 5000 });
+      await expect(page.locator("h1").filter({ hasText: /Project Alpha/ })).toBeVisible({
+        timeout: 5000,
+      });
     }
   });
 
@@ -88,7 +95,7 @@ test.describe("Exo E2E - Inbox View", () => {
 });
 
 test.describe("Exo E2E - Email Detail", () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: "serial" });
   let electronApp: ElectronApplication;
   let page: Page;
 
@@ -159,7 +166,7 @@ test.describe("Exo E2E - Email Detail", () => {
 });
 
 test.describe("Exo E2E - Draft Generation", () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: "serial" });
   let electronApp: ElectronApplication;
   let page: Page;
 
@@ -225,7 +232,7 @@ test.describe("Exo E2E - Draft Generation", () => {
 });
 
 test.describe("Exo E2E - Navigation", () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: "serial" });
   let electronApp: ElectronApplication;
   let page: Page;
 
@@ -253,7 +260,7 @@ test.describe("Exo E2E - Navigation", () => {
   test("can close settings and return to inbox", async () => {
     // Settings may already be open from previous serial test — only click if not
     const settingsHeader = page.locator("h1:has-text('Settings')");
-    if (!await settingsHeader.isVisible().catch(() => false)) {
+    if (!(await settingsHeader.isVisible().catch(() => false))) {
       const settingsButton = page.locator("button[title='Settings']");
       await settingsButton.click();
       await page.waitForTimeout(500);
@@ -264,7 +271,10 @@ test.describe("Exo E2E - Navigation", () => {
 
     // Find close button (X icon in the title bar - it's next to the Settings title)
     // The close button has an SVG with the X path
-    const closeButton = page.locator("button").filter({ has: page.locator("svg path[d*='M6 18L18 6']") }).first();
+    const closeButton = page
+      .locator("button")
+      .filter({ has: page.locator("svg path[d*='M6 18L18 6']") })
+      .first();
 
     if (await closeButton.isVisible()) {
       await closeButton.click();
@@ -279,7 +289,10 @@ test.describe("Exo E2E - Navigation", () => {
     // Ensure we're on the inbox view first (close settings if open)
     const settingsHeader = page.locator("h1:has-text('Settings')");
     if (await settingsHeader.isVisible().catch(() => false)) {
-      const backButton = page.locator("button").filter({ hasText: /Back|Close|←/ }).first();
+      const backButton = page
+        .locator("button")
+        .filter({ hasText: /Back|Close|←/ })
+        .first();
       if (await backButton.isVisible().catch(() => false)) {
         await backButton.click();
         await page.waitForTimeout(300);
@@ -314,7 +327,7 @@ test.describe("Exo E2E - Navigation", () => {
 });
 
 test.describe("Exo E2E - Draft Critique", () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: "serial" });
   let electronApp: ElectronApplication;
   let page: Page;
 
@@ -369,7 +382,7 @@ test.describe("Exo E2E - Draft Critique", () => {
 });
 
 test.describe("Exo E2E - EA Settings", () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: "serial" });
   let electronApp: ElectronApplication;
   let page: Page;
 
@@ -400,7 +413,10 @@ test.describe("Exo E2E - EA Settings", () => {
     await expect(page.locator("text=Executive Assistant Integration")).toBeVisible();
 
     // Enable EA toggle (click the toggle button)
-    const toggle = page.locator("button").filter({ has: page.locator("span.rounded-full") }).first();
+    const toggle = page
+      .locator("button")
+      .filter({ has: page.locator("span.rounded-full") })
+      .first();
     if (await toggle.isVisible()) {
       await toggle.click();
       await page.waitForTimeout(300);
@@ -423,7 +439,10 @@ test.describe("Exo E2E - EA Settings", () => {
     await page.waitForTimeout(500);
 
     // Close settings
-    const closeButton = page.locator("button").filter({ has: page.locator("svg path[d*='M6 18L18 6']") }).first();
+    const closeButton = page
+      .locator("button")
+      .filter({ has: page.locator("svg path[d*='M6 18L18 6']") })
+      .first();
     if (await closeButton.isVisible()) {
       await closeButton.click();
     }
@@ -431,7 +450,7 @@ test.describe("Exo E2E - EA Settings", () => {
 });
 
 test.describe("Exo E2E - CC Display", () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: "serial" });
   let electronApp: ElectronApplication;
   let page: Page;
 
@@ -458,7 +477,10 @@ test.describe("Exo E2E - CC Display", () => {
     await page.waitForTimeout(300);
 
     // Enable and configure EA
-    const toggle = page.locator("button").filter({ has: page.locator("span.rounded-full") }).first();
+    const toggle = page
+      .locator("button")
+      .filter({ has: page.locator("span.rounded-full") })
+      .first();
     if (await toggle.isVisible()) {
       await toggle.click();
       await page.waitForTimeout(300);
@@ -477,14 +499,19 @@ test.describe("Exo E2E - CC Display", () => {
     await page.waitForTimeout(500);
 
     // Close settings
-    const closeButton = page.locator("button").filter({ has: page.locator("svg path[d*='M6 18L18 6']") }).first();
+    const closeButton = page
+      .locator("button")
+      .filter({ has: page.locator("svg path[d*='M6 18L18 6']") })
+      .first();
     if (await closeButton.isVisible()) {
       await closeButton.click();
       await page.waitForTimeout(300);
     }
 
     // Find and click on the scheduling email (demo-meeting)
-    const meetingEmail = page.locator("button").filter({ hasText: "Meeting to discuss partnership" });
+    const meetingEmail = page
+      .locator("button")
+      .filter({ hasText: "Meeting to discuss partnership" });
     if (await meetingEmail.isVisible()) {
       await meetingEmail.click();
       await page.waitForTimeout(500);

@@ -3,10 +3,7 @@
  * splitting and first-name extraction.
  */
 import { test, expect } from "@playwright/test";
-import {
-  splitAddressList,
-  extractFirstName,
-} from "../../src/renderer/utils/address-parsing";
+import { splitAddressList, extractFirstName } from "../../src/renderer/utils/address-parsing";
 
 // ============================================================
 // splitAddressList
@@ -14,10 +11,7 @@ import {
 
 test.describe("splitAddressList", () => {
   test("simple comma-separated addresses", () => {
-    expect(splitAddressList("a@b.com, c@d.com")).toEqual([
-      "a@b.com",
-      "c@d.com",
-    ]);
+    expect(splitAddressList("a@b.com, c@d.com")).toEqual(["a@b.com", "c@d.com"]);
   });
 
   test("Name <email> format", () => {
@@ -37,9 +31,7 @@ test.describe("splitAddressList", () => {
   });
 
   test("angle bracket addresses", () => {
-    expect(splitAddressList("<alice@example.com>")).toEqual([
-      "<alice@example.com>",
-    ]);
+    expect(splitAddressList("<alice@example.com>")).toEqual(["<alice@example.com>"]);
   });
 
   test("single address", () => {
@@ -51,15 +43,11 @@ test.describe("splitAddressList", () => {
   });
 
   test("whitespace handling", () => {
-    expect(splitAddressList("  a@b.com ,  c@d.com  ")).toEqual([
-      "a@b.com",
-      "c@d.com",
-    ]);
+    expect(splitAddressList("  a@b.com ,  c@d.com  ")).toEqual(["a@b.com", "c@d.com"]);
   });
 
   test("multiple addresses with mixed formats", () => {
-    const input =
-      'Alice <alice@a.com>, "Doe, Bob" <bob@b.com>, plain@c.com';
+    const input = 'Alice <alice@a.com>, "Doe, Bob" <bob@b.com>, plain@c.com';
     expect(splitAddressList(input)).toEqual([
       "Alice <alice@a.com>",
       '"Doe, Bob" <bob@b.com>',
@@ -69,10 +57,7 @@ test.describe("splitAddressList", () => {
 
   test("RFC 2822 comments in parentheses", () => {
     const input = "alice@example.com (Alice), bob@example.com";
-    expect(splitAddressList(input)).toEqual([
-      "alice@example.com (Alice)",
-      "bob@example.com",
-    ]);
+    expect(splitAddressList(input)).toEqual(["alice@example.com (Alice)", "bob@example.com"]);
   });
 });
 

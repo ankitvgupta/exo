@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { type z } from "zod";
 import type { McpServerConfig, CliToolConfig } from "../../shared/types";
 
 // Re-export renderer-safe types from the shared module to maintain a single
@@ -11,7 +11,13 @@ export type {
   AgentContext,
 } from "../../shared/agent-types";
 
-import type { AgentTaskState, AgentEvent, ScopedAgentEvent, AgentProviderConfig, AgentContext } from "../../shared/agent-types";
+import type {
+  AgentTaskState,
+  AgentEvent,
+  ScopedAgentEvent,
+  AgentProviderConfig,
+  AgentContext,
+} from "../../shared/agent-types";
 
 // --- Provider Interface ---
 
@@ -127,7 +133,11 @@ export interface ConfirmationDetails {
 }
 
 export type DbProxyFn = (method: string, ...args: unknown[]) => Promise<unknown>;
-export type GmailProxyFn = (method: string, accountId: string, ...args: unknown[]) => Promise<unknown>;
+export type GmailProxyFn = (
+  method: string,
+  accountId: string,
+  ...args: unknown[]
+) => Promise<unknown>;
 
 /** Result of a proxied net.fetch call through the main process. */
 export interface NetFetchResult {
@@ -176,21 +186,49 @@ export type WorkerMessage =
   | { type: "gmail_error"; requestId: string; error: string }
   | { type: "net_fetch_response"; requestId: string; result: NetFetchResult }
   | { type: "net_fetch_error"; requestId: string; error: string }
-  | { type: "run"; taskId: string; providerIds: string[]; prompt: string; context: AgentContext; modelOverride?: string }
+  | {
+      type: "run";
+      taskId: string;
+      providerIds: string[];
+      prompt: string;
+      context: AgentContext;
+      modelOverride?: string;
+    }
   | { type: "cancel"; taskId: string }
   | { type: "confirm"; toolCallId: string; approved: boolean }
   | { type: "config_update"; config: Partial<AgentFrameworkConfig> }
   | { type: "list_providers" }
-  | { type: "load_provider"; providerId: string; providerPath: string; config: AgentFrameworkConfig }
+  | {
+      type: "load_provider";
+      providerId: string;
+      providerPath: string;
+      config: AgentFrameworkConfig;
+    }
   | { type: "unload_provider"; providerId: string }
   | { type: "check_health"; providerId: string };
 
 export type CoordinatorMessage =
   | { type: "db_request"; requestId: string; method: string; args: unknown[] }
   | { type: "gmail_request"; requestId: string; method: string; accountId: string; args: unknown[] }
-  | { type: "net_fetch_request"; requestId: string; url: string; options: { method: string; headers?: Record<string, string>; body?: string } }
-  | { type: "confirmation_request"; toolCallId: string; toolName: string; input: unknown; description: string }
+  | {
+      type: "net_fetch_request";
+      requestId: string;
+      url: string;
+      options: { method: string; headers?: Record<string, string>; body?: string };
+    }
+  | {
+      type: "confirmation_request";
+      toolCallId: string;
+      toolName: string;
+      input: unknown;
+      description: string;
+    }
   | { type: "providers_list"; providers: AgentProviderConfig[] }
   | { type: "provider_loaded"; providerId: string }
   | { type: "provider_load_error"; providerId: string; error: string }
-  | { type: "provider_health"; providerId: string; status: "connected" | "not_configured" | "error"; message?: string };
+  | {
+      type: "provider_health";
+      providerId: string;
+      status: "connected" | "not_configured" | "error";
+      message?: string;
+    };

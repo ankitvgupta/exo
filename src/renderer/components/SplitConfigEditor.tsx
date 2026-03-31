@@ -27,7 +27,9 @@ function ConditionEditor({ condition, onChange, onRemove }: ConditionEditorProps
         className="text-sm border rounded px-2 py-1 w-24 dark:bg-gray-700 dark:text-gray-100 dark:border-gray-600"
       >
         {CONDITION_TYPES.map((t) => (
-          <option key={t.value} value={t.value}>{t.label}</option>
+          <option key={t.value} value={t.value}>
+            {t.label}
+          </option>
         ))}
       </select>
 
@@ -55,7 +57,12 @@ function ConditionEditor({ condition, onChange, onRemove }: ConditionEditorProps
         title="Remove condition"
       >
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M6 18L18 6M6 6l12 12"
+          />
         </svg>
       </button>
     </div>
@@ -73,7 +80,7 @@ function SplitEditor({ split, onSave, onCancel, existingCount }: SplitEditorProp
   const [name, setName] = useState(split?.name ?? "");
   const [icon, setIcon] = useState(split?.icon ?? "");
   const [conditions, setConditions] = useState<SplitCondition[]>(
-    split?.conditions ?? [{ type: "from", value: "" }]
+    split?.conditions ?? [{ type: "from", value: "" }],
   );
   const [conditionLogic, setConditionLogic] = useState<"and" | "or">(split?.conditionLogic ?? "or");
   const [exclusive, setExclusive] = useState(split?.exclusive ?? false);
@@ -120,7 +127,9 @@ function SplitEditor({ split, onSave, onCancel, existingCount }: SplitEditorProp
       <div className="space-y-4">
         <div className="flex gap-3">
           <div className="flex-1">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Name</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Name
+            </label>
             <input
               type="text"
               value={name}
@@ -130,7 +139,9 @@ function SplitEditor({ split, onSave, onCancel, existingCount }: SplitEditorProp
             />
           </div>
           <div className="w-20">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Icon</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Icon
+            </label>
             <input
               type="text"
               value={icon}
@@ -144,7 +155,9 @@ function SplitEditor({ split, onSave, onCancel, existingCount }: SplitEditorProp
 
         <div>
           <div className="flex items-center justify-between mb-2">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Conditions</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Conditions
+            </label>
             <select
               value={conditionLogic}
               onChange={(e) => setConditionLogic(e.target.value as "and" | "or")}
@@ -172,7 +185,8 @@ function SplitEditor({ split, onSave, onCancel, existingCount }: SplitEditorProp
           </button>
           <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
             Use <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">*</code> as wildcard.
-            Examples: <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">*@company.com</code>,
+            Examples:{" "}
+            <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">*@company.com</code>,
             <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded ml-1">john*</code>,
             <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded ml-1">*newsletter*</code>
           </p>
@@ -187,7 +201,9 @@ function SplitEditor({ split, onSave, onCancel, existingCount }: SplitEditorProp
               className="rounded"
             />
             <div>
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Exclusive</span>
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                Exclusive
+              </span>
               <p className="text-xs text-gray-500 dark:text-gray-400">
                 Hide matching emails from "All" inbox and "Archive Ready"
               </p>
@@ -332,7 +348,7 @@ export function SplitConfigEditor() {
     setShResult(null);
     setShError(null);
     try {
-      const result = await window.api.splits.discoverSuperhuman() as {
+      const result = (await window.api.splits.discoverSuperhuman()) as {
         success: boolean;
         data?: { accounts: SuperhumanAccount[] };
         error?: string;
@@ -355,7 +371,7 @@ export function SplitConfigEditor() {
     setShImporting(true);
     setShResult(null);
     try {
-      const result = await window.api.splits.importFromSuperhuman(email, currentAccountId) as {
+      const result = (await window.api.splits.importFromSuperhuman(email, currentAccountId)) as {
         success: boolean;
         data?: ImportResult;
         error?: string;
@@ -363,7 +379,7 @@ export function SplitConfigEditor() {
       if (result.success && result.data) {
         setShResult(result.data);
         // Refresh splits
-        const refreshed = await window.api.splits.getAll() as {
+        const refreshed = (await window.api.splits.getAll()) as {
           success: boolean;
           data?: InboxSplit[];
         };
@@ -400,8 +416,8 @@ export function SplitConfigEditor() {
         <div>
           <h3 className="font-medium text-gray-900 dark:text-gray-100">Inbox Splits</h3>
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            Splits for <span className="font-medium">{currentAccount?.email}</span>.
-            Use wildcards (*) in patterns.
+            Splits for <span className="font-medium">{currentAccount?.email}</span>. Use wildcards
+            (*) in patterns.
           </p>
         </div>
         {!isCreating && !editingSplit && (
@@ -460,7 +476,9 @@ export function SplitConfigEditor() {
             Imported {shResult.imported} split{shResult.imported !== 1 ? "s" : ""}
           </p>
           {shResult.warnings.map((w, i) => (
-            <p key={i} className="text-xs text-yellow-700 dark:text-yellow-400">{w}</p>
+            <p key={i} className="text-xs text-yellow-700 dark:text-yellow-400">
+              {w}
+            </p>
           ))}
           <button
             onClick={() => setShResult(null)}
@@ -528,7 +546,8 @@ export function SplitConfigEditor() {
                     )}
                   </div>
                   <div className="text-xs text-gray-500 dark:text-gray-400">
-                    {split.conditions.length} condition{split.conditions.length !== 1 ? "s" : ""} ({split.conditionLogic})
+                    {split.conditions.length} condition{split.conditions.length !== 1 ? "s" : ""} (
+                    {split.conditionLogic})
                   </div>
                 </div>
               </div>
@@ -541,7 +560,12 @@ export function SplitConfigEditor() {
                   title="Move up"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M5 15l7-7 7 7"
+                    />
                   </svg>
                 </button>
                 <button
@@ -551,7 +575,12 @@ export function SplitConfigEditor() {
                   title="Move down"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M19 9l-7 7-7-7"
+                    />
                   </svg>
                 </button>
                 <button
@@ -561,7 +590,12 @@ export function SplitConfigEditor() {
                   title="Edit"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
+                    />
                   </svg>
                 </button>
                 <button
@@ -571,7 +605,12 @@ export function SplitConfigEditor() {
                   title="Delete"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                    />
                   </svg>
                 </button>
               </div>

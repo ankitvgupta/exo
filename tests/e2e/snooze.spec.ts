@@ -39,11 +39,14 @@ async function selectAndOpenEmail(page: Page, nameFilter: string): Promise<void>
   // Press Enter to open the email detail view (action buttons only appear after opening)
   await page.keyboard.press("Enter");
   // Wait for action buttons to appear (title differs depending on snoozed state)
-  await page.locator("button[title='Snooze (h)'], button[title='Snoozed']").first().waitFor({ timeout: 5000 });
+  await page
+    .locator("button[title='Snooze (h)'], button[title='Snoozed']")
+    .first()
+    .waitFor({ timeout: 5000 });
 }
 
 test.describe("Snooze Feature — Menu & Presets", () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: "serial" });
   let electronApp: ElectronApplication;
   let page: Page;
 
@@ -53,7 +56,11 @@ test.describe("Snooze Feature — Menu & Presets", () => {
     page = result.page;
 
     // Wait for email list to populate (priority badges or any email sender visible)
-    await page.locator("button").filter({ hasText: /High|Medium|Low|HR Team|Product Team|Snoozed/ }).first().waitFor({ timeout: 15000 });
+    await page
+      .locator("button")
+      .filter({ hasText: /High|Medium|Low|HR Team|Product Team|Snoozed/ })
+      .first()
+      .waitFor({ timeout: 15000 });
 
     page.on("console", (msg) => {
       if (msg.type() === "error") {
@@ -73,7 +80,9 @@ test.describe("Snooze Feature — Menu & Presets", () => {
     await selectAndOpenEmail(page, "HR Team");
 
     // Click snooze button (clock icon)
-    const snoozeButton = page.locator("button[title='Snooze (h)'], button[title='Snoozed']").first();
+    const snoozeButton = page
+      .locator("button[title='Snooze (h)'], button[title='Snoozed']")
+      .first();
     await snoozeButton.click();
 
     // Snooze menu should appear
@@ -97,7 +106,9 @@ test.describe("Snooze Feature — Menu & Presets", () => {
     await selectAndOpenEmail(page, "HR Team");
 
     // Open snooze menu
-    const snoozeButton = page.locator("button[title='Snooze (h)'], button[title='Snoozed']").first();
+    const snoozeButton = page
+      .locator("button[title='Snooze (h)'], button[title='Snoozed']")
+      .first();
     await snoozeButton.click();
 
     // Verify menu is open
@@ -114,7 +125,9 @@ test.describe("Snooze Feature — Menu & Presets", () => {
     await selectAndOpenEmail(page, "HR Team");
 
     // Open snooze menu
-    const snoozeButton = page.locator("button[title='Snooze (h)'], button[title='Snoozed']").first();
+    const snoozeButton = page
+      .locator("button[title='Snooze (h)'], button[title='Snoozed']")
+      .first();
     await snoozeButton.click();
     await expect(page.locator("text=Tomorrow")).toBeVisible({ timeout: 3000 });
 
@@ -136,14 +149,17 @@ test.describe("Snooze Feature — Menu & Presets", () => {
 
       // Should show snoozed emails with a clock indicator
       const clockIcon = page.locator("svg path[d*='M12 8v4l3 3']");
-      const hasIcon = await clockIcon.first().isVisible().catch(() => false);
+      const hasIcon = await clockIcon
+        .first()
+        .isVisible()
+        .catch(() => false);
       expect(hasIcon).toBe(true);
     }
   });
 });
 
 test.describe("Snooze Feature — Natural Language Input", () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: "serial" });
   let electronApp: ElectronApplication;
   let page: Page;
 
@@ -153,7 +169,11 @@ test.describe("Snooze Feature — Natural Language Input", () => {
     page = result.page;
 
     // Wait for email list to populate
-    await page.locator("button").filter({ hasText: /High|Medium|Low|Garry|HR Team|Product Team/ }).first().waitFor({ timeout: 15000 });
+    await page
+      .locator("button")
+      .filter({ hasText: /High|Medium|Low|Garry|HR Team|Product Team/ })
+      .first()
+      .waitFor({ timeout: 15000 });
   });
 
   test.afterAll(async () => {
@@ -169,7 +189,9 @@ test.describe("Snooze Feature — Natural Language Input", () => {
     await selectAndOpenEmail(page, "Garry");
 
     // Open snooze menu
-    const snoozeButton = page.locator("button[title='Snooze (h)'], button[title='Snoozed']").first();
+    const snoozeButton = page
+      .locator("button[title='Snooze (h)'], button[title='Snoozed']")
+      .first();
     await snoozeButton.click();
 
     // Type a natural language time
@@ -185,7 +207,6 @@ test.describe("Snooze Feature — Natural Language Input", () => {
     // Should show a Snooze button for the parsed time
     const confirmButton = page.locator("button:has-text('Snooze')").last();
     await expect(confirmButton).toBeVisible();
-
   });
 
   test("shows error for unparseable input", async () => {
@@ -195,7 +216,9 @@ test.describe("Snooze Feature — Natural Language Input", () => {
     await selectAndOpenEmail(page, "Garry");
 
     // Open snooze menu
-    const snoozeButton = page.locator("button[title='Snooze (h)'], button[title='Snoozed']").first();
+    const snoozeButton = page
+      .locator("button[title='Snooze (h)'], button[title='Snoozed']")
+      .first();
     await snoozeButton.click();
 
     // Type gibberish
@@ -206,7 +229,6 @@ test.describe("Snooze Feature — Natural Language Input", () => {
     // Should show error
     const errorMessage = page.locator("text=Couldn't parse that");
     await expect(errorMessage).toBeVisible();
-
   });
 
   test("can snooze with Enter key after typing time", async () => {
@@ -216,7 +238,9 @@ test.describe("Snooze Feature — Natural Language Input", () => {
     await selectAndOpenEmail(page, "Garry");
 
     // Open snooze menu
-    const snoozeButton = page.locator("button[title='Snooze (h)'], button[title='Snoozed']").first();
+    const snoozeButton = page
+      .locator("button[title='Snooze (h)'], button[title='Snoozed']")
+      .first();
     await snoozeButton.click();
 
     // Type a time and hit Enter
@@ -228,12 +252,11 @@ test.describe("Snooze Feature — Natural Language Input", () => {
 
     // Snooze menu should close
     await expect(page.locator("text=Later Today")).not.toBeVisible();
-
   });
 });
 
 test.describe("Snooze Feature — Snooze Banner & Unsnooze", () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: "serial" });
   let electronApp: ElectronApplication;
   let page: Page;
 
@@ -243,7 +266,11 @@ test.describe("Snooze Feature — Snooze Banner & Unsnooze", () => {
     page = result.page;
 
     // Wait for email list to populate
-    await page.locator("button").filter({ hasText: /High|Medium|Low|HR Team|Product Team/ }).first().waitFor({ timeout: 15000 });
+    await page
+      .locator("button")
+      .filter({ hasText: /High|Medium|Low|HR Team|Product Team/ })
+      .first()
+      .waitFor({ timeout: 15000 });
   });
 
   test.afterAll(async () => {
@@ -256,7 +283,9 @@ test.describe("Snooze Feature — Snooze Banner & Unsnooze", () => {
     // First, snooze a non-snoozed email
     await selectAndOpenEmail(page, "HR Team");
 
-    const snoozeButton = page.locator("button[title='Snooze (h)'], button[title='Snoozed']").first();
+    const snoozeButton = page
+      .locator("button[title='Snooze (h)'], button[title='Snoozed']")
+      .first();
     await snoozeButton.click();
     await expect(page.locator("text=In 1 Week")).toBeVisible({ timeout: 3000 });
 
@@ -300,7 +329,9 @@ test.describe("Snooze Feature — Snooze Banner & Unsnooze", () => {
     if (!(await emailButton.isVisible())) return;
     await selectAndOpenEmail(page, "Gustaf");
 
-    const snoozeButton = page.locator("button[title='Snooze (h)'], button[title='Snoozed']").first();
+    const snoozeButton = page
+      .locator("button[title='Snooze (h)'], button[title='Snoozed']")
+      .first();
     await snoozeButton.click();
     await expect(page.locator("text=Later Today")).toBeVisible({ timeout: 3000 });
 
@@ -332,7 +363,7 @@ test.describe("Snooze Feature — Snooze Banner & Unsnooze", () => {
 });
 
 test.describe("Snooze Feature — Date Picker", () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: "serial" });
   let electronApp: ElectronApplication;
   let page: Page;
 
@@ -342,7 +373,11 @@ test.describe("Snooze Feature — Date Picker", () => {
     page = result.page;
 
     // Wait for email list to populate
-    await page.locator("button").filter({ hasText: /High|Medium|Low|HR Team|Product Team/ }).first().waitFor({ timeout: 15000 });
+    await page
+      .locator("button")
+      .filter({ hasText: /High|Medium|Low|HR Team|Product Team/ })
+      .first()
+      .waitFor({ timeout: 15000 });
   });
 
   test.afterAll(async () => {
@@ -356,7 +391,9 @@ test.describe("Snooze Feature — Date Picker", () => {
     await selectAndOpenEmail(page, "HR Team");
 
     // Open snooze menu
-    const snoozeButton = page.locator("button[title='Snooze (h)'], button[title='Snoozed']").first();
+    const snoozeButton = page
+      .locator("button[title='Snooze (h)'], button[title='Snoozed']")
+      .first();
     await snoozeButton.click();
     await expect(page.locator("text=Pick date & time")).toBeVisible({ timeout: 3000 });
 
@@ -374,6 +411,5 @@ test.describe("Snooze Feature — Date Picker", () => {
     // Should show a Snooze button
     const snoozeConfirm = page.locator("button:has-text('Snooze')").last();
     await expect(snoozeConfirm).toBeVisible();
-
   });
 });

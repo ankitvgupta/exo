@@ -1,0 +1,17 @@
+{
+  "id": "no-reply-newsletter-001",
+  "description": "Weekly tech newsletter — automated marketing content, no reply expected",
+  "email": {
+    "id": "fixture-003",
+    "threadId": "thread-003",
+    "from": "digest@techweekly.com",
+    "to": "user@company.com",
+    "subject": "Weekly Tech Digest: Top 10 AI Stories This Week",
+    "body": "Welcome to your weekly tech newsletter!\n\nThis week in AI:\n1. OpenAI announces new model capabilities for enterprise customers\n2. Google releases Gemini updates with improved reasoning\n3. Microsoft expands Copilot features across Office 365\n4. Anthropic publishes constitutional AI safety research\n5. Meta open-sources new LLaMA variant\n\nIn other news:\n- AWS re:Invent highlights and key announcements\n- The future of quantum computing: a primer\n- DevOps trends to watch in 2025\n\nClick here to read the full articles. Unsubscribe | Manage preferences",
+    "date": "2025-01-15T08:00:00Z",
+    "snippet": "Welcome to your weekly tech newsletter! This week in AI..."
+  },
+  "expected": {
+    "needs_reply": false
+  }
+}

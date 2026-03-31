@@ -40,7 +40,10 @@ export async function launchElectronApp(
 
   // The app defaults to the Priority tab. Switch to "All" so tests see every
   // email in the demo inbox (most tests search for specific emails by name).
-  const allTab = window.locator("button").filter({ hasText: /^All\s*\d*$/ }).first();
+  const allTab = window
+    .locator("button")
+    .filter({ hasText: /^All\s*\d*$/ })
+    .first();
   try {
     await allTab.waitFor({ state: "visible", timeout: 3000 });
     await allTab.click();

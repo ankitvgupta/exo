@@ -255,7 +255,7 @@ test.describe("edge cases", () => {
   test("HTML input is detected (would use DOM path in browser)", () => {
     // Verify that HTML content is properly identified - in the real code
     // this triggers the DOMParser path which we can't test in Node
-    expect(isHtmlContent("<div class=\"gmail_quote\">quoted</div>")).toBe(true);
+    expect(isHtmlContent('<div class="gmail_quote">quoted</div>')).toBe(true);
   });
 
   test("plain text with > in non-quote context is not stripped when on first line", () => {

@@ -15,11 +15,15 @@ export const ANALYSIS_CAP = 50;
  * Filters memories by scope and caps each to `cap`, then builds
  * human-readable sections for each non-empty scope.
  */
-export function buildScopedSections(memories: Memory[], cap: number, senderEmail?: string): string[] {
-  const person = memories.filter(m => m.scope === "person").slice(0, cap);
-  const domain = memories.filter(m => m.scope === "domain").slice(0, cap);
-  const category = memories.filter(m => m.scope === "category").slice(0, cap);
-  const global = memories.filter(m => m.scope === "global").slice(0, cap);
+export function buildScopedSections(
+  memories: Memory[],
+  cap: number,
+  senderEmail?: string,
+): string[] {
+  const person = memories.filter((m) => m.scope === "person").slice(0, cap);
+  const domain = memories.filter((m) => m.scope === "domain").slice(0, cap);
+  const category = memories.filter((m) => m.scope === "category").slice(0, cap);
+  const global = memories.filter((m) => m.scope === "global").slice(0, cap);
 
   const sections: string[] = [];
 
@@ -34,7 +38,9 @@ export function buildScopedSections(memories: Memory[], cap: number, senderEmail
   }
 
   if (category.length > 0) {
-    sections.push(`For certain types of emails (apply only if relevant):\n${formatCategoryMemories(category)}`);
+    sections.push(
+      `For certain types of emails (apply only if relevant):\n${formatCategoryMemories(category)}`,
+    );
   }
 
   if (global.length > 0) {
@@ -87,9 +93,11 @@ export function buildAnalysisMemoryContext(senderEmail: string, accountId: strin
 }
 
 function formatMemories(memories: Memory[]): string {
-  return memories.map(m => `- ${m.content}`).join("\n");
+  return memories.map((m) => `- ${m.content}`).join("\n");
 }
 
 function formatCategoryMemories(memories: Memory[]): string {
-  return memories.map(m => `- ${m.scopeValue ? `[${m.scopeValue}] ` : ""}${m.content}`).join("\n");
+  return memories
+    .map((m) => `- ${m.scopeValue ? `[${m.scopeValue}] ` : ""}${m.content}`)
+    .join("\n");
 }

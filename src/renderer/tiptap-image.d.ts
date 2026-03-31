@@ -16,11 +16,7 @@ declare module "@tiptap/extension-image" {
 declare module "@tiptap/core" {
   interface Commands<ReturnType> {
     image: {
-      setImage: (options: {
-        src: string;
-        alt?: string;
-        title?: string;
-      }) => ReturnType;
+      setImage: (options: { src: string; alt?: string; title?: string }) => ReturnType;
     };
   }
 }

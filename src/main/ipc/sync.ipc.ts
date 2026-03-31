@@ -7,10 +7,38 @@ import { networkMonitor } from "../services/network-monitor";
 import { outboxService } from "../services/outbox-service";
 import { pendingActionsQueue } from "../services/pending-actions";
 import { isNetworkError } from "../services/network-errors";
-import { getAccounts, saveAccount, removeAccount, setPrimaryAccount, getAllEmails, getInboxEmails, getSentEmails, saveEmail, searchEmails, getEmail, getEmailsByThread, getEmailsByIds, getEmailIds, getEmailBodies, updateEmailLabelIds, deleteEmail, saveArchiveReady, saveAnalysis, snoozeEmail, clearSnoozedEmails, saveCorrespondentProfile, updateAccountDisplayName, deleteAgentTrace, saveDraft, type AccountRecord } from "../db";
+import {
+  getAccounts,
+  saveAccount,
+  removeAccount,
+  setPrimaryAccount,
+  getInboxEmails,
+  getSentEmails,
+  saveEmail,
+  searchEmails,
+  getEmail,
+  getEmailsByThread,
+  getEmailsByIds,
+  getEmailIds,
+  getEmailBodies,
+  updateEmailLabelIds,
+  deleteEmail,
+  saveArchiveReady,
+  saveAnalysis,
+  snoozeEmail,
+  clearSnoozedEmails,
+  saveCorrespondentProfile,
+  updateAccountDisplayName,
+  deleteAgentTrace,
+  saveDraft,
+  type AccountRecord,
+} from "../db";
 import { getOnboardingClient, clearOnboardingClient } from "./onboarding.ipc";
 import { calendarSyncService } from "../services/calendar-sync";
 import type { IpcResponse, DashboardEmail } from "../../shared/types";
+import { createLogger } from "../services/logger";
+
+const log = createLogger("sync-ipc");
 
 const isTestMode = process.env.EXO_TEST_MODE === "true";
 const isDemoMode = process.env.EXO_DEMO_MODE === "true";
@@ -48,7 +76,7 @@ async function retryFailedConnections(): Promise<void> {
 
     if (disconnected.length === 0) return;
 
-    console.log(`[Sync] Retrying ${disconnected.length} failed account connection(s)`);
+    log.info(`[Sync] Retrying ${disconnected.length} failed account connection(s)`);
 
     for (const account of disconnected) {
       try {
@@ -59,7 +87,7 @@ async function retryFailedConnections(): Promise<void> {
         activeClients.set(account.id, client);
         emailSyncService.startSync(account.id);
 
-        console.log(`[Sync] Reconnected account: ${accountInfo.email}`);
+        log.info(`[Sync] Reconnected account: ${accountInfo.email}`);
 
         // Notify renderer of the reconnection
         const window = getMainWindow();
@@ -70,7 +98,7 @@ async function retryFailedConnections(): Promise<void> {
           });
         }
       } catch (err) {
-        console.error(`[Sync] Retry failed for account ${account.id}:`, err);
+        log.error({ err: err }, `[Sync] Retry failed for account ${account.id}`);
       }
     }
   } finally {
@@ -88,8 +116,8 @@ export function registerSyncIpc(): void {
   // When going online, reconnect failed accounts THEN process queues
   networkMonitor.on("online", async () => {
     await retryFailedConnections();
-    outboxService.processQueue().catch(console.error);
-    pendingActionsQueue.processQueue().catch(console.error);
+    outboxService.processQueue().catch((err) => log.error({ err }, "Unhandled error"));
+    pendingActionsQueue.processQueue().catch((err) => log.error({ err }, "Unhandled error"));
   });
 
   // Give the pending actions queue access to Gmail clients
@@ -97,8 +125,11 @@ export function registerSyncIpc(): void {
 
   // Forward permanent action failures to the renderer so it can restore emails,
   // and roll back the optimistic DB update
-  pendingActionsQueue.on("action-failed", (data: { emailId: string; accountId: string; action: string; error: string }) => {
-    console.error(`[Sync] Pending action permanently failed: ${data.action} ${data.emailId} - ${data.error}`);
+  pendingActionsQueue.on("action-failed", (...args: unknown[]) => {
+    const data = args[0] as { emailId: string; accountId: string; action: string; error: string };
+    log.error(
+      `[Sync] Pending action permanently failed: ${data.action} ${data.emailId} - ${data.error}`,
+    );
 
     // Roll back the optimistic DB change so the email isn't lost locally
     if (data.action === "archive") {
@@ -112,17 +143,20 @@ export function registerSyncIpc(): void {
     } else if (data.action === "trash") {
       const saved = trashedEmailData.get(data.emailId);
       if (saved) {
-        saveEmail({
-          id: saved.id,
-          threadId: saved.threadId,
-          subject: saved.subject,
-          from: saved.from,
-          to: saved.to,
-          date: saved.date,
-          body: saved.body || "",
-          snippet: saved.snippet,
-          labelIds: saved.labelIds,
-        }, data.accountId);
+        saveEmail(
+          {
+            id: saved.id,
+            threadId: saved.threadId,
+            subject: saved.subject,
+            from: saved.from,
+            to: saved.to,
+            date: saved.date,
+            body: saved.body || "",
+            snippet: saved.snippet,
+            labelIds: saved.labelIds,
+          },
+          data.accountId,
+        );
         trashedEmailData.delete(data.emailId);
       }
     }
@@ -134,12 +168,20 @@ export function registerSyncIpc(): void {
   });
 
   // When a queued action succeeds, clean up saved data and notify the renderer
-  pendingActionsQueue.on("action-succeeded", (data: { emailId: string; accountId: string; action: string }) => {
+  pendingActionsQueue.on("action-succeeded", (...args: unknown[]) => {
+    const data = args[0] as { emailId: string; accountId: string; action: string };
     trashedEmailData.delete(data.emailId);
     const window = getMainWindow();
     if (window) {
-      window.webContents.send("sync:emails-removed", { accountId: data.accountId, emailIds: [data.emailId] });
-      window.webContents.send("sync:action-succeeded", { emailId: data.emailId, accountId: data.accountId, action: data.action });
+      window.webContents.send("sync:emails-removed", {
+        accountId: data.accountId,
+        emailIds: [data.emailId],
+      });
+      window.webContents.send("sync:action-succeeded", {
+        emailId: data.emailId,
+        accountId: data.accountId,
+        action: data.action,
+      });
     }
   });
 
@@ -198,7 +240,7 @@ export function registerSyncIpc(): void {
   emailSyncService.onAuthError((accountId, email) => {
     const window = getMainWindow();
     if (window) {
-      console.log(`[Auth] Sending token-expired event for ${email}`);
+      log.info(`[Auth] Sending token-expired event for ${email}`);
       window.webContents.send("auth:token-expired", { accountId, email, source: "gmail" });
     }
   });
@@ -208,8 +250,12 @@ export function registerSyncIpc(): void {
   extensionHost.onAuthRequired((extensionId, displayName, message) => {
     const window = getMainWindow();
     if (window) {
-      console.log(`[Auth] Sending extension-auth-required for ${displayName}`);
-      window.webContents.send("auth:extension-auth-required", { extensionId, displayName, message });
+      log.info(`[Auth] Sending extension-auth-required for ${displayName}`);
+      window.webContents.send("auth:extension-auth-required", {
+        extensionId,
+        displayName,
+        message,
+      });
     }
   });
 
@@ -229,7 +275,7 @@ export function registerSyncIpc(): void {
         await emailSyncService.registerAccount(client);
         emailSyncService.startSync(accountId);
 
-        console.log(`[Auth] Re-authenticated account ${accountId}, sync restarted`);
+        log.info(`[Auth] Re-authenticated account ${accountId}, sync restarted`);
         return { success: true, data: undefined };
       } catch (error) {
         return {
@@ -237,7 +283,7 @@ export function registerSyncIpc(): void {
           error: error instanceof Error ? error.message : "Unknown error",
         };
       }
-    }
+    },
   );
 
   // Get all accounts
@@ -313,7 +359,11 @@ export function registerSyncIpc(): void {
         pendingAddClient = null;
         activeClients.delete(id);
         emailSyncService.unregisterAccount(id);
-        try { removeAccount(id); } catch { /* may not have been saved yet */ }
+        try {
+          removeAccount(id);
+        } catch {
+          /* may not have been saved yet */
+        }
         const message = error instanceof Error ? error.message : "Unknown error";
         return {
           success: false,
@@ -321,7 +371,7 @@ export function registerSyncIpc(): void {
           cancelled: message === "Authorization cancelled",
         };
       }
-    }
+    },
   );
 
   // Cancel an in-progress account add (e.g. user closed browser during OAuth)
@@ -365,7 +415,7 @@ export function registerSyncIpc(): void {
           error: error instanceof Error ? error.message : "Unknown error",
         };
       }
-    }
+    },
   );
 
   // Set primary account
@@ -385,7 +435,7 @@ export function registerSyncIpc(): void {
           error: error instanceof Error ? error.message : "Unknown error",
         };
       }
-    }
+    },
   );
 
   // Start sync for an account
@@ -405,7 +455,7 @@ export function registerSyncIpc(): void {
           error: error instanceof Error ? error.message : "Unknown error",
         };
       }
-    }
+    },
   );
 
   // Stop sync for an account
@@ -425,7 +475,7 @@ export function registerSyncIpc(): void {
           error: error instanceof Error ? error.message : "Unknown error",
         };
       }
-    }
+    },
   );
 
   // Trigger immediate sync
@@ -445,7 +495,7 @@ export function registerSyncIpc(): void {
           error: error instanceof Error ? error.message : "Unknown error",
         };
       }
-    }
+    },
   );
 
   // Get sync status
@@ -465,7 +515,7 @@ export function registerSyncIpc(): void {
           error: error instanceof Error ? error.message : "Unknown error",
         };
       }
-    }
+    },
   );
 
   // Set sync interval
@@ -485,7 +535,7 @@ export function registerSyncIpc(): void {
           error: error instanceof Error ? error.message : "Unknown error",
         };
       }
-    }
+    },
   );
 
   // Get emails for a specific account from the database
@@ -493,7 +543,7 @@ export function registerSyncIpc(): void {
     "sync:get-emails",
     async (_, { accountId }: { accountId: string }): Promise<IpcResponse<DashboardEmail[]>> => {
       const t0 = performance.now();
-      console.log(`[PERF] sync:get-emails START for ${accountId}`);
+      log.info(`[PERF] sync:get-emails START for ${accountId}`);
 
       if (useFakeData) {
         const { DEMO_INBOX_EMAILS, DEMO_EXPECTED_ANALYSIS } = await import("../demo/fake-inbox");
@@ -501,25 +551,29 @@ export function registerSyncIpc(): void {
         // fake email body/html content (not stored in demo DB) and expected analysis
         const currentInbox = getInboxEmails("default");
         const dbMap = new Map(currentInbox.map((e) => [e.id, e]));
-        const fakeEmails: DashboardEmail[] = DEMO_INBOX_EMAILS
-          .filter((email) => dbMap.has(email.id))
-          .map((email) => {
-            const dbEmail = dbMap.get(email.id)!;
-            const expectedAnalysis = DEMO_EXPECTED_ANALYSIS[email.id];
-            return {
-              ...email,
-              accountId: "default",
-              analysis: dbEmail.analysis ?? (expectedAnalysis ? {
-                needsReply: expectedAnalysis.needsReply,
-                reason: expectedAnalysis.reason,
-                priority: expectedAnalysis.priority,
-                analyzedAt: Date.now(),
-              } : undefined),
-              // Preserve draft data from DB (includes agentTaskId)
-              draft: dbEmail.draft,
-            };
-          });
-        console.log(`[PERF] sync:get-emails END (demo) ${(performance.now() - t0).toFixed(1)}ms`);
+        const fakeEmails: DashboardEmail[] = DEMO_INBOX_EMAILS.filter((email) =>
+          dbMap.has(email.id),
+        ).map((email) => {
+          const dbEmail = dbMap.get(email.id)!;
+          const expectedAnalysis = DEMO_EXPECTED_ANALYSIS[email.id];
+          return {
+            ...email,
+            accountId: "default",
+            analysis:
+              dbEmail.analysis ??
+              (expectedAnalysis
+                ? {
+                    needsReply: expectedAnalysis.needsReply,
+                    reason: expectedAnalysis.reason,
+                    priority: expectedAnalysis.priority,
+                    analyzedAt: Date.now(),
+                  }
+                : undefined),
+            // Preserve draft data from DB (includes agentTaskId)
+            draft: dbEmail.draft,
+          };
+        });
+        log.info(`[PERF] sync:get-emails END (demo) ${(performance.now() - t0).toFixed(1)}ms`);
         return { success: true, data: fakeEmails };
       }
 
@@ -528,17 +582,19 @@ export function registerSyncIpc(): void {
         // Background-synced emails are in DB for search but not loaded into renderer
         const t1 = performance.now();
         const emails = getInboxEmails(accountId);
-        console.log(`[PERF] sync:get-emails DB query took ${(performance.now() - t1).toFixed(1)}ms, returned ${emails.length} emails`);
-        console.log(`[PERF] sync:get-emails END total ${(performance.now() - t0).toFixed(1)}ms`);
+        log.info(
+          `[PERF] sync:get-emails DB query took ${(performance.now() - t1).toFixed(1)}ms, returned ${emails.length} emails`,
+        );
+        log.info(`[PERF] sync:get-emails END total ${(performance.now() - t0).toFixed(1)}ms`);
         return { success: true, data: emails };
       } catch (error) {
-        console.log(`[PERF] sync:get-emails ERROR ${(performance.now() - t0).toFixed(1)}ms`);
+        log.info(`[PERF] sync:get-emails ERROR ${(performance.now() - t0).toFixed(1)}ms`);
         return {
           success: false,
           error: error instanceof Error ? error.message : "Unknown error",
         };
       }
-    }
+    },
   );
 
   // Get sent emails for a specific account from the database
@@ -548,12 +604,12 @@ export function registerSyncIpc(): void {
       if (useFakeData) {
         const { DEMO_INBOX_EMAILS } = await import("../demo/fake-inbox");
         // In demo mode, return emails that have the SENT label
-        const sentEmails: DashboardEmail[] = DEMO_INBOX_EMAILS
-          .filter((email) => email.labelIds?.includes("SENT"))
-          .map((email) => ({
-            ...email,
-            accountId: "default",
-          }));
+        const sentEmails: DashboardEmail[] = DEMO_INBOX_EMAILS.filter((email) =>
+          email.labelIds?.includes("SENT"),
+        ).map((email) => ({
+          ...email,
+          accountId: "default",
+        }));
         return { success: true, data: sentEmails };
       }
 
@@ -566,14 +622,17 @@ export function registerSyncIpc(): void {
           error: error instanceof Error ? error.message : "Unknown error",
         };
       }
-    }
+    },
   );
 
   // Fetch email bodies for a batch of IDs (used by renderer to backfill
   // bodies after the initial body-less inbox load)
   ipcMain.handle(
     "sync:prefetch-bodies",
-    async (_, { ids }: { ids: string[] }): Promise<IpcResponse<Array<{ id: string; body: string }>>> => {
+    async (
+      _,
+      { ids }: { ids: string[] },
+    ): Promise<IpcResponse<Array<{ id: string; body: string }>>> => {
       try {
         const bodies = getEmailBodies(ids);
         return { success: true, data: bodies };
@@ -583,13 +642,13 @@ export function registerSyncIpc(): void {
           error: error instanceof Error ? error.message : "Unknown error",
         };
       }
-    }
+    },
   );
 
   // Initialize accounts on startup
   ipcMain.handle("sync:init", async (): Promise<IpcResponse<AccountInfo[]>> => {
     const t0 = performance.now();
-    console.log(`[PERF] sync:init START`);
+    log.info(`[PERF] sync:init START`);
 
     if (useFakeData) {
       // In demo mode, ensure the demo account exists and populate with fake emails
@@ -602,7 +661,9 @@ export function registerSyncIpc(): void {
       for (const email of DEMO_STYLE_SEED_EMAILS) {
         saveEmail(email, "default");
       }
-      console.log(`[Demo] Saved ${DEMO_INBOX_EMAILS.length + DEMO_STYLE_SEED_EMAILS.length} demo emails to database`);
+      log.info(
+        `[Demo] Saved ${DEMO_INBOX_EMAILS.length + DEMO_STYLE_SEED_EMAILS.length} demo emails to database`,
+      );
 
       // Save demo analysis data for each email so archive-ready checks pass
       const { DEMO_EXPECTED_ANALYSIS } = await import("../demo/fake-inbox");
@@ -615,11 +676,15 @@ export function registerSyncIpc(): void {
       for (const [emailId, draftBody] of Object.entries(DEMO_DRAFT_RESPONSES)) {
         saveDraft(emailId, draftBody, "pending");
       }
-      console.log(`[Demo] Saved ${Object.keys(DEMO_DRAFT_RESPONSES).length} demo drafts to database`);
+      log.info(`[Demo] Saved ${Object.keys(DEMO_DRAFT_RESPONSES).length} demo drafts to database`);
 
       // Save demo archive-ready data so the Archive Ready view has content
       const demoArchiveReady = [
-        { threadId: "thread-project-alpha", reason: "User confirmed availability and agreed on 7-week timeline - conversation is complete" },
+        {
+          threadId: "thread-project-alpha",
+          reason:
+            "User confirmed availability and agreed on 7-week timeline - conversation is complete",
+        },
         { threadId: "thread-github-ci", reason: "Automated CI notification - no response needed" },
         { threadId: "thread-newsletter", reason: "Newsletter subscription - informational only" },
         { threadId: "thread-amazon-ship", reason: "Shipping confirmation - no response needed" },
@@ -629,20 +694,30 @@ export function registerSyncIpc(): void {
       for (const { threadId, reason } of demoArchiveReady) {
         saveArchiveReady(threadId, "default", true, reason);
       }
-      console.log(`[Demo] Saved ${demoArchiveReady.length} demo archive-ready records`);
+      log.info(`[Demo] Saved ${demoArchiveReady.length} demo archive-ready records`);
 
       // Clear stale snooze data (e.g. from previous e2e test runs sharing this DB)
       clearSnoozedEmails("default");
 
       // Seed demo snoozed emails so the Snoozed tab has content
       const demoSnoozed = [
-        { id: "snooze-demo-1", emailId: "demo-010", threadId: "thread-lunch", snoozeUntil: Date.now() + 4 * 60 * 60 * 1000 },
-        { id: "snooze-demo-2", emailId: "demo-meeting", threadId: "thread-meeting-request", snoozeUntil: Date.now() + 24 * 60 * 60 * 1000 },
+        {
+          id: "snooze-demo-1",
+          emailId: "demo-010",
+          threadId: "thread-lunch",
+          snoozeUntil: Date.now() + 4 * 60 * 60 * 1000,
+        },
+        {
+          id: "snooze-demo-2",
+          emailId: "demo-meeting",
+          threadId: "thread-meeting-request",
+          snoozeUntil: Date.now() + 24 * 60 * 60 * 1000,
+        },
       ];
       for (const s of demoSnoozed) {
         snoozeEmail(s.id, s.emailId, s.threadId, "default", s.snoozeUntil);
       }
-      console.log(`[Demo] Saved ${demoSnoozed.length} demo snoozed records`);
+      log.info(`[Demo] Saved ${demoSnoozed.length} demo snoozed records`);
 
       // Seed correspondent profiles for style testing contacts
       saveCorrespondentProfile({
@@ -667,9 +742,9 @@ export function registerSyncIpc(): void {
         formalityScore: 0.88,
         lastComputedAt: Date.now(),
       });
-      console.log("[Demo] Saved 2 demo correspondent profiles for style testing");
+      log.info("[Demo] Saved 2 demo correspondent profiles for style testing");
 
-      console.log(`[PERF] sync:init END (demo) ${(performance.now() - t0).toFixed(1)}ms`);
+      log.info(`[PERF] sync:init END (demo) ${(performance.now() - t0).toFixed(1)}ms`);
       return {
         success: true,
         data: [{ accountId: "default", email: "me@example.com", isConnected: true }],
@@ -679,7 +754,7 @@ export function registerSyncIpc(): void {
     try {
       const t1 = performance.now();
       let accounts = getAccounts();
-      console.log(`[PERF] sync:init getAccounts took ${(performance.now() - t1).toFixed(1)}ms`);
+      log.info(`[PERF] sync:init getAccounts took ${(performance.now() - t1).toFixed(1)}ms`);
       const connectedAccounts: AccountInfo[] = [];
 
       // If no accounts in database, try to connect with default account
@@ -693,20 +768,20 @@ export function registerSyncIpc(): void {
           const profile = await client.getProfile();
           const displayName = await client.fetchDisplayName();
           saveAccount("default", profile.emailAddress, displayName ?? undefined, true);
-          console.log(`[Sync] Migrated existing OAuth to account: ${profile.emailAddress}`);
+          log.info(`[Sync] Migrated existing OAuth to account: ${profile.emailAddress}`);
 
           // Refresh accounts list
           accounts = getAccounts();
-        } catch (err) {
+        } catch (_err) {
           // No valid tokens - user needs to complete setup
-          console.log("[Sync] No existing OAuth tokens found");
+          log.info("[Sync] No existing OAuth tokens found");
         }
       }
 
-      console.log(`[Sync] Found ${accounts.length} accounts in database`);
+      log.info(`[Sync] Found ${accounts.length} accounts in database`);
       for (const account of accounts) {
         const tAccount = performance.now();
-        console.log(`[PERF] sync:init connecting account ${account.id} START`);
+        log.info(`[PERF] sync:init connecting account ${account.id} START`);
 
         // Skip accounts already set up by the onboarding flow — they're
         // registered, synced, and have their sync loop running.
@@ -720,11 +795,15 @@ export function registerSyncIpc(): void {
               email: account.email,
               isConnected: true,
             });
-            console.log(`[Sync] Account ${account.id} already registered (onboarding), reusing client`);
+            log.info(
+              `[Sync] Account ${account.id} already registered (onboarding), reusing client`,
+            );
             continue;
           }
           // Onboarding client not found — fall through to create a new client
-          console.log(`[Sync] Account ${account.id} registered but onboarding client missing, creating new client`);
+          log.info(
+            `[Sync] Account ${account.id} registered but onboarding client missing, creating new client`,
+          );
         }
 
         try {
@@ -732,29 +811,39 @@ export function registerSyncIpc(): void {
           const client = new GmailClient(account.id);
           const tConnect = performance.now();
           await client.connect();
-          console.log(`[PERF] sync:init client.connect took ${(performance.now() - tConnect).toFixed(1)}ms`);
+          log.info(
+            `[PERF] sync:init client.connect took ${(performance.now() - tConnect).toFixed(1)}ms`,
+          );
 
           // Register and start syncing
           const tRegister = performance.now();
           const accountInfo = await emailSyncService.registerAccount(client);
-          console.log(`[PERF] sync:init registerAccount took ${(performance.now() - tRegister).toFixed(1)}ms`);
+          log.info(
+            `[PERF] sync:init registerAccount took ${(performance.now() - tRegister).toFixed(1)}ms`,
+          );
           activeClients.set(account.id, client);
 
           // Backfill display name for existing accounts that don't have one
           if (!account.displayName && accountInfo.displayName) {
             updateAccountDisplayName(account.id, accountInfo.displayName);
             client.clearAccountInfoCache();
-            console.log(`[Sync] Backfilled display name for ${account.email}: ${accountInfo.displayName}`);
+            log.info(
+              `[Sync] Backfilled display name for ${account.email}: ${accountInfo.displayName}`,
+            );
           }
 
           const tStartSync = performance.now();
           emailSyncService.startSync(account.id);
-          console.log(`[PERF] sync:init startSync took ${(performance.now() - tStartSync).toFixed(1)}ms`);
+          log.info(
+            `[PERF] sync:init startSync took ${(performance.now() - tStartSync).toFixed(1)}ms`,
+          );
 
           connectedAccounts.push(accountInfo);
-          console.log(`[PERF] sync:init account ${account.id} total ${(performance.now() - tAccount).toFixed(1)}ms`);
+          log.info(
+            `[PERF] sync:init account ${account.id} total ${(performance.now() - tAccount).toFixed(1)}ms`,
+          );
         } catch (err) {
-          console.error(`[Sync] Failed to connect account ${account.id}:`, err);
+          log.error({ err: err }, `[Sync] Failed to connect account ${account.id}`);
 
           // Still store the client reference so reauth can use it
           const client = new GmailClient(account.id);
@@ -772,7 +861,7 @@ export function registerSyncIpc(): void {
             setTimeout(() => {
               const win = getMainWindow();
               if (win) {
-                console.log(`[Auth] Sending startup token-expired for ${account.email}`);
+                log.info(`[Auth] Sending startup token-expired for ${account.email}`);
                 win.webContents.send("auth:token-expired", {
                   accountId: account.id,
                   email: account.email,
@@ -785,33 +874,33 @@ export function registerSyncIpc(): void {
       }
 
       // After all accounts are connected, start background processing
-      if (connectedAccounts.some(a => a.isConnected)) {
+      if (connectedAccounts.some((a) => a.isConnected)) {
         // Delay 3 seconds to let the UI fully load first
         // Skip if any account is doing a first-time sync — fullSync with
         // runTriage will handle queueing only the recent emails after triage.
         setTimeout(() => {
           if (emailSyncService.hasFirstSyncPending()) {
-            console.log("[Prefetch] Skipping processAllPending — first-time sync in progress");
+            log.info("[Prefetch] Skipping processAllPending — first-time sync in progress");
           } else {
-            console.log("[PERF] prefetch starting (3s after sync:init)");
+            log.info("[PERF] prefetch starting (3s after sync:init)");
             prefetchService.processAllPending().catch((error) => {
-              console.error("[Sync] Error starting prefetch:", error);
+              log.error({ err: error }, "[Sync] Error starting prefetch");
             });
           }
         }, 3000);
 
         // Process any queued outbox messages from previous session
-        outboxService.processQueue().catch(console.error);
+        outboxService.processQueue().catch((err) => log.error({ err }, "Unhandled error"));
 
         // Trigger calendar sync now that accounts are connected
         // (the initial sync at startup may have found 0 accounts)
         calendarSyncService.syncNow();
       }
 
-      console.log(`[PERF] sync:init END total ${(performance.now() - t0).toFixed(1)}ms`);
+      log.info(`[PERF] sync:init END total ${(performance.now() - t0).toFixed(1)}ms`);
       return { success: true, data: connectedAccounts };
     } catch (error) {
-      console.log(`[PERF] sync:init ERROR ${(performance.now() - t0).toFixed(1)}ms`);
+      log.info(`[PERF] sync:init ERROR ${(performance.now() - t0).toFixed(1)}ms`);
       return {
         success: false,
         error: error instanceof Error ? error.message : "Unknown error",
@@ -827,7 +916,10 @@ export function registerSyncIpc(): void {
       const email = getEmail(emailId);
       const previousLabels = email?.labelIds || [];
       if (email) {
-        updateEmailLabelIds(emailId, previousLabels.filter((l: string) => l !== "INBOX"));
+        updateEmailLabelIds(
+          emailId,
+          previousLabels.filter((l: string) => l !== "INBOX"),
+        );
       }
 
       if (useFakeData) {
@@ -854,7 +946,11 @@ export function registerSyncIpc(): void {
 
           // Clean up agent trace data for this email's draft (if any)
           if (email?.draft?.agentTaskId) {
-            try { deleteAgentTrace(email.draft.agentTaskId); } catch { /* non-critical */ }
+            try {
+              deleteAgentTrace(email.draft.agentTaskId);
+            } catch {
+              /* non-critical */
+            }
           }
 
           // Notify renderer of email removal
@@ -866,7 +962,10 @@ export function registerSyncIpc(): void {
           return { success: true, data: undefined };
         } catch (error) {
           const msg = error instanceof Error ? error.message : String(error);
-          const isRateLimit = msg.includes("Too many concurrent requests") || msg.includes("Rate Limit") || (error as { code?: number })?.code === 429;
+          const isRateLimit =
+            msg.includes("Too many concurrent requests") ||
+            msg.includes("Rate Limit") ||
+            (error as { code?: number })?.code === 429;
 
           if (isNetworkError(error)) {
             pendingActionsQueue.enqueue("archive", emailId, accountId);
@@ -877,13 +976,15 @@ export function registerSyncIpc(): void {
           if (isRateLimit && attempt < MAX_RETRIES) {
             // Exponential backoff: 1s, 2s, 4s
             const delay = 1000 * Math.pow(2, attempt);
-            console.warn(`[Archive] Rate-limited for ${emailId}, retrying in ${delay}ms (attempt ${attempt + 1}/${MAX_RETRIES})`);
-            await new Promise(resolve => setTimeout(resolve, delay));
+            log.warn(
+              `[Archive] Rate-limited for ${emailId}, retrying in ${delay}ms (attempt ${attempt + 1}/${MAX_RETRIES})`,
+            );
+            await new Promise((resolve) => setTimeout(resolve, delay));
             continue;
           }
 
           // Permanent failure — restore the INBOX label in DB
-          console.error(`[Archive] Permanent failure for ${emailId}: ${msg}`);
+          log.error(`[Archive] Permanent failure for ${emailId}: ${msg}`);
           updateEmailLabelIds(emailId, previousLabels);
           return {
             success: false,
@@ -894,14 +995,14 @@ export function registerSyncIpc(): void {
 
       // Should not reach here, but satisfy TypeScript
       return { success: false, error: "Max retries exceeded" };
-    }
+    },
   );
 
   // Batch archive multiple emails in a single Gmail API call
   ipcMain.handle(
     "emails:batch-archive",
     async (_, { accountId, emailIds }: { accountId: string; emailIds: string[] }) => {
-      console.log(`[Archive] Batch archive: ${emailIds.length} emails`);
+      log.info(`[Archive] Batch archive: ${emailIds.length} emails`);
 
       // Optimistically update DB for all emails
       const previousLabelsMap = new Map<string, string[]>();
@@ -909,7 +1010,10 @@ export function registerSyncIpc(): void {
         const email = getEmail(emailId);
         if (email) {
           previousLabelsMap.set(emailId, email.labelIds || []);
-          updateEmailLabelIds(emailId, (email.labelIds || []).filter((l: string) => l !== "INBOX"));
+          updateEmailLabelIds(
+            emailId,
+            (email.labelIds || []).filter((l: string) => l !== "INBOX"),
+          );
         }
       }
 
@@ -942,7 +1046,11 @@ export function registerSyncIpc(): void {
           for (const emailId of emailIds) {
             const email = getEmail(emailId);
             if (email?.draft?.agentTaskId) {
-              try { deleteAgentTrace(email.draft.agentTaskId); } catch { /* non-critical */ }
+              try {
+                deleteAgentTrace(email.draft.agentTaskId);
+              } catch {
+                /* non-critical */
+              }
             }
           }
 
@@ -955,7 +1063,10 @@ export function registerSyncIpc(): void {
           return { success: true, data: undefined };
         } catch (error) {
           const msg = error instanceof Error ? error.message : String(error);
-          const isRateLimit = msg.includes("Too many concurrent requests") || msg.includes("Rate Limit") || (error as { code?: number })?.code === 429;
+          const isRateLimit =
+            msg.includes("Too many concurrent requests") ||
+            msg.includes("Rate Limit") ||
+            (error as { code?: number })?.code === 429;
 
           if (isNetworkError(error)) {
             for (const emailId of emailIds) {
@@ -967,13 +1078,15 @@ export function registerSyncIpc(): void {
 
           if (isRateLimit && attempt < MAX_RETRIES) {
             const delay = 1000 * Math.pow(2, attempt);
-            console.warn(`[Archive] Batch archive rate-limited, retrying in ${delay}ms (attempt ${attempt + 1}/${MAX_RETRIES})`);
-            await new Promise(resolve => setTimeout(resolve, delay));
+            log.warn(
+              `[Archive] Batch archive rate-limited, retrying in ${delay}ms (attempt ${attempt + 1}/${MAX_RETRIES})`,
+            );
+            await new Promise((resolve) => setTimeout(resolve, delay));
             continue;
           }
 
           // Permanent failure — restore INBOX labels
-          console.error(`[Archive] Batch archive permanent failure: ${msg}`);
+          log.error(`[Archive] Batch archive permanent failure: ${msg}`);
           for (const [emailId, labels] of previousLabelsMap) {
             updateEmailLabelIds(emailId, labels);
           }
@@ -982,14 +1095,14 @@ export function registerSyncIpc(): void {
       }
 
       return { success: false, error: "Max retries exceeded" };
-    }
+    },
   );
 
   // Batch trash multiple emails in a single Gmail API call
   ipcMain.handle(
     "emails:batch-trash",
     async (_, { accountId, emailIds }: { accountId: string; emailIds: string[] }) => {
-      console.log(`[Trash] Batch trash: ${emailIds.length} emails`);
+      log.info(`[Trash] Batch trash: ${emailIds.length} emails`);
 
       // Save email data before deleting so we can restore on permanent failure
       const emailDataMap = new Map<string, ReturnType<typeof getEmail>>();
@@ -1024,7 +1137,7 @@ export function registerSyncIpc(): void {
       const { failedIds } = await client.batchTrash(emailIds);
 
       // Notify renderer about successfully trashed emails
-      const succeededIds = emailIds.filter(id => !failedIds.includes(id));
+      const succeededIds = emailIds.filter((id) => !failedIds.includes(id));
       if (succeededIds.length > 0) {
         const window = getMainWindow();
         if (window) {
@@ -1034,28 +1147,31 @@ export function registerSyncIpc(): void {
 
       // Restore only the failed emails to DB
       if (failedIds.length > 0) {
-        console.error(`[Trash] Batch trash: ${failedIds.length}/${emailIds.length} failed`);
+        log.error(`[Trash] Batch trash: ${failedIds.length}/${emailIds.length} failed`);
         for (const emailId of failedIds) {
           const emailData = emailDataMap.get(emailId);
           if (emailData) {
-            saveEmail({
-              id: emailData.id,
-              threadId: emailData.threadId,
-              subject: emailData.subject,
-              from: emailData.from,
-              to: emailData.to,
-              date: emailData.date,
-              body: emailData.body || "",
-              snippet: emailData.snippet,
-              labelIds: emailData.labelIds,
-            }, accountId);
+            saveEmail(
+              {
+                id: emailData.id,
+                threadId: emailData.threadId,
+                subject: emailData.subject,
+                from: emailData.from,
+                to: emailData.to,
+                date: emailData.date,
+                body: emailData.body || "",
+                snippet: emailData.snippet,
+                labelIds: emailData.labelIds,
+              },
+              accountId,
+            );
           }
         }
         return { success: false, error: `${failedIds.length} emails failed to trash`, failedIds };
       }
 
       return { success: true, data: undefined };
-    }
+    },
   );
 
   // Archive all emails in a thread (offline-aware: queues when offline or on network error)
@@ -1065,15 +1181,16 @@ export function registerSyncIpc(): void {
       const threadEmails = getEmailsByThread(threadId, accountId);
       // Treat emails with no labelIds (NULL in DB) as inbox emails,
       // matching the getInboxEmails query: WHERE label_ids IS NULL OR label_ids LIKE '%"INBOX"%'
-      const inboxEmails = threadEmails.filter(
-        (e) => !e.labelIds || e.labelIds.includes("INBOX")
-      );
+      const inboxEmails = threadEmails.filter((e) => !e.labelIds || e.labelIds.includes("INBOX"));
 
       // Optimistically update DB for all inbox emails
       const previousLabelsMap = new Map<string, string[]>();
       for (const email of inboxEmails) {
         previousLabelsMap.set(email.id, email.labelIds || []);
-        updateEmailLabelIds(email.id, (email.labelIds || []).filter((l: string) => l !== "INBOX"));
+        updateEmailLabelIds(
+          email.id,
+          (email.labelIds || []).filter((l: string) => l !== "INBOX"),
+        );
       }
 
       if (useFakeData) {
@@ -1126,7 +1243,11 @@ export function registerSyncIpc(): void {
         // Clean up agent traces for archived thread emails
         for (const email of threadEmails) {
           if (email.draft?.agentTaskId) {
-            try { deleteAgentTrace(email.draft.agentTaskId); } catch { /* non-critical */ }
+            try {
+              deleteAgentTrace(email.draft.agentTaskId);
+            } catch {
+              /* non-critical */
+            }
           }
         }
 
@@ -1135,7 +1256,10 @@ export function registerSyncIpc(): void {
           const allThreadEmailIds = threadEmails.map((e) => e.id);
           const window = getMainWindow();
           if (window) {
-            window.webContents.send("sync:emails-removed", { accountId, emailIds: allThreadEmailIds });
+            window.webContents.send("sync:emails-removed", {
+              accountId,
+              emailIds: allThreadEmailIds,
+            });
           }
         }
 
@@ -1150,7 +1274,7 @@ export function registerSyncIpc(): void {
           error: error instanceof Error ? error.message : "Unknown error",
         };
       }
-    }
+    },
   );
 
   // Trash an email (offline-aware: queues when offline or on network error)
@@ -1201,17 +1325,20 @@ export function registerSyncIpc(): void {
 
         // Permanent failure — restore the email to DB
         if (emailData) {
-          saveEmail({
-            id: emailData.id,
-            threadId: emailData.threadId,
-            subject: emailData.subject,
-            from: emailData.from,
-            to: emailData.to,
-            date: emailData.date,
-            body: emailData.body || "",
-            snippet: emailData.snippet,
-            labelIds: emailData.labelIds,
-          }, accountId);
+          saveEmail(
+            {
+              id: emailData.id,
+              threadId: emailData.threadId,
+              subject: emailData.subject,
+              from: emailData.from,
+              to: emailData.to,
+              date: emailData.date,
+              body: emailData.body || "",
+              snippet: emailData.snippet,
+              labelIds: emailData.labelIds,
+            },
+            accountId,
+          );
         }
 
         return {
@@ -1219,13 +1346,16 @@ export function registerSyncIpc(): void {
           error: error instanceof Error ? error.message : "Unknown error",
         };
       }
-    }
+    },
   );
 
   // Star/unstar an email
   ipcMain.handle(
     "emails:set-starred",
-    async (_, { accountId, emailId, starred }: { accountId: string; emailId: string; starred: boolean }): Promise<IpcResponse<void>> => {
+    async (
+      _,
+      { accountId, emailId, starred }: { accountId: string; emailId: string; starred: boolean },
+    ): Promise<IpcResponse<void>> => {
       if (useFakeData) {
         return { success: true, data: undefined };
       }
@@ -1244,13 +1374,16 @@ export function registerSyncIpc(): void {
           error: error instanceof Error ? error.message : "Unknown error",
         };
       }
-    }
+    },
   );
 
   // Mark an email as read or unread
   ipcMain.handle(
     "emails:set-read",
-    async (_, { accountId, emailId, read }: { accountId: string; emailId: string; read: boolean }): Promise<IpcResponse<void>> => {
+    async (
+      _,
+      { accountId, emailId, read }: { accountId: string; emailId: string; read: boolean },
+    ): Promise<IpcResponse<void>> => {
       if (useFakeData) {
         return { success: true, data: undefined };
       }
@@ -1270,11 +1403,15 @@ export function registerSyncIpc(): void {
           const currentLabels = email.labelIds || ["INBOX"];
           let newLabels: string[];
           if (read) {
-            newLabels = currentLabels.filter(l => l !== "UNREAD");
+            newLabels = currentLabels.filter((l) => l !== "UNREAD");
           } else {
-            newLabels = currentLabels.includes("UNREAD") ? currentLabels : [...currentLabels, "UNREAD"];
+            newLabels = currentLabels.includes("UNREAD")
+              ? currentLabels
+              : [...currentLabels, "UNREAD"];
           }
-          console.log(`[SetRead] ${emailId} read=${read}: ${JSON.stringify(currentLabels)} → ${JSON.stringify(newLabels)}`);
+          log.info(
+            `[SetRead] ${emailId} read=${read}: ${JSON.stringify(currentLabels)} → ${JSON.stringify(newLabels)}`,
+          );
           updateEmailLabelIds(emailId, newLabels);
         }
 
@@ -1285,7 +1422,7 @@ export function registerSyncIpc(): void {
           error: error instanceof Error ? error.message : "Unknown error",
         };
       }
-    }
+    },
   );
 
   // Get all messages in a thread (including sent replies)
@@ -1293,7 +1430,10 @@ export function registerSyncIpc(): void {
   // This avoids a 500ms-3000ms Gmail API round-trip on every thread open.
   ipcMain.handle(
     "emails:get-thread",
-    async (_, { accountId, threadId }: { accountId: string; threadId: string }): Promise<IpcResponse<DashboardEmail[]>> => {
+    async (
+      _,
+      { accountId, threadId }: { accountId: string; threadId: string },
+    ): Promise<IpcResponse<DashboardEmail[]>> => {
       if (useFakeData) {
         return { success: true, data: [] };
       }
@@ -1306,37 +1446,43 @@ export function registerSyncIpc(): void {
         // (e.g., sent replies from other devices not yet synced)
         const client = activeClients.get(accountId);
         if (client) {
-          client.getThread(threadId).then(gmailEmails => {
-            // Re-query DB to avoid stale snapshot if background sync added emails
-            const currentDbIds = new Set(getEmailsByThread(threadId, accountId).map(e => e.id));
-            const newEmails = gmailEmails.filter(e => !currentDbIds.has(e.id));
+          client
+            .getThread(threadId)
+            .then((gmailEmails) => {
+              // Re-query DB to avoid stale snapshot if background sync added emails
+              const currentDbIds = new Set(getEmailsByThread(threadId, accountId).map((e) => e.id));
+              const newEmails = gmailEmails.filter((e) => !currentDbIds.has(e.id));
 
-            if (newEmails.length > 0) {
-              // Save new emails to DB
-              for (const email of newEmails) {
-                saveEmail(email, accountId);
+              if (newEmails.length > 0) {
+                // Save new emails to DB
+                for (const email of newEmails) {
+                  saveEmail(email, accountId);
+                }
+
+                // NOTE: No draft cleanup here. This path backfills historical
+                // thread members for display — it can't distinguish genuinely
+                // new activity from old emails not yet in the local DB.
+                // incrementalSync (via History API) handles draft cleanup
+                // correctly because it only sees truly new emails.
+
+                // Push new thread members to renderer via existing event
+                const window = getMainWindow();
+                if (window) {
+                  const dashboardNewEmails: DashboardEmail[] = newEmails.map((email) => ({
+                    ...email,
+                    accountId,
+                    labelIds: email.labelIds,
+                  }));
+                  window.webContents.send("sync:new-emails", {
+                    accountId,
+                    emails: dashboardNewEmails,
+                  });
+                }
               }
-
-              // NOTE: No draft cleanup here. This path backfills historical
-              // thread members for display — it can't distinguish genuinely
-              // new activity from old emails not yet in the local DB.
-              // incrementalSync (via History API) handles draft cleanup
-              // correctly because it only sees truly new emails.
-
-              // Push new thread members to renderer via existing event
-              const window = getMainWindow();
-              if (window) {
-                const dashboardNewEmails: DashboardEmail[] = newEmails.map(email => ({
-                  ...email,
-                  accountId,
-                  labelIds: email.labelIds,
-                }));
-                window.webContents.send("sync:new-emails", { accountId, emails: dashboardNewEmails });
-              }
-            }
-          }).catch(err => {
-            console.error("[Thread] Background refresh failed:", err);
-          });
+            })
+            .catch((err) => {
+              log.error({ err: err }, "[Thread] Background refresh failed");
+            });
         }
 
         return { success: true, data: dbEmails };
@@ -1357,7 +1503,7 @@ export function registerSyncIpc(): void {
         }
 
         // Convert to DashboardEmail format
-        const dashboardEmails: DashboardEmail[] = emails.map(email => ({
+        const dashboardEmails: DashboardEmail[] = emails.map((email) => ({
           ...email,
           accountId,
           labelIds: email.labelIds,
@@ -1370,39 +1516,47 @@ export function registerSyncIpc(): void {
           error: error instanceof Error ? error.message : "Unknown error",
         };
       }
-    }
+    },
   );
 
   // Search all mail using local FTS5 index (instant search)
   ipcMain.handle(
     "emails:search",
-    async (_, { accountId, query, maxResults = 50 }: { accountId: string; query: string; maxResults?: number }): Promise<IpcResponse<DashboardEmail[]>> => {
+    async (
+      _,
+      {
+        accountId,
+        query,
+        maxResults = 50,
+      }: { accountId: string; query: string; maxResults?: number },
+    ): Promise<IpcResponse<DashboardEmail[]>> => {
       if (useFakeData) {
         const { DEMO_INBOX_EMAILS, DEMO_EXPECTED_ANALYSIS } = await import("../demo/fake-inbox");
         const q = query.toLowerCase();
-        const filtered = DEMO_INBOX_EMAILS
-          .filter((email) => {
-            const bodyPlain = email.body.replace(/<[^>]*>/g, " ").toLowerCase();
-            return (
-              email.subject.toLowerCase().includes(q) ||
-              bodyPlain.includes(q) ||
-              email.from.toLowerCase().includes(q) ||
-              email.to.toLowerCase().includes(q) ||
-              (email.snippet?.toLowerCase().includes(q) ?? false)
-            );
-          })
+        const filtered = DEMO_INBOX_EMAILS.filter((email) => {
+          const bodyPlain = email.body.replace(/<[^>]*>/g, " ").toLowerCase();
+          return (
+            email.subject.toLowerCase().includes(q) ||
+            bodyPlain.includes(q) ||
+            email.from.toLowerCase().includes(q) ||
+            email.to.toLowerCase().includes(q) ||
+            (email.snippet?.toLowerCase().includes(q) ?? false)
+          );
+        })
           .slice(0, maxResults)
           .map((email): DashboardEmail => {
             const analysis = DEMO_EXPECTED_ANALYSIS[email.id];
             return {
               ...email,
               accountId: "default",
-              analysis: analysis ? {
-                needsReply: analysis.needsReply,
-                reason: analysis.reason,
-                priority: analysis.priority,
-                analyzedAt: Date.now(),
-              } : undefined,
+              analysis: analysis
+                ? {
+                    needsReply: analysis.needsReply,
+                    reason: analysis.reason,
+                    priority: analysis.priority,
+                    analyzedAt: Date.now(),
+                  }
+                : undefined,
             };
           });
         return { success: true, data: filtered };
@@ -1411,25 +1565,33 @@ export function registerSyncIpc(): void {
       try {
         // Use local FTS5 search (instant)
         const searchResults = searchEmails(query, { accountId, limit: maxResults });
-        const localIds = searchResults.map(r => r.id);
+        const localIds = searchResults.map((r) => r.id);
         const dashboardEmails = getEmailsByIds(localIds);
 
-        console.log(`[Search] Local FTS5 found ${dashboardEmails.length} results for "${query}"`);
+        log.info(`[Search] Local FTS5 found ${dashboardEmails.length} results for "${query}"`);
         return { success: true, data: dashboardEmails };
       } catch (error) {
-        console.error("[Search] Error:", error);
+        log.error({ err: error }, "[Search] Error");
         return {
           success: false,
           error: error instanceof Error ? error.message : "Unknown error",
         };
       }
-    }
+    },
   );
 
   // Remote Gmail API search — fetches results from Gmail, saves new ones to local DB
   ipcMain.handle(
     "emails:search-remote",
-    async (_, { accountId, query, maxResults = 50, pageToken }: { accountId: string; query: string; maxResults?: number; pageToken?: string }): Promise<IpcResponse<{ emails: DashboardEmail[]; nextPageToken?: string }>> => {
+    async (
+      _,
+      {
+        accountId,
+        query,
+        maxResults = 50,
+        pageToken,
+      }: { accountId: string; query: string; maxResults?: number; pageToken?: string },
+    ): Promise<IpcResponse<{ emails: DashboardEmail[]; nextPageToken?: string }>> => {
       if (useFakeData) {
         return { success: true, data: { emails: [] } };
       }
@@ -1441,37 +1603,46 @@ export function registerSyncIpc(): void {
 
       try {
         // 1. Get message IDs from Gmail API (with optional page token for pagination)
-        const { results: gmailResults, nextPageToken } = await client.searchEmails(query, maxResults, pageToken);
+        const { results: gmailResults, nextPageToken } = await client.searchEmails(
+          query,
+          maxResults,
+          pageToken,
+        );
         if (gmailResults.length === 0) {
           return { success: true, data: { emails: [] } };
         }
 
         // 2. Partition into already-local vs needs-fetch
         const localIdSet = getEmailIds(accountId);
-        const needsFetch = gmailResults.filter(r => !localIdSet.has(r.id));
+        const needsFetch = gmailResults.filter((r) => !localIdSet.has(r.id));
 
         // 3. Batch fetch remote-only messages and save to local DB
         if (needsFetch.length > 0) {
-          console.log(`[Search] Fetching ${needsFetch.length} remote emails for "${query}"`);
-          const fetched = await client.getMessages(needsFetch.map(r => r.id), 25);
+          log.info(`[Search] Fetching ${needsFetch.length} remote emails for "${query}"`);
+          const fetched = await client.getMessages(
+            needsFetch.map((r) => r.id),
+            25,
+          );
           for (const email of fetched) {
             saveEmail(email, accountId);
           }
         }
 
         // 4. Return all Gmail results as DashboardEmails (now all are in local DB)
-        const allIds = gmailResults.map(r => r.id);
+        const allIds = gmailResults.map((r) => r.id);
         const dashboardEmails = getEmailsByIds(allIds);
 
-        console.log(`[Search] Remote search found ${dashboardEmails.length} results for "${query}" (${needsFetch.length} newly fetched)${nextPageToken ? " [more available]" : ""}`);
+        log.info(
+          `[Search] Remote search found ${dashboardEmails.length} results for "${query}" (${needsFetch.length} newly fetched)${nextPageToken ? " [more available]" : ""}`,
+        );
         return { success: true, data: { emails: dashboardEmails, nextPageToken } };
       } catch (error) {
-        console.error("[Search] Remote search error:", error);
+        log.error({ err: error }, "[Search] Remote search error");
         return {
           success: false,
           error: error instanceof Error ? error.message : "Unknown error",
         };
       }
-    }
+    },
   );
 }

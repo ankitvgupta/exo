@@ -19,7 +19,7 @@ export function applyOptimisticReads(emails: DashboardEmail[]): DashboardEmail[]
   return emails.map((e) =>
     optimisticReadIds.has(e.id) && e.labelIds?.includes("UNREAD")
       ? { ...e, labelIds: e.labelIds.filter((l) => l !== "UNREAD") }
-      : e
+      : e,
   );
 }
 
