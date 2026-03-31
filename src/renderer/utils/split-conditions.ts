@@ -1,14 +1,24 @@
 import type { InboxSplit, DashboardEmail } from "../../shared/types";
 
-// Label name → ID lookup for split condition matching.
+// Label name → ID lookup for split condition matching, keyed by account.
 // Populated asynchronously on app mount; falls back to direct ID comparison when empty.
-const labelNameToIds = new Map<string, string>();
+const labelNameToIdsByAccount = new Map<string, Map<string, string>>();
 
-export function setLabelMap(labels: Array<{ id: string; name: string }>): void {
-  labelNameToIds.clear();
+export function setLabelMap(accountId: string, labels: Array<{ id: string; name: string }>): void {
+  const map = new Map<string, string>();
   for (const label of labels) {
-    labelNameToIds.set(label.name.toLowerCase(), label.id);
+    map.set(label.name.toLowerCase(), label.id);
   }
+  labelNameToIdsByAccount.set(accountId, map);
+}
+
+function resolveLabelNameToId(value: string): string | undefined {
+  const lower = value.toLowerCase();
+  for (const map of labelNameToIdsByAccount.values()) {
+    const id = map.get(lower);
+    if (id) return id;
+  }
+  return undefined;
 }
 
 // Convert a glob-like pattern to a regex
@@ -61,7 +71,7 @@ export function evaluateCondition(email: DashboardEmail, condition: InboxSplit["
       if (labelIds.includes(condition.value)) {
         matches = true;
       } else {
-        const resolvedId = labelNameToIds.get(condition.value.toLowerCase());
+        const resolvedId = resolveLabelNameToId(condition.value);
         matches = resolvedId ? labelIds.includes(resolvedId) : false;
       }
       break;

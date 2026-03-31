@@ -1,16 +1,31 @@
 import { useMemo } from "react";
 import { useAppStore, useThreadedEmails, type EmailThread } from "../store";
 import type { InboxSplit } from "../../shared/types";
-import { emailMatchesSplit } from "../utils/split-conditions";
+import { emailMatchesSplit, evaluateCondition } from "../utils/split-conditions";
 
 function threadMatchesSplit(thread: EmailThread, split: InboxSplit): boolean {
-  // For label conditions, check ALL emails in the thread (Gmail labels are thread-level).
-  // For other condition types (from, to, subject), keep checking only the latest email.
-  const hasLabelCondition = split.conditions.some((c) => c.type === "label");
-  if (hasLabelCondition) {
-    return thread.emails.some((email) => emailMatchesSplit(email, split));
+  const labelConditions = split.conditions.filter((c) => c.type === "label");
+
+  // No label conditions — use the original latest-email-only path
+  if (labelConditions.length === 0) {
+    return emailMatchesSplit(thread.latestEmail, split);
   }
-  return emailMatchesSplit(thread.latestEmail, split);
+
+  // Evaluate label conditions against ANY email in the thread (Gmail labels are thread-level)
+  const labelResults = labelConditions.map((c) =>
+    thread.emails.some((email) => evaluateCondition(email, c))
+  );
+
+  // Evaluate non-label conditions against only the latest email
+  const otherConditions = split.conditions.filter((c) => c.type !== "label");
+  const otherResults = otherConditions.map((c) =>
+    evaluateCondition(thread.latestEmail, c)
+  );
+
+  const allResults = [...labelResults, ...otherResults];
+  return split.conditionLogic === "and"
+    ? allResults.every(Boolean)
+    : allResults.some(Boolean);
 }
 
 interface TabProps {

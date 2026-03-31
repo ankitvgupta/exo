@@ -581,14 +581,16 @@ export default function App() {
     });
   }, [setSplits]);
 
-  // Populate label name→ID map so split conditions can match labels by name
+  // Populate label name→ID map so split conditions can match labels by name.
+  // Re-fetches when the active account changes (different accounts may have different labels).
   useEffect(() => {
-    window.api.labels.list("default").then((result: { success: boolean; data?: Array<{ id: string; name: string }> }) => {
+    if (!currentAccountId) return;
+    window.api.labels.list(currentAccountId).then((result: { success: boolean; data?: Array<{ id: string; name: string }> }) => {
       if (result.success && result.data) {
-        setLabelMap(result.data);
+        setLabelMap(currentAccountId, result.data);
       }
     }).catch(() => {});
-  }, []);
+  }, [currentAccountId]);
 
   // Initialize sync and accounts
   const initializeSync = useCallback(async () => {
