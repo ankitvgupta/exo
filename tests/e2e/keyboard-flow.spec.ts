@@ -175,7 +175,10 @@ test.describe("Keyboard Navigation - Enter and Escape", () => {
   test("Escape deselects the selected email", async () => {
     // Select an email
     await page.keyboard.press("j");
-    await page.waitForTimeout(300);
+    // Wait for selection to appear (CI can be slow to process keyboard events)
+    await expect(page.locator("div[data-thread-id][data-selected='true']")).toBeVisible({
+      timeout: 10000,
+    });
 
     const selected = await getSelectedThreadId(page);
     expect(selected).not.toBeNull();
