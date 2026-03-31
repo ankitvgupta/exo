@@ -24,7 +24,7 @@ export function FromSelector({ aliases, selected, onChange }: FromSelectorProps)
         From
       </label>
       <select
-        value={selected?.toLowerCase() || ""}
+        value={selected?.toLowerCase() || aliases.find(a => a.isPrimary)?.email.toLowerCase() || aliases[0].email.toLowerCase()}
         onChange={(e) => onChange(e.target.value)}
         className="flex-1 text-sm bg-transparent border-none outline-none text-gray-900 dark:text-gray-100 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded py-0.5 -ml-1"
         title={displayValue}

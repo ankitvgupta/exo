@@ -98,6 +98,13 @@ export function useComposeForm({
   // --- From (send-as alias) state ---
   const [from, setFrom] = useState<string | undefined>(initialFrom);
 
+  // Sync from state when initialFrom resolves async (e.g. defaultAlias query)
+  useEffect(() => {
+    if (initialFrom && !from) {
+      setFrom(initialFrom);
+    }
+  }, [initialFrom]); // intentionally omit `from` — only sync when user hasn't chosen yet
+
   // --- Address state ---
   // initialTo may contain formatted addresses ("Name <email>") from draft
   // restoration. Extract bare emails for form state and display names for nameMap.
