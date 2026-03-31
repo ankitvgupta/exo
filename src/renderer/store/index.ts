@@ -212,6 +212,7 @@ interface AppState {
   // Inbox splits state
   splits: InboxSplit[];
   currentSplitId: string | null;
+  labelMapVersion: number; // incremented when label name→ID map is populated
 
   // Theme state
   themePreference: ThemePreference;
@@ -376,6 +377,7 @@ interface AppState {
   // Inbox splits actions
   setSplits: (splits: InboxSplit[]) => void;
   setCurrentSplitId: (id: string | null) => void;
+  incrementLabelMapVersion: () => void;
 
   // Theme actions
   setThemePreference: (preference: ThemePreference) => void;
@@ -538,6 +540,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   // Inbox splits state
   splits: [],
   currentSplitId: "__priority__",
+  labelMapVersion: 0,
 
   // Theme state
   themePreference: "system",
@@ -954,6 +957,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   // Inbox splits actions
   setSplits: (splits) => set({ splits }),
   setCurrentSplitId: (id) => set({ currentSplitId: id }),
+  incrementLabelMapVersion: () => set((s) => ({ labelMapVersion: s.labelMapVersion + 1 })),
 
   // Theme actions
   setThemePreference: (preference) => set({ themePreference: preference }),
@@ -1832,6 +1836,7 @@ export function useSplitFilteredThreads() {
   const recentlyUnsnoozedThreadIds = useAppStore((state) => state.recentlyUnsnoozedThreadIds);
   const unsnoozedReturnTimes = useAppStore((state) => state.unsnoozedReturnTimes);
   const sentEmails = useAppStore((state) => state.sentEmails);
+  const labelMapVersion = useAppStore((state) => state.labelMapVersion);
 
   return useMemo(() => {
     // Filter splits for current account
@@ -2009,7 +2014,7 @@ export function useSplitFilteredThreads() {
       snoozed: baseResult.snoozed,
       snoozedCount: baseResult.snoozedCount,
     };
-  }, [baseResult, allSplits, currentAccountId, accounts, currentSplitId, archiveReadyThreadIds, recentlyUnsnoozedThreadIds, unsnoozedReturnTimes, sentEmails]);
+  }, [baseResult, allSplits, currentAccountId, accounts, currentSplitId, archiveReadyThreadIds, recentlyUnsnoozedThreadIds, unsnoozedReturnTimes, sentEmails, labelMapVersion]);
 }
 
 // Legacy selector for backwards compatibility

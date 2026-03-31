@@ -66,6 +66,7 @@ export function SplitTabs() {
   const archiveReadyThreadIds = useAppStore((state) => state.archiveReadyThreadIds);
   const recentlyUnsnoozedThreadIds = useAppStore((state) => state.recentlyUnsnoozedThreadIds);
   const localDrafts = useAppStore((state) => state.localDrafts);
+  const labelMapVersion = useAppStore((state) => state.labelMapVersion);
   const { threads, needsReply, done, snoozedCount } = useThreadedEmails();
 
   // Filter splits for current account
@@ -115,7 +116,7 @@ export function SplitTabs() {
     }
 
     return map;
-  }, [threads, needsReply, done, splits, isNonExclusive]);
+  }, [threads, needsReply, done, splits, isNonExclusive, labelMapVersion]);
 
   // Sort splits by order
   const sortedSplits = useMemo(

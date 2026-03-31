@@ -169,6 +169,7 @@ function SearchResultsView() {
     isOnline,
     remoteSearchNextPageToken,
     remoteSearchLoadingMore,
+    incrementLabelMapVersion,
   } = useAppStore();
 
   const currentUserEmail = accounts.find(a => a.id === currentAccountId)?.email;
@@ -588,9 +589,10 @@ export default function App() {
     window.api.labels.list(currentAccountId).then((result: { success: boolean; data?: Array<{ id: string; name: string }> }) => {
       if (result.success && result.data) {
         setLabelMap(currentAccountId, result.data);
+        incrementLabelMapVersion();
       }
     }).catch(() => {});
-  }, [currentAccountId]);
+  }, [currentAccountId, incrementLabelMapVersion]);
 
   // Initialize sync and accounts
   const initializeSync = useCallback(async () => {
