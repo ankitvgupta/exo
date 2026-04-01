@@ -340,8 +340,8 @@ export const EmailPreviewSidebar = memo(function EmailPreviewSidebar() {
     <div className="w-80 bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 flex flex-col overflow-hidden">
       {/* Tab bar — only show when multiple tabs available */}
       {availableTabs.length > 1 && (
-        <div className="flex-shrink-0 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/80">
-          <div className="flex">
+        <div className="flex-shrink-0 h-10 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/80">
+          <div className="flex h-full">
             {availableTabs.map((tab) => {
               const Icon = TAB_ICONS[tab];
               const isActive = sidebarTab === tab;

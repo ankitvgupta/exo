@@ -104,7 +104,7 @@ export function SplitTabs() {
 
   // Always show the tab bar — Priority, Other, Archive Ready always visible; All on the far right
   return (
-    <div className="flex border-b border-gray-200 dark:border-gray-700 px-2 overflow-x-auto">
+    <div className="flex h-10 border-b border-gray-200 dark:border-gray-700 px-2 overflow-x-auto">
       {/* Primary tabs: Priority, Other */}
       <Tab
         active={currentSplitId === "__priority__"}
