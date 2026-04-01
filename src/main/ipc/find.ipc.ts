@@ -5,17 +5,28 @@ function getMainWindow(): BrowserWindow | null {
   return windows.length > 0 ? windows[0] : null;
 }
 
-export function registerFindIpc(): void {
-  const win = getMainWindow();
-  if (win) {
-    win.webContents.on("found-in-page", (_event, result) => {
-      win.webContents.send("find:result", {
-        activeMatchOrdinal: result.activeMatchOrdinal,
-        matches: result.matches,
-      });
-    });
-  }
+// Track which webContents have the found-in-page listener attached
+const attachedWebContentsIds = new Set<number>();
 
+function ensureFoundInPageListener(win: BrowserWindow): void {
+  const id = win.webContents.id;
+  if (attachedWebContentsIds.has(id)) return;
+  attachedWebContentsIds.add(id);
+
+  win.webContents.on("found-in-page", (_event, result) => {
+    win.webContents.send("find:result", {
+      activeMatchOrdinal: result.activeMatchOrdinal,
+      matches: result.matches,
+    });
+  });
+
+  // Clean up when the window is closed
+  win.on("closed", () => {
+    attachedWebContentsIds.delete(id);
+  });
+}
+
+export function registerFindIpc(): void {
   ipcMain.handle(
     "find:find",
     (
@@ -24,6 +35,7 @@ export function registerFindIpc(): void {
     ) => {
       const w = getMainWindow();
       if (!w || !text) return;
+      ensureFoundInPageListener(w);
       w.webContents.findInPage(text, { forward: forward ?? true, findNext: findNext ?? false });
     },
   );
