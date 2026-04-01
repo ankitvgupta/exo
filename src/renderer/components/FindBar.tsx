@@ -1,23 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useAppStore } from "../store";
 
-declare global {
-  interface Window {
-    api: {
-      find: {
-        find: (text: string, options?: { forward?: boolean; findNext?: boolean }) => void;
-        stop: () => void;
-        onResult: (
-          callback: (result: { activeMatchOrdinal: number; matches: number }) => void,
-        ) => void;
-        removeResultListener: () => void;
-        onOpen: (callback: () => void) => void;
-        removeOpenListener: () => void;
-      };
-    };
-  }
-}
-
 export function FindBar() {
   const closeFindBar = useAppStore((s) => s.closeFindBar);
   const [query, setQuery] = useState("");
@@ -38,7 +21,7 @@ export function FindBar() {
 
   // Listen for find results from main process
   useEffect(() => {
-    window.api.find.onResult((result) => {
+    window.api.find.onResult((result: { activeMatchOrdinal: number; matches: number }) => {
       setActiveMatch(result.activeMatchOrdinal);
       setTotalMatches(result.matches);
     });
@@ -63,6 +46,7 @@ export function FindBar() {
   // Stop find when component unmounts
   useEffect(() => {
     return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
       window.api.find.stop();
     };
   }, []);
