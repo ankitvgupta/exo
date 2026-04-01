@@ -72,6 +72,7 @@ export function FindBar() {
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
       e.preventDefault();
+      if (debounceRef.current) clearTimeout(debounceRef.current);
       if (query) {
         findText(query, true, !e.shiftKey);
       }

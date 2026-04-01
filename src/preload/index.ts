@@ -1070,6 +1070,7 @@ const api = {
     onResult: (
       callback: (result: { activeMatchOrdinal: number; matches: number }) => void,
     ): void => {
+      ipcRenderer.removeAllListeners("find:result");
       ipcRenderer.on(
         "find:result",
         (_: Electron.IpcRendererEvent, result: { activeMatchOrdinal: number; matches: number }) =>
@@ -1080,6 +1081,7 @@ const api = {
       ipcRenderer.removeAllListeners("find:result");
     },
     onOpen: (callback: () => void): void => {
+      ipcRenderer.removeAllListeners("find:open");
       ipcRenderer.on("find:open", () => callback());
     },
     removeOpenListener: (): void => {
