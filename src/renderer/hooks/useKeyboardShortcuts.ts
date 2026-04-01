@@ -77,6 +77,19 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
   const gPrefixRef = useRef(false);
   const gPrefixTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Open find bar and ensure the input is focused — handles the case where
+  // the bar is already open but input lost focus (standard Cmd+F UX).
+  function openAndFocusFindBar() {
+    useAppStore.getState().openFindBar();
+    setTimeout(() => {
+      const input = document.querySelector<HTMLInputElement>('[data-testid="find-bar-input"]');
+      if (input) {
+        input.focus();
+        input.select();
+      }
+    }, 0);
+  }
+
   // Single event listener registered once. All state is read fresh from the
   // Zustand store via getState() at keypress time, eliminating stale closures.
   useEffect(() => {
@@ -212,7 +225,7 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
       const isMac = navigator.platform.startsWith("Mac");
       if (e.key === "f" && (isMac ? e.metaKey : e.ctrlKey)) {
         e.preventDefault();
-        state.openFindBar();
+        openAndFocusFindBar();
         return;
       }
 
@@ -1054,7 +1067,7 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
   // intercepts it via before-input-event and sends find:open instead).
   useEffect(() => {
     window.api.find.onOpen(() => {
-      useAppStore.getState().openFindBar();
+      openAndFocusFindBar();
     });
     return () => {
       window.api.find.removeOpenListener();
