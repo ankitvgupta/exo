@@ -4,18 +4,17 @@ import { useAppStore } from "../store";
 export function FindBar() {
   const closeFindBar = useAppStore((s) => s.closeFindBar);
   const [query, setQuery] = useState("");
-  const [activeMatch, setActiveMatch] = useState(0);
-  const [totalMatches, setTotalMatches] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Display the match count via a ref + direct DOM manipulation.
+  // React re-renders would also work but this avoids unnecessary VDOM diffs.
+  const matchCountRef = useRef<HTMLSpanElement>(null);
 
   const close = useCallback(() => {
     window.api.find.stop();
     closeFindBar();
   }, [closeFindBar]);
 
-  // Auto-focus on mount — Electron's before-input-event preventDefault() can
-  // steal focus back from the input, so we need to retry until it sticks.
   useEffect(() => {
     const focus = () => {
       inputRef.current?.focus();
@@ -27,20 +26,22 @@ export function FindBar() {
     return () => clearTimeout(timer);
   }, []);
 
-  // Listen for find results from main process.
-  // Remove-then-add to avoid stacking listeners (React Strict Mode double-mounts).
+  // Listen for find results — buffer them, don't update DOM immediately.
   useEffect(() => {
     window.api.find.removeResultListener();
     window.api.find.onResult((result: { activeMatchOrdinal: number; matches: number }) => {
-      setActiveMatch(result.activeMatchOrdinal);
-      setTotalMatches(result.matches);
+      if (matchCountRef.current) {
+        matchCountRef.current.textContent =
+          result.matches > 0
+            ? `${result.activeMatchOrdinal} of ${result.matches}`
+            : "No matches";
+      }
     });
     return () => {
       window.api.find.removeResultListener();
     };
   }, []);
 
-  // Handle Escape — let modal overlays (CommandPalette, AgentPalette, SearchBar) take priority
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -55,7 +56,26 @@ export function FindBar() {
     return () => window.removeEventListener("keydown", handleKeyDown, { capture: true });
   }, [close]);
 
-  // Stop find when component unmounts
+  // Handle Enter/Shift+Enter at the window level — findInPage steals focus
+  // to the matched element, so the input's onKeyDown may not fire.
+  useEffect(() => {
+    const handleEnter = (e: KeyboardEvent) => {
+      if (e.key === "Enter") {
+        const text = inputRef.current?.value;
+        if (!text) return;
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        if (debounceRef.current) clearTimeout(debounceRef.current);
+        findText(text, true, !e.shiftKey);
+        // Re-focus the input so the user can edit the query
+        inputRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", handleEnter, { capture: true });
+    return () => window.removeEventListener("keydown", handleEnter, { capture: true });
+  }, [findText]);
+
   useEffect(() => {
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -66,8 +86,7 @@ export function FindBar() {
   const findText = useCallback((text: string, findNext?: boolean, forward?: boolean) => {
     if (!text) {
       window.api.find.stop();
-      setActiveMatch(0);
-      setTotalMatches(0);
+      if (matchCountRef.current) matchCountRef.current.textContent = "";
       return;
     }
     window.api.find.find(text, { findNext: findNext ?? false, forward: forward ?? true });
@@ -75,6 +94,10 @@ export function FindBar() {
 
   const handleInputChange = (value: string) => {
     setQuery(value);
+    if (!value) {
+      pendingResultRef.current = "";
+      if (matchCountRef.current) matchCountRef.current.textContent = "";
+    }
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       findText(value);
@@ -85,7 +108,6 @@ export function FindBar() {
     if (e.key === "Enter") {
       e.preventDefault();
       e.stopPropagation();
-      // Stop the native event from reaching useKeyboardShortcuts' window listener
       e.nativeEvent.stopImmediatePropagation();
       if (debounceRef.current) clearTimeout(debounceRef.current);
       if (query) {
@@ -118,11 +140,11 @@ export function FindBar() {
         className="flex-1 min-w-0 px-2 py-1 text-sm bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
         data-testid="find-bar-input"
       />
-      {query && (
-        <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
-          {totalMatches > 0 ? `${activeMatch} of ${totalMatches}` : "No matches"}
-        </span>
-      )}
+      <span
+        ref={matchCountRef}
+        className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap"
+        data-testid="find-bar-count"
+      />
       <button
         onClick={goPrev}
         className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-gray-500 dark:text-gray-400"

@@ -6,26 +6,75 @@ function getMainWindow(): BrowserWindow | null {
 }
 
 export function registerFindIpc(): void {
-  // Fire-and-forget: just call findInPage. Results are relayed via the
-  // permanent "found-in-page" listener in window.ts → "find:result" IPC.
-  // We intentionally avoid ipcMain.handle here because returning a promise
-  // that waits on "found-in-page" deadlocks — Electron won't dispatch the
-  // webContents event while an IPC handle response is pending.
+  let lastFindText = "";
+  let reestablishing = false;
+  let listenerAttached = false;
+
+  // Attach the found-in-page listener lazily (the window may not exist yet
+  // when registerFindIpc is called). Only attached once.
+  function ensureListener(w: BrowserWindow): void {
+    if (listenerAttached) return;
+    listenerAttached = true;
+
+    // Track all events for debugging
+    (global as any).__findDebug = { events: [], reestablishResults: [], ipcCalls: [] };
+
+    w.webContents.on("found-in-page", (_event, result) => {
+      const entry = {
+        ordinal: result.activeMatchOrdinal,
+        matches: result.matches,
+        reest: reestablishing,
+        ts: Date.now(),
+      };
+      (global as any).__findDebug.events.push(entry);
+
+      if (reestablishing) {
+        reestablishing = false;
+        (global as any).__findDebug.reestablishResults.push(entry);
+        return;
+      }
+
+      w.webContents.send("find:result", {
+        activeMatchOrdinal: result.activeMatchOrdinal,
+        matches: result.matches,
+      });
+
+      if (lastFindText) {
+        reestablishing = true;
+        setTimeout(() => {
+          if (!w.isDestroyed()) {
+            w.webContents.findInPage(lastFindText, { findNext: true, forward: true });
+          }
+        }, 50);
+      }
+    });
+
+    w.on("closed", () => {
+      listenerAttached = false;
+      lastFindText = "";
+    });
+  }
+
+  // Fire-and-forget: call findInPage, results come back via found-in-page.
+  // Always use findNext: true — Electron doesn't fire found-in-page for
+  // findNext: false when called from an IPC handler.
   ipcMain.on(
     "find:find",
     (
       _event,
-      { text, forward, findNext }: { text: string; forward?: boolean; findNext?: boolean },
+      { text, forward }: { text: string; forward?: boolean; findNext?: boolean },
     ) => {
       const w = getMainWindow();
       if (!w || !text) return;
-      // Always use findNext: true — Electron's found-in-page event doesn't
-      // fire for the initial search (findNext: false) when called from an IPC
-      // handler. Using findNext: true works for both initial and subsequent
-      // searches: Electron starts a new search if the text differs from the
-      // active search, and advances to the next match if it's the same text.
+      ensureListener(w);
+      lastFindText = text;
+      if ((global as any).__findDebug) {
+        (global as any).__findDebug.ipcCalls.push({ text, forward, ts: Date.now() });
+      }
       setImmediate(() => {
-        w.webContents.findInPage(text, { forward: forward ?? true, findNext: true });
+        if (!w.isDestroyed()) {
+          w.webContents.findInPage(text, { forward: forward ?? true, findNext: true });
+        }
       });
     },
   );
@@ -33,6 +82,8 @@ export function registerFindIpc(): void {
   ipcMain.on("find:stop", () => {
     const w = getMainWindow();
     if (!w) return;
+    lastFindText = "";
+    reestablishing = false;
     w.webContents.stopFindInPage("clearSelection");
   });
 }
