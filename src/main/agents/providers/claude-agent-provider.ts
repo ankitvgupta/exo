@@ -9,7 +9,6 @@ import {
   type Query,
   type McpServerConfig,
   type SpawnOptions as SdkSpawnOptions,
-  type HookCallback,
 } from "@anthropic-ai/claude-agent-sdk";
 import type {
   AgentProvider,
