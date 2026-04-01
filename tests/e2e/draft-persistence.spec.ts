@@ -304,13 +304,20 @@ test.describe("Draft persistence across navigation", () => {
       timeout: 3000,
     });
 
-    // Clean up: discard the forward draft so it doesn't leak into the next test.
-    // The close button triggers handleDiscardDraft which clears the persisted draft.
+    // Clean up: fully clear the forward draft so it doesn't leak into the next test.
+    // Just closing is not enough — the draft persists (that's what this suite tests).
+    // Must reopen, clear content, then close to remove the persisted draft.
     await inlineCompose.locator("[data-testid='inline-compose-close']").click();
+    await page.waitForTimeout(300);
+    await forwardButton.click();
     await page.waitForTimeout(500);
-
-    // Verify compose is fully closed before proceeding
-    await expect(inlineCompose).not.toBeVisible({ timeout: 5000 });
+    const clearEditor = inlineCompose.locator(".ProseMirror");
+    await clearEditor.click();
+    await page.keyboard.press("ControlOrMeta+a");
+    await page.keyboard.press("Backspace");
+    await page.waitForTimeout(200);
+    await inlineCompose.locator("[data-testid='inline-compose-close']").click();
+    await page.waitForTimeout(300);
   });
 
   test("reply mode persists: reply stays reply after round-trip", async () => {
