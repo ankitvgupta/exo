@@ -1,3 +1,28 @@
+<div align="center">
+
+<img width="1200" alt="Exo" src="docs/images/readme-hero.png" />
+
+### Exo: Claude Code for your Inbox
+
+[![GitHub stars](https://img.shields.io/github/stars/ankitvgupta/mail-app?style=flat&logo=github)](https://github.com/ankitvgupta/mail-app/stargazers)
+[![GitHub release](https://img.shields.io/github/v/release/ankitvgupta/mail-app?style=flat&logo=github)](https://github.com/ankitvgupta/mail-app/releases)
+[![License](https://img.shields.io/github/license/ankitvgupta/mail-app?style=flat)](LICENSE.md)
+
+<br />
+
+Exo is Claude Code for your Inbox. It's an open source, AI-native desktop email client. <br />
+Built with Electron, React, TypeScript, and Tailwind CSS.
+
+<br />
+
+[**Download for macOS**](https://github.com/ankitvgupta/mail-app/releases/latest) &nbsp;&bull;&nbsp; [Documentation](https://exo.email) &nbsp;&bull;&nbsp; [Changelog](https://github.com/ankitvgupta/mail-app/releases) 
+
+<br />
+
+
+</div>
+
+
 # Exo
 
 [![Download DMG](https://img.shields.io/github/v/release/ankitvgupta/mail-app?label=Download%20.dmg&logo=apple&style=flat-square)](https://github.com/ankitvgupta/mail-app/releases/latest)
