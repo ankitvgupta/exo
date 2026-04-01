@@ -32,7 +32,7 @@ test.describe("Find in Page - Cmd+F", () => {
     await expect(page.locator("text=Inbox").first()).toBeVisible({ timeout: 10000 });
 
     // Open find bar
-    await page.keyboard.press("Meta+f");
+    await page.keyboard.press("ControlOrMeta+f");
 
     // Verify find bar appears with focused input
     const findBar = page.locator('[data-testid="find-bar"]');
@@ -54,7 +54,7 @@ test.describe("Find in Page - Cmd+F", () => {
 
   test("typing shows match count", async () => {
     // Re-open find bar
-    await page.keyboard.press("Meta+f");
+    await page.keyboard.press("ControlOrMeta+f");
 
     const findBar = page.locator('[data-testid="find-bar"]');
     await expect(findBar).toBeVisible({ timeout: 5000 });
