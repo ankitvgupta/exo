@@ -57,7 +57,7 @@ test.describe("Snooze — email must leave inbox and cursor must advance", () =>
     await expect(page.locator("div[data-thread-id]").first()).toBeVisible({ timeout: 10000 });
     await page.waitForTimeout(1000);
 
-    // Step 1: Press j twice to select the 3rd thread (so there's a "next" below)
+    // Step 1: Select a thread (so there's a "next" thread below for cursor advancement)
     // Use retry-based approach — on CI, keyboard events can fire before React state commits
     const selectedRow = page.locator("div[data-thread-id][data-selected='true']");
     const deadline1 = Date.now() + 15000;
