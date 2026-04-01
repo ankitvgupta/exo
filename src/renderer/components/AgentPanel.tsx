@@ -895,7 +895,7 @@ export const AgentTabContent = memo(function AgentTabContent({ emailId }: { emai
   return (
     <div className="flex flex-col h-full min-h-0">
       {/* Status + cancel header */}
-      <div className="flex items-center justify-between px-4 py-2 border-b border-gray-100 dark:border-gray-700/50 flex-shrink-0">
+      <div className="h-10 flex items-center justify-between px-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
         <div className="flex items-center gap-2 min-w-0">
           <StatusChip status={task.status} />
           {task.providerIds.length === 1 && (

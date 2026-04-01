@@ -3186,7 +3186,7 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
     <div className="flex-1 flex flex-col bg-white dark:bg-gray-800 overflow-hidden">
       {/* Back button for full view */}
       {isFullView && (
-        <div className="h-10 px-4 bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700/50 flex items-center flex-shrink-0">
+        <div className="h-10 px-4 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center flex-shrink-0">
           <button
             onClick={handleBackToSplit}
             className="flex items-center gap-1 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors text-sm"
