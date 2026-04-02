@@ -393,6 +393,74 @@ const NUMBERED_MIGRATIONS: Migration[] = [
       `);
     },
   },
+  {
+    version: 2,
+    name: "add_agent_sessions_table",
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS agent_sessions (
+          id TEXT PRIMARY KEY,
+          title TEXT NOT NULL,
+          email_id TEXT,
+          thread_id TEXT,
+          account_id TEXT NOT NULL,
+          provider_ids TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          status TEXT NOT NULL DEFAULT 'active'
+        );
+        CREATE INDEX IF NOT EXISTS idx_agent_sessions_account ON agent_sessions(account_id);
+        CREATE INDEX IF NOT EXISTS idx_agent_sessions_email ON agent_sessions(email_id);
+        CREATE INDEX IF NOT EXISTS idx_agent_sessions_updated ON agent_sessions(updated_at DESC);
+      `);
+
+      // Migrate existing traces to sessions
+      const traces = db.prepare("SELECT * FROM agent_conversation_mirror").all() as Array<{
+        local_task_id: string;
+        provider_id: string;
+        messages_json: string;
+        created_at: string;
+        updated_at: string;
+      }>;
+
+      const insertSession = db.prepare(`
+        INSERT OR IGNORE INTO agent_sessions (id, title, email_id, thread_id, account_id, provider_ids, created_at, updated_at, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+
+      for (const trace of traces) {
+        if (!trace.local_task_id) continue;
+        let title = "Untitled session";
+        try {
+          const events = JSON.parse(trace.messages_json) as Array<{ type: string; text?: string }>;
+          const firstUserMsg = events.find((e) => e.type === "user_message");
+          if (firstUserMsg?.text) {
+            title =
+              firstUserMsg.text.length > 40
+                ? firstUserMsg.text.slice(0, 40).replace(/\s+\S*$/, "") + "..."
+                : firstUserMsg.text;
+          }
+        } catch {
+          /* ignore parse errors */
+        }
+
+        const createdAt = new Date(trace.created_at).getTime() || Date.now();
+        const updatedAt = new Date(trace.updated_at).getTime() || Date.now();
+
+        insertSession.run(
+          trace.local_task_id,
+          title,
+          null,
+          null,
+          "",
+          JSON.stringify([trace.provider_id]),
+          createdAt,
+          updatedAt,
+          "completed",
+        );
+      }
+    },
+  },
 ];
 
 function runNumberedMigrations(db: DatabaseInstance): void {
@@ -4252,4 +4320,85 @@ export function listConversationMirrors(providerId?: string): ConversationMirror
     createdAt: row.createdAt as string,
     updatedAt: row.updatedAt as string,
   }));
+}
+
+// ---------------------------------------------------------------------------
+// Agent Sessions
+// ---------------------------------------------------------------------------
+
+export interface AgentSessionRow {
+  id: string;
+  title: string;
+  email_id: string | null;
+  thread_id: string | null;
+  account_id: string;
+  provider_ids: string; // JSON array
+  created_at: number;
+  updated_at: number;
+  status: string;
+}
+
+export function saveAgentSession(session: AgentSessionRow): void {
+  getDatabase()
+    .prepare(
+      `INSERT OR REPLACE INTO agent_sessions
+       (id, title, email_id, thread_id, account_id, provider_ids, created_at, updated_at, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .run(
+      session.id,
+      session.title,
+      session.email_id,
+      session.thread_id,
+      session.account_id,
+      session.provider_ids,
+      session.created_at,
+      session.updated_at,
+      session.status,
+    );
+}
+
+export function getAgentSession(sessionId: string): AgentSessionRow | null {
+  return (
+    (getDatabase()
+      .prepare("SELECT * FROM agent_sessions WHERE id = ?")
+      .get(sessionId) as AgentSessionRow | undefined) ?? null
+  );
+}
+
+export function listAgentSessions(accountId: string, limit = 50): AgentSessionRow[] {
+  return getDatabase()
+    .prepare(
+      "SELECT * FROM agent_sessions WHERE account_id = ? ORDER BY updated_at DESC LIMIT ?",
+    )
+    .all(accountId, limit) as AgentSessionRow[];
+}
+
+export function listAgentSessionsForEmail(emailId: string): AgentSessionRow[] {
+  return getDatabase()
+    .prepare("SELECT * FROM agent_sessions WHERE email_id = ? ORDER BY updated_at DESC")
+    .all(emailId) as AgentSessionRow[];
+}
+
+export function updateAgentSessionStatus(
+  sessionId: string,
+  status: string,
+  updatedAt = Date.now(),
+): void {
+  getDatabase()
+    .prepare("UPDATE agent_sessions SET status = ?, updated_at = ? WHERE id = ?")
+    .run(status, updatedAt, sessionId);
+}
+
+export function updateAgentSessionTitle(sessionId: string, title: string): void {
+  getDatabase()
+    .prepare("UPDATE agent_sessions SET title = ?, updated_at = ? WHERE id = ?")
+    .run(title, Date.now(), sessionId);
+}
+
+export function deleteAgentSession(sessionId: string): void {
+  getDatabase().prepare("DELETE FROM agent_sessions WHERE id = ?").run(sessionId);
+  getDatabase()
+    .prepare("DELETE FROM agent_conversation_mirror WHERE local_task_id = ?")
+    .run(sessionId);
 }
