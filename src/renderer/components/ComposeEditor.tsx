@@ -9,6 +9,7 @@ import Image from "@tiptap/extension-image";
 import Placeholder from "@tiptap/extension-placeholder";
 import TextAlign from "@tiptap/extension-text-align";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import DOMPurify from "dompurify";
 import { useAppStore } from "../store";
 import { ContactMention } from "./MentionSuggestion";
 import type { Snippet } from "../../shared/types";
@@ -496,7 +497,9 @@ export function ComposeEditor({
   const currentAccountId = useAppStore((s) => s.currentAccountId);
   const accounts = useAppStore((s) => s.accounts);
   const accountSnippets = snippets.filter((s) => s.accountId === currentAccountId);
-  const senderName = accounts.find((a) => a.id === currentAccountId)?.email?.split("@")[0];
+  const currentAccountRecord = accounts.find((a) => a.id === currentAccountId);
+  const senderName =
+    currentAccountRecord?.displayName || currentAccountRecord?.email?.split("@")[0];
 
   // Ref keeps the latest onAddToCc without recreating extensions
   const onAddToCcRef = useRef<((email: string) => void) | null>(onAddToCc ?? null);
@@ -629,7 +632,8 @@ export function ComposeEditor({
         onInsertSnippet={(snippet) => {
           if (!editor) return;
           const resolved = resolveSnippetVariables(snippet.body, recipientEmail, senderName);
-          editor.chain().focus().insertContent(resolved).run();
+          const sanitized = DOMPurify.sanitize(resolved);
+          editor.chain().focus().insertContent(sanitized).run();
         }}
       />
       <div className="dark:text-gray-100">
