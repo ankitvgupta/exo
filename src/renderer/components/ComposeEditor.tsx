@@ -142,9 +142,7 @@ function SnippetPicker({
               className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 border-b border-gray-100 dark:border-gray-700 last:border-b-0"
             >
               <div className="flex items-center gap-2">
-                <span className="font-medium text-gray-900 dark:text-gray-100">
-                  {snippet.name}
-                </span>
+                <span className="font-medium text-gray-900 dark:text-gray-100">{snippet.name}</span>
                 {snippet.shortcut && (
                   <span className="px-1 py-0.5 text-xs bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 rounded font-mono">
                     ;{snippet.shortcut}

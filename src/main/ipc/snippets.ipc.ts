@@ -173,9 +173,7 @@ export function registerSnippetsIpc(): void {
           discoveredPaths.set(email, filePath);
           try {
             const shSnippets = await readSuperhumanSnippets(filePath);
-            log.info(
-              `[SuperhumanImport] ${email}: ${shSnippets.length} snippets found`,
-            );
+            log.info(`[SuperhumanImport] ${email}: ${shSnippets.length} snippets found`);
             accounts.push({ email, snippetCount: shSnippets.length });
           } catch (e) {
             log.error({ err: e }, `[SuperhumanImport] Failed to read snippets for ${email}`);
@@ -223,9 +221,7 @@ export function registerSnippetsIpc(): void {
         // Deduplicate against existing snippets by name (for the same account)
         const existingSnippets = getSnippets();
         const existingNames = new Set(
-          existingSnippets
-            .filter((s) => s.accountId === targetAccountId)
-            .map((s) => s.name),
+          existingSnippets.filter((s) => s.accountId === targetAccountId).map((s) => s.name),
         );
         const uniqueNewSnippets = newSnippets.filter((s) => !existingNames.has(s.name));
         const skippedCount = newSnippets.length - uniqueNewSnippets.length;

@@ -118,10 +118,7 @@ export function SnippetsEditor() {
     setShImporting(true);
     setShResult(null);
     try {
-      const result = (await window.api.snippets.importFromSuperhuman(
-        email,
-        currentAccountId,
-      )) as {
+      const result = (await window.api.snippets.importFromSuperhuman(email, currentAccountId)) as {
         success: boolean;
         data?: ImportResult;
         error?: string;
@@ -368,8 +365,7 @@ function SnippetForm({
       </div>
       <div>
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-          Shortcut{" "}
-          <span className="font-normal text-gray-500 dark:text-gray-400">(optional)</span>
+          Shortcut <span className="font-normal text-gray-500 dark:text-gray-400">(optional)</span>
         </label>
         <div className="flex items-center gap-1">
           <span className="text-sm text-gray-500 dark:text-gray-400 font-mono">;</span>
@@ -397,10 +393,13 @@ function SnippetForm({
           className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y"
         />
         <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-          Use {"{"}<code className="text-xs">first_name</code>{"}"} for the
-          recipient&apos;s first name, {"{"}<code className="text-xs">my_name</code>{"}"} for
-          your name, or any {"{"}<code className="text-xs">custom_placeholder</code>{"}"} that
-          you&apos;ll fill in when inserting.
+          Use {"{"}
+          <code className="text-xs">first_name</code>
+          {"}"} for the recipient&apos;s first name, {"{"}
+          <code className="text-xs">my_name</code>
+          {"}"} for your name, or any {"{"}
+          <code className="text-xs">custom_placeholder</code>
+          {"}"} that you&apos;ll fill in when inserting.
         </p>
       </div>
       <div className="flex justify-end gap-2">
