@@ -123,6 +123,10 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
 
       const mode = getKeyboardMode();
       const currentThreads = threadsRef.current;
+      // In drafts view, scope all thread operations to visible draft threads
+      const visibleThreads = state.currentSplitId === "__drafts__"
+        ? currentThreads.filter((t) => t.draft && t.draft.body)
+        : currentThreads;
 
       // Always allow Escape to close modals or go back in view modes
       if (e.key === "Escape") {
@@ -235,10 +239,7 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
       // In drafts view, only select threads with AI drafts (matching the visible list)
       if ((e.metaKey || e.ctrlKey) && e.key === "a" && !activeSearchQuery) {
         e.preventDefault();
-        const selectableThreads = state.currentSplitId === "__drafts__"
-          ? currentThreads.filter((t) => t.draft && t.draft.body)
-          : currentThreads;
-        state.selectAllThreads(selectableThreads.map((t) => t.threadId));
+        state.selectAllThreads(visibleThreads.map((t) => t.threadId));
         return;
       }
 
@@ -276,9 +277,9 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
         if (e.key === "g") {
           // g g → go to top of current list (Vim-style)
           e.preventDefault();
-          if (currentThreads.length > 0) {
-            setSelectedThreadId(currentThreads[0].threadId);
-            setSelectedEmailId(currentThreads[0].latestEmail.id);
+          if (visibleThreads.length > 0) {
+            setSelectedThreadId(visibleThreads[0].threadId);
+            setSelectedEmailId(visibleThreads[0].latestEmail.id);
           }
           return;
         }
@@ -356,11 +357,7 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
           }
         }
 
-        // In drafts view, only include threads with AI-generated drafts (matching the visible list)
-        const threadsForNav = isDraftsView
-          ? currentThreads.filter((t) => t.draft && t.draft.body)
-          : currentThreads;
-        for (const t of threadsForNav) {
+        for (const t of visibleThreads) {
           items.push({ type: "thread", threadId: t.threadId, emailId: t.latestEmail.id });
         }
 
@@ -618,16 +615,16 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
       ) {
         e.preventDefault();
         markNavigationActive();
-        if (currentThreads.length === 0) return;
-        const currentIndex = currentThreads.findIndex((t) => t.threadId === selectedThreadId);
+        if (visibleThreads.length === 0) return;
+        const currentIndex = visibleThreads.findIndex((t) => t.threadId === selectedThreadId);
         if (currentIndex < 0) return;
 
         const direction = e.key === "J" || e.key === "ArrowDown" ? 1 : -1;
         const nextIndex = currentIndex + direction;
-        if (nextIndex < 0 || nextIndex >= currentThreads.length) return;
+        if (nextIndex < 0 || nextIndex >= visibleThreads.length) return;
 
-        const currentThread = currentThreads[currentIndex];
-        const nextThread = currentThreads[nextIndex];
+        const currentThread = visibleThreads[currentIndex];
+        const nextThread = visibleThreads[nextIndex];
 
         // If no selection yet, select the current thread first as the anchor
         if (selectedThreadIds.size === 0) {
@@ -992,9 +989,9 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
 
         // Shift+G for bottom
         case "G":
-          if (e.shiftKey && currentThreads.length > 0) {
+          if (e.shiftKey && visibleThreads.length > 0) {
             e.preventDefault();
-            const lastThread = currentThreads[currentThreads.length - 1];
+            const lastThread = visibleThreads[visibleThreads.length - 1];
             setSelectedThreadId(lastThread.threadId);
             setSelectedEmailId(lastThread.latestEmail.id);
           }
