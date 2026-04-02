@@ -676,6 +676,13 @@ export default function App() {
     }
   }, []);
 
+  // Sync selected thread ID to viewedThreadId so agent live context stays current
+  const selectedThreadId = useAppStore((s) => s.selectedThreadId);
+  const setViewedThreadId = useAppStore((s) => s.setViewedThreadId);
+  useEffect(() => {
+    setViewedThreadId(selectedThreadId || null);
+  }, [selectedThreadId, setViewedThreadId]);
+
   // Initialize theme and density from main process and listen for OS theme changes
   useEffect(() => {
     // Fetch persisted theme preference
