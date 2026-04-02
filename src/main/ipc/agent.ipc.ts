@@ -5,14 +5,11 @@ import { authenticateProvider } from "../agents/private-providers-main";
 import { getModelIdForFeature } from "./settings.ipc";
 import {
   getAgentTrace,
-  saveAgentSession,
   getAgentSession,
   listAgentSessions,
   listAgentSessionsForEmail,
-  updateAgentSessionStatus,
   updateAgentSessionTitle,
   deleteAgentSession,
-  type AgentSessionRow,
 } from "../db";
 import type { AgentContext } from "../agents/types";
 import type { ScopedAgentEvent } from "../agents/types";
