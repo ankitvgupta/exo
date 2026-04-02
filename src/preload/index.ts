@@ -881,6 +881,18 @@ const api = {
       ipcRenderer.invoke("agent:get-trace", { taskId }),
     claudeAuthStatus: (): Promise<unknown> => ipcRenderer.invoke("agent:claude-auth-status"),
     claudeLogin: (): Promise<unknown> => ipcRenderer.invoke("agent:claude-login"),
+    listSessions(accountId: string, emailId?: string): Promise<unknown> {
+      return ipcRenderer.invoke("agent:list-sessions", { accountId, emailId });
+    },
+    getSession(sessionId: string): Promise<unknown> {
+      return ipcRenderer.invoke("agent:get-session", { sessionId });
+    },
+    renameSession(sessionId: string, title: string): Promise<unknown> {
+      return ipcRenderer.invoke("agent:rename-session", { sessionId, title });
+    },
+    deleteSession(sessionId: string): Promise<unknown> {
+      return ipcRenderer.invoke("agent:delete-session", { sessionId });
+    },
     onEvent: (callback: (data: unknown) => void): void => {
       ipcRenderer.on("agent:event", (_: Electron.IpcRendererEvent, data: unknown) =>
         callback(data),
