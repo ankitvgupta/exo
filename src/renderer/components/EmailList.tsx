@@ -73,9 +73,10 @@ export function EmailList() {
     [allLocalDrafts, currentAccountId],
   );
 
-  // Threads with AI-generated drafts (for the Drafts tab)
+  // Threads with AI-generated drafts (for the Drafts tab).
+  // Exclude "pending" drafts — these are still being generated and have no content yet.
   const threadsWithDrafts = useMemo(
-    () => (isDraftsView ? threads.filter((t) => t.draft) : []),
+    () => (isDraftsView ? threads.filter((t) => t.draft && t.draft.status !== "pending") : []),
     [threads, isDraftsView],
   );
 
@@ -608,7 +609,7 @@ export function EmailList() {
       {/* Batch action bar - shown when threads are multi-selected */}
       <BatchActionBar
         selectedCount={selectedThreadIds.size}
-        totalCount={threads.length}
+        totalCount={isDraftsView ? threadsWithDrafts.length + localDrafts.length : threads.length}
         onArchive={batchArchive}
         onTrash={batchTrash}
         onMarkUnread={batchMarkUnread}
