@@ -8,6 +8,7 @@ import {
   type DashboardEmail,
 } from "../../shared/types";
 import { stripQuotedContent } from "./strip-quoted-content";
+import { UNTRUSTED_DATA_INSTRUCTION, wrapUntrustedEmail } from "../../shared/prompt-safety";
 import { createLogger } from "./logger";
 
 const log = createLogger("archive-ready");
@@ -94,14 +95,14 @@ export class ArchiveReadyAnalyzer {
     }
     parts.push("");
 
+    parts.push(UNTRUSTED_DATA_INSTRUCTION);
+    parts.push("");
+
     for (const email of recentEmails) {
       const isFromUser = userEmail && this.isFromUser(email, userEmail);
       parts.push(`--- Message ${isFromUser ? "(FROM USER)" : "(RECEIVED)"} ---`);
-      parts.push(`From: ${email.from}`);
-      parts.push(`To: ${email.to}`);
-      parts.push(`Date: ${email.date}`);
 
-      // Include analysis if available
+      // Include analysis if available (trusted system-generated data, outside tags)
       if (email.analysis) {
         parts.push(
           `Analysis: ${email.analysis.needsReply ? "Needs reply" : "No reply needed"} - ${email.analysis.reason}`,
@@ -117,7 +118,7 @@ export class ArchiveReadyAnalyzer {
       if (body.length > maxLen) {
         body = body.substring(0, maxLen) + "\n[... truncated ...]";
       }
-      parts.push(`Body: ${body}`);
+      parts.push(wrapUntrustedEmail(`From: ${email.from}\nTo: ${email.to}\nDate: ${email.date}\nBody: ${body}`));
       parts.push("");
     }
 

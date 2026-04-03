@@ -11,6 +11,7 @@ import {
   type EAConfig,
   type GeneratedDraftResponse,
 } from "../../shared/types";
+import { UNTRUSTED_DATA_INSTRUCTION, wrapUntrustedEmail } from "../../shared/prompt-safety";
 import { createLogger } from "./logger";
 
 const log = createLogger("draft-generator");
@@ -114,6 +115,7 @@ Do NOT propose specific times yourself - defer to the assistant.`;
             content: `${this.prompt}
 ${senderContext}
 ${calendaringContext}
+${UNTRUSTED_DATA_INSTRUCTION}
 ---
 ANALYSIS (for context):
 Reason for reply: ${analysis.reason}
@@ -122,12 +124,7 @@ Priority: ${analysis.priority || "medium"}
 ---
 ORIGINAL EMAIL:
 
-From: ${email.from}
-To: ${email.to}
-Subject: ${email.subject}
-Date: ${email.date}
-
-${email.body}`,
+${wrapUntrustedEmail(`From: ${email.from}\nTo: ${email.to}\nSubject: ${email.subject}\nDate: ${email.date}\n\n${email.body}`)}`,
           },
         ],
       },
@@ -243,6 +240,7 @@ ${profile.summary}
             role: "user",
             content: `${this.prompt}
 ${recipientContext}
+${UNTRUSTED_DATA_INSTRUCTION}
 ---
 Write the text for a forwarded email. The original email will be automatically appended as quoted content, so do not reproduce it.
 
@@ -252,12 +250,7 @@ ${instructions}
 ---
 ORIGINAL EMAIL BEING FORWARDED:
 
-From: ${email.from}
-To: ${email.to}
-Subject: ${email.subject}
-Date: ${email.date}
-
-${email.body}`,
+${wrapUntrustedEmail(`From: ${email.from}\nTo: ${email.to}\nSubject: ${email.subject}\nDate: ${email.date}\n\n${email.body}`)}`,
           },
         ],
       },
