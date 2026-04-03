@@ -154,9 +154,6 @@ function fuzzyMatch(text: string, query: string): boolean {
   return words.every((w) => lowerText.includes(w));
 }
 
-/** Sentinel key used in the store for agent tasks that aren't tied to any specific email. */
-export const GLOBAL_AGENT_KEY = "__global__";
-
 interface AgentCommandPaletteProps {
   isOpen: boolean;
   onClose: () => void;
@@ -356,6 +353,8 @@ export function AgentCommandPalette({ isOpen, onClose }: AgentCommandPaletteProp
           message: result.error ?? "Failed to start agent task",
           providerId: effectiveProviderIds[0],
         });
+        // Clean up the optimistically-created session so it doesn't linger as 'active'
+        store.updateSessionInStore(taskId, { status: "failed" });
       }
     },
     [

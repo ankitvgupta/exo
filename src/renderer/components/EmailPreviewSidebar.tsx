@@ -287,7 +287,6 @@ export const EmailPreviewSidebar = memo(function EmailPreviewSidebar() {
   // Debounced to avoid blocking j/k navigation — traces can be very large
   // (100MB+) and IPC deserialization blocks the main thread.
   const loadedTraceRef = useRef<string | null>(null);
-  const replayAgentTrace = useAppStore((s) => s.replayAgentTrace);
   // Derive primitive values so the effect doesn't re-run on every store mutation
   const selectedEmailIdForTrace = selectedEmail?.id;
   const selectedEmailAgentTaskId = selectedEmail?.draft?.agentTaskId;
@@ -366,24 +365,31 @@ export const EmailPreviewSidebar = memo(function EmailPreviewSidebar() {
         getTrace: (
           taskId: string,
         ) => Promise<{ success: boolean; data?: { events: ScopedAgentEvent[] } }>;
+        getSession: (
+          sessionId: string,
+        ) => Promise<{ success: boolean; data?: { providerIds: string[] } }>;
       };
     };
 
     const sessionId = globalAgentTaskKey;
     const timeoutId = setTimeout(() => {
-      api.agent
-        .getTrace(sessionId)
-        .then((result) => {
+      // Load both session metadata (for providerIds) and trace data in parallel
+      Promise.all([api.agent.getSession(sessionId), api.agent.getTrace(sessionId)])
+        .then(([sessionResult, traceResult]) => {
           // Guard: user may have switched away
           if (useAppStore.getState().globalAgentTaskKey !== sessionId) return;
-          if (!result.success || !result.data?.events?.length) return;
+          if (!traceResult.success || !traceResult.data?.events?.length) return;
+          const providerIds =
+            sessionResult.success && sessionResult.data?.providerIds?.length
+              ? sessionResult.data.providerIds
+              : ["claude"];
           replayAgentTrace(
             sessionId,
             sessionId, // Use sessionId as the task key for non-email runs
-            ["claude"],
+            providerIds,
             "",
             { accountId: currentAccountId || "", userEmail: "" },
-            result.data.events,
+            traceResult.data.events,
           );
         })
         .catch((err: unknown) => {

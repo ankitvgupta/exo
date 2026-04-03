@@ -315,7 +315,6 @@ interface AppState {
 
   // Session-based agent state (new)
   agentSessions: Record<string, AgentSession>;
-  activeSessionId: string | null;
   sessionList: AgentSessionSummary[];
 
   // Local drafts state (new emails composed by agent or user, not tied to threads)
@@ -525,11 +524,9 @@ interface AppState {
   markThreadAsRead: (threadId: string) => void;
 
   // Session actions
-  setActiveSessionId: (sessionId: string | null) => void;
   loadSessionList: (accountId: string) => Promise<void>;
   createSession: (session: AgentSession) => void;
   updateSessionInStore: (sessionId: string, updates: Partial<AgentSession>) => void;
-  removeSession: (sessionId: string) => void;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -662,7 +659,6 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   // Session-based agent state (new)
   agentSessions: {},
-  activeSessionId: null,
   sessionList: [],
 
   // Local drafts
@@ -1445,6 +1441,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         sessionStatus = "active";
       }
 
+      const sessionStatusChanged = sessionStatus !== session.status;
       return {
         ...newAgentTasksState,
         agentSessions: {
@@ -1456,9 +1453,14 @@ export const useAppStore = create<AppState>((set, get) => ({
             updatedAt: Date.now(),
           },
         },
-        sessionList: state.sessionList.map((s) =>
-          s.id === taskId ? { ...s, status: sessionStatus, updatedAt: Date.now() } : s,
-        ),
+        // Only rebuild sessionList when session status actually changes
+        ...(sessionStatusChanged
+          ? {
+              sessionList: state.sessionList.map((s) =>
+                s.id === taskId ? { ...s, status: sessionStatus, updatedAt: Date.now() } : s,
+              ),
+            }
+          : {}),
       };
     }),
 
@@ -1704,8 +1706,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   // Session actions
-  setActiveSessionId: (sessionId) => set({ activeSessionId: sessionId }),
-
   loadSessionList: async (accountId) => {
     const result = await window.api.agent.listSessions(accountId);
     if (result && result.success && result.data) {
@@ -1718,7 +1718,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   createSession: (session) =>
     set((state) => ({
       agentSessions: { ...state.agentSessions, [session.id]: session },
-      activeSessionId: session.id,
       sessionList: [
         {
           id: session.id,
@@ -1743,16 +1742,6 @@ export const useAppStore = create<AppState>((set, get) => ({
             ? { ...s, title: updated.title, status: updated.status, updatedAt: updated.updatedAt }
             : s,
         ),
-      };
-    }),
-
-  removeSession: (sessionId) =>
-    set((state) => {
-      const { [sessionId]: _, ...rest } = state.agentSessions;
-      return {
-        agentSessions: rest,
-        sessionList: state.sessionList.filter((s) => s.id !== sessionId),
-        activeSessionId: state.activeSessionId === sessionId ? null : state.activeSessionId,
       };
     }),
 }));

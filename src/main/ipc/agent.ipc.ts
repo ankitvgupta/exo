@@ -279,7 +279,9 @@ export function registerAgentIpc(): void {
     async (_, { accountId, emailId }: { accountId: string; emailId?: string }) => {
       try {
         const rows = emailId ? listAgentSessionsForEmail(emailId) : listAgentSessions(accountId);
-        const summaries = rows.map((r) => ({
+        // Filter by accountId to enforce ownership even when querying by emailId
+        const owned = rows.filter((r) => r.account_id === accountId);
+        const summaries = owned.map((r) => ({
           id: r.id,
           title: r.title,
           status: r.status,
@@ -294,35 +296,61 @@ export function registerAgentIpc(): void {
     },
   );
 
-  ipcMain.handle("agent:get-session", async (_, { sessionId }: { sessionId: string }) => {
-    try {
-      const row = getAgentSession(sessionId);
-      if (!row) return { success: false, error: "Session not found" };
-      return {
-        success: true,
-        data: {
-          id: row.id,
-          title: row.title,
-          emailId: row.email_id,
-          threadId: row.thread_id,
-          accountId: row.account_id,
-          providerIds: JSON.parse(row.provider_ids),
-          createdAt: row.created_at,
-          updatedAt: row.updated_at,
-          status: row.status,
-        },
-      };
-    } catch (err) {
-      log.error({ err }, "Failed to get agent session");
-      return { success: false, error: String(err) };
-    }
-  });
+  ipcMain.handle(
+    "agent:get-session",
+    async (_, { sessionId, accountId }: { sessionId: string; accountId?: string }) => {
+      try {
+        const row = getAgentSession(sessionId);
+        if (!row) return { success: false, error: "Session not found" };
+        // Ownership check: if accountId provided, verify it matches
+        if (accountId && row.account_id !== accountId) {
+          return { success: false, error: "Session not found" };
+        }
+        let providerIds: string[];
+        try {
+          providerIds = JSON.parse(row.provider_ids);
+        } catch {
+          log.warn({ sessionId }, "Malformed provider_ids in session row");
+          providerIds = [];
+        }
+        return {
+          success: true,
+          data: {
+            id: row.id,
+            title: row.title,
+            emailId: row.email_id,
+            threadId: row.thread_id,
+            accountId: row.account_id,
+            providerIds,
+            createdAt: row.created_at,
+            updatedAt: row.updated_at,
+            status: row.status,
+          },
+        };
+      } catch (err) {
+        log.error({ err }, "Failed to get agent session");
+        return { success: false, error: String(err) };
+      }
+    },
+  );
 
   ipcMain.handle(
     "agent:rename-session",
-    async (_, { sessionId, title }: { sessionId: string; title: string }) => {
+    async (
+      _,
+      { sessionId, title, accountId }: { sessionId: string; title: string; accountId?: string },
+    ) => {
       try {
-        updateAgentSessionTitle(sessionId, title);
+        // Ownership check
+        if (accountId) {
+          const row = getAgentSession(sessionId);
+          if (!row || row.account_id !== accountId) {
+            return { success: false, error: "Session not found" };
+          }
+        }
+        const trimmed = title.trim();
+        if (!trimmed) return { success: false, error: "Title cannot be empty" };
+        updateAgentSessionTitle(sessionId, trimmed);
         return { success: true, data: null };
       } catch (err) {
         log.error({ err }, "Failed to rename agent session");
@@ -331,13 +359,23 @@ export function registerAgentIpc(): void {
     },
   );
 
-  ipcMain.handle("agent:delete-session", async (_, { sessionId }: { sessionId: string }) => {
-    try {
-      deleteAgentSession(sessionId);
-      return { success: true, data: null };
-    } catch (err) {
-      log.error({ err }, "Failed to delete agent session");
-      return { success: false, error: String(err) };
-    }
-  });
+  ipcMain.handle(
+    "agent:delete-session",
+    async (_, { sessionId, accountId }: { sessionId: string; accountId?: string }) => {
+      try {
+        // Ownership check
+        if (accountId) {
+          const row = getAgentSession(sessionId);
+          if (!row || row.account_id !== accountId) {
+            return { success: false, error: "Session not found" };
+          }
+        }
+        deleteAgentSession(sessionId);
+        return { success: true, data: null };
+      } catch (err) {
+        log.error({ err }, "Failed to delete agent session");
+        return { success: false, error: String(err) };
+      }
+    },
+  );
 }

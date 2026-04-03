@@ -352,7 +352,8 @@ export class AgentCoordinator {
     const now = Date.now();
     const sessionRow: db.AgentSessionRow = {
       id: taskId,
-      title: prompt.length > 40 ? prompt.slice(0, 40).replace(/\s+\S*$/, "") + "..." : prompt,
+      title:
+        (prompt.length > 40 ? prompt.slice(0, 40).replace(/\s+\S*$/, "") : prompt) || "Untitled",
       email_id: context.currentEmailId || null,
       thread_id: context.currentThreadId || null,
       account_id: context.accountId,
@@ -361,7 +362,11 @@ export class AgentCoordinator {
       updated_at: now,
       status: "active",
     };
-    db.saveAgentSession(sessionRow);
+    try {
+      db.saveAgentSession(sessionRow);
+    } catch (err) {
+      log.error({ err, taskId }, "Failed to save agent session");
+    }
 
     // Forward events from port1 to the renderer via IPC
     port1.on("message", (event) => {
@@ -390,7 +395,11 @@ export class AgentCoordinator {
         this.persistTaskEvents(taskId, state);
         const terminalStatus =
           state === "completed" ? "completed" : state === "cancelled" ? "cancelled" : "failed";
-        db.updateAgentSessionStatus(taskId, terminalStatus);
+        try {
+          db.updateAgentSessionStatus(taskId, terminalStatus);
+        } catch (err) {
+          log.error({ err, taskId, terminalStatus }, "Failed to update agent session status");
+        }
         this.closePort(taskId);
         this.resolveTaskCompletion(taskId, state);
       }
@@ -454,7 +463,11 @@ export class AgentCoordinator {
     // Persist partial trace before closing port — the worker's "cancelled" event
     // won't arrive after closePort() kills the message handler.
     this.persistTaskEvents(taskId, "cancelled");
-    db.updateAgentSessionStatus(taskId, "cancelled");
+    try {
+      db.updateAgentSessionStatus(taskId, "cancelled");
+    } catch (err) {
+      log.error({ err, taskId }, "Failed to update agent session status on cancel");
+    }
     this.closePort(taskId);
     this.resolveTaskCompletion(taskId, "cancelled");
   }

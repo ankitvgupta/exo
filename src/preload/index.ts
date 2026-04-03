@@ -887,12 +887,6 @@ const api = {
     getSession(sessionId: string): Promise<unknown> {
       return ipcRenderer.invoke("agent:get-session", { sessionId });
     },
-    renameSession(sessionId: string, title: string): Promise<unknown> {
-      return ipcRenderer.invoke("agent:rename-session", { sessionId, title });
-    },
-    deleteSession(sessionId: string): Promise<unknown> {
-      return ipcRenderer.invoke("agent:delete-session", { sessionId });
-    },
     onEvent: (callback: (data: unknown) => void): void => {
       ipcRenderer.on("agent:event", (_: Electron.IpcRendererEvent, data: unknown) =>
         callback(data),

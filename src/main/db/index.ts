@@ -414,72 +414,9 @@ const NUMBERED_MIGRATIONS: Migration[] = [
         CREATE INDEX IF NOT EXISTS idx_agent_sessions_email ON agent_sessions(email_id);
         CREATE INDEX IF NOT EXISTS idx_agent_sessions_updated ON agent_sessions(updated_at DESC);
       `);
-
-      // Migrate existing traces to sessions (table may not exist in fresh DBs)
-      const mirrorExists = db
-        .prepare(
-          "SELECT name FROM sqlite_master WHERE type='table' AND name='agent_conversation_mirror'",
-        )
-        .get();
-      if (!mirrorExists) return;
-
-      // Join against emails to resolve account_id and email metadata for migrated sessions
-      const traces = db
-        .prepare(
-          `SELECT m.*, e.account_id, e.id AS email_id, e.thread_id
-           FROM agent_conversation_mirror m
-           LEFT JOIN emails e ON e.id = m.local_task_id`,
-        )
-        .all() as Array<{
-        local_task_id: string;
-        provider_id: string;
-        messages_json: string;
-        created_at: string;
-        updated_at: string;
-        account_id: string | null;
-        email_id: string | null;
-        thread_id: string | null;
-      }>;
-
-      const insertSession = db.prepare(`
-        INSERT OR IGNORE INTO agent_sessions (id, title, email_id, thread_id, account_id, provider_ids, created_at, updated_at, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `);
-
-      for (const trace of traces) {
-        if (!trace.local_task_id) continue;
-        // Skip traces we can't associate with an account — they'd be invisible anyway
-        if (!trace.account_id) continue;
-
-        let title = "Untitled session";
-        try {
-          const events = JSON.parse(trace.messages_json) as Array<{ type: string; text?: string }>;
-          const firstUserMsg = events.find((e) => e.type === "user_message");
-          if (firstUserMsg?.text) {
-            title =
-              firstUserMsg.text.length > 40
-                ? firstUserMsg.text.slice(0, 40).replace(/\s+\S*$/, "") + "..."
-                : firstUserMsg.text;
-          }
-        } catch {
-          /* ignore parse errors */
-        }
-
-        const createdAt = new Date(trace.created_at).getTime() || Date.now();
-        const updatedAt = new Date(trace.updated_at).getTime() || Date.now();
-
-        insertSession.run(
-          trace.local_task_id,
-          title,
-          trace.email_id,
-          trace.thread_id,
-          trace.account_id,
-          JSON.stringify([trace.provider_id]),
-          createdAt,
-          updatedAt,
-          "completed",
-        );
-      }
+      // Note: existing traces in agent_conversation_mirror are NOT migrated to sessions.
+      // They remain accessible via the existing replayAgentTrace path. New sessions are
+      // created by the coordinator going forward.
     },
   },
 ];
@@ -4416,8 +4353,9 @@ export function updateAgentSessionTitle(sessionId: string, title: string): void 
 }
 
 export function deleteAgentSession(sessionId: string): void {
-  getDatabase().prepare("DELETE FROM agent_sessions WHERE id = ?").run(sessionId);
-  getDatabase()
-    .prepare("DELETE FROM agent_conversation_mirror WHERE local_task_id = ?")
-    .run(sessionId);
+  const db = getDatabase();
+  db.transaction(() => {
+    db.prepare("DELETE FROM agent_sessions WHERE id = ?").run(sessionId);
+    db.prepare("DELETE FROM agent_conversation_mirror WHERE local_task_id = ?").run(sessionId);
+  })();
 }
