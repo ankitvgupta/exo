@@ -1063,6 +1063,33 @@ const api = {
     },
   },
 
+  // Find-in-page
+  find: {
+    find: (text: string, options?: { forward?: boolean; findNext?: boolean }): void =>
+      ipcRenderer.send("find:find", { text, ...options }),
+    stop: (): void => ipcRenderer.send("find:stop"),
+    onResult: (
+      callback: (result: { activeMatchOrdinal: number; matches: number }) => void,
+    ): void => {
+      ipcRenderer.removeAllListeners("find:result");
+      ipcRenderer.on(
+        "find:result",
+        (_: Electron.IpcRendererEvent, result: { activeMatchOrdinal: number; matches: number }) =>
+          callback(result),
+      );
+    },
+    removeResultListener: (): void => {
+      ipcRenderer.removeAllListeners("find:result");
+    },
+    onOpen: (callback: () => void): void => {
+      ipcRenderer.removeAllListeners("find:open");
+      ipcRenderer.on("find:open", () => callback());
+    },
+    removeOpenListener: (): void => {
+      ipcRenderer.removeAllListeners("find:open");
+    },
+  },
+
   // Usage / cost tracking
   usage: {
     getStats: (): Promise<unknown> => ipcRenderer.invoke("settings:get-usage-stats"),

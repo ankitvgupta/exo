@@ -61,6 +61,23 @@ export function createWindow(): BrowserWindow {
     }
   });
 
+  // Intercept keyboard shortcuts before they reach the page.
+  mainWindow.webContents.on("before-input-event", (event, input) => {
+    if (input.type !== "keyDown") return;
+
+    // Cmd/Ctrl+F → open find bar
+    const isFindModifier = process.platform === "darwin" ? input.meta : input.control;
+    if (input.key === "f" && isFindModifier) {
+      event.preventDefault();
+      mainWindow?.webContents.send("find:open");
+      return;
+    }
+
+    // Enter cycling is handled in the renderer (FindBar.tsx window-level
+    // keydown listener) — before-input-event doesn't reliably fire for all
+    // input methods (e.g. CDP key injection).
+  });
+
   mainWindow.webContents.setWindowOpenHandler((details) => {
     shell.openExternal(details.url);
     return { action: "deny" };
