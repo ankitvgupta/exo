@@ -120,6 +120,12 @@ class PrefetchService {
   private completedAgentDraftLog: AgentDraftItem[] = []; // ring buffer, last 50
   private processedDraftThreads = new Set<string>(); // threadIds with queued/processed agent drafts
 
+  // Startup cache: populated by sync:get-emails to avoid duplicate getInboxEmails() call
+  // at startup. Consumed once by processAllPending(), then closed to prevent non-startup
+  // sync:get-emails calls (account switch, manual refresh) from re-populating with partial data.
+  private cachedInboxEmails: DashboardEmail[] | null = null;
+  private startupCacheOpen = true;
+
   // Progress tracking
   private processedCounts = {
     analysis: 0,
@@ -165,6 +171,25 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
       );
     }
     return this.archiveReadyAnalyzer;
+  }
+
+  /**
+   * Cache inbox emails from sync:get-emails to avoid duplicate getInboxEmails() call
+   * at startup. Called per-account; results are accumulated across accounts.
+   */
+  addCachedInboxEmails(emails: DashboardEmail[]): void {
+    if (!this.startupCacheOpen) return;
+    if (!this.cachedInboxEmails) {
+      this.cachedInboxEmails = [];
+    }
+    // Use concat instead of push(...spread) to avoid stack overflow on large inboxes
+    this.cachedInboxEmails = this.cachedInboxEmails.concat(emails);
+  }
+
+  /** Close the startup cache window without consuming. Called when processAllPending is skipped. */
+  closeStartupCache(): void {
+    this.cachedInboxEmails = null;
+    this.startupCacheOpen = false;
   }
 
   /**
@@ -241,11 +266,15 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
       `[PERF] processAllPending getConfig took ${(performance.now() - tConfig).toFixed(1)}ms`,
     );
 
-    // Only process inbox emails - use efficient DB query instead of loading all emails
+    // Use cached inbox emails from sync:get-emails if available (startup path),
+    // otherwise fall back to DB query (non-startup callers like prompt change, rerun drafts).
     const tGetEmails = performance.now();
-    const inboxEmails = getInboxEmails();
+    const usedCache = this.cachedInboxEmails !== null;
+    const inboxEmails = this.cachedInboxEmails ?? getInboxEmails();
+    this.cachedInboxEmails = null;
+    this.startupCacheOpen = false; // close window so non-startup sync:get-emails won't re-populate
     log.info(
-      `[PERF] processAllPending getInboxEmails took ${(performance.now() - tGetEmails).toFixed(1)}ms, returned ${inboxEmails.length} emails`,
+      `[PERF] processAllPending getInboxEmails took ${(performance.now() - tGetEmails).toFixed(1)}ms, returned ${inboxEmails.length} emails (cache=${usedCache})`,
     );
 
     const unanalyzed = inboxEmails.filter((e) => !e.analysis);
@@ -518,7 +547,12 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
     const CONCURRENCY: Record<PrefetchTask["type"], number> = {
       analysis: 10,
       "archive-ready": 10,
-      "sender-profile": 10,
+      // Sender-profile tasks make Claude API calls then do synchronous DB
+      // reads/writes on resolution. With 10 concurrent tasks resolving near-
+      // simultaneously, the sync DB bursts pile up and block the main thread
+      // for seconds (observed 7.8s event-loop lag). Cap at 3 so at most 3
+      // bursts of sync work can land back-to-back.
+      "sender-profile": 3,
       "agent-draft": 1,
     };
 
@@ -895,7 +929,9 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
       this.processedCounts.extensionEnrichment++;
 
       // Now trigger enrichment for all other emails waiting for this sender
-      // These will be cache hits - each extension handles its own caching
+      // These will be cache hits - each extension handles its own caching.
+      // Yield between each to avoid blocking the event loop with back-to-back
+      // sync DB reads (getEmail + getEmailsByThread + enrichment cache checks).
       const waitingEmails = this.pendingSenderLookups.get(senderEmail) || [];
       if (waitingEmails.length > 1) {
         let cachedCount = 0;
@@ -904,14 +940,17 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
             waitingEmailId !== emailId &&
             !this.processedExtensionEnrichments.has(waitingEmailId)
           ) {
+            // Yield with a brief delay so IPC handlers, UI updates, and
+            // incremental GC can run. setImmediate alone isn't enough — the
+            // rapid object allocation from cache-hit processing causes major
+            // GC pauses (~1s) when V8 defers collection too long.
+            await new Promise((resolve) => setTimeout(resolve, 5));
             const waitingEmail = getEmail(waitingEmailId);
             if (waitingEmail) {
-              const waitingThreadEmails = getEmailsByThread(
-                waitingEmail.threadId,
-                waitingEmail.accountId,
-              );
-              // allowNewLookups: false - these should all be cache hits
-              await extensionHost.enrichEmail(waitingEmail, waitingThreadEmails, {
+              // allowNewLookups: false means these are cache hits — threadEmails
+              // are only used by provider.enrich() which won't be called.
+              // Pass empty array to avoid loading full email bodies into memory.
+              await extensionHost.enrichEmail(waitingEmail, [], {
                 allowNewLookups: false,
               });
               this.processedExtensionEnrichments.add(waitingEmailId);
@@ -1441,6 +1480,8 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
   clear(): void {
     this.reset();
     this.queue = [];
+    this.cachedInboxEmails = null;
+    this.startupCacheOpen = false;
     this.processedAnalysis.clear();
     this.processedSenderProfiles.clear();
     this.processedDrafts.clear();
