@@ -17,6 +17,7 @@ import { getConfig, getModelIdForFeature } from "./settings.ipc";
 import { buildMemoryContext } from "../services/memory-context";
 import { prefetchService } from "../services/prefetch-service";
 import { agentCoordinator } from "../agents/agent-coordinator";
+import { UNTRUSTED_DATA_INSTRUCTION, wrapUntrustedEmail } from "../../shared/prompt-safety";
 import type { IpcResponse } from "../../shared/types";
 import { DEMO_INBOX_EMAILS } from "../demo/fake-inbox";
 import { createLogger } from "../services/logger";
@@ -120,16 +121,14 @@ export function registerDraftsIpc(): void {
           {
             model: getModelIdForFeature("refinement"),
             max_tokens: 1024,
+            system: [{ type: "text", text: UNTRUSTED_DATA_INSTRUCTION }],
             messages: [
               {
                 role: "user",
                 content: `Refine this email draft based on the feedback provided.
 ${memorySection}
 ORIGINAL EMAIL BEING REPLIED TO:
-From: ${email.from}
-Subject: ${email.subject}
----
-${email.body}
+${wrapUntrustedEmail(`From: ${email.from}\nSubject: ${email.subject}\n---\n${email.body}`)}
 ---
 
 CURRENT DRAFT:

@@ -8,6 +8,7 @@ import {
 } from "../../shared/types";
 import { stripQuotedContent } from "./strip-quoted-content";
 import { stripJsonFences } from "../../shared/strip-json-fences";
+import { UNTRUSTED_DATA_INSTRUCTION, wrapUntrustedEmail } from "../../shared/prompt-safety";
 import { createLogger } from "./logger";
 
 const log = createLogger("analyzer");
@@ -181,12 +182,9 @@ export class EmailAnalyzer {
         messages: [
           {
             role: "user",
-            content: `${userIdentityLine}From: ${email.from}
-To: ${email.to}
-Subject: ${email.subject}
-Date: ${email.date}
+            content: `${UNTRUSTED_DATA_INSTRUCTION}
 
-${emailContent}${analysisMemoryContext}`,
+${userIdentityLine}${wrapUntrustedEmail(`From: ${email.from}\nTo: ${email.to}\nSubject: ${email.subject}\nDate: ${email.date}\n\n${emailContent}`)}${analysisMemoryContext}`,
           },
         ],
       },
