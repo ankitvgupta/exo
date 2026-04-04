@@ -119,7 +119,11 @@ export class ArchiveReadyAnalyzer {
       if (body.length > maxLen) {
         body = body.substring(0, maxLen) + "\n[... truncated ...]";
       }
-      parts.push(wrapUntrustedEmail(`From: ${email.from}\nTo: ${email.to}\nDate: ${email.date}\nBody: ${body}`));
+      parts.push(
+        wrapUntrustedEmail(
+          `From: ${email.from}\nTo: ${email.to}\nDate: ${email.date}\nBody: ${body}`,
+        ),
+      );
       parts.push("");
     }
 
