@@ -186,6 +186,12 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
     this.cachedInboxEmails = this.cachedInboxEmails.concat(emails);
   }
 
+  /** Close the startup cache window without consuming. Called when processAllPending is skipped. */
+  closeStartupCache(): void {
+    this.cachedInboxEmails = null;
+    this.startupCacheOpen = false;
+  }
+
   /**
    * Queue emails for prefetching
    * This is the main entry point - call this when new emails arrive
@@ -1464,6 +1470,8 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
   clear(): void {
     this.reset();
     this.queue = [];
+    this.cachedInboxEmails = null;
+    this.startupCacheOpen = false;
     this.processedAnalysis.clear();
     this.processedSenderProfiles.clear();
     this.processedDrafts.clear();

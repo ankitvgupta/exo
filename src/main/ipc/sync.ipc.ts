@@ -883,6 +883,7 @@ export function registerSyncIpc(): void {
         setTimeout(() => {
           if (emailSyncService.hasFirstSyncPending()) {
             log.info("[Prefetch] Skipping processAllPending — first-time sync in progress");
+            prefetchService.closeStartupCache();
           } else {
             log.info("[PERF] prefetch starting (3s after sync:init)");
             prefetchService.processAllPending().catch((error) => {
