@@ -408,14 +408,10 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
               </p>
 
               <div className="bg-yellow-50 dark:bg-yellow-900/30 p-4 rounded-lg mb-6">
-                <h3 className="font-semibold text-yellow-900 dark:text-yellow-200 mb-2">
-                  Permissions requested:
-                </h3>
-                <ul className="text-sm text-yellow-800 dark:text-yellow-300 space-y-1 list-disc list-inside">
-                  <li>Read your emails (gmail.readonly)</li>
-                  <li>Create draft emails (gmail.compose)</li>
-                  <li>View your calendar events (calendar.readonly)</li>
-                </ul>
+                <p className="text-sm text-yellow-800 dark:text-yellow-300">
+                  We&apos;ll request access to view and edit your emails and view your calendar
+                  events.
+                </p>
               </div>
 
               {error && (
