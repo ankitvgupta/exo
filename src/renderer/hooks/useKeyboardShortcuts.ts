@@ -77,6 +77,21 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
   const gPrefixRef = useRef(false);
   const gPrefixTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Open find bar and ensure the input is focused — handles the case where
+  // the bar is already open but input lost focus (standard Cmd+F UX).
+  // The 100ms delay ensures the FindBar component has mounted (React render +
+  // commit) before we query the DOM for the input element.
+  function openAndFocusFindBar() {
+    useAppStore.getState().openFindBar();
+    setTimeout(() => {
+      const input = document.querySelector<HTMLInputElement>('[data-testid="find-bar-input"]');
+      if (input) {
+        input.focus();
+        input.select();
+      }
+    }, 100);
+  }
+
   // Single event listener registered once. All state is read fresh from the
   // Zustand store via getState() at keypress time, eliminating stale closures.
   useEffect(() => {
@@ -126,6 +141,11 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
 
       // Always allow Escape to close modals or go back in view modes
       if (e.key === "Escape") {
+        // Find bar handles its own Escape via a capture-phase window listener.
+        // Bail out here to avoid double-action (e.g. closing find bar AND
+        // switching view mode) when a synthetic event from an iframe hits window.
+        if (state.isFindBarOpen) return;
+
         // Overlays take priority — always dismissable regardless of compose mode.
         // Without this, compose mode's early return blocks the agent/command palette
         // from closing when compose is also open (e.g. Cmd+J on an open draft).
@@ -207,6 +227,15 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
         return;
       }
 
+      // Cmd+F (macOS) / Ctrl+F (Windows/Linux) for find-in-page
+      // Don't intercept Ctrl+F on macOS — it's Emacs cursor-forward in text inputs
+      const isMac = navigator.platform.startsWith("Mac");
+      if (e.key === "f" && (isMac ? e.metaKey : e.ctrlKey)) {
+        e.preventDefault();
+        openAndFocusFindBar();
+        return;
+      }
+
       // In compose mode, only handle Cmd+Enter for send — except when the
       // editor isn't focused (e.g. auto-opened draft without focus), where
       // Enter should focus the editor and "b" should switch sidebar tabs.
@@ -219,8 +248,10 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
         return;
       }
 
-      // Skip if user is typing in an input
-      if (isInputFocused()) {
+      // Skip if user is typing in an input or the find bar is open
+      // (findInPage steals focus to the match, so isInputFocused() may be false
+      // even while the user is actively using the find bar)
+      if (isInputFocused() || state.isFindBarOpen) {
         return;
       }
 
@@ -1040,6 +1071,18 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
     };
   }, []);
 
+  // Listen for Cmd+F routed from main process (Electron's default menu
+  // captures Cmd+F before the renderer sees it, so the main process
+  // intercepts it via before-input-event and sends find:open instead).
+  useEffect(() => {
+    window.api.find.onOpen(() => {
+      openAndFocusFindBar();
+    });
+    return () => {
+      window.api.find.removeOpenListener();
+    };
+  }, []);
+
   // Return current mode for components that need it
   return { mode: getKeyboardMode() };
 }
@@ -1096,6 +1139,7 @@ export function getKeyboardShortcuts(bindings: "superhuman" | "gmail") {
     ],
     search: [
       { key: "/", description: "Open search" },
+      { key: "Cmd+F", description: "Find in page" },
       { key: "Cmd+K", description: "Command palette" },
       { key: "Cmd+J", description: "Agent action palette" },
     ],
