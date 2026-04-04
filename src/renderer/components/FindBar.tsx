@@ -34,9 +34,7 @@ export function FindBar() {
       lastMatchRef.current = { ordinal: result.activeMatchOrdinal, total: result.matches };
       if (matchCountRef.current) {
         matchCountRef.current.textContent =
-          result.matches > 0
-            ? `${result.activeMatchOrdinal} of ${result.matches}`
-            : "No matches";
+          result.matches > 0 ? `${result.activeMatchOrdinal} of ${result.matches}` : "No matches";
       }
     });
     return () => {
@@ -84,9 +82,7 @@ export function FindBar() {
       const { ordinal, total } = lastMatchRef.current;
       if (total > 0 && matchCountRef.current) {
         const forward = !e.shiftKey;
-        const next = forward
-          ? (ordinal % total) + 1
-          : ((ordinal - 2 + total) % total) + 1;
+        const next = forward ? (ordinal % total) + 1 : ((ordinal - 2 + total) % total) + 1;
         lastMatchRef.current.ordinal = next;
         matchCountRef.current.textContent = `${next} of ${total}`;
       }
@@ -117,20 +113,24 @@ export function FindBar() {
   const optimisticUpdate = useCallback((forward: boolean) => {
     const { ordinal, total } = lastMatchRef.current;
     if (total > 0 && matchCountRef.current) {
-      const next = forward
-        ? (ordinal % total) + 1
-        : ((ordinal - 2 + total) % total) + 1;
+      const next = forward ? (ordinal % total) + 1 : ((ordinal - 2 + total) % total) + 1;
       lastMatchRef.current.ordinal = next;
       matchCountRef.current.textContent = `${next} of ${total}`;
     }
   }, []);
 
   const goNext = () => {
-    if (query) { optimisticUpdate(true); findText(query, true, true); }
+    if (query) {
+      optimisticUpdate(true);
+      findText(query, true, true);
+    }
   };
 
   const goPrev = () => {
-    if (query) { optimisticUpdate(false); findText(query, true, false); }
+    if (query) {
+      optimisticUpdate(false);
+      findText(query, true, false);
+    }
   };
 
   return (

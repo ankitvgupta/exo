@@ -37,10 +37,7 @@ export function registerFindIpc(): void {
   // findNext: false when called from an IPC handler.
   ipcMain.on(
     "find:find",
-    (
-      _event,
-      { text, forward }: { text: string; forward?: boolean; findNext?: boolean },
-    ) => {
+    (_event, { text, forward }: { text: string; forward?: boolean; findNext?: boolean }) => {
       const w = getMainWindow();
       if (!w || !text) return;
       ensureListener(w);
