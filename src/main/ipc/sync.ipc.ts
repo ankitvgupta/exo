@@ -574,6 +574,7 @@ export function registerSyncIpc(): void {
           };
         });
         log.info(`[PERF] sync:get-emails END (demo) ${(performance.now() - t0).toFixed(1)}ms`);
+        prefetchService.addCachedInboxEmails(fakeEmails);
         return { success: true, data: fakeEmails };
       }
 
@@ -586,6 +587,7 @@ export function registerSyncIpc(): void {
           `[PERF] sync:get-emails DB query took ${(performance.now() - t1).toFixed(1)}ms, returned ${emails.length} emails`,
         );
         log.info(`[PERF] sync:get-emails END total ${(performance.now() - t0).toFixed(1)}ms`);
+        prefetchService.addCachedInboxEmails(emails);
         return { success: true, data: emails };
       } catch (error) {
         log.info(`[PERF] sync:get-emails ERROR ${(performance.now() - t0).toFixed(1)}ms`);
@@ -881,6 +883,7 @@ export function registerSyncIpc(): void {
         setTimeout(() => {
           if (emailSyncService.hasFirstSyncPending()) {
             log.info("[Prefetch] Skipping processAllPending — first-time sync in progress");
+            prefetchService.closeStartupCache();
           } else {
             log.info("[PERF] prefetch starting (3s after sync:init)");
             prefetchService.processAllPending().catch((error) => {
