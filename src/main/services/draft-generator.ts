@@ -109,13 +109,12 @@ Do NOT propose specific times yourself - defer to the assistant.`;
       {
         model: this.model,
         max_tokens: 1024,
+        system: [{ type: "text", text: `${this.prompt}\n\n${UNTRUSTED_DATA_INSTRUCTION}` }],
         messages: [
           {
             role: "user",
-            content: `${this.prompt}
-${senderContext}
+            content: `${senderContext}
 ${calendaringContext}
-${UNTRUSTED_DATA_INSTRUCTION}
 ---
 ANALYSIS (for context):
 Reason for reply: ${analysis.reason}
@@ -235,12 +234,11 @@ ${profile.summary}
       {
         model: this.model,
         max_tokens: 1024,
+        system: [{ type: "text", text: `${this.prompt}\n\n${UNTRUSTED_DATA_INSTRUCTION}` }],
         messages: [
           {
             role: "user",
-            content: `${this.prompt}
-${recipientContext}
-${UNTRUSTED_DATA_INSTRUCTION}
+            content: `${recipientContext}
 ---
 Write the text for a forwarded email. The original email will be automatically appended as quoted content, so do not reproduce it.
 

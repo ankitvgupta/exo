@@ -26,14 +26,11 @@ export class CalendaringAgent {
       {
         model: this.model,
         max_tokens: 512,
+        system: [{ type: "text", text: `${this.prompt}\n\n${UNTRUSTED_DATA_INSTRUCTION}` }],
         messages: [
           {
             role: "user",
-            content: `${this.prompt}
-
-${UNTRUSTED_DATA_INSTRUCTION}
----
-EMAIL TO ANALYZE:
+            content: `EMAIL TO ANALYZE:
 
 ${wrapUntrustedEmail(`From: ${email.from}\nTo: ${email.to}\nSubject: ${email.subject}\nDate: ${email.date}\n\n${email.body}`)}`,
           },
