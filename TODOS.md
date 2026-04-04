@@ -73,3 +73,11 @@ Show a small badge ("Web Search", "YC") on each enrichment sidebar panel so user
 - **Depends on:** Nothing
 - **Context:** The startup path was fixed by caching sync:get-emails results (see prefetch cache PR). But callers 2-5 of processAllPending still run the full query. The merge cache (`_mergeGroupsByAccount`) is usually warm, so `buildMergeCache` could short-circuit. The LIKE '%"INBOX"%' pattern on label_ids defeats indexes — consider a boolean `is_inbox` column or a normalized labels table.
 - **Added:** 2026-04-03, eng review of prefetch startup fix
+
+### P1: Agent draft spawning blocks main thread
+- **What:** Investigate and fix main-thread blocking during agent draft generation ("Drafting 2/4" phase). Likely culprits: synchronous `getEmail()` calls to build AgentContext, synchronous IPC setup in `AgentCoordinator.runAgent()`, and synchronous SQLite writes when persisting agent events (e.g., "Persisted 35 events").
+- **Why:** After fixing the `processAllPending` startup cache, the beach ball moved downstream to when agent drafts start. With 3 concurrent agent drafts, each doing sync DB reads + event persistence, the main thread blocks visibly.
+- **Effort:** M (human: ~2 days / CC: ~30 min)
+- **Depends on:** Nothing (startup cache fix already landed)
+- **Context:** Observed in real inbox with 738 emails, 5 agent drafts queued. The `processAgentDraft` path in `prefetch-service.ts:1002` calls `getEmail(emailId)` (sync SQLite), then `agentCoordinator.runAgent()` which does MessagePort setup and proxy initialization. After completion, `AgentCoordinator.Persisted N events` writes N rows synchronously. All on the main Electron thread.
+- **Added:** 2026-04-04, observed during real-inbox testing of prefetch cache fix
