@@ -223,7 +223,8 @@ function handleMailtoUrl(url: string): void {
     pendingMailtoUrl = url;
     // On macOS the app can be running with no windows; create one so the URL gets consumed
     if (app.isReady()) {
-      createWindow();
+      const newWindow = createWindow();
+      agentCoordinator.setMainWindow(newWindow);
     }
     return;
   }
@@ -485,7 +486,10 @@ app.whenReady().then(async () => {
 
   app.on("activate", function () {
     // On macOS re-create a window when dock icon is clicked and no windows are open
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    if (BrowserWindow.getAllWindows().length === 0) {
+      const newWindow = createWindow();
+      agentCoordinator.setMainWindow(newWindow);
+    }
   });
 });
 
