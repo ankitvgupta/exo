@@ -1,7 +1,6 @@
 import { app, BrowserWindow, ipcMain, session, nativeTheme } from "electron";
 import { join } from "path";
-import { execSync } from "child_process";
-import { readFileSync, existsSync } from "fs";
+import { readFileSync, existsSync, readdirSync } from "fs";
 import { electronApp, optimizer } from "@electron-toolkit/utils";
 
 import { getDataDir, initDevData } from "./data-dir";
@@ -75,28 +74,54 @@ if (process.platform === "darwin") {
 }
 
 // Fix PATH for packaged macOS apps (launched from Finder/Dock get minimal PATH).
-// We use a non-interactive login shell (`-lc`, not `-ilc`) to avoid running the
-// user's .zshrc — interactive shell configs can access TCC-protected directories
-// (e.g. iterm2_shell_integration, neofetch) which would trigger macOS permission
-// prompts attributed to this app. A login shell still sources /etc/zprofile and
-// ~/.zprofile, which is where PATH-modifying tools (homebrew, nvm) typically live.
+// Instead of spawning a shell (which sources user profiles that can trigger TCC
+// prompts like "access files on a network volume" or "access contacts"), we read
+// macOS's PATH config files directly: /etc/paths + /etc/paths.d/* — the same
+// sources that path_helper(8) uses. We also probe common user-local tool dirs.
 if (app.isPackaged && process.platform === "darwin") {
+  const pathDirs: string[] = [];
+
+  // Read /etc/paths (system default PATH entries)
   try {
-    const userShell = process.env.SHELL || "/bin/zsh";
-    const output = execSync(`${userShell} -lc 'echo $PATH'`, {
-      encoding: "utf8",
-      timeout: 5000,
-    }).trim();
-    const shellPath = output.split("\n").pop() || "";
-    if (shellPath) process.env.PATH = shellPath;
+    const lines = readFileSync("/etc/paths", "utf8").trim().split("\n");
+    pathDirs.push(...lines.filter(Boolean));
   } catch {
-    const fallbackPaths = [
-      "/opt/homebrew/bin",
-      "/usr/local/bin",
-      `${process.env.HOME}/.nvm/current/bin`,
-    ].join(":");
-    process.env.PATH = `${fallbackPaths}:${process.env.PATH}`;
+    // Fall back to the essential system paths
+    pathDirs.push("/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin");
   }
+
+  // Read /etc/paths.d/* (homebrew, developer tools, etc.)
+  try {
+    for (const file of readdirSync("/etc/paths.d")) {
+      try {
+        const lines = readFileSync(`/etc/paths.d/${file}`, "utf8")
+          .trim()
+          .split("\n");
+        pathDirs.push(...lines.filter(Boolean));
+      } catch {
+        /* skip unreadable files */
+      }
+    }
+  } catch {
+    /* /etc/paths.d may not exist */
+  }
+
+  // Probe common user-local tool directories (nvm, cargo, etc.)
+  const home = process.env.HOME;
+  if (home) {
+    const userDirs = [
+      `${home}/.nvm/current/bin`,
+      `${home}/.cargo/bin`,
+      `${home}/.local/bin`,
+    ];
+    for (const dir of userDirs) {
+      if (existsSync(dir)) pathDirs.push(dir);
+    }
+  }
+
+  // Prepend discovered paths to the (minimal) inherited PATH
+  const discovered = pathDirs.join(":");
+  process.env.PATH = `${discovered}:${process.env.PATH}`;
 }
 
 // Load .env file if it exists (for API keys)
