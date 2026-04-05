@@ -31,6 +31,7 @@ import {
 import { getEnrichmentBySender } from "../extensions/enrichment-store";
 import { autoUpdateService } from "../services/auto-updater";
 
+import { existsSync } from "fs";
 import { getDataDir } from "../data-dir";
 import { createLogger } from "../services/logger";
 
@@ -268,6 +269,16 @@ export function registerSettingsIpc(): void {
         agentCoordinator.updateConfig({
           model: getModelIdForFeature("agentDrafter"),
         });
+      }
+
+      // Append any new extra PATH directories so they take effect without restart
+      if ("extraPathDirs" in config) {
+        const currentPath = process.env.PATH || "";
+        for (const dir of newConfig.extraPathDirs ?? []) {
+          if (dir && !currentPath.includes(dir) && existsSync(dir)) {
+            process.env.PATH = `${dir}:${currentPath}`;
+          }
+        }
       }
 
       // Reset cached analyzer/service instances when model config or API key changes,

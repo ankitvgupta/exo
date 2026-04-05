@@ -119,6 +119,24 @@ if (app.isPackaged && process.platform === "darwin") {
     }
   }
 
+  // Read user-configured extra PATH directories from the config file.
+  // We read the JSON directly instead of going through electron-store because
+  // the settings module hasn't been imported yet at this point in startup.
+  try {
+    const configPath = join(getDataDir(), "exo-config.json");
+    if (existsSync(configPath)) {
+      const raw = JSON.parse(readFileSync(configPath, "utf8"));
+      const extras: unknown[] = raw?.config?.extraPathDirs ?? [];
+      for (const dir of extras) {
+        if (typeof dir === "string" && dir && existsSync(dir)) {
+          pathDirs.push(dir);
+        }
+      }
+    }
+  } catch {
+    /* config not yet created or malformed — skip */
+  }
+
   // Prepend discovered paths to the (minimal) inherited PATH
   const discovered = pathDirs.join(":");
   process.env.PATH = `${discovered}:${process.env.PATH}`;
