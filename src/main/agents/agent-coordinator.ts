@@ -361,6 +361,13 @@ export class AgentCoordinator {
 
     // Forward events from port1 to the renderer via IPC
     port1.on("message", (event) => {
+      // If the window was destroyed (user quit), cancel all running tasks
+      // immediately rather than continuing to process events to nowhere.
+      if (this.mainWindow?.isDestroyed()) {
+        this.cancelAll();
+        return;
+      }
+
       const agentEvent = event.data as ScopedAgentEvent;
       this.sendToRenderer("agent:event", {
         taskId,
