@@ -63,6 +63,17 @@ if (process.platform === "darwin") {
   app.commandLine.appendSwitch("use-mock-keychain");
 }
 
+// Disable Chromium's media session / Now Playing integration.
+// Without this, macOS prompts "Exo.app would like to access Apple Music" on first launch
+// because Chromium registers with the MediaPlayer framework for hardware media key handling.
+// An email client has no need for media key interception or Now Playing integration.
+if (process.platform === "darwin") {
+  app.commandLine.appendSwitch(
+    "disable-features",
+    "HardwareMediaKeyHandling,MediaSessionService",
+  );
+}
+
 // Fix PATH for packaged macOS apps (launched from Finder/Dock get minimal PATH).
 // We use a non-interactive login shell (`-lc`, not `-ilc`) to avoid running the
 // user's .zshrc — interactive shell configs can access TCC-protected directories
