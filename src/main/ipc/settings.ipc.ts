@@ -1,6 +1,7 @@
 import { ipcMain, nativeTheme, BrowserWindow, shell, dialog } from "electron";
 import Store from "electron-store";
 import {
+  AppearanceConfigSchema,
   type AppearanceConfig,
   type Config,
   type EAConfig,
@@ -677,8 +678,14 @@ export function registerSettingsIpc(): void {
   // Set appearance config — saves to store, broadcasts to renderer
   ipcMain.handle(
     "appearance:set",
-    async (_, appearance: AppearanceConfig): Promise<IpcResponse<void>> => {
+    async (_, rawAppearance: unknown): Promise<IpcResponse<void>> => {
       try {
+        const parsed = AppearanceConfigSchema.safeParse(rawAppearance);
+        if (!parsed.success) {
+          return { success: false, error: `Invalid appearance config: ${parsed.error.message}` };
+        }
+        const appearance = parsed.data;
+
         const currentConfig = getConfig();
         getStore().set("config", { ...currentConfig, appearance });
 

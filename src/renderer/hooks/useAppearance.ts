@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useAppStore } from "../store";
 import { THEME_PRESETS } from "../../shared/theme-presets";
-import type { AppearanceConfig } from "../../shared/types";
+import { AppearanceConfigSchema, type AppearanceConfig } from "../../shared/types";
 import type { ThemeColors } from "../../shared/theme-presets";
 
 // Convert "#2563eb" → "37 99 235"
@@ -57,15 +57,22 @@ export function useAppearance(): void {
 
   // Fetch persisted config on mount
   useEffect(() => {
-    window.api.appearance.get().then((result: { success: boolean; data?: AppearanceConfig }) => {
-      if (result.success && result.data) {
-        setAppearance(result.data);
-      }
-    });
+    window.api.appearance
+      .get()
+      .then((result: { success: boolean; data?: unknown }) => {
+        if (result.success && result.data) {
+          const parsed = AppearanceConfigSchema.safeParse(result.data);
+          if (parsed.success) setAppearance(parsed.data);
+        }
+      })
+      .catch(() => {
+        // Appearance fetch failed — keep defaults
+      });
 
     // Listen for changes broadcast from main process (e.g. from another window)
     window.api.appearance.onChange((data: Record<string, unknown>) => {
-      setAppearance(data as AppearanceConfig);
+      const parsed = AppearanceConfigSchema.safeParse(data);
+      if (parsed.success) setAppearance(parsed.data);
     });
 
     return () => {
