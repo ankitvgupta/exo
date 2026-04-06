@@ -156,13 +156,28 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
       if (result.success) {
         await enterExtensionsStep();
       } else {
+        if (result.error === "Authorization cancelled") {
+          // User cancelled — don't show as an error, just reset
+          setIsLoading(false);
+          return;
+        }
         setError(result.error);
         setIsLoading(false);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Authorization failed. Please try again.");
+      const msg = err instanceof Error ? err.message : "Authorization failed. Please try again.";
+      if (msg === "Authorization cancelled") {
+        setIsLoading(false);
+        return;
+      }
+      setError(msg);
       setIsLoading(false);
     }
+  };
+
+  const handleCancelOAuth = async () => {
+    await window.api.gmail.cancelOAuth();
+    setIsLoading(false);
   };
 
   const enterExtensionsStep = useCallback(async () => {
@@ -427,6 +442,15 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
               >
                 {isLoading ? "Authorizing..." : "Authorize with Google"}
               </button>
+
+              {isLoading && (
+                <button
+                  onClick={handleCancelOAuth}
+                  className="w-full mt-2 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
+                >
+                  Cancel
+                </button>
+              )}
             </>
           )}
 
