@@ -39,6 +39,10 @@ export function createWindow(): BrowserWindow {
     trafficLightPosition: { x: 15, y: 15 },
     backgroundColor: getInitialBackgroundColor(),
     icon: getIconPath(),
+    // Prevent Chromium from throttling timers in hidden windows during tests.
+    // Without this, setTimeout-based logic (e.g. undo-send toast auto-dismiss)
+    // gets frozen indefinitely when the window is never shown.
+    ...(isTestMode && { backgroundThrottling: false }),
     webPreferences: {
       preload: join(__dirname, "../preload/index.mjs"),
       sandbox: false, // ESM preload requires sandbox disabled
@@ -55,6 +59,23 @@ export function createWindow(): BrowserWindow {
     if (!isTestMode) {
       mainWindow?.show();
     }
+  });
+
+  // Intercept keyboard shortcuts before they reach the page.
+  mainWindow.webContents.on("before-input-event", (event, input) => {
+    if (input.type !== "keyDown") return;
+
+    // Cmd/Ctrl+F → open find bar
+    const isFindModifier = process.platform === "darwin" ? input.meta : input.control;
+    if (input.key === "f" && isFindModifier) {
+      event.preventDefault();
+      mainWindow?.webContents.send("find:open");
+      return;
+    }
+
+    // Enter cycling is handled in the renderer (FindBar.tsx window-level
+    // keydown listener) — before-input-event doesn't reliably fire for all
+    // input methods (e.g. CDP key injection).
   });
 
   mainWindow.webContents.setWindowOpenHandler((details) => {

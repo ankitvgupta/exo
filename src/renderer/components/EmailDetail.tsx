@@ -32,6 +32,7 @@ import { useComposeForm } from "../hooks/useComposeForm";
 import { THREAD_NAV_EVENT } from "../hooks/useKeyboardShortcuts";
 import type { ComposeFormState } from "../hooks/useComposeForm";
 import { ComposeToolbar } from "./ComposeToolbar";
+import { FromSelector } from "./FromSelector";
 import { trackEvent } from "../services/posthog";
 import { draftBodyToHtml } from "../../shared/draft-utils";
 import { AnalysisPrioritySection } from "./AnalysisPrioritySection";
@@ -305,8 +306,8 @@ function EmailBodyRenderer({
     const iframeKeydownHandler = (e: KeyboardEvent) => {
       // Let modifier combos (Cmd+C, Cmd+V, etc.) work natively in the iframe
       if (e.metaKey || e.ctrlKey) {
-        // Only forward Cmd+K and Cmd+, which are app-level shortcuts
-        if (e.key !== "k" && e.key !== ",") return;
+        // Only forward Cmd+K, Cmd+, and Cmd+F which are app-level shortcuts
+        if (e.key !== "k" && e.key !== "," && e.key !== "f") return;
       }
       window.dispatchEvent(
         new KeyboardEvent("keydown", {
@@ -1459,7 +1460,7 @@ function InlineReply({
   // Handle Cmd+Enter to send (capture phase to beat ProseMirror's Enter handler)
   useEffect(() => {
     const handleCmdEnter = (e: KeyboardEvent) => {
-      if (e.key === "Enter" && e.metaKey) {
+      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
         handleSend();
       }
@@ -1593,20 +1594,43 @@ function InlineReply({
         </div>
         {showAddressFields && (
           <>
-            <AddressInput
-              label="To"
-              value={form.to}
-              onChange={form.setTo}
-              placeholder="recipient@example.com"
-              autoFocus={isForward}
-              nameMap={mergedNameMap}
-              onSuggestionSelected={form.handleSuggestionSelected}
-              fieldId="to"
-              onChipDrop={(email, sourceField) =>
-                form.handleRecipientDrop("to", email, sourceField)
-              }
-              onChipDragStart={handleRecipientDragStart}
-            />
+            <div className="flex items-center">
+              <div className="flex-1 min-w-0">
+                <AddressInput
+                  label="To"
+                  value={form.to}
+                  onChange={form.setTo}
+                  placeholder="recipient@example.com"
+                  autoFocus={isForward}
+                  nameMap={mergedNameMap}
+                  onSuggestionSelected={form.handleSuggestionSelected}
+                  fieldId="to"
+                  onChipDrop={(email, sourceField) =>
+                    form.handleRecipientDrop("to", email, sourceField)
+                  }
+                  onChipDragStart={handleRecipientDragStart}
+                />
+              </div>
+              <button
+                onClick={() => form.setShowCcBcc(!form.showCcBcc)}
+                className="ml-2 flex-shrink-0 p-1 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                title={form.showCcBcc ? "Hide Cc/Bcc/From" : "Show Cc/Bcc/From"}
+              >
+                <svg
+                  className={`w-4 h-4 transition-transform ${form.showCcBcc ? "rotate-180" : ""}`}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M19 9l-7 7-7-7"
+                  />
+                </svg>
+              </button>
+            </div>
             {form.showCcBcc && (
               <div>
                 <AddressInput
@@ -1634,6 +1658,11 @@ function InlineReply({
                     form.handleRecipientDrop("bcc", email, sourceField)
                   }
                   onChipDragStart={handleRecipientDragStart}
+                />
+                <FromSelector
+                  aliases={form.sendAsAliases}
+                  selected={form.from}
+                  onChange={form.setFrom}
                 />
               </div>
             )}
@@ -1982,7 +2011,7 @@ function NewEmailCompose({
   // Handle Cmd+Enter to send (capture phase to beat ProseMirror's Enter handler)
   useEffect(() => {
     const handleCmdEnter = (e: KeyboardEvent) => {
-      if (e.key === "Enter" && e.metaKey) {
+      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
         handleSend();
       }
@@ -2038,7 +2067,7 @@ function NewEmailCompose({
       {/* Compose form */}
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-3xl mx-auto px-4">
-          {/* To field with Cc/Bcc toggle */}
+          {/* To field with expand chevron for Cc/Bcc/From */}
           <div className="flex items-center">
             <div className="flex-1 min-w-0">
               <AddressInput
@@ -2060,18 +2089,29 @@ function NewEmailCompose({
                 onChipDragStart={form.handleRecipientDragStart}
               />
             </div>
-            {!form.showCcBcc && (
-              <button
-                onClick={() => form.setShowCcBcc(true)}
-                className="ml-2 flex-shrink-0 text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-                data-testid="compose-cc-bcc-toggle"
+            <button
+              onClick={() => form.setShowCcBcc(!form.showCcBcc)}
+              className="ml-2 flex-shrink-0 p-1 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+              data-testid="compose-cc-bcc-toggle"
+              title={form.showCcBcc ? "Hide Cc/Bcc/From" : "Show Cc/Bcc/From"}
+            >
+              <svg
+                className={`w-4 h-4 transition-transform ${form.showCcBcc ? "rotate-180" : ""}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
               >
-                Cc/Bcc
-              </button>
-            )}
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M19 9l-7 7-7-7"
+                />
+              </svg>
+            </button>
           </div>
 
-          {/* Collapsible Cc/Bcc fields */}
+          {/* Collapsible Cc/Bcc/From fields */}
           {form.showCcBcc && (
             <>
               <AddressInput
@@ -2103,6 +2143,11 @@ function NewEmailCompose({
                   form.handleRecipientDrop("bcc", email, sourceField)
                 }
                 onChipDragStart={form.handleRecipientDragStart}
+              />
+              <FromSelector
+                aliases={form.sendAsAliases}
+                selected={form.from}
+                onChange={form.setFrom}
               />
             </>
           )}

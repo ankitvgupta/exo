@@ -7,6 +7,7 @@ import {
   type EAConfig,
   type Email,
 } from "../../shared/types";
+import { UNTRUSTED_DATA_INSTRUCTION, wrapUntrustedEmail } from "../../shared/prompt-safety";
 import { createLogger } from "./logger";
 
 const log = createLogger("calendaring");
@@ -25,20 +26,13 @@ export class CalendaringAgent {
       {
         model: this.model,
         max_tokens: 512,
+        system: [{ type: "text", text: `${this.prompt}\n\n${UNTRUSTED_DATA_INSTRUCTION}` }],
         messages: [
           {
             role: "user",
-            content: `${this.prompt}
+            content: `EMAIL TO ANALYZE:
 
----
-EMAIL TO ANALYZE:
-
-From: ${email.from}
-To: ${email.to}
-Subject: ${email.subject}
-Date: ${email.date}
-
-${email.body}`,
+${wrapUntrustedEmail(`From: ${email.from}\nTo: ${email.to}\nSubject: ${email.subject}\nDate: ${email.date}\n\n${email.body}`)}`,
           },
         ],
       },

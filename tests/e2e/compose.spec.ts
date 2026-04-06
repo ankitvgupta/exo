@@ -1,5 +1,5 @@
 import { test, expect, Page, ElectronApplication } from "@playwright/test";
-import { launchElectronApp } from "./launch-helpers";
+import { launchElectronApp , closeApp } from "./launch-helpers";
 
 /**
  * E2E Tests for Compose and Send functionality
@@ -29,7 +29,7 @@ test.describe("Compose - New Email", () => {
 
   test.afterAll(async () => {
     if (electronApp) {
-      await electronApp.close();
+      await closeApp(electronApp);
     }
   });
 
@@ -129,8 +129,8 @@ test.describe("Compose - New Email", () => {
     await expect(ccField).toBeVisible({ timeout: 3000 });
     await expect(bccField).toBeVisible({ timeout: 3000 });
 
-    // Toggle button should disappear once expanded
-    await expect(toggleButton).not.toBeVisible();
+    // Toggle button stays visible (chevron that can collapse)
+    await expect(toggleButton).toBeVisible();
 
     // Verify we can type in the Cc field
     const ccInput = ccField.locator("input[type='text']");
@@ -213,7 +213,7 @@ test.describe("Compose - Reply", () => {
 
   test.afterAll(async () => {
     if (electronApp) {
-      await electronApp.close();
+      await closeApp(electronApp);
     }
   });
 
@@ -304,7 +304,7 @@ test.describe("Compose - Forward", () => {
 
   test.afterAll(async () => {
     if (electronApp) {
-      await electronApp.close();
+      await closeApp(electronApp);
     }
   });
 
@@ -390,7 +390,7 @@ test.describe("Compose - Rich Text Editor", () => {
 
   test.afterAll(async () => {
     if (electronApp) {
-      await electronApp.close();
+      await closeApp(electronApp);
     }
   });
 
@@ -459,7 +459,7 @@ test.describe("Compose - Save Draft", () => {
 
   test.afterAll(async () => {
     if (electronApp) {
-      await electronApp.close();
+      await closeApp(electronApp);
     }
   });
 

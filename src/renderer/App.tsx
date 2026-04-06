@@ -26,6 +26,7 @@ import { UndoActionToast } from "./components/UndoActionToast";
 import { DraftEditLearnedToast } from "./components/DraftEditLearnedToast";
 import { AnalysisOverrideLearnedToast } from "./components/AnalysisOverrideLearnedToast";
 import { SnoozeMenu } from "./components/SnoozeMenu";
+import { FindBar } from "./components/FindBar";
 import { registerBundledExtensions } from "./extensions";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 import {
@@ -625,6 +626,7 @@ export default function App() {
     closeSearch,
     isCommandPaletteOpen,
     closeCommandPalette,
+    isFindBarOpen,
     isAgentPaletteOpen,
     setAgentPaletteOpen,
     isAgentsSidebarOpen,
@@ -2028,6 +2030,9 @@ export default function App() {
           </div>
         </div>
       ))}
+
+      {/* Find bar (page-wide, works in any view mode) */}
+      {isFindBarOpen && <FindBar />}
 
       {/* Main content */}
       <div className="flex-1 flex overflow-hidden">

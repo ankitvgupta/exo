@@ -6,7 +6,8 @@
 
 [![GitHub stars](https://img.shields.io/github/stars/ankitvgupta/mail-app?style=flat&logo=github)](https://github.com/ankitvgupta/mail-app/stargazers)
 [![GitHub release](https://img.shields.io/github/v/release/ankitvgupta/mail-app?style=flat&logo=github)](https://github.com/ankitvgupta/mail-app/releases)
-[![License](https://img.shields.io/github/license/ankitvgupta/mail-app?style=flat)](LICENSE.md)
+[![License](https://img.shields.io/github/license/ankitvgupta/mail-app?style=flat)](LICENSE)
+[![Download DMG](https://img.shields.io/github/v/release/ankitvgupta/mail-app?label=Download%20.dmg&logo=apple&style=flat-square)](https://github.com/ankitvgupta/mail-app/releases/latest)
 
 <br />
 

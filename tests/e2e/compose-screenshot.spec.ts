@@ -1,5 +1,5 @@
 import { test, expect, Page, ElectronApplication } from "@playwright/test";
-import { launchElectronApp } from "./launch-helpers";
+import { launchElectronApp , closeApp } from "./launch-helpers";
 
 test.describe("Compose View - CC/BCC Toggle", () => {
   test.describe.configure({ mode: "serial" });
@@ -15,7 +15,7 @@ test.describe("Compose View - CC/BCC Toggle", () => {
 
   test.afterAll(async () => {
     if (electronApp) {
-      await electronApp.close();
+      await closeApp(electronApp);
     }
   });
 
@@ -67,8 +67,8 @@ test.describe("Compose View - CC/BCC Toggle", () => {
     await expect(page.locator("[data-testid='address-input-cc']")).toBeVisible();
     await expect(page.locator("[data-testid='address-input-bcc']")).toBeVisible();
 
-    // Toggle button should be gone
-    await expect(page.locator("[data-testid='compose-cc-bcc-toggle']")).not.toBeVisible();
+    // Toggle button stays visible (chevron that can collapse)
+    await expect(page.locator("[data-testid='compose-cc-bcc-toggle']")).toBeVisible();
 
     // Can add CC and BCC recipients
     const ccInput = page.locator("[data-testid='address-input-cc'] input[type='text']");
