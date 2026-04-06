@@ -546,7 +546,7 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
     // satisfy the Record<PrefetchTask["type"], number> type requirement.
     const CONCURRENCY: Record<PrefetchTask["type"], number> = {
       analysis: 10,
-      "archive-ready": 5,
+      "archive-ready": 10,
       // Sender-profile tasks make Claude API calls then do synchronous DB
       // reads/writes on resolution. With 10 concurrent tasks resolving near-
       // simultaneously, the sync DB bursts pile up and block the main thread
@@ -618,9 +618,9 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
             try {
               const tTask = performance.now();
               await this.processTask(task);
+              const taskTime = performance.now() - tTask;
               // Yield after each task so DB writes don't pile up back-to-back
               await new Promise((resolve) => setImmediate(resolve));
-              const taskTime = performance.now() - tTask;
               if (taskTime > 100) {
                 log.info(
                   `[PERF] processTask ${task.type}:${task.emailId.slice(0, 8)} took ${taskTime.toFixed(1)}ms`,
