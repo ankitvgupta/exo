@@ -6,7 +6,7 @@ interface SetupWizardProps {
   onComplete: () => void;
 }
 
-type Step = "loading" | "credentials" | "apikey" | "oauth" | "extensions" | "analytics";
+type Step = "loading" | "backend" | "credentials" | "apikey" | "oauth" | "extensions" | "analytics";
 
 interface ExtensionAuthInfo {
   extensionId: string;
@@ -41,6 +41,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
   const [analyticsEnabled, setAnalyticsEnabled] = useState(true);
 
   // Check what's already configured and skip to the right step.
+  // Backend choice is always the first step so the user picks how to connect to Claude.
   useEffect(() => {
     (
       window.api.gmail.checkAuth() as Promise<
@@ -51,31 +52,40 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
         if (authResult.success) {
           const { hasCredentials, hasAnthropicKey, hasTokens } = authResult.data;
 
-          const flow: Step[] = [];
-          if (!hasCredentials) flow.push("credentials");
-          if (!hasAnthropicKey) flow.push("apikey");
-          if (!hasTokens) flow.push("oauth");
-          flow.push("extensions");
-          flow.push("analytics");
-          setVisibleSteps(flow);
+          // If the user already has a working LLM backend, skip the backend step
+          if (hasAnthropicKey) {
+            const flow: Step[] = [];
+            if (!hasCredentials) flow.push("credentials");
+            if (!hasTokens) flow.push("oauth");
+            flow.push("extensions");
+            flow.push("analytics");
+            setVisibleSteps(flow);
 
-          if (!hasCredentials) {
-            setStep("credentials");
-          } else if (!hasAnthropicKey) {
-            setStep("apikey");
-          } else if (!hasTokens) {
-            setStep("oauth");
+            if (!hasCredentials) {
+              setStep("credentials");
+            } else if (!hasTokens) {
+              setStep("oauth");
+            } else {
+              enterExtensionsStep();
+            }
           } else {
-            enterExtensionsStep();
+            // No LLM backend configured — start with backend choice
+            const flow: Step[] = ["backend"];
+            if (!hasCredentials) flow.push("credentials");
+            if (!hasTokens) flow.push("oauth");
+            flow.push("extensions");
+            flow.push("analytics");
+            setVisibleSteps(flow);
+            setStep("backend");
           }
         } else {
-          setVisibleSteps(["credentials", "apikey", "oauth", "extensions", "analytics"]);
-          setStep("credentials");
+          setVisibleSteps(["backend", "credentials", "oauth", "extensions", "analytics"]);
+          setStep("backend");
         }
       })
       .catch(() => {
-        setVisibleSteps(["credentials", "apikey", "oauth", "extensions", "analytics"]);
-        setStep("credentials");
+        setVisibleSteps(["backend", "credentials", "oauth", "extensions", "analytics"]);
+        setStep("backend");
       });
   }, []);
 
@@ -150,28 +160,39 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
     }
   };
 
-  const handleSelectClaudeSdk = async () => {
+  /** Advance from the backend step to the next step in the flow. */
+  const handleBackendContinue = async () => {
     setIsLoading(true);
     setError(null);
 
     try {
-      // Save the backend choice — this makes hasAnthropicKey return true
+      // Save the backend choice
       const result = (await window.api.settings.set({
-        llmBackend: "claude-sdk",
+        llmBackend: setupBackend,
       })) as IpcResponse<void>;
-      if (result.success) {
-        const authResult = (await window.api.gmail.checkAuth()) as IpcResponse<{
-          hasCredentials: boolean;
-          hasTokens: boolean;
-          hasAnthropicKey: boolean;
-        }>;
-        if (authResult.success && authResult.data.hasTokens) {
-          await enterExtensionsStep();
-        } else {
-          setStep("oauth");
-        }
-      } else {
+      if (!result.success) {
         setError(result.error ?? "Failed to save backend choice");
+        return;
+      }
+
+      if (setupBackend === "anthropic") {
+        // Need an API key — insert apikey step after backend if not already there
+        const backendIdx = visibleSteps.indexOf("backend");
+        if (!visibleSteps.includes("apikey")) {
+          const updated = [...visibleSteps];
+          updated.splice(backendIdx + 1, 0, "apikey");
+          setVisibleSteps(updated);
+        }
+        setStep("apikey");
+      } else {
+        // Claude SDK — skip apikey, go to next step (credentials or oauth)
+        const backendIdx = visibleSteps.indexOf("backend");
+        const next = visibleSteps[backendIdx + 1];
+        if (next) {
+          setStep(next);
+        } else {
+          setStep("credentials");
+        }
       }
     } finally {
       setIsLoading(false);
@@ -283,6 +304,85 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
             </div>
           )}
 
+          {step === "backend" && (
+            <>
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">
+                Connect to Claude
+              </h2>
+              <p className="text-gray-600 dark:text-gray-400 mb-6">
+                Exo uses Claude to analyze your emails, generate drafts, and look up sender
+                information. Choose how to connect:
+              </p>
+
+              <div className="space-y-3 mb-6">
+                <label
+                  className={`flex items-start gap-3 p-4 border rounded-lg cursor-pointer transition-colors ${
+                    setupBackend === "claude-sdk"
+                      ? "border-blue-500 bg-blue-50 dark:bg-blue-900/30"
+                      : "border-gray-300 dark:border-gray-600 hover:border-gray-400"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="backend"
+                    value="claude-sdk"
+                    checked={setupBackend === "claude-sdk"}
+                    onChange={() => setSetupBackend("claude-sdk")}
+                    className="mt-1"
+                  />
+                  <div>
+                    <div className="font-medium text-gray-900 dark:text-gray-100">
+                      Claude Code SDK
+                    </div>
+                    <div className="text-sm text-gray-500 dark:text-gray-400">
+                      Uses your Claude Max subscription (flat-rate). Requires Claude Code to be
+                      installed and logged in.
+                    </div>
+                  </div>
+                </label>
+
+                <label
+                  className={`flex items-start gap-3 p-4 border rounded-lg cursor-pointer transition-colors ${
+                    setupBackend === "anthropic"
+                      ? "border-blue-500 bg-blue-50 dark:bg-blue-900/30"
+                      : "border-gray-300 dark:border-gray-600 hover:border-gray-400"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="backend"
+                    value="anthropic"
+                    checked={setupBackend === "anthropic"}
+                    onChange={() => setSetupBackend("anthropic")}
+                    className="mt-1"
+                  />
+                  <div>
+                    <div className="font-medium text-gray-900 dark:text-gray-100">
+                      Anthropic API Key
+                    </div>
+                    <div className="text-sm text-gray-500 dark:text-gray-400">
+                      Pay-per-token billing. Requires an API key from console.anthropic.com.
+                    </div>
+                  </div>
+                </label>
+              </div>
+
+              {error && (
+                <div className="p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg mb-4">
+                  <p className="text-sm text-red-800 dark:text-red-300">{error}</p>
+                </div>
+              )}
+
+              <button
+                onClick={handleBackendContinue}
+                disabled={isLoading}
+                className="w-full py-3 bg-blue-600 dark:bg-blue-500 text-white font-medium rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors disabled:opacity-50"
+              >
+                {isLoading ? "Saving..." : "Continue"}
+              </button>
+            </>
+          )}
+
           {step === "credentials" && (
             <>
               <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">
@@ -368,108 +468,49 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
           {step === "apikey" && (
             <>
               <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">
-                Connect to Claude
+                Anthropic API Key
               </h2>
               <p className="text-gray-600 dark:text-gray-400 mb-6">
-                Exo uses Claude to analyze your emails, generate drafts, and look up sender
-                information. Choose how to connect:
+                Enter your Anthropic API key to enable email analysis, draft generation, and sender
+                lookup.
               </p>
 
-              {/* Backend choice */}
-              <div className="space-y-3 mb-6">
-                <label
-                  className={`flex items-start gap-3 p-4 border rounded-lg cursor-pointer transition-colors ${
-                    setupBackend === "claude-sdk"
-                      ? "border-blue-500 bg-blue-50 dark:bg-blue-900/30"
-                      : "border-gray-300 dark:border-gray-600 hover:border-gray-400"
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="backend"
-                    value="claude-sdk"
-                    checked={setupBackend === "claude-sdk"}
-                    onChange={() => setSetupBackend("claude-sdk")}
-                    className="mt-1"
-                  />
-                  <div>
-                    <div className="font-medium text-gray-900 dark:text-gray-100">
-                      Claude Code SDK
-                    </div>
-                    <div className="text-sm text-gray-500 dark:text-gray-400">
-                      Uses your Claude Max subscription (flat-rate). Requires Claude Code to be
-                      installed and logged in.
-                    </div>
-                  </div>
-                </label>
-
-                <label
-                  className={`flex items-start gap-3 p-4 border rounded-lg cursor-pointer transition-colors ${
-                    setupBackend === "anthropic"
-                      ? "border-blue-500 bg-blue-50 dark:bg-blue-900/30"
-                      : "border-gray-300 dark:border-gray-600 hover:border-gray-400"
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="backend"
-                    value="anthropic"
-                    checked={setupBackend === "anthropic"}
-                    onChange={() => setSetupBackend("anthropic")}
-                    className="mt-1"
-                  />
-                  <div>
-                    <div className="font-medium text-gray-900 dark:text-gray-100">
-                      Anthropic API Key
-                    </div>
-                    <div className="text-sm text-gray-500 dark:text-gray-400">
-                      Pay-per-token billing. Requires an API key from console.anthropic.com.
-                    </div>
-                  </div>
-                </label>
+              <div className="bg-blue-50 dark:bg-blue-900/30 p-4 rounded-lg mb-6">
+                <h3 className="font-semibold text-blue-900 dark:text-blue-200 mb-2">
+                  Get your API key:
+                </h3>
+                <ol className="text-sm text-blue-800 dark:text-blue-300 space-y-2 list-decimal list-inside">
+                  <li>
+                    Go to{" "}
+                    <a
+                      href="https://console.anthropic.com/settings/keys"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline hover:no-underline"
+                    >
+                      console.anthropic.com
+                    </a>
+                  </li>
+                  <li>Create a new API key (or use an existing one)</li>
+                  <li>Paste it below</li>
+                </ol>
               </div>
 
-              {/* API key input — only shown when Anthropic API is selected */}
-              {setupBackend === "anthropic" && (
-                <>
-                  <div className="bg-blue-50 dark:bg-blue-900/30 p-4 rounded-lg mb-6">
-                    <h3 className="font-semibold text-blue-900 dark:text-blue-200 mb-2">
-                      Get your API key:
-                    </h3>
-                    <ol className="text-sm text-blue-800 dark:text-blue-300 space-y-2 list-decimal list-inside">
-                      <li>
-                        Go to{" "}
-                        <a
-                          href="https://console.anthropic.com/settings/keys"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="underline hover:no-underline"
-                        >
-                          console.anthropic.com
-                        </a>
-                      </li>
-                      <li>Create a new API key (or use an existing one)</li>
-                      <li>Paste it below</li>
-                    </ol>
-                  </div>
-
-                  <div className="space-y-4 mb-6">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        API Key
-                      </label>
-                      <input
-                        type="password"
-                        value={apiKey}
-                        onChange={(e) => setApiKey(e.target.value)}
-                        onKeyDown={(e) => e.key === "Enter" && !isLoading && handleSaveApiKey()}
-                        placeholder="sk-ant-api03-..."
-                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
-                  </div>
-                </>
-              )}
+              <div className="space-y-4 mb-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    API Key
+                  </label>
+                  <input
+                    type="password"
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && !isLoading && handleSaveApiKey()}
+                    placeholder="sk-ant-api03-..."
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
 
               {error && (
                 <div className="p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg mb-4">
@@ -478,7 +519,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
               )}
 
               <button
-                onClick={setupBackend === "claude-sdk" ? handleSelectClaudeSdk : handleSaveApiKey}
+                onClick={handleSaveApiKey}
                 disabled={isLoading}
                 className="w-full py-3 bg-blue-600 dark:bg-blue-500 text-white font-medium rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors disabled:opacity-50"
               >
