@@ -116,20 +116,21 @@ test.describe("Settings - CLI Tools", () => {
     // Save after removing
     const saveButton = page.locator("button:has-text('Save')").last();
     await saveButton.click();
-    await page.waitForTimeout(500);
+    await expect(page.locator("button:has-text('Saved')")).toBeVisible({ timeout: 3000 });
 
-    // Close settings
+    // Close settings with Escape (reliable — settings has priority in the handler)
     await page.keyboard.press("Escape");
-    await page.waitForTimeout(300);
+    await expect(page.locator("h1:has-text('Settings')")).toBeHidden({ timeout: 5000 });
 
-    // Reopen settings
-    await page.keyboard.press("ControlOrMeta+,");
+    // Reopen settings via button (keyboard shortcut Ctrl+, is unreliable on CI)
+    const settingsButton = page.locator("button[title='Settings']");
+    await settingsButton.click();
     await expect(page.locator("h1:has-text('Settings')")).toBeVisible({ timeout: 5000 });
 
     // Navigate back to Agents tab
     const agentsTab = page.locator("button:has-text('Agents')");
     await agentsTab.click();
-    await page.waitForTimeout(500);
+    await expect(agentsTab).toHaveAttribute("data-active", "true", { timeout: 3000 });
 
     await expect(page.locator("h4:has-text('CLI Tools')")).toBeVisible({ timeout: 5000 });
 
