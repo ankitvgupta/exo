@@ -880,10 +880,10 @@ export function registerSyncIpc(): void {
         // Delay 3 seconds to let the UI fully load first
         // Skip if any account is doing a first-time sync — fullSync with
         // runTriage will handle queueing only the recent emails after triage.
-        setTimeout(async () => {
-          // Calendar sync is time-sensitive — run independently of prefetch
-          calendarSyncService.syncNow();
+        // Calendar sync is time-sensitive — run immediately, not after the 3s delay
+        calendarSyncService.syncNow();
 
+        setTimeout(async () => {
           if (emailSyncService.hasFirstSyncPending()) {
             log.info("[Prefetch] Skipping processAllPending — first-time sync in progress");
             prefetchService.closeStartupCache();

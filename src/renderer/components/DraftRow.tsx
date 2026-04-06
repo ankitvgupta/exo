@@ -38,16 +38,22 @@ function formatRelativeDate(timestamp: number): string {
   return new Date(timestamp).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
+// Named HTML entities commonly found in email content and tiptap output
+const NAMED_ENTITIES: Record<string, string> = {
+  amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " ",
+  mdash: "\u2014", ndash: "\u2013", hellip: "\u2026",
+  lsquo: "\u2018", rsquo: "\u2019", ldquo: "\u201C", rdquo: "\u201D",
+  bull: "\u2022", middot: "\u00B7", copy: "\u00A9", reg: "\u00AE",
+  trade: "\u2122", deg: "\u00B0", plusmn: "\u00B1", times: "\u00D7",
+};
+
 // Lightweight regex strip — avoids DOMParser overhead in the hot render path
 function stripHtmlTags(html: string): string {
   return html
     .replace(/<[^>]*>/g, "")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&nbsp;/g, " ")
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCodePoint(parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (_, dec) => String.fromCodePoint(Number(dec)))
+    .replace(/&([a-zA-Z]+);/g, (match, name) => NAMED_ENTITIES[name] ?? match)
     .trim();
 }
 
