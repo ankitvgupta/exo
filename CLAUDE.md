@@ -78,7 +78,7 @@ Generally i will give one git worktree one branch to work with and itll be clear
 
 ### Requires confirmation
 - `git push` — makes changes visible to others; always ask first
-- `git push --force` — never without explicit approval
+- `git push --force` — **never do this without explicitly asking the user first and getting approval**. Even if the situation seems to call for it, always check first.
 - `git reset --hard` — never without explicit approval
 - `git rebase` — never without explicit approval
 - `git clean -f`, `git checkout .`, `git restore .`, `git branch -D` — destructive, always ask first
