@@ -1468,18 +1468,66 @@ function rowToDashboardEmail(row: Record<string, unknown>): DashboardEmail {
 }
 
 // Analysis operations
+export interface DraftCleanupInfo {
+  gmailDraftId: string | null;
+  agentTaskId: string | null;
+  accountId: string | null;
+}
+
+/**
+ * Save analysis for an email. When the priority is "skip" and the email had
+ * a draft, the local draft and its agent trace are deleted automatically.
+ * Returns cleanup info so the caller can cancel in-flight agents and delete
+ * the Gmail draft (which requires async network calls outside the DB layer).
+ */
 export function saveAnalysis(
   emailId: string,
   needsReply: boolean,
   reason: string,
   priority?: string,
-): void {
+): DraftCleanupInfo | null {
   const db = getDatabase();
+  const effectivePriority = priority || null;
+
+  // When reclassifying as "skip", clean up any existing draft
+  let cleanupInfo: DraftCleanupInfo | null = null;
+  if (effectivePriority === "skip") {
+    const draftRow = db
+      .prepare(
+        `SELECT d.gmail_draft_id, d.agent_task_id, e.account_id
+         FROM drafts d JOIN emails e ON d.email_id = e.id
+         WHERE d.email_id = ?`,
+      )
+      .get(emailId) as
+      | { gmail_draft_id: string | null; agent_task_id: string | null; account_id: string | null }
+      | undefined;
+
+    if (draftRow) {
+      cleanupInfo = {
+        gmailDraftId: draftRow.gmail_draft_id,
+        agentTaskId: draftRow.agent_task_id,
+        accountId: draftRow.account_id,
+      };
+
+      // Delete agent trace first (references draft's agent_task_id)
+      if (draftRow.agent_task_id) {
+        db.prepare(`DELETE FROM agent_conversation_mirror WHERE local_task_id = ?`).run(
+          draftRow.agent_task_id,
+        );
+      }
+
+      // Delete the local draft
+      db.prepare("DELETE FROM drafts WHERE email_id = ?").run(emailId);
+    }
+  }
+
   const stmt = db.prepare(`
     INSERT OR REPLACE INTO analyses (email_id, needs_reply, reason, priority, analyzed_at)
     VALUES (?, ?, ?, ?, ?)
   `);
-  stmt.run(emailId, needsReply ? 1 : 0, reason, priority || null, Date.now());
+  stmt.run(emailId, needsReply ? 1 : 0, reason, effectivePriority, Date.now());
+
+  return cleanupInfo;
 }
 
 // Draft operations

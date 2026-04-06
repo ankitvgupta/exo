@@ -9,6 +9,7 @@ import {
   learnFromPriorityOverrideInferred,
 } from "../services/analysis-edit-learner";
 import { stripQuotedContent } from "../services/strip-quoted-content";
+import { deleteGmailDraftById } from "../services/gmail-draft-sync";
 import { createLogger } from "../services/logger";
 
 const log = createLogger("analysis-ipc");
@@ -239,8 +240,8 @@ export function registerAnalysisIpc(): void {
         const originalNeedsReply = originalAnalysis?.needsReply ?? false;
         const originalPriority = originalAnalysis?.priority ?? null;
 
-        // Update the analysis in DB
-        saveAnalysis(
+        // Update the analysis in DB (also deletes local draft + trace if reclassified as skip)
+        const draftCleanup = saveAnalysis(
           emailId,
           newNeedsReply,
           originalAnalysis?.reason ?? "User override",
@@ -250,6 +251,27 @@ export function registerAnalysisIpc(): void {
         log.info(
           `[Analysis] Priority overridden for ${emailId}: ${originalPriority ?? "skip"} → ${newPriority ?? "skip"}`,
         );
+
+        // If reclassified as skip and had a draft, clean up Gmail draft and cancel agents
+        if (draftCleanup) {
+          log.info(`[Analysis] Cleaning up draft for ${emailId} after skip reclassification`);
+          if (draftCleanup.gmailDraftId && draftCleanup.accountId) {
+            deleteGmailDraftById(draftCleanup.accountId, draftCleanup.gmailDraftId).catch(
+              () => {},
+            );
+          }
+          if (draftCleanup.agentTaskId) {
+            const { agentCoordinator } = await import("../agents/agent-coordinator");
+            agentCoordinator.cancel(draftCleanup.agentTaskId);
+          }
+          // Cancel any in-flight auto-draft agent
+          const { prefetchService } = await import("../services/prefetch-service");
+          const activeTaskId = prefetchService.getActiveAgentTaskId(emailId);
+          if (activeTaskId) {
+            const { agentCoordinator } = await import("../agents/agent-coordinator");
+            agentCoordinator.cancel(activeTaskId);
+          }
+        }
 
         // Learn from the override in the background (don't block the UI)
         const accountId = email.accountId ?? "default";

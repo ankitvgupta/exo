@@ -18,6 +18,7 @@ import { agentCoordinator } from "../agents/agent-coordinator";
 import type { AgentContext } from "../agents/types";
 import { DEFAULT_AGENT_DRAFTER_PROMPT } from "../../shared/types";
 import type { Email, DashboardEmail } from "../../shared/types";
+import { deleteGmailDraftById } from "./gmail-draft-sync";
 import { createLogger } from "./logger";
 
 const log = createLogger("prefetch");
@@ -748,9 +749,26 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
       const userEmail = account?.email;
 
       const result = await analyzer.analyze(emailForAnalysis, userEmail, email.accountId);
-      saveAnalysis(emailId, result.needs_reply, result.reason, result.priority);
+      const draftCleanup = saveAnalysis(emailId, result.needs_reply, result.reason, result.priority);
       this.processedAnalysis.add(emailId);
       this.processedCounts.analysis++;
+
+      // If reclassified as "skip" and had a draft, clean up Gmail draft and cancel agents
+      if (draftCleanup) {
+        log.info(
+          `[Prefetch] Email ${emailId} reclassified as skip — deleted local draft` +
+            (draftCleanup.gmailDraftId ? ` and queuing Gmail draft deletion` : ``),
+        );
+        if (draftCleanup.gmailDraftId && draftCleanup.accountId) {
+          deleteGmailDraftById(draftCleanup.accountId, draftCleanup.gmailDraftId).catch(() => {});
+        }
+        // Cancel any in-flight agent draft for this email
+        const activeTaskId = this.activeAgentTaskIds.get(emailId);
+        if (activeTaskId) {
+          agentCoordinator.cancel(activeTaskId);
+        }
+        this.processedDrafts.delete(emailId);
+      }
 
       log.info(
         `[Prefetch] Analyzed ${emailId}: ${result.priority} priority, needs_reply=${result.needs_reply}`,

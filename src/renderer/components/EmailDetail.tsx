@@ -3568,13 +3568,19 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
           <AnalysisPrioritySection
             email={latestReceivedEmail}
             onAnalysisUpdated={(newNeedsReply, newPriority) => {
-              updateEmail(latestReceivedEmail.id, {
+              const updates: Partial<DashboardEmail> = {
                 analysis: {
                   ...latestReceivedEmail.analysis!,
                   needsReply: newNeedsReply,
                   priority: (newPriority as "high" | "medium" | "low" | "skip" | null) ?? undefined,
                 },
-              });
+              };
+              // When reclassified as skip, clear the draft from UI state
+              // (main process deletes local + Gmail draft automatically)
+              if (newPriority === "skip" || newPriority === null) {
+                updates.draft = undefined;
+              }
+              updateEmail(latestReceivedEmail.id, updates);
             }}
           />
         )}
