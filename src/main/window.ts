@@ -38,7 +38,8 @@ export function createWindow(): BrowserWindow {
     titleBarStyle: "hiddenInset",
     trafficLightPosition: { x: 15, y: 15 },
     backgroundColor: getInitialBackgroundColor(),
-    icon: getIconPath(),
+    // On macOS, keep the bundle icon for Dock/Cmd+Tab instead of overriding it at runtime.
+    ...(process.platform !== "darwin" ? { icon: getIconPath() } : {}),
     // Prevent Chromium from throttling timers in hidden windows during tests.
     // Without this, setTimeout-based logic (e.g. undo-send toast auto-dismiss)
     // gets frozen indefinitely when the window is never shown.
