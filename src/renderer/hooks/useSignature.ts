@@ -6,7 +6,7 @@ export function useSignature(accountId: string) {
   const [activeSignatureId, setActiveSignatureId] = useState<string | null>(null);
   const [hasUserChosen, setHasUserChosen] = useState(false);
 
-  const { data: signatureConfig } = useQuery({
+  const { data: configData } = useQuery({
     queryKey: ["general-config"],
     queryFn: async () => {
       const result = (await window.api.settings.get()) as IpcResponse<Config>;
@@ -15,10 +15,10 @@ export function useSignature(accountId: string) {
       }
       return null;
     },
-    select: (config) => config?.signatures ?? [],
   });
 
-  const allSignatures = signatureConfig ?? [];
+  const allSignatures = configData?.signatures ?? [];
+  const showExoBranding = configData?.showExoBranding !== false;
 
   const availableSignatures = useMemo(
     () => allSignatures.filter((s: Signature) => !s.accountId || s.accountId === accountId),
@@ -45,9 +45,15 @@ export function useSignature(accountId: string) {
 
   const activeSignature = availableSignatures.find((s: Signature) => s.id === activeSignatureId);
 
-  const signatureHtml = activeSignature?.bodyHtml
-    ? `<div class="email-signature"><br><div>--</div>${activeSignature.bodyHtml}</div>`
+  const exoBrandingLine = showExoBranding
+    ? `<div style="margin-top:12px;font-size:12px;color:#999;">Sent by <a href="https://exo.email" style="color:#999;">Exo</a></div>`
     : "";
+
+  const signatureHtml = activeSignature?.bodyHtml
+    ? `<div class="email-signature"><br><div>--</div>${activeSignature.bodyHtml}${exoBrandingLine}</div>`
+    : exoBrandingLine
+      ? `<div class="email-signature"><br><div>--</div>${exoBrandingLine}</div>`
+      : "";
 
   return {
     activeSignatureId,
