@@ -165,6 +165,12 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
     }
   };
 
+  const handleCancelOAuth = async () => {
+    await window.api.gmail.abortOAuth();
+    setIsLoading(false);
+    setError("Authorization cancelled. Make sure your email is added as a test user, then try again.");
+  };
+
   const enterExtensionsStep = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -287,7 +293,25 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                     Choose <strong>Desktop app</strong> as the application type
                   </li>
                   <li>Copy the Client ID and Client Secret below</li>
+                  <li>
+                    Go to{" "}
+                    <strong>
+                      <a
+                        href="https://console.cloud.google.com/auth/audience"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="underline"
+                      >
+                        Audience → Test users → Add users
+                      </a>
+                    </strong>{" "}
+                    and add every email address you want to use with Exo
+                  </li>
                 </ol>
+                <p className="mt-3 text-xs text-amber-700 dark:text-amber-400">
+                  While your Google Cloud project is in &quot;Testing&quot; mode, only emails
+                  listed as test users can authorize. Google will block all other accounts.
+                </p>
               </div>
 
               <div className="space-y-4 mb-6">
@@ -412,6 +436,18 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                   We&apos;ll request access to view and edit your emails and view your calendar
                   events.
                 </p>
+                <p className="text-sm text-yellow-800 dark:text-yellow-300 mt-2">
+                  Your email <strong>must</strong> be added as a test user in{" "}
+                  <a
+                    href="https://console.cloud.google.com/auth/audience"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="underline font-medium"
+                  >
+                    Google Cloud Console → Audience
+                  </a>
+                  , otherwise Google will block the authorization.
+                </p>
               </div>
 
               {error && (
@@ -427,6 +463,16 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
               >
                 {isLoading ? "Authorizing..." : "Authorize with Google"}
               </button>
+
+              {/* Cancel button so users aren't stuck waiting when Google blocks them */}
+              {isLoading && (
+                <button
+                  onClick={handleCancelOAuth}
+                  className="w-full mt-2 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
+                >
+                  Cancel and try again
+                </button>
+              )}
             </>
           )}
 

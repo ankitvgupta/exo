@@ -1404,7 +1404,21 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
 
               {accountError && (
                 <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-300 px-4 py-3 rounded-lg mb-4">
-                  {accountError}
+                  <p>{accountError}</p>
+                  {accountError.includes("Access denied") && (
+                    <p className="mt-2 text-xs">
+                      Add your email as a test user in{" "}
+                      <a
+                        href="https://console.cloud.google.com/auth/audience"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="underline font-medium"
+                      >
+                        Google Cloud Console → Audience
+                      </a>
+                      , then try again.
+                    </p>
+                  )}
                 </div>
               )}
 

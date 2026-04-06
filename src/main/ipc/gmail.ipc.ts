@@ -109,6 +109,15 @@ export function registerGmailIpc(): void {
     },
   );
 
+  // Cancel an in-progress OAuth flow
+  ipcMain.handle("gmail:abort-oauth", async (): Promise<IpcResponse<void>> => {
+    const existingClient = gmailClients.get("default");
+    if (existingClient) {
+      existingClient.abortOAuth();
+    }
+    return { success: true, data: undefined };
+  });
+
   // Start OAuth flow
   ipcMain.handle("gmail:start-oauth", async (): Promise<IpcResponse<void>> => {
     if (useFakeData) {
@@ -116,6 +125,12 @@ export function registerGmailIpc(): void {
     }
 
     try {
+      // Abort any in-progress OAuth flow before starting a new one
+      const existingClient = gmailClients.get("default");
+      if (existingClient) {
+        existingClient.abortOAuth();
+      }
+
       // Reset clients to force re-auth
       gmailClients.clear();
       const client = await getClient("default");
