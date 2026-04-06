@@ -52,7 +52,7 @@ export function useSignature(accountId: string) {
   const signatureHtml = activeSignature?.bodyHtml
     ? `<div class="email-signature"><br><div>--</div>${activeSignature.bodyHtml}${exoBrandingLine}</div>`
     : exoBrandingLine
-      ? `<div class="email-signature"><br>${exoBrandingLine}</div>`
+      ? `<div class="email-signature"><br><div>--</div>${exoBrandingLine}</div>`
       : "";
 
   return {
