@@ -19,7 +19,7 @@ ipcMain.on("debug:log", (_, msg: string) => {
 import { ExtensionManifestSchema } from "../shared/extension-types";
 import webSearchPackageJson from "../extensions/mail-ext-web-search/package.json";
 import calendarPackageJson from "../extensions/mail-ext-calendar/package.json";
-import { createWindow, getIconPath } from "./window";
+import { createWindow } from "./window";
 import { registerGmailIpc } from "./ipc/gmail.ipc";
 import { registerAnalysisIpc } from "./ipc/analysis.ipc";
 import { registerDraftsIpc } from "./ipc/drafts.ipc";
@@ -313,11 +313,6 @@ app.whenReady().then(async () => {
 
   // Set app user model id for windows
   electronApp.setAppUserModelId("com.exo.app");
-
-  // Set dock icon on macOS (especially for dev mode where packaged icon isn't used)
-  if (process.platform === "darwin" && app.dock) {
-    app.dock.setIcon(getIconPath());
-  }
 
   // Initialize network monitor
   networkMonitor.init();

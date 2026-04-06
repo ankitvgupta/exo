@@ -1294,12 +1294,12 @@ export default function App() {
         result: IpcResponse<{
           hasCredentials: boolean;
           hasTokens: boolean;
-          hasAnthropicKey: boolean;
         }>,
       ) => {
         if (result.success) {
-          // Credentials are always bundled at build time — only check API key and tokens
-          setNeedsSetup(!result.data.hasAnthropicKey || !result.data.hasTokens);
+          // Do not gate startup on Anthropic configuration.
+          // Setup is required only for Gmail auth readiness.
+          setNeedsSetup(!result.data.hasTokens);
         } else {
           setNeedsSetup(true);
         }
