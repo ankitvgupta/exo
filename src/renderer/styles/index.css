@@ -47,9 +47,12 @@
   }
 }
 
-/* Font scale — scales the entire UI proportionally */
+/* Font scale — scales the entire UI proportionally.
+   Window is always created with transparent:true, so html must
+   have an opaque background by default to prevent see-through. */
 html {
   font-size: calc(var(--font-scale) * 100%) !important;
+  background-color: rgb(var(--bg-base)) !important;
 }
 
 /* Background gradient — fixed layer behind semi-transparent surfaces.

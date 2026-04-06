@@ -37,18 +37,14 @@ function getInitialVibrancy(): boolean {
   }
 }
 
-// Apply or remove vibrancy/transparency on a BrowserWindow at runtime
+// Apply or remove vibrancy on a BrowserWindow at runtime.
+// The window is always created with transparent:true, so toggling
+// vibrancy just adds/removes the OS blur — CSS handles the alpha.
 export function applyVibrancy(win: BrowserWindow, enabled: boolean): void {
   if (process.platform === "darwin") {
-    // macOS: frosted glass effect
     win.setVibrancy(enabled ? "under-window" : null);
-    win.setBackgroundColor(enabled ? "#00000000" : getInitialBackgroundColor());
   } else if (process.platform === "win32") {
-    // Windows 11: acrylic blur
     win.setBackgroundMaterial(enabled ? "acrylic" : "none");
-    if (!enabled) {
-      win.setBackgroundColor(getInitialBackgroundColor());
-    }
   }
 }
 
@@ -64,10 +60,14 @@ export function createWindow(): BrowserWindow {
     autoHideMenuBar: true,
     titleBarStyle: "hiddenInset",
     trafficLightPosition: { x: 15, y: 15 },
-    backgroundColor: vibrancyEnabled ? "#00000000" : getInitialBackgroundColor(),
     icon: getIconPath(),
 
-    // macOS frosted glass
+    // transparent must be set at creation — cannot be toggled later.
+    // Always enable it so vibrancy can be turned on/off at runtime.
+    transparent: true,
+    backgroundColor: "#00000000",
+
+    // macOS frosted glass (if persisted from last session)
     ...(vibrancyEnabled &&
       process.platform === "darwin" && {
         vibrancy: "under-window" as const,
