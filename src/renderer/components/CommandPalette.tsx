@@ -22,6 +22,7 @@ import {
   Forward,
   type LucideIcon,
 } from "lucide-react";
+import React from "react";
 import {
   Command,
   CommandInput,
@@ -29,6 +30,7 @@ import {
   CommandEmpty,
   CommandGroup,
   CommandItem,
+  CommandSeparator,
   CommandShortcut,
 } from "./ui/command";
 import { useAppStore, useThreadedEmails } from "../store";
@@ -608,111 +610,173 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
     [onClose],
   );
 
-  // Escape closes the palette (cmdk clears input first if non-empty)
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        e.stopPropagation();
-        onClose();
-      }
-    },
-    [onClose],
-  );
-
   return (
-    <AnimatePresence>
-      {isOpen && (
-        <MotionConfig transition={{ type: "spring", stiffness: 450, damping: 25, mass: 0.1 }}>
-          <div className="fixed inset-0 z-50 flex items-start justify-center pt-20">
-            {/* Backdrop */}
+    <MotionConfig transition={{ type: "spring", stiffness: 450, damping: 25, mass: 0.1 }}>
+      <div className="relative z-50">
+        {/* Expanded palette */}
+        <AnimatePresence>
+          {isOpen ? (
             <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.15 }}
-              className="absolute inset-0 bg-black/40"
-              onClick={onClose}
-            />
-
-            {/* Palette */}
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: -10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: -10 }}
-              className="relative w-full max-w-xl rounded-xl shadow-2xl dark:shadow-black/40 overflow-hidden border border-gray-200 dark:border-gray-700"
+              layoutId="cmd-wrapper"
+              className="fixed inset-0 z-50 flex items-start justify-center pt-20"
             >
-              <Command
-                onKeyDown={handleKeyDown}
-                filter={(value, search) => {
-                  // cmdk's filter returns 0 or 1
-                  const lower = value.toLowerCase();
-                  const q = search.toLowerCase();
-                  if (lower.includes(q)) return 1;
-                  return q.split(/\s+/).every((w) => lower.includes(w)) ? 1 : 0;
-                }}
-              >
-                {/* Input */}
-                <div className="flex items-center gap-3 px-4 border-b border-gray-200 dark:border-gray-700">
-                  <Search className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                  <CommandInput
-                    autoFocus
-                    value={query}
-                    onValueChange={setQuery}
-                    placeholder="Type a command..."
+              {/* Backdrop */}
+              <AnimatePresence>
+                {isOpen && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.15 }}
+                    className="absolute inset-0 bg-black/40 dark:bg-black/60"
+                    onClick={onClose}
                   />
-                  <kbd className="px-1.5 py-0.5 text-xs text-gray-400 bg-gray-100 dark:bg-gray-700 rounded flex-shrink-0">
-                    esc
-                  </kbd>
-                </div>
+                )}
+              </AnimatePresence>
 
-                {/* Results */}
-                <CommandList>
-                  <CommandEmpty>No matching commands</CommandEmpty>
-                  {groupedActions.map(({ category, actions: catActions }) => (
-                    <CommandGroup key={category} heading={category}>
-                      {catActions.map((action) => (
-                        <CommandItem
-                          key={action.id}
-                          value={`${action.label} ${action.category}`}
-                          onSelect={() => executeAction(action)}
-                        >
-                          {action.icon ? (
-                            <action.icon className="w-4 h-4 text-gray-400 dark:text-gray-500 flex-shrink-0" />
-                          ) : (
-                            <div className="w-4 h-4" />
-                          )}
-                          <span className="flex-1">{action.label}</span>
-                          {action.shortcut && <CommandShortcut>{action.shortcut}</CommandShortcut>}
-                        </CommandItem>
+              {/* Panel */}
+              <div className="relative w-full max-w-xl rounded-xl">
+                <Command
+                  value={query}
+                  onValueChange={setQuery}
+                  className="rounded-xl shadow-2xl dark:shadow-black/40"
+                  filter={(value, search) => {
+                    const lower = value.toLowerCase();
+                    const q = search.toLowerCase();
+                    if (lower.includes(q)) return 1;
+                    return q.split(/\s+/).every((w) => lower.includes(w)) ? 1 : 0;
+                  }}
+                >
+                  {/* Border overlay */}
+                  <motion.div
+                    style={{ borderRadius: 12 }}
+                    className="absolute -inset-px origin-top-left border border-gray-200 dark:border-gray-700 pointer-events-none"
+                  />
+
+                  {/* Search input row */}
+                  <label className="relative flex w-full items-center border-b border-gray-200 dark:border-gray-700">
+                    <span className="flex w-12 h-12 items-center justify-center">
+                      <motion.span layoutId="cmd-icon">
+                        <Search className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+                      </motion.span>
+                    </span>
+
+                    <motion.span
+                      layoutId="cmd-center"
+                      className="flex h-full flex-1 items-center text-left [&_[data-slot=command-input-wrapper]]:border-none [&_[data-slot=command-input-wrapper]]:px-0 [&_[data-slot=command-input-wrapper]_svg]:hidden"
+                    >
+                      <CommandInput autoFocus placeholder="Find..." />
+                    </motion.span>
+
+                    <motion.span
+                      layoutId="cmd-kbd"
+                      className="flex w-12 h-12 items-center justify-center pr-1"
+                    >
+                      <kbd className="flex items-center justify-center rounded-sm border border-gray-300 dark:border-gray-600 px-1 py-0.5 text-xs text-gray-500 dark:text-gray-400 tracking-tighter">
+                        Esc
+                      </kbd>
+                    </motion.span>
+                  </label>
+
+                  {/* Command list */}
+                  <motion.div
+                    initial={{ opacity: 0, y: -50 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -50 }}
+                    className="relative overflow-x-hidden overflow-y-hidden"
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape") {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        onClose();
+                      }
+                    }}
+                  >
+                    <CommandList>
+                      <CommandEmpty>No results found.</CommandEmpty>
+                      {groupedActions.map(({ category, actions: catActions }, groupIndex) => (
+                        <React.Fragment key={category}>
+                          {groupIndex > 0 && <CommandSeparator />}
+                          <CommandGroup heading={category}>
+                            {catActions.map((action) => (
+                              <CommandItem
+                                key={action.id}
+                                value={`${action.label} ${action.category}`}
+                                onSelect={() => executeAction(action)}
+                              >
+                                {action.icon ? (
+                                  <action.icon className="w-4 h-4 text-gray-400 dark:text-gray-500 flex-shrink-0" />
+                                ) : (
+                                  <div className="w-4 h-4" />
+                                )}
+                                <span className="flex-1">{action.label}</span>
+                                {action.shortcut && (
+                                  <CommandShortcut>{action.shortcut}</CommandShortcut>
+                                )}
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </React.Fragment>
                       ))}
-                    </CommandGroup>
-                  ))}
-                </CommandList>
-
-                {/* Footer */}
-                <div className="flex items-center gap-4 px-4 py-2 text-xs text-gray-400 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
-                  <span>
-                    <kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 rounded">
-                      &uarr;&darr;
-                    </kbd>{" "}
-                    navigate
-                  </span>
-                  <span>
-                    <kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 rounded">Enter</kbd>{" "}
-                    execute
-                  </span>
-                  <span>
-                    <kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 rounded">Esc</kbd>{" "}
-                    close
-                  </span>
-                </div>
-              </Command>
+                    </CommandList>
+                  </motion.div>
+                </Command>
+              </div>
             </motion.div>
-          </div>
-        </MotionConfig>
-      )}
-    </AnimatePresence>
+          ) : null}
+        </AnimatePresence>
+      </div>
+    </MotionConfig>
+  );
+}
+
+/**
+ * Compact search bar trigger that sits in the titlebar.
+ * Morphs into the full command palette via shared layoutIds.
+ */
+export function CommandBarTrigger({ onClick }: { onClick: () => void }) {
+  return (
+    <MotionConfig transition={{ type: "spring", stiffness: 450, damping: 25, mass: 0.1 }}>
+      <motion.button
+        layoutId="cmd-wrapper"
+        onClick={onClick}
+        className="titlebar-no-drag group relative flex h-8 w-48 items-center"
+      >
+        <motion.div
+          className="absolute inset-0 origin-top-left border border-gray-300 dark:border-gray-600 group-hover:border-gray-400 dark:group-hover:border-gray-500 transition-colors"
+          style={{ borderRadius: 6 }}
+        />
+        <div className="flex flex-1 items-center">
+          {/* Search icon */}
+          <span className="flex w-8 h-8 items-center justify-center">
+            <motion.span layoutId="cmd-icon">
+              <Search className="w-4 h-4 text-gray-500 dark:text-gray-400 opacity-50" />
+            </motion.span>
+          </span>
+
+          {/* Placeholder text */}
+          <span className="relative flex flex-1 items-center opacity-40">
+            <motion.span
+              layoutId="cmd-center"
+              className="absolute grid h-8 w-full flex-1 cursor-text items-center text-left text-sm text-gray-600 dark:text-gray-300"
+            >
+              Find...
+            </motion.span>
+          </span>
+
+          {/* Keyboard shortcut badge */}
+          <motion.span
+            layoutId="cmd-kbd"
+            transition={{ duration: 0.1 }}
+            className="flex w-8 h-8 items-center justify-center"
+          >
+            <kbd className="flex items-center justify-center rounded-sm border border-gray-300 dark:border-gray-600 w-5 h-5 text-xs text-gray-500 dark:text-gray-400">
+              /
+            </kbd>
+          </motion.span>
+        </div>
+      </motion.button>
+    </MotionConfig>
   );
 }
 

@@ -123,7 +123,6 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
         setSelectedEmailId,
         setSelectedThreadId,
         openCompose,
-        openSearch,
         closeSearch,
         setShowSettings,
         removeEmailsAndAdvance,
@@ -1003,11 +1002,11 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
           }
           break;
 
-        // Search (exclude Shift+/ which is "?" for help)
+        // Search — "/" now opens the command palette (same as Cmd+K)
         case "/":
           if (!e.shiftKey) {
             e.preventDefault();
-            openSearch();
+            state.openCommandPalette();
           }
           break;
 
