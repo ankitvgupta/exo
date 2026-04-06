@@ -102,6 +102,7 @@ export function registerScheduledSendIpc(): void {
           accountId: options.accountId,
           type: options.threadId ? "reply" : "send",
           threadId: options.threadId,
+          from: options.from,
           to: formatAddressesWithNames(options.to, recipientNames),
           cc: options.cc ? formatAddressesWithNames(options.cc, recipientNames) : undefined,
           bcc: options.bcc ? formatAddressesWithNames(options.bcc, recipientNames) : undefined,
@@ -172,6 +173,7 @@ export function registerScheduledSendIpc(): void {
         if (client) {
           try {
             const draft = await client.createFullDraft({
+              from: row.from || undefined,
               to: row.to,
               cc: row.cc,
               bcc: row.bcc,
