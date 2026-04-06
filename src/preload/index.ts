@@ -25,6 +25,7 @@ const api = {
     saveCredentials: (clientId: string, clientSecret: string): Promise<unknown> =>
       ipcRenderer.invoke("gmail:save-credentials", { clientId, clientSecret }),
     startOAuth: (): Promise<unknown> => ipcRenderer.invoke("gmail:start-oauth"),
+    cancelOAuth: (): Promise<void> => ipcRenderer.invoke("gmail:cancel-oauth"),
   },
 
   // Analysis operations

@@ -14,6 +14,9 @@ const useFakeData = isTestMode || isDemoMode;
 
 const gmailClients = new Map<string, GmailClient>();
 
+// Track the client used during initial OAuth so it can be cancelled
+let pendingOAuthClient: GmailClient | null = null;
+
 function resolveTargetAccountId(accountId?: string): string {
   const trimmedAccountId = accountId?.trim();
   const accounts = getAccounts();
@@ -118,7 +121,13 @@ export function registerGmailIpc(): void {
     try {
       // Reset clients to force re-auth
       gmailClients.clear();
-      const client = await getClient("default");
+
+      // Create the client manually so we can track it for cancellation
+      const client = new GmailClient("default");
+      pendingOAuthClient = client;
+      await client.connect();
+      gmailClients.set("default", client);
+      pendingOAuthClient = null;
 
       // Get the user's profile to save the account
       const profile = await client.getProfile();
@@ -139,10 +148,19 @@ export function registerGmailIpc(): void {
 
       return { success: true, data: undefined };
     } catch (error) {
+      pendingOAuthClient = null;
       return {
         success: false,
         error: error instanceof Error ? error.message : "Unknown error",
       };
+    }
+  });
+
+  // Cancel an in-progress initial OAuth flow
+  ipcMain.handle("gmail:cancel-oauth", async (): Promise<void> => {
+    if (pendingOAuthClient) {
+      pendingOAuthClient.abortOAuth();
+      pendingOAuthClient = null;
     }
   });
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import type { IpcResponse } from "../../shared/types";
 import { reconfigurePostHog } from "../services/posthog";
 
@@ -34,11 +34,8 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
   const [extensionAuths, setExtensionAuths] = useState<ExtensionAuthInfo[]>([]);
   const [authenticatingExtension, setAuthenticatingExtension] = useState<string | null>(null);
 
-  // Analytics opt-in (default ON - session replay is bundled under analytics)
+  // Analytics opt-in (default ON — session replay is bundled under analytics)
   const [analyticsEnabled, setAnalyticsEnabled] = useState(true);
-
-  // Track if user cancelled OAuth so the pending promise does not advance wizard
-  const oauthCancelledRef = useRef(false);
 
   // Check what's already configured and skip to the right step.
   useEffect(() => {
@@ -151,30 +148,36 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
   };
 
   const handleStartOAuth = async () => {
-    oauthCancelledRef.current = false;
     setIsLoading(true);
     setError(null);
 
     try {
       const result = await window.api.gmail.startOAuth();
-      if (oauthCancelledRef.current) {
-        oauthCancelledRef.current = false;
-        return;
-      }
       if (result.success) {
         await enterExtensionsStep();
       } else {
+        if (result.error === "Authorization cancelled") {
+          // User cancelled — don't show as an error, just reset
+          setIsLoading(false);
+          return;
+        }
         setError(result.error);
         setIsLoading(false);
       }
     } catch (err) {
-      if (oauthCancelledRef.current) {
-        oauthCancelledRef.current = false;
+      const msg = err instanceof Error ? err.message : "Authorization failed. Please try again.";
+      if (msg === "Authorization cancelled") {
+        setIsLoading(false);
         return;
       }
-      setError(err instanceof Error ? err.message : "Authorization failed. Please try again.");
+      setError(msg);
       setIsLoading(false);
     }
+  };
+
+  const handleCancelOAuth = async () => {
+    await window.api.gmail.cancelOAuth();
+    setIsLoading(false);
   };
 
   const enterExtensionsStep = useCallback(async () => {
@@ -442,11 +445,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
 
               {isLoading && (
                 <button
-                  onClick={() => {
-                    oauthCancelledRef.current = true;
-                    setIsLoading(false);
-                    setError("Authorization was cancelled. You can try again when ready.");
-                  }}
+                  onClick={handleCancelOAuth}
                   className="w-full mt-2 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
                 >
                   Cancel
