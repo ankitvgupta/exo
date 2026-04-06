@@ -40,11 +40,27 @@ function formatRelativeDate(timestamp: number): string {
 
 // Named HTML entities commonly found in email content and tiptap output
 const NAMED_ENTITIES: Record<string, string> = {
-  amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " ",
-  mdash: "\u2014", ndash: "\u2013", hellip: "\u2026",
-  lsquo: "\u2018", rsquo: "\u2019", ldquo: "\u201C", rdquo: "\u201D",
-  bull: "\u2022", middot: "\u00B7", copy: "\u00A9", reg: "\u00AE",
-  trade: "\u2122", deg: "\u00B0", plusmn: "\u00B1", times: "\u00D7",
+  amp: "&",
+  lt: "<",
+  gt: ">",
+  quot: '"',
+  apos: "'",
+  nbsp: " ",
+  mdash: "\u2014",
+  ndash: "\u2013",
+  hellip: "\u2026",
+  lsquo: "\u2018",
+  rsquo: "\u2019",
+  ldquo: "\u201C",
+  rdquo: "\u201D",
+  bull: "\u2022",
+  middot: "\u00B7",
+  copy: "\u00A9",
+  reg: "\u00AE",
+  trade: "\u2122",
+  deg: "\u00B0",
+  plusmn: "\u00B1",
+  times: "\u00D7",
 };
 
 // Lightweight regex strip — avoids DOMParser overhead in the hot render path
