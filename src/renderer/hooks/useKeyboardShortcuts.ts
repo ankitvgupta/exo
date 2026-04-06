@@ -3,6 +3,7 @@ import { useAppStore, useSplitFilteredThreads } from "../store";
 import { batchArchive, batchTrash, batchMarkUnread, batchToggleStar } from "./useBatchActions";
 import { markNavigationActive } from "./useSyncBuffer";
 import { mergeAndThreadSearchResults } from "../utils/searchResults";
+import { draftMatchesSplit } from "../utils/split-conditions";
 import { trackEvent } from "../services/posthog";
 
 declare global {
@@ -348,10 +349,24 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
         const isDraftsView = currentSplitId === "__drafts__";
 
         const isSnoozedView = currentSplitId === "__snoozed__";
-        if (isDraftsView || (accountDrafts.length > 0 && currentSplitId !== "__archive-ready__")) {
-          const draftsForNav = isSnoozedView
-            ? accountDrafts.filter((d) => d.threadId && state.snoozedThreads.has(d.threadId))
-            : accountDrafts;
+        const isSentView = currentSplitId === "__sent__";
+        if (isDraftsView || (accountDrafts.length > 0 && currentSplitId !== "__archive-ready__" && !isSentView)) {
+          let draftsForNav: typeof accountDrafts;
+          if (isSnoozedView) {
+            draftsForNav = accountDrafts.filter((d) => d.threadId && state.snoozedThreads.has(d.threadId));
+          } else {
+            // Match EmailList filtering: custom splits filter by conditions, "Other" hides all
+            const currentSplit = currentSplitId
+              ? state.splits.find((s) => s.id === currentSplitId)
+              : undefined;
+            if (currentSplit) {
+              draftsForNav = accountDrafts.filter((d) => draftMatchesSplit(d, currentSplit));
+            } else if (currentSplitId === "__other__") {
+              draftsForNav = [];
+            } else {
+              draftsForNav = accountDrafts;
+            }
+          }
           for (const d of draftsForNav) {
             items.push({ type: "draft", draftId: d.id });
           }
