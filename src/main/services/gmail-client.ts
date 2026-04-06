@@ -353,13 +353,20 @@ export class GmailClient {
               ? `Google authorization error: ${googleError}`
               : "Missing authorization code";
 
+          // HTML-escape to prevent reflected XSS via the ?error= parameter
+          const safeMessage = message
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;");
+
           res.writeHead(400, { "Content-Type": "text/html; charset=utf-8", Connection: "close" });
           res.end(`
             <html>
               <body style="font-family: system-ui; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0;">
                 <div style="text-align: center;">
                   <h1>✗ Authorization Failed</h1>
-                  <p>${message}</p>
+                  <p>${safeMessage}</p>
                   <p style="margin-top: 1em; color: #666;">You can close this tab and try again in the app.</p>
                 </div>
               </body>

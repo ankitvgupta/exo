@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import type { IpcResponse } from "../../shared/types";
 import { reconfigurePostHog } from "../services/posthog";
 
@@ -36,6 +36,9 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
 
   // Analytics opt-in (default ON — session replay is bundled under analytics)
   const [analyticsEnabled, setAnalyticsEnabled] = useState(true);
+
+  // Track whether OAuth was user-cancelled so the catch block doesn't overwrite the cancel message
+  const oauthCancelledRef = useRef(false);
 
   // Check what's already configured and skip to the right step.
   useEffect(() => {
@@ -160,12 +163,18 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
         setIsLoading(false);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Authorization failed. Please try again.");
+      // Don't overwrite cancel message — abortOAuth rejects the promise,
+      // but handleCancelOAuth already set a more helpful error
+      if (!oauthCancelledRef.current) {
+        setError(err instanceof Error ? err.message : "Authorization failed. Please try again.");
+      }
+      oauthCancelledRef.current = false;
       setIsLoading(false);
     }
   };
 
   const handleCancelOAuth = async () => {
+    oauthCancelledRef.current = true;
     await window.api.gmail.abortOAuth();
     setIsLoading(false);
     setError("Authorization cancelled. Make sure your email is added as a test user, then try again.");
