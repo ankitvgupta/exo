@@ -664,16 +664,7 @@ export function registerSettingsIpc(): void {
       const config = getConfig();
       return {
         success: true,
-        data: config.appearance ?? {
-          themePreset: "default",
-          accentColor: null,
-          vibrancy: false,
-          fontScale: "default",
-          borderRadius: "default",
-          reduceMotion: false,
-          sidebarWidth: "default",
-          lineSpacing: "default",
-        },
+        data: config.appearance ?? { themePreset: "default", accentColor: null },
       };
     } catch (error) {
       return {
@@ -683,21 +674,13 @@ export function registerSettingsIpc(): void {
     }
   });
 
-  // Set appearance config — saves to store, applies vibrancy, broadcasts to renderer
+  // Set appearance config — saves to store, broadcasts to renderer
   ipcMain.handle(
     "appearance:set",
     async (_, appearance: AppearanceConfig): Promise<IpcResponse<void>> => {
       try {
         const currentConfig = getConfig();
         getStore().set("config", { ...currentConfig, appearance });
-
-        // Apply vibrancy to the main window
-        const { applyVibrancy } = await import("../window");
-        const { getMainWindow } = await import("../window");
-        const win = getMainWindow();
-        if (win) {
-          applyVibrancy(win, appearance.vibrancy);
-        }
 
         // Broadcast to all renderer windows
         for (const w of BrowserWindow.getAllWindows()) {

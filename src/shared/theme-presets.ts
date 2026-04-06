@@ -189,31 +189,3 @@ export const ACCENT_SWATCHES = [
   { name: "Teal", hex: "#0d9488", rgb: "13 148 136" },
   { name: "Cyan", hex: "#0891b2", rgb: "8 145 178" },
 ] as const;
-
-// Font scale multipliers
-export const FONT_SCALE_VALUES = {
-  small: 0.875,
-  default: 1,
-  large: 1.125,
-} as const;
-
-// Border radius tokens (px)
-export const BORDER_RADIUS_VALUES = {
-  sharp: "2px",
-  default: "8px",
-  round: "16px",
-} as const;
-
-// Sidebar width tokens
-export const SIDEBAR_WIDTH_VALUES = {
-  narrow: "320px",
-  default: "400px",
-  wide: "500px",
-} as const;
-
-// Line spacing multipliers
-export const LINE_SPACING_VALUES = {
-  compact: "1.35",
-  default: "1.5",
-  relaxed: "1.75",
-} as const;
