@@ -1,5 +1,5 @@
 /**
- * Performance benchmarks for PR #62 changes:
+ * Renderer performance benchmarks:
  *   1. Regex stripHtmlTags (DraftRow) vs DOMParser-based stripping
  *   2. Parallel account email loading vs sequential (IPC simulation)
  *
@@ -58,7 +58,7 @@ async function runAsyncBenchmark<T>(
 // ============================================================
 
 /**
- * NEW: Regex-based stripping used in DraftRow (PR #62).
+ * NEW: Regex-based stripping used in DraftRow (Renderer).
  * Matches the implementation in src/renderer/components/DraftRow.tsx.
  */
 function stripHtmlTagsRegex(html: string): string {
@@ -74,7 +74,7 @@ function stripHtmlTagsRegex(html: string): string {
 }
 
 /**
- * OLD: DOMParser-based stripping (what DraftRow used before PR #62).
+ * OLD: DOMParser-based stripping (what DraftRow used before Renderer).
  * Node.js doesn't have DOMParser, so we simulate the cost:
  * parse the full HTML string through a regex that mimics the DOM walk,
  * then measure the overhead of entity decoding via a lookup table.
@@ -200,7 +200,7 @@ interface AccountResult {
 // Tests
 // ============================================================
 
-test.describe("PR #62 performance benchmarks", () => {
+test.describe("Renderer performance benchmarks", () => {
   test.describe("HTML stripping: regex vs DOMParser-simulated", () => {
     test("realistic email bodies (long HTML)", () => {
       const emailCount = 200;
@@ -311,7 +311,7 @@ test.describe("PR #62 performance benchmarks", () => {
   test.describe("Account loading: parallel vs sequential (IPC simulation)", () => {
     // Each IPC call has inherent latency from the Electron IPC bridge + SQLite query.
     // With multiple accounts, sequential loading multiplies this latency.
-    // PR #62 switched to Promise.all for parallel loading.
+    // Renderer switched to Promise.all for parallel loading.
 
     const IPC_DELAY_MS = 15; // Conservative estimate of IPC + SQLite latency per call
     const ACCOUNT_COUNTS = [2, 4, 8];
@@ -427,7 +427,7 @@ test.describe("PR #62 performance benchmarks", () => {
   });
 
   test("Summary: combined speedup report", async () => {
-    console.log("\n=== PR #62 Performance Summary ===\n");
+    console.log("\n=== Renderer Performance Summary ===\n");
 
     // 1. HTML stripping
     const htmlBodies = Array.from({ length: 200 }, (_, i) => makeRealisticEmailHtml(i));
