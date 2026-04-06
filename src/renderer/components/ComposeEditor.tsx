@@ -1,4 +1,10 @@
 import { useEditor, EditorContent } from "@tiptap/react";
+import { ReactRenderer } from "@tiptap/react";
+import { Extension } from "@tiptap/core";
+import Suggestion from "@tiptap/suggestion";
+import type { SuggestionOptions, SuggestionProps } from "@tiptap/suggestion";
+import { PluginKey } from "@tiptap/pm/state";
+import tippy, { type Instance as TippyInstance } from "tippy.js";
 import type { EditorView } from "@tiptap/pm/view";
 
 // Extract Editor type from useEditor return type
@@ -8,7 +14,15 @@ import Link from "@tiptap/extension-link";
 import Image from "@tiptap/extension-image";
 import Placeholder from "@tiptap/extension-placeholder";
 import TextAlign from "@tiptap/extension-text-align";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import DOMPurify from "dompurify";
 import { useAppStore } from "../store";
 import { ContactMention } from "./MentionSuggestion";
@@ -71,94 +85,189 @@ function readFileAsDataUrl(file: File): Promise<string> {
   });
 }
 
-// Snippet picker dropdown
-function SnippetPicker({
-  snippets,
-  onSelect,
-  onClose,
-}: {
-  snippets: Snippet[];
-  onSelect: (snippet: Snippet) => void;
-  onClose: () => void;
-}) {
-  const [search, setSearch] = useState("");
-  const inputRef = useRef<HTMLInputElement>(null);
+// --- Inline snippet suggestion (Superhuman-style, triggered by ;) ---
+
+interface SnippetListProps {
+  items: Snippet[];
+  command: (item: Snippet) => void;
+}
+
+interface SnippetListRef {
+  onKeyDown: (props: { event: KeyboardEvent }) => boolean;
+}
+
+const SnippetList = forwardRef<SnippetListRef, SnippetListProps>(({ items, command }, ref) => {
+  const [selectedIndex, setSelectedIndex] = useState(0);
 
   useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
+    setSelectedIndex(0);
+  }, [items]);
 
-  // Close on click outside
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      if (!target.closest("[data-snippet-picker]")) {
-        onClose();
+  const selectItem = useCallback(
+    (index: number) => {
+      const item = items[index];
+      if (item) command(item);
+    },
+    [items, command],
+  );
+
+  useImperativeHandle(ref, () => ({
+    onKeyDown: ({ event }: { event: KeyboardEvent }) => {
+      if (event.key === "ArrowUp") {
+        setSelectedIndex((i) => (i <= 0 ? items.length - 1 : i - 1));
+        return true;
       }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [onClose]);
+      if (event.key === "ArrowDown") {
+        setSelectedIndex((i) => (i >= items.length - 1 ? 0 : i + 1));
+        return true;
+      }
+      if (event.key === "Enter" || event.key === "Tab") {
+        selectItem(selectedIndex);
+        return true;
+      }
+      return false;
+    },
+  }));
 
-  const filtered = search
-    ? snippets.filter(
-        (s) =>
-          s.name.toLowerCase().includes(search.toLowerCase()) ||
-          (s.shortcut && s.shortcut.toLowerCase().includes(search.toLowerCase())),
-      )
-    : snippets;
+  if (items.length === 0) return null;
 
   return (
-    <div
-      data-snippet-picker
-      className="absolute top-full left-0 mt-1 w-72 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 max-h-64 flex flex-col"
-    >
-      <div className="p-2 border-b border-gray-200 dark:border-gray-700">
-        <input
-          ref={inputRef}
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search snippets..."
-          className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
-          onKeyDown={(e) => {
-            if (e.key === "Escape") onClose();
-            if (e.key === "Enter" && filtered.length > 0) {
-              onSelect(filtered[0]);
-            }
-          }}
-        />
-      </div>
-      <div className="overflow-y-auto flex-1">
-        {filtered.length === 0 ? (
-          <div className="p-3 text-sm text-gray-500 dark:text-gray-400 text-center">
-            {snippets.length === 0 ? "No snippets. Create them in Settings." : "No matches."}
+    <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg dark:shadow-xl dark:shadow-black/50 max-h-60 overflow-y-auto z-50 w-96">
+      {items.map((item, index) => (
+        <div
+          key={item.id}
+          className={`px-4 py-2.5 cursor-pointer text-sm ${
+            index === selectedIndex
+              ? "bg-blue-50 dark:bg-gray-700"
+              : "hover:bg-gray-100 dark:hover:bg-gray-700/50"
+          }`}
+          onClick={() => selectItem(index)}
+          onMouseEnter={() => setSelectedIndex(index)}
+        >
+          <div className="flex items-center justify-between gap-2">
+            <span className="font-medium text-gray-900 dark:text-gray-100 truncate">
+              {item.name}
+            </span>
+            <span className="text-xs text-gray-400 dark:text-gray-500 shrink-0">Me</span>
           </div>
-        ) : (
-          filtered.map((snippet) => (
-            <button
-              key={snippet.id}
-              onClick={() => onSelect(snippet)}
-              className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 border-b border-gray-100 dark:border-gray-700 last:border-b-0"
-            >
-              <div className="flex items-center gap-2">
-                <span className="font-medium text-gray-900 dark:text-gray-100">{snippet.name}</span>
-                {snippet.shortcut && (
-                  <span className="px-1 py-0.5 text-xs bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 rounded font-mono">
-                    ;{snippet.shortcut}
-                  </span>
-                )}
-              </div>
-              <p className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">
-                {snippet.body.replace(/<[^>]*>/g, "").substring(0, 80)}
-              </p>
-            </button>
-          ))
-        )}
-      </div>
+          <p className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">
+            {stripHtmlPreview(item.body)}
+          </p>
+        </div>
+      ))}
     </div>
   );
+});
+
+SnippetList.displayName = "SnippetList";
+
+function stripHtmlPreview(html: string): string {
+  const tmp = document.createElement("div");
+  tmp.innerHTML = html;
+  return (tmp.textContent || tmp.innerText || "").trim().substring(0, 100);
 }
+
+const snippetPluginKey = new PluginKey("snippetSuggestion");
+
+interface SnippetMentionOptions {
+  snippetsRef: React.RefObject<Snippet[]>;
+  onInsertRef: React.RefObject<
+    ((snippet: Snippet, range: { from: number; to: number }) => void) | null
+  >;
+}
+
+const SnippetMention = Extension.create<SnippetMentionOptions>({
+  name: "snippetMention",
+
+  addOptions() {
+    return {
+      snippetsRef: { current: [] },
+      onInsertRef: { current: null },
+    };
+  },
+
+  addProseMirrorPlugins() {
+    const { snippetsRef, onInsertRef } = this.options;
+
+    const suggestionConfig: Omit<SuggestionOptions<Snippet>, "editor"> = {
+      char: ";",
+      pluginKey: snippetPluginKey,
+      // Show all snippets immediately (no prefix required), then filter as user types
+      items: ({ query }): Snippet[] => {
+        const all = snippetsRef.current ?? [];
+        if (!query) return all;
+        const q = query.toLowerCase();
+        return all.filter(
+          (s) =>
+            s.name.toLowerCase().includes(q) ||
+            (s.shortcut && s.shortcut.toLowerCase().includes(q)),
+        );
+      },
+
+      command: ({ editor, range, props: snippet }) => {
+        onInsertRef.current?.(snippet, range);
+      },
+
+      render: () => {
+        let component: ReactRenderer<SnippetListRef, SnippetListProps>;
+        let popup: TippyInstance[];
+
+        return {
+          onStart: (props: SuggestionProps<Snippet>) => {
+            component = new ReactRenderer(SnippetList, {
+              props: { items: props.items, command: props.command },
+              editor: props.editor,
+            });
+
+            if (!props.clientRect) return;
+
+            popup = tippy("body", {
+              getReferenceClientRect: () => props.clientRect?.() ?? new DOMRect(),
+              appendTo: () => document.body,
+              content: component.element,
+              showOnCreate: true,
+              interactive: true,
+              trigger: "manual",
+              placement: "bottom-start",
+            });
+          },
+
+          onUpdate: (props: SuggestionProps<Snippet>) => {
+            component?.updateProps({
+              items: props.items,
+              command: props.command,
+            });
+
+            if (!props.clientRect || !popup?.[0]) return;
+
+            popup[0].setProps({
+              getReferenceClientRect: () => props.clientRect?.() ?? new DOMRect(),
+            });
+          },
+
+          onKeyDown: (props: { event: KeyboardEvent }) => {
+            if (props.event.key === "Escape") {
+              return false;
+            }
+            return component?.ref?.onKeyDown(props) ?? false;
+          },
+
+          onExit: () => {
+            popup?.[0]?.destroy();
+            component?.destroy();
+          },
+        };
+      },
+    };
+
+    return [
+      Suggestion({
+        editor: this.editor,
+        ...suggestionConfig,
+      }),
+    ];
+  },
+});
 
 /** Escape plain text for safe injection into HTML */
 function escapeHtml(str: string): string {
@@ -208,19 +317,7 @@ function resolveSnippetVariables(
 }
 
 // Toolbar component
-function Toolbar({
-  editor,
-  snippets,
-  onInsertSnippet,
-  showSnippetPicker,
-  setShowSnippetPicker,
-}: {
-  editor: Editor | null;
-  snippets: Snippet[];
-  onInsertSnippet: (snippet: Snippet) => void;
-  showSnippetPicker: boolean;
-  setShowSnippetPicker: (show: boolean) => void;
-}) {
+function Toolbar({ editor }: { editor: Editor | null }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const setLink = useCallback(() => {
@@ -420,34 +517,6 @@ function Toolbar({
         onChange={handleFileSelected}
       />
 
-      {/* Insert snippet */}
-      <div className="relative">
-        <ToolbarButton
-          onClick={() => setShowSnippetPicker(!showSnippetPicker)}
-          active={showSnippetPicker}
-          title="Insert snippet (;)"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
-            />
-          </svg>
-        </ToolbarButton>
-        {showSnippetPicker && (
-          <SnippetPicker
-            snippets={snippets}
-            onSelect={(snippet) => {
-              onInsertSnippet(snippet);
-              setShowSnippetPicker(false);
-            }}
-            onClose={() => setShowSnippetPicker(false)}
-          />
-        )}
-      </div>
-
       <div className="w-px h-5 bg-gray-300 dark:bg-gray-600 mx-1" />
 
       {/* Text alignment */}
@@ -502,7 +571,6 @@ export function ComposeEditor({
   const currentAccountRecord = accounts.find((a) => a.id === currentAccountId);
   const senderName =
     currentAccountRecord?.displayName || currentAccountRecord?.email?.split("@")[0];
-  const [showSnippetPicker, setShowSnippetPicker] = useState(false);
 
   // Ref keeps the latest onAddToCc without recreating extensions
   const onAddToCcRef = useRef<((email: string) => void) | null>(onAddToCc ?? null);
@@ -513,16 +581,18 @@ export function ComposeEditor({
   // Stable ref object for the extension (created once)
   const stableRef = useMemo(() => onAddToCcRef, []);
 
-  // Ref for snippet picker toggle so the editor keydown handler can access it
-  // without recreating the editor
-  const snippetPickerRef = useRef(setShowSnippetPicker);
+  // Snippet suggestion refs (stable across renders, extension reads latest via ref)
+  const snippetsRef = useRef(accountSnippets);
   useEffect(() => {
-    snippetPickerRef.current = setShowSnippetPicker;
-  }, [setShowSnippetPicker]);
-  const hasSnippetsRef = useRef(accountSnippets.length > 0);
-  useEffect(() => {
-    hasSnippetsRef.current = accountSnippets.length > 0;
-  }, [accountSnippets.length]);
+    snippetsRef.current = accountSnippets;
+  }, [accountSnippets]);
+  const stableSnippetsRef = useMemo(() => snippetsRef, []);
+
+  // Snippet insertion callback (called by the suggestion command)
+  const onSnippetInsertRef = useRef<
+    ((snippet: Snippet, range: { from: number; to: number }) => void) | null
+  >(null);
+  const stableOnInsertRef = useMemo(() => onSnippetInsertRef, []);
 
   const editor = useEditor({
     extensions: [
@@ -552,21 +622,16 @@ export function ComposeEditor({
       ContactMention.configure({
         onAddToCcRef: stableRef,
       }),
+      SnippetMention.configure({
+        snippetsRef: stableSnippetsRef,
+        onInsertRef: stableOnInsertRef,
+      }),
     ],
     content: initialContent,
     autofocus: autoFocus ? "end" : false,
     editorProps: {
       attributes: {
         class: "prose prose-sm max-w-none focus:outline-none min-h-[100px] p-3",
-      },
-      // Open snippet picker when user types ";"
-      handleKeyDown: (_view: EditorView, event: KeyboardEvent) => {
-        if (event.key === ";" && !event.metaKey && !event.ctrlKey && hasSnippetsRef.current) {
-          event.preventDefault();
-          snippetPickerRef.current(true);
-          return true;
-        }
-        return false;
       },
       // Handle paste and drop of images
       handlePaste: (view: EditorView, event: ClipboardEvent) => {
@@ -638,6 +703,25 @@ export function ComposeEditor({
     },
   });
 
+  // Set up snippet insertion callback (runs when a snippet is selected from the inline picker)
+  useEffect(() => {
+    onSnippetInsertRef.current = (snippet: Snippet, range: { from: number; to: number }) => {
+      if (!editor) return;
+      const resolved = resolveSnippetVariables(snippet.body, recipientEmail, senderName);
+      const sanitized = DOMPurify.sanitize(resolved);
+      const hasHtml = /<[a-z][\s\S]*>/i.test(sanitized);
+      let content: string;
+      if (hasHtml) {
+        content = sanitized
+          .replace(/<br\s*\/?>\s*<\/div>/gi, "</div>")
+          .replace(/<div>\s*<\/div>/gi, "<p></p>");
+      } else {
+        content = sanitized.replace(/\n/g, "<br>");
+      }
+      editor.chain().focus().deleteRange(range).insertContent(content).run();
+    };
+  }, [editor, recipientEmail, senderName]);
+
   // Update content when initialContent changes (for editing drafts)
   useEffect(() => {
     if (editor && initialContent !== editor.getHTML()) {
@@ -649,31 +733,7 @@ export function ComposeEditor({
     <div
       className={`border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 ${className}`}
     >
-      <Toolbar
-        editor={editor}
-        snippets={accountSnippets}
-        showSnippetPicker={showSnippetPicker}
-        setShowSnippetPicker={setShowSnippetPicker}
-        onInsertSnippet={(snippet) => {
-          if (!editor) return;
-          const resolved = resolveSnippetVariables(snippet.body, recipientEmail, senderName);
-          const sanitized = DOMPurify.sanitize(resolved);
-          const hasHtml = /<[a-z][\s\S]*>/i.test(sanitized);
-          let content: string;
-          if (hasHtml) {
-            // Normalize Superhuman's HTML pattern: <div>text<br></div><div><br></div>
-            // Remove trailing <br> inside divs (redundant — the div itself is a block)
-            // and convert empty <div><br></div> to just a paragraph break.
-            content = sanitized
-              .replace(/<br\s*\/?>\s*<\/div>/gi, "</div>")
-              .replace(/<div>\s*<\/div>/gi, "<p></p>");
-          } else {
-            // Plain-text: convert \n to <br> so TipTap preserves line breaks
-            content = sanitized.replace(/\n/g, "<br>");
-          }
-          editor.chain().focus().insertContent(content).run();
-        }}
-      />
+      <Toolbar editor={editor} />
       <div className="dark:text-gray-100">
         <EditorContent editor={editor} />
       </div>
