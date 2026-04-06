@@ -12,6 +12,7 @@ import {
   batchToggleStar,
 } from "../hooks/useBatchActions";
 import { draftBodyToHtml } from "../../shared/draft-utils";
+import { draftMatchesSplit } from "../utils/split-conditions";
 import { useVirtualizer } from "@tanstack/react-virtual";
 
 /** Check if bodyHtml already contains rich formatting tags (from TipTap or draftBodyToHtml).
@@ -59,6 +60,7 @@ export function EmailList() {
   const allLocalDrafts = useAppStore((s) => s.localDrafts);
   const unsnoozedReturnTimes = useAppStore((s) => s.unsnoozedReturnTimes);
   const selectedThreadId = useAppStore((s) => s.selectedThreadId);
+  const splits = useAppStore((s) => s.splits);
   const { threads } = useSplitFilteredThreads();
 
   const isArchiveReadyView = currentSplitId === "__archive-ready__";
@@ -366,14 +368,30 @@ export function EmailList() {
   // Build a flat items array for the virtualizer: drafts at top + thread items
   type ListItem = { type: "draft"; draft: LocalDraft } | { type: "thread"; thread: EmailThread };
 
+  // Resolve the current custom split (if any) for draft filtering
+  const currentSplit = useMemo(
+    () => (currentSplitId ? splits.find((s) => s.id === currentSplitId) : undefined),
+    [currentSplitId, splits],
+  );
+
   const items = useMemo((): ListItem[] => {
     if (isDraftsView) return []; // Drafts view is non-virtualized
     const result: ListItem[] = [];
     // Drafts at top (except in archive-ready and sent views)
     if (localDrafts.length > 0 && !isArchiveReadyView && !isSentView) {
-      const draftsToShow = isSnoozedView
-        ? localDrafts.filter((d) => d.threadId && snoozedThreads.has(d.threadId))
-        : localDrafts;
+      let draftsToShow: LocalDraft[];
+      if (isSnoozedView) {
+        draftsToShow = localDrafts.filter((d) => d.threadId && snoozedThreads.has(d.threadId));
+      } else if (currentSplit) {
+        // Custom split: only show drafts whose recipients/subject match the split
+        draftsToShow = localDrafts.filter((d) => draftMatchesSplit(d, currentSplit));
+      } else if (currentSplitId === "__other__") {
+        // "Other" is a catch-all for low-priority — don't surface drafts here
+        draftsToShow = [];
+      } else {
+        // "All", "Priority" — show all drafts
+        draftsToShow = localDrafts;
+      }
       for (const draft of draftsToShow) {
         result.push({ type: "draft", draft });
       }
@@ -390,6 +408,7 @@ export function EmailList() {
     isSentView,
     isSnoozedView,
     snoozedThreads,
+    currentSplit,
   ]);
 
   // Calculate initial scroll offset so the virtualizer renders the correct
