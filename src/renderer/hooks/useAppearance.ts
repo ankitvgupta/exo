@@ -4,10 +4,11 @@ import { THEME_PRESETS } from "../../shared/theme-presets";
 import { AppearanceConfigSchema, type AppearanceConfig } from "../../shared/types";
 import type { ThemeColors } from "../../shared/theme-presets";
 
-// Convert "#2563eb" → "37 99 235"
+// Convert "#2563eb" → "37 99 235", fallback to blue if invalid
 function hexToRgbTriplet(hex: string): string {
-  const h = hex.replace("#", "");
-  const n = parseInt(h, 16);
+  const h = hex.replace(/^#/, "");
+  const valid = /^[0-9a-fA-F]{6}$/.test(h);
+  const n = parseInt(valid ? h : "2563eb", 16);
   return `${(n >> 16) & 255} ${(n >> 8) & 255} ${n & 255}`;
 }
 
