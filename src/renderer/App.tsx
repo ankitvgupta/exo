@@ -779,7 +779,6 @@ export default function App() {
 
   // Initialize sync and accounts
   const initializeSync = useCallback(async () => {
-    const tInit = performance.now();
     try {
       const result = await window.api.sync.init();
       if (result.success && result.data) {
@@ -823,13 +822,11 @@ export default function App() {
         // Fetch all accounts in parallel instead of sequentially
         const allEmails: DashboardEmail[] = [];
         const allSentEmails: DashboardEmail[] = [];
-        const tEmailLoad = performance.now();
         const accountResults = await Promise.all(
           accountList.map((acc) =>
             Promise.all([window.api.sync.getEmails(acc.id), window.api.sync.getSentEmails(acc.id)]),
           ),
         );
-        console.log(`[PERF-BENCH] Email loading (${accountList.length} accounts): ${(performance.now() - tEmailLoad).toFixed(1)}ms`);
         for (const [emailsResult, sentResult] of accountResults) {
           if (emailsResult.success && emailsResult.data) {
             allEmails.push(...emailsResult.data);
@@ -864,7 +861,6 @@ export default function App() {
           const drafts = draftsResult.data.map((d) => LocalDraftSchema.parse(d));
           useAppStore.getState().setLocalDrafts(drafts);
         }
-        console.log(`[PERF-BENCH] Full initializeSync: ${(performance.now() - tInit).toFixed(1)}ms`);
       }
     } catch (err) {
       console.error("Failed to initialize sync:", err);
