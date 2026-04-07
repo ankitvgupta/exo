@@ -526,6 +526,69 @@ export class GmailClient {
   }
 
   /**
+   * List all labels for the authenticated account.
+   * Returns id, name, type, and optional color for each label.
+   */
+  async listLabels(): Promise<
+    Array<{
+      id: string;
+      name: string;
+      type: string;
+      color?: { textColor: string; backgroundColor: string };
+    }>
+  > {
+    const gmail = this.gmail!;
+    const response = await gmail.users.labels.list({ userId: "me" });
+    const rawLabels = response.data.labels || [];
+    return rawLabels.map((l) => ({
+      id: l.id!,
+      name: l.name!,
+      type: l.type || "user",
+      ...(l.color
+        ? { color: { textColor: l.color.textColor!, backgroundColor: l.color.backgroundColor! } }
+        : {}),
+    }));
+  }
+
+  /**
+   * Modify labels on a message (add and/or remove arbitrary labels)
+   */
+  async modifyMessageLabels(
+    messageId: string,
+    addLabelIds: string[],
+    removeLabelIds: string[],
+  ): Promise<void> {
+    const gmail = this.gmail!;
+    await gmail.users.messages.modify({
+      userId: "me",
+      id: messageId,
+      requestBody: {
+        addLabelIds: addLabelIds.length > 0 ? addLabelIds : undefined,
+        removeLabelIds: removeLabelIds.length > 0 ? removeLabelIds : undefined,
+      },
+    });
+  }
+
+  /**
+   * Modify labels on all messages in a thread
+   */
+  async modifyThreadLabels(
+    threadId: string,
+    addLabelIds: string[],
+    removeLabelIds: string[],
+  ): Promise<void> {
+    const gmail = this.gmail!;
+    await gmail.users.threads.modify({
+      userId: "me",
+      id: threadId,
+      requestBody: {
+        addLabelIds: addLabelIds.length > 0 ? addLabelIds : undefined,
+        removeLabelIds: removeLabelIds.length > 0 ? removeLabelIds : undefined,
+      },
+    });
+  }
+
+  /**
    * Get the total number of messages with a given label.
    * Uses the labels.get endpoint which returns exact counts.
    */

@@ -187,6 +187,35 @@ const api = {
       ipcRenderer.invoke("emails:search-remote", { query, accountId, maxResults, pageToken }),
   },
 
+  // Label operations
+  labels: {
+    list: (accountId: string): Promise<unknown> => ipcRenderer.invoke("labels:list", { accountId }),
+    modifyMessage: (
+      accountId: string,
+      emailId: string,
+      addLabelIds: string[],
+      removeLabelIds: string[],
+    ): Promise<unknown> =>
+      ipcRenderer.invoke("labels:modify-message", {
+        accountId,
+        emailId,
+        addLabelIds,
+        removeLabelIds,
+      }),
+    modifyThread: (
+      accountId: string,
+      threadId: string,
+      addLabelIds: string[],
+      removeLabelIds: string[],
+    ): Promise<unknown> =>
+      ipcRenderer.invoke("labels:modify-thread", {
+        accountId,
+        threadId,
+        addLabelIds,
+        removeLabelIds,
+      }),
+  },
+
   // Style operations
   style: {
     getContext: (toAddress: string): Promise<unknown> =>
