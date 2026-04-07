@@ -12,6 +12,7 @@ import {
   batchToggleStar,
 } from "../hooks/useBatchActions";
 import { draftBodyToHtml } from "../../shared/draft-utils";
+import { draftMatchesSplit } from "../utils/split-conditions";
 import { useVirtualizer } from "@tanstack/react-virtual";
 
 /** Check if bodyHtml already contains rich formatting tags (from TipTap or draftBodyToHtml).
@@ -59,6 +60,7 @@ export function EmailList() {
   const allLocalDrafts = useAppStore((s) => s.localDrafts);
   const unsnoozedReturnTimes = useAppStore((s) => s.unsnoozedReturnTimes);
   const selectedThreadId = useAppStore((s) => s.selectedThreadId);
+  const splits = useAppStore((s) => s.splits);
   const { threads } = useSplitFilteredThreads();
 
   const isArchiveReadyView = currentSplitId === "__archive-ready__";
@@ -71,6 +73,13 @@ export function EmailList() {
   const localDrafts = useMemo(
     () => allLocalDrafts.filter((d) => !currentAccountId || d.accountId === currentAccountId),
     [allLocalDrafts, currentAccountId],
+  );
+
+  // Threads with AI-generated drafts (for the Drafts tab).
+  // Filter to drafts with body content — excludes placeholder shells still being generated.
+  const threadsWithDrafts = useMemo(
+    () => (isDraftsView ? threads.filter((t) => t.draft && t.draft.body) : []),
+    [threads, isDraftsView],
   );
 
   const handleDraftClick = useCallback(
@@ -273,13 +282,15 @@ export function EmailList() {
 
   const isMultiSelectActive = selectedThreadIds.size > 0;
 
-  // Keep threads in a ref so getThreadRange always reads the latest list
+  // Keep visible threads in a ref so getThreadRange always reads the latest list
   // without appearing in the useCallback deps. This prevents handleThreadClick
   // from getting a new reference when threads change, which matters because
   // the EmailRow memo comparator intentionally skips onClick.
-  const threadsRef = useRef(threads);
+  // In drafts view, only AI-draft threads are visible — use that subset for range selection.
+  const visibleThreads = isDraftsView ? threadsWithDrafts : threads;
+  const threadsRef = useRef(visibleThreads);
   useEffect(() => {
-    threadsRef.current = threads;
+    threadsRef.current = visibleThreads;
   });
 
   // Shift+click range selection helper — stable ref avoids stale closure
@@ -357,14 +368,30 @@ export function EmailList() {
   // Build a flat items array for the virtualizer: drafts at top + thread items
   type ListItem = { type: "draft"; draft: LocalDraft } | { type: "thread"; thread: EmailThread };
 
+  // Resolve the current custom split (if any) for draft filtering
+  const currentSplit = useMemo(
+    () => (currentSplitId ? splits.find((s) => s.id === currentSplitId) : undefined),
+    [currentSplitId, splits],
+  );
+
   const items = useMemo((): ListItem[] => {
     if (isDraftsView) return []; // Drafts view is non-virtualized
     const result: ListItem[] = [];
     // Drafts at top (except in archive-ready and sent views)
     if (localDrafts.length > 0 && !isArchiveReadyView && !isSentView) {
-      const draftsToShow = isSnoozedView
-        ? localDrafts.filter((d) => d.threadId && snoozedThreads.has(d.threadId))
-        : localDrafts;
+      let draftsToShow: LocalDraft[];
+      if (isSnoozedView) {
+        draftsToShow = localDrafts.filter((d) => d.threadId && snoozedThreads.has(d.threadId));
+      } else if (currentSplit) {
+        // Custom split: only show drafts whose recipients/subject match the split
+        draftsToShow = localDrafts.filter((d) => draftMatchesSplit(d, currentSplit));
+      } else if (currentSplitId === "__other__") {
+        // "Other" is a catch-all for low-priority — don't surface drafts here
+        draftsToShow = [];
+      } else {
+        // "All", "Priority" — show all drafts
+        draftsToShow = localDrafts;
+      }
       for (const draft of draftsToShow) {
         result.push({ type: "draft", draft });
       }
@@ -381,6 +408,7 @@ export function EmailList() {
     isSentView,
     isSnoozedView,
     snoozedThreads,
+    currentSplit,
   ]);
 
   // Calculate initial scroll offset so the virtualizer renders the correct
@@ -419,6 +447,14 @@ export function EmailList() {
     virtualizer.scrollToIndex(idx, { align: "auto" });
   }, [selectedThreadId]);
 
+  // Drafts view is non-virtualized, so the virtualizer scroll-to above is a no-op.
+  // Use native scrollIntoView for j/k navigation of AI-draft threads.
+  useEffect(() => {
+    if (!isDraftsView || !selectedThreadId) return;
+    const el = listRef.current?.querySelector(`[data-thread-id="${selectedThreadId}"]`);
+    el?.scrollIntoView({ block: "nearest" });
+  }, [selectedThreadId, isDraftsView]);
+
   const cycleDensity = () => {
     const currentIndex = densityOrder.indexOf(inboxDensity);
     const nextIndex = (currentIndex + 1) % densityOrder.length;
@@ -440,8 +476,9 @@ export function EmailList() {
   }, [selectedThreadIds, threads, setSelectedThreadId, setSelectedEmailId]);
 
   const handleSelectAll = useCallback(() => {
-    selectAllThreads(threads.map((t) => t.threadId));
-  }, [threads, selectAllThreads]);
+    const visibleThreads = isDraftsView ? threadsWithDrafts : threads;
+    selectAllThreads(visibleThreads.map((t) => t.threadId));
+  }, [threads, threadsWithDrafts, isDraftsView, selectAllThreads]);
 
   // Email list takes available width (flex-1)
   return (
@@ -599,7 +636,7 @@ export function EmailList() {
       {/* Batch action bar - shown when threads are multi-selected */}
       <BatchActionBar
         selectedCount={selectedThreadIds.size}
-        totalCount={threads.length}
+        totalCount={isDraftsView ? threadsWithDrafts.length : threads.length}
         onArchive={batchArchive}
         onTrash={batchTrash}
         onMarkUnread={batchMarkUnread}
@@ -611,10 +648,10 @@ export function EmailList() {
 
       {/* Thread list - flat, chronological */}
       <div ref={listRef} className="flex-1 overflow-y-auto">
-        {/* Drafts view: show only local drafts (non-virtualized, small list) */}
+        {/* Drafts view: local drafts (compose sessions) + threads with AI-generated drafts */}
         {isDraftsView ? (
           <>
-            {localDrafts.length === 0 && !isLoading && (
+            {localDrafts.length === 0 && threadsWithDrafts.length === 0 && !isLoading && (
               <div className="flex flex-col items-center justify-center py-12 text-gray-400 dark:text-gray-500">
                 <svg
                   className="w-12 h-12 mb-3"
@@ -640,6 +677,19 @@ export function EmailList() {
                 density={inboxDensity}
                 onClick={() => handleDraftClick(draft)}
               />
+            ))}
+            {threadsWithDrafts.map((thread) => (
+              <div key={thread.threadId} data-thread-id={thread.threadId}>
+                <EmailRow
+                  thread={thread}
+                  isSelected={selectedThreadId === thread.threadId}
+                  isChecked={selectedThreadIds.has(thread.threadId)}
+                  isMultiSelectActive={selectedThreadIds.size > 0}
+                  density={inboxDensity}
+                  onClick={(e) => handleThreadClick(thread, e)}
+                  onCheckboxChange={() => toggleThreadSelected(thread.threadId)}
+                />
+              </div>
             ))}
           </>
         ) : items.length > 0 ? (
