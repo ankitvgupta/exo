@@ -1,5 +1,5 @@
 import { test, expect, Page, ElectronApplication } from "@playwright/test";
-import { launchElectronApp , closeApp } from "./launch-helpers";
+import { launchElectronApp, closeApp } from "./launch-helpers";
 
 /**
  * E2E Tests for CLI Tools configuration in the Agents settings tab.
@@ -41,9 +41,10 @@ test.describe("Settings - CLI Tools", () => {
       removeBtn = page.locator("button[title='Remove tool']").first();
     }
 
-    // Save the clean state
-    const saveButtons = page.locator("button:has-text('Save')");
-    await saveButtons.last().click();
+    // Save the clean state — scope to the CLI Tools section to avoid hitting other Save buttons
+    const cliSection = page.locator("div:has(> div > h4:has-text('CLI Tools'))").first();
+    const saveButtons = cliSection.locator("button:has-text('Save')");
+    await saveButtons.click();
     await page.waitForTimeout(500);
   });
 
@@ -94,11 +95,12 @@ test.describe("Settings - CLI Tools", () => {
   });
 
   test("can save CLI tools and get confirmation", async () => {
-    const saveButton = page.locator("button:has-text('Save')").last();
+    const cliSection = page.locator("div:has(> div > h4:has-text('CLI Tools'))").first();
+    const saveButton = cliSection.locator("button:has-text('Save')");
     await expect(saveButton).toBeVisible();
     await saveButton.click();
 
-    await expect(page.locator("button:has-text('Saved')")).toBeVisible({ timeout: 3000 });
+    await expect(cliSection.locator("button:has-text('Saved')")).toBeVisible({ timeout: 3000 });
   });
 
   test("can remove a CLI tool", async () => {
@@ -114,9 +116,10 @@ test.describe("Settings - CLI Tools", () => {
 
   test("CLI tools persist after closing and reopening settings", async () => {
     // Save after removing
-    const saveButton = page.locator("button:has-text('Save')").last();
+    const cliSection = page.locator("div:has(> div > h4:has-text('CLI Tools'))").first();
+    const saveButton = cliSection.locator("button:has-text('Save')");
     await saveButton.click();
-    await expect(page.locator("button:has-text('Saved')")).toBeVisible({ timeout: 3000 });
+    await expect(cliSection.locator("button:has-text('Saved')")).toBeVisible({ timeout: 3000 });
 
     // Close settings with Escape (reliable — settings has priority in the handler)
     await page.keyboard.press("Escape");
