@@ -22,8 +22,8 @@ import { Writable } from "stream";
  * logger errors from propagating up through IPC handlers during shutdown
  * race conditions (see GitHub issue #67).
  */
-function safeSonicBoomWrapper(dest: SonicBoom): Writable {
-  return new Writable({
+function safeSonicBoomWrapper(dest: SonicBoom): Writable & { flushSync?: () => void } {
+  const wrapper = new Writable({
     write(chunk, _encoding, callback) {
       try {
         if (dest.destroyed) {
@@ -42,6 +42,16 @@ function safeSonicBoomWrapper(dest: SonicBoom): Writable {
       callback();
     },
   });
+  // Expose flushSync so pino's logger.flush() can still synchronously
+  // flush the underlying SonicBoom buffer to disk.
+  (wrapper as Writable & { flushSync: () => void }).flushSync = () => {
+    try {
+      if (!dest.destroyed) dest.flushSync();
+    } catch {
+      /* best effort */
+    }
+  };
+  return wrapper;
 }
 
 // Lazy-require Electron modules so this file can be imported in tests
