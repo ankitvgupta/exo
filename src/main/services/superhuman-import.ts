@@ -4,7 +4,7 @@ import { createRequire } from "module";
 import { join } from "path";
 import { tmpdir, homedir } from "os";
 import { randomUUID } from "crypto";
-import type { InboxSplit, SplitCondition } from "../../shared/types";
+import type { InboxSplit, Snippet, SplitCondition } from "../../shared/types";
 
 // Use createRequire to load native module at runtime (same pattern as db/index.ts)
 const require = createRequire(import.meta.url);
@@ -405,4 +405,113 @@ export function convertSuperhumanSplits(
   }
 
   return { splits, warnings };
+}
+
+// ============================================
+// Superhuman snippets
+// ============================================
+
+type SuperhumanSnippet = {
+  id: string;
+  name: string;
+  body: string; // HTML content
+  shortcut?: string;
+};
+
+/**
+ * Read snippets from a Superhuman database file.
+ * Superhuman stores snippets as draft threads listed under SH_SNIPPETS in list_ids.
+ * Each snippet's content is in the threads table's superhuman_data column,
+ * under messages.{draftId}.draft with fields: name, body, subject.
+ */
+export async function readSuperhumanSnippets(filePath: string): Promise<SuperhumanSnippet[]> {
+  const tmpDir = await mkdtemp(join(tmpdir(), "sh-import-"));
+  const tmpFile = join(tmpDir, "superhuman.db");
+
+  try {
+    const srcFh = await open(filePath, "r");
+
+    try {
+      const srcStream = srcFh.createReadStream({ start: HEADER_SIZE });
+      const dstStream = createWriteStream(tmpFile);
+
+      await new Promise<void>((resolve, reject) => {
+        srcStream.pipe(dstStream);
+        dstStream.on("finish", resolve);
+        dstStream.on("error", reject);
+        srcStream.on("error", reject);
+      });
+    } finally {
+      await srcFh.close();
+    }
+
+    const db = new Database(tmpFile, { readonly: true });
+    try {
+      // Get snippet thread IDs from the SH_SNIPPETS list
+      const snippetRows = db
+        .prepare("SELECT thread_id FROM list_ids WHERE list_id = 'SH_SNIPPETS'")
+        .all() as Array<{ thread_id: string }>;
+
+      if (snippetRows.length === 0) return [];
+
+      const snippets: SuperhumanSnippet[] = [];
+      for (const { thread_id } of snippetRows) {
+        const threadRow = db
+          .prepare("SELECT superhuman_data FROM threads WHERE thread_id = ?")
+          .get(thread_id) as { superhuman_data: string } | undefined;
+
+        if (!threadRow?.superhuman_data) continue;
+
+        const shData = JSON.parse(threadRow.superhuman_data);
+        // Snippet draft is in shData.messages.{draftId}.draft
+        const messages = shData?.messages;
+        if (!messages || typeof messages !== "object") continue;
+
+        for (const msgValue of Object.values(messages)) {
+          const draft = (msgValue as { draft?: Record<string, unknown> })?.draft;
+          if (!draft || draft.action !== "snippet") continue;
+
+          snippets.push({
+            id: (draft.id as string) || thread_id,
+            name: (draft.name as string) || "",
+            body: (draft.body as string) || "",
+            shortcut: draft.shortcut as string | undefined,
+          });
+        }
+      }
+
+      return snippets;
+    } finally {
+      db.close();
+    }
+  } finally {
+    await rm(tmpDir, { recursive: true, force: true });
+  }
+}
+
+/**
+ * Convert Superhuman snippets to our Snippet format.
+ */
+export function convertSuperhumanSnippets(
+  shSnippets: SuperhumanSnippet[],
+  accountId: string,
+): Snippet[] {
+  const now = Date.now();
+  const snippets: Snippet[] = [];
+
+  for (const sh of shSnippets) {
+    if (!sh.name || typeof sh.body !== "string") continue;
+
+    snippets.push({
+      id: randomUUID(),
+      accountId,
+      name: sh.name,
+      body: sh.body,
+      shortcut: sh.shortcut || undefined,
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
+
+  return snippets;
 }

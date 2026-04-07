@@ -54,6 +54,7 @@ import type {
   SnoozedEmail,
   IpcResponse,
   InboxSplit,
+  Snippet,
 } from "../shared/types";
 import type { ScopedAgentEvent, AgentProviderConfig } from "../shared/agent-types";
 import { mergeAndThreadSearchResults } from "./utils/searchResults";
@@ -665,6 +666,7 @@ export default function App() {
   const setSentEmails = useAppStore((s) => s.setSentEmails);
   const addSentEmails = useAppStore((s) => s.addSentEmails);
   const setSplits = useAppStore((s) => s.setSplits);
+  const setSnippets = useAppStore((s) => s.setSnippets);
 
   // Initialize keyboard shortcuts
   useKeyboardShortcuts({
@@ -777,6 +779,20 @@ export default function App() {
       });
   }, [setSplits]);
 
+  // Load snippets on mount (stored in electron-store, independent of sync)
+  useEffect(() => {
+    window.api.snippets
+      .getAll()
+      .then((result: { success: boolean; data?: Snippet[] }) => {
+        if (result.success && result.data) {
+          setSnippets(result.data);
+        }
+      })
+      .catch((err: unknown) => {
+        console.error("Failed to load snippets on mount:", err);
+      });
+  }, [setSnippets]);
+
   // Initialize sync and accounts
   const initializeSync = useCallback(async () => {
     try {
@@ -795,9 +811,10 @@ export default function App() {
         const accountsResult = await window.api.accounts.list();
         if (accountsResult.success && accountsResult.data) {
           const fullAccounts: Account[] = accountsResult.data.map(
-            (acc: { id: string; email: string; isPrimary: boolean }) => ({
+            (acc: { id: string; email: string; isPrimary: boolean; displayName?: string }) => ({
               id: acc.id,
               email: acc.email,
+              displayName: acc.displayName,
               isPrimary: acc.isPrimary,
               isConnected: accountList.find((a) => a.id === acc.id)?.isConnected ?? false,
             }),

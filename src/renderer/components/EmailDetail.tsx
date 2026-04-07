@@ -1676,6 +1676,7 @@ function InlineReply({
           placeholder={isForward ? "Add a message..." : "Write your reply..."}
           autoFocus={!isForward && !restoredDraft?.skipAutoFocus}
           onAddToCc={handleMentionAddToCc}
+          recipientEmail={form.to[0]}
         />
         {/* Attachments */}
         {form.loadingForwardAttachments && (
@@ -2180,6 +2181,7 @@ function NewEmailCompose({
               onChange={form.handleEditorChange}
               placeholder="Write your message..."
               onAddToCc={form.handleMentionAddToCc}
+              recipientEmail={form.to[0]}
             />
           </div>
 
