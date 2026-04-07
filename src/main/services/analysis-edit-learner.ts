@@ -285,8 +285,8 @@ export async function learnFromPriorityOverrideInferred(
  * Use Claude to extract generalizable observations from a priority override.
  */
 async function analyzeOverride(override: AnalysisOverride): Promise<AnalysisObservation[] | null> {
-  // Skip API call in test mode
-  if (process.env.EXO_TEST_MODE === "true") {
+  // Skip API call in test/demo mode
+  if (process.env.EXO_TEST_MODE === "true" || process.env.EXO_DEMO_MODE === "true") {
     return null;
   }
 
@@ -383,8 +383,8 @@ async function matchAnalysisDraftMemories(
   observations: AnalysisObservation[],
   draftMemories: DraftMemory[],
 ): Promise<Array<{ observationIndex: number; matchedDraftMemoryId: string | null }>> {
-  // Skip API call in test mode
-  if (process.env.EXO_TEST_MODE === "true") {
+  // Skip API call in test/demo mode
+  if (process.env.EXO_TEST_MODE === "true" || process.env.EXO_DEMO_MODE === "true") {
     return observations.map((_, i) => ({ observationIndex: i, matchedDraftMemoryId: null }));
   }
 

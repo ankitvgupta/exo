@@ -18,7 +18,8 @@ import { createLogger } from "../services/logger";
 const log = createLogger("archive-ready-ipc");
 
 const isTestMode = process.env.EXO_TEST_MODE === "true";
-const useFakeData = isTestMode;
+const isDemoMode = process.env.EXO_DEMO_MODE === "true";
+const useFakeData = isTestMode || isDemoMode;
 
 let analyzer: ArchiveReadyAnalyzer | null = null;
 

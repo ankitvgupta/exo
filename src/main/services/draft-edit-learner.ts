@@ -399,8 +399,8 @@ export async function filterAgainstPromotedMemories(
     return observations;
   }
 
-  // Skip API call in test mode — return all observations unfiltered
-  if (process.env.EXO_TEST_MODE === "true") {
+  // Skip API call in test/demo mode — return all observations unfiltered
+  if (process.env.EXO_TEST_MODE === "true" || process.env.EXO_DEMO_MODE === "true") {
     return observations;
   }
 
@@ -497,8 +497,8 @@ export async function consolidateMemoryScopes(
     return { action: "save", deletedIds: [], createdGlobal: null, coveringMemoryId: null };
   }
 
-  // Skip API call in test mode — treat all candidates as new
-  if (process.env.EXO_TEST_MODE === "true") {
+  // Skip API call in test/demo mode — treat all candidates as new
+  if (process.env.EXO_TEST_MODE === "true" || process.env.EXO_DEMO_MODE === "true") {
     return { action: "save", deletedIds: [], createdGlobal: null, coveringMemoryId: null };
   }
 
