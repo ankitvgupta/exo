@@ -86,14 +86,12 @@ export function registerLabelsIpc(): void {
         const client = await getClient(accountId);
         await client.modifyThreadLabels(threadId, addLabelIds, removeLabelIds);
 
-        // Update local DB for all emails in the thread
+        // Read back authoritative labelIds from Gmail for each thread message
         const threadEmails = getEmailsByThread(threadId, accountId);
         for (const email of threadEmails) {
-          const currentLabels = email.labelIds ?? [];
-          const updated = currentLabels
-            .filter((id) => !removeLabelIds.includes(id))
-            .concat(addLabelIds.filter((id) => !currentLabels.includes(id)));
-          updateEmailLabelIds(email.id, updated);
+          const msg = await client.readEmail(email.id);
+          const newLabelIds = msg?.labelIds ?? [];
+          updateEmailLabelIds(email.id, newLabelIds);
         }
 
         return { success: true, data: undefined };
