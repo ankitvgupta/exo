@@ -25,6 +25,11 @@ const log = createLogger("prefetch");
 // Cached label ID→name map per account, populated lazily from Gmail API
 const labelNameCache = new Map<string, Map<string, string>>();
 
+// System labels the analyzer doesn't need to see (already obvious from context)
+const HIDDEN_LABELS = new Set(["INBOX", "UNREAD", "SENT", "DRAFT", "SPAM", "TRASH",
+  "CATEGORY_PERSONAL", "CATEGORY_SOCIAL", "CATEGORY_UPDATES",
+  "CATEGORY_FORUMS", "CATEGORY_PROMOTIONS"]);
+
 export async function resolveLabelNames(labelIds: string[] | undefined, accountId: string | undefined): Promise<string[]> {
   if (!labelIds?.length || !accountId) return [];
 
@@ -47,13 +52,8 @@ export async function resolveLabelNames(labelIds: string[] | undefined, accountI
   const nameMap = labelNameCache.get(accountId);
   if (!nameMap) return [];
 
-  // System labels the analyzer doesn't need to see (already obvious from context)
-  const HIDDEN = new Set(["INBOX", "UNREAD", "SENT", "DRAFT", "SPAM", "TRASH",
-    "CATEGORY_PERSONAL", "CATEGORY_SOCIAL", "CATEGORY_UPDATES",
-    "CATEGORY_FORUMS", "CATEGORY_PROMOTIONS"]);
-
   return labelIds
-    .filter((id) => !HIDDEN.has(id))
+    .filter((id) => !HIDDEN_LABELS.has(id))
     .map((id) => nameMap.get(id) ?? id)
     .filter((name) => !name.startsWith("Label_")); // drop unresolved IDs
 }
