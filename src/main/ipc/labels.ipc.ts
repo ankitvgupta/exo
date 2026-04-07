@@ -2,6 +2,9 @@ import { ipcMain } from "electron";
 import { getClient } from "./gmail.ipc";
 import { updateEmailLabelIds, getEmailsByThread } from "../db";
 import type { IpcResponse } from "../../shared/types";
+import { createLogger } from "../services/logger";
+
+const log = createLogger("labels-ipc");
 
 interface LabelInfo {
   id: string;
@@ -20,7 +23,7 @@ export function registerLabelsIpc(): void {
         const labels = await client.listLabels();
         return { success: true, data: labels };
       } catch (error) {
-        console.error("[Labels] Failed to list labels:", error);
+        log.error({ err: error }, "Failed to list labels");
         return { success: false, error: String(error) };
       }
     },
@@ -56,7 +59,7 @@ export function registerLabelsIpc(): void {
 
         return { success: true, data: { labelIds: newLabelIds } };
       } catch (error) {
-        console.error("[Labels] Failed to modify message labels:", error);
+        log.error({ err: error }, "Failed to modify message labels");
         return { success: false, error: String(error) };
       }
     },
@@ -95,7 +98,7 @@ export function registerLabelsIpc(): void {
 
         return { success: true, data: undefined };
       } catch (error) {
-        console.error("[Labels] Failed to modify thread labels:", error);
+        log.error({ err: error }, "Failed to modify thread labels");
         return { success: false, error: String(error) };
       }
     },
