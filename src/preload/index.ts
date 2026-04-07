@@ -547,6 +547,19 @@ const api = {
       ipcRenderer.invoke("splits:import-superhuman", { superhumanEmail, targetAccountId }),
   },
 
+  // Snippets
+  snippets: {
+    getAll: (): Promise<unknown> => ipcRenderer.invoke("snippets:get-all"),
+    save: (snippets: unknown[]): Promise<unknown> => ipcRenderer.invoke("snippets:save", snippets),
+    create: (snippet: unknown): Promise<unknown> => ipcRenderer.invoke("snippets:create", snippet),
+    update: (id: string, updates: unknown): Promise<unknown> =>
+      ipcRenderer.invoke("snippets:update", { id, updates }),
+    delete: (id: string): Promise<unknown> => ipcRenderer.invoke("snippets:delete", { id }),
+    discoverSuperhuman: (): Promise<unknown> => ipcRenderer.invoke("snippets:discover-superhuman"),
+    importFromSuperhuman: (superhumanEmail: string, targetAccountId: string): Promise<unknown> =>
+      ipcRenderer.invoke("snippets:import-superhuman", { superhumanEmail, targetAccountId }),
+  },
+
   // Theme
   theme: {
     get: (): Promise<unknown> => ipcRenderer.invoke("theme:get"),
@@ -590,6 +603,7 @@ const api = {
     },
     reauth: (accountId: string): Promise<unknown> =>
       ipcRenderer.invoke("auth:reauth", { accountId }),
+    cancelReauth: (): Promise<void> => ipcRenderer.invoke("gmail:cancel-reauth"),
     removeAllListeners: (): void => {
       ipcRenderer.removeAllListeners("auth:token-expired");
       ipcRenderer.removeAllListeners("auth:extension-auth-required");

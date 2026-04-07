@@ -1,4 +1,10 @@
 import { useEditor, EditorContent } from "@tiptap/react";
+import { ReactRenderer } from "@tiptap/react";
+import { Extension } from "@tiptap/core";
+import Suggestion from "@tiptap/suggestion";
+import type { SuggestionOptions, SuggestionProps } from "@tiptap/suggestion";
+import { PluginKey } from "@tiptap/pm/state";
+import tippy, { type Instance as TippyInstance } from "tippy.js";
 import type { EditorView } from "@tiptap/pm/view";
 
 // Extract Editor type from useEditor return type
@@ -8,9 +14,19 @@ import Link from "@tiptap/extension-link";
 import Image from "@tiptap/extension-image";
 import Placeholder from "@tiptap/extension-placeholder";
 import TextAlign from "@tiptap/extension-text-align";
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import DOMPurify from "dompurify";
 import { useAppStore } from "../store";
 import { ContactMention } from "./MentionSuggestion";
+import type { Snippet } from "../../shared/types";
 
 interface ComposeEditorProps {
   initialContent?: string;
@@ -21,6 +37,8 @@ interface ComposeEditorProps {
   autoFocus?: boolean;
   /** Called when a contact is selected via @mention or +mention in the body */
   onAddToCc?: (email: string) => void;
+  /** Recipient email for snippet variable resolution */
+  recipientEmail?: string;
 }
 
 // Toolbar button component
@@ -67,24 +85,365 @@ function readFileAsDataUrl(file: File): Promise<string> {
   });
 }
 
+// --- Inline snippet suggestion (Superhuman-style, triggered by ;) ---
+
+interface SnippetListProps {
+  items: Snippet[];
+  command: (item: Snippet) => void;
+}
+
+interface SnippetListRef {
+  onKeyDown: (props: { event: KeyboardEvent }) => boolean;
+}
+
+const SnippetList = forwardRef<SnippetListRef, SnippetListProps>(({ items, command }, ref) => {
+  const [selectedIndex, setSelectedIndex] = useState(0);
+
+  useEffect(() => {
+    setSelectedIndex(0);
+  }, [items]);
+
+  const selectItem = useCallback(
+    (index: number) => {
+      const item = items[index];
+      if (item) command(item);
+    },
+    [items, command],
+  );
+
+  useImperativeHandle(ref, () => ({
+    onKeyDown: ({ event }: { event: KeyboardEvent }) => {
+      if (event.key === "ArrowUp") {
+        setSelectedIndex((i) => (i <= 0 ? items.length - 1 : i - 1));
+        return true;
+      }
+      if (event.key === "ArrowDown") {
+        setSelectedIndex((i) => (i >= items.length - 1 ? 0 : i + 1));
+        return true;
+      }
+      if (event.key === "Enter" || event.key === "Tab") {
+        selectItem(selectedIndex);
+        return true;
+      }
+      return false;
+    },
+  }));
+
+  if (items.length === 0) return null;
+
+  return (
+    <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg dark:shadow-xl dark:shadow-black/50 max-h-60 overflow-y-auto z-50">
+      {items.map((item, index) => (
+        <div
+          key={item.id}
+          className={`px-3 py-2 cursor-pointer text-sm ${
+            index === selectedIndex
+              ? "bg-blue-50 dark:bg-gray-700"
+              : "hover:bg-gray-100 dark:hover:bg-gray-700/50"
+          }`}
+          onMouseDown={(e) => {
+            e.preventDefault();
+            selectItem(index);
+          }}
+          onMouseEnter={() => setSelectedIndex(index)}
+        >
+          <div className="flex items-center justify-between gap-2">
+            <span className="font-medium text-gray-900 dark:text-gray-100 truncate text-xs">
+              {item.name}
+            </span>
+            <span className="text-[10px] text-gray-400 dark:text-gray-500 shrink-0">Me</span>
+          </div>
+          <p className="text-[11px] text-gray-500 dark:text-gray-400 truncate">
+            {stripHtmlPreview(item.body)}
+          </p>
+        </div>
+      ))}
+    </div>
+  );
+});
+
+SnippetList.displayName = "SnippetList";
+
+function stripHtmlPreview(html: string): string {
+  const tmp = document.createElement("div");
+  tmp.innerHTML = html;
+  return (tmp.textContent || tmp.innerText || "").trim().substring(0, 100);
+}
+
+const snippetPluginKey = new PluginKey("snippetSuggestion");
+
+interface SnippetContext {
+  snippets: Snippet[];
+  recipientEmail?: string;
+  senderName?: string;
+}
+
+interface SnippetMentionOptions {
+  contextRef: React.RefObject<SnippetContext>;
+}
+
+const SnippetMention = Extension.create<SnippetMentionOptions>({
+  name: "snippetMention",
+
+  addOptions() {
+    return {
+      contextRef: { current: { snippets: [] } },
+    };
+  },
+
+  addProseMirrorPlugins() {
+    const { contextRef } = this.options;
+
+    const suggestionConfig: Omit<SuggestionOptions<Snippet>, "editor"> = {
+      char: ";",
+      pluginKey: snippetPluginKey,
+      // Only trigger after whitespace or at the start of a line (not mid-word like "review this;")
+      allowedPrefixes: [" "],
+      items: ({ query }): Snippet[] => {
+        const all = contextRef.current?.snippets ?? [];
+        if (!query) return all;
+        const q = query.toLowerCase();
+        return all.filter(
+          (s) =>
+            s.name.toLowerCase().includes(q) ||
+            (s.shortcut && s.shortcut.toLowerCase().includes(q)),
+        );
+      },
+
+      command: ({ editor, range, props: snippet }) => {
+        const ctx = contextRef.current;
+        const resolved = resolveSnippetVariables(
+          snippet.body,
+          ctx?.recipientEmail,
+          ctx?.senderName,
+        );
+        // Check if the body is HTML BEFORE sanitizing — plain text bodies
+        // would have angle brackets stripped by DOMPurify
+        const isHtml = /<[a-z][\s\S]*>/i.test(resolved);
+        let content: string;
+        if (isHtml) {
+          const sanitized = DOMPurify.sanitize(resolved);
+          content = sanitized
+            .replace(/<br\s*\/?>\s*<\/div>/gi, "</div>")
+            .replace(/<div>\s*<\/div>/gi, "<p></p>");
+        } else {
+          // Plain text: escape HTML chars and convert newlines to <br>
+          content = escapeHtml(resolved).replace(/\n/g, "<br>");
+        }
+        editor.chain().focus().deleteRange(range).insertContent(content).run();
+      },
+
+      render: () => {
+        let component: ReactRenderer<SnippetListRef, SnippetListProps>;
+        let popup: TippyInstance[];
+
+        return {
+          onStart: (props: SuggestionProps<Snippet>) => {
+            component = new ReactRenderer(SnippetList, {
+              props: { items: props.items, command: props.command },
+              editor: props.editor,
+            });
+
+            if (!props.clientRect) return;
+
+            popup = tippy("body", {
+              getReferenceClientRect: () => props.clientRect?.() ?? new DOMRect(),
+              appendTo: () => document.body,
+              content: component.element,
+              showOnCreate: true,
+              interactive: true,
+              trigger: "manual",
+              placement: "bottom-start",
+            });
+          },
+
+          onUpdate: (props: SuggestionProps<Snippet>) => {
+            component?.updateProps({
+              items: props.items,
+              command: props.command,
+            });
+
+            if (!props.clientRect || !popup?.[0]) return;
+
+            popup[0].setProps({
+              getReferenceClientRect: () => props.clientRect?.() ?? new DOMRect(),
+            });
+          },
+
+          onKeyDown: (props: { event: KeyboardEvent }) => {
+            if (props.event.key === "Escape") {
+              return false;
+            }
+            return component?.ref?.onKeyDown(props) ?? false;
+          },
+
+          onExit: () => {
+            popup?.[0]?.destroy();
+            component?.destroy();
+          },
+        };
+      },
+    };
+
+    return [
+      Suggestion({
+        editor: this.editor,
+        ...suggestionConfig,
+      }),
+    ];
+  },
+});
+
+/** Escape plain text for safe injection into HTML */
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+/**
+ * Resolve snippet variables:
+ * - {first_name} → recipient's first name
+ * - {my_name} → sender's display name
+ * - {custom_var} → prompt user
+ */
+function resolveSnippetVariables(
+  body: string,
+  recipientEmail?: string,
+  senderName?: string,
+): string {
+  let resolved = body;
+
+  // Resolve {my_name} — use replacer function to avoid $-pattern interpretation
+  if (senderName) {
+    resolved = resolved.replace(/\{my_name\}/gi, () => senderName);
+  }
+
+  // Resolve {first_name} from recipient email (best effort: take part before @, capitalize)
+  if (recipientEmail) {
+    const localPart = recipientEmail.split("@")[0] || "";
+    const firstName = localPart.split(/[._-]/)[0];
+    const capitalized = firstName.charAt(0).toUpperCase() + firstName.slice(1).toLowerCase();
+    resolved = resolved.replace(/\{first_name\}/gi, () => capitalized);
+  }
+
+  // Custom placeholders like {inviter}, {action_item_1} are left as-is
+  // so the user can fill them in directly in the editor after insertion.
+  // This avoids blocking window.prompt() dialogs.
+
+  return resolved;
+}
+
+// Inline popover for entering a link URL
+function LinkPopover({
+  editor,
+  onClose,
+  anchorRef,
+}: {
+  editor: Editor;
+  onClose: () => void;
+  anchorRef: React.RefObject<HTMLDivElement | null>;
+}) {
+  const previousUrl = editor.getAttributes("link").href;
+  const [url, setUrl] = useState(previousUrl || "https://");
+  const inputRef = useRef<HTMLInputElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    inputRef.current?.select();
+  }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as Node;
+      // Ignore clicks on the popover itself or the anchor button (toggle handles that)
+      if (popoverRef.current?.contains(target)) return;
+      if (anchorRef.current?.contains(target)) return;
+      onClose();
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [onClose, anchorRef]);
+
+  const apply = () => {
+    if (url.trim() === "") {
+      editor.chain().focus().extendMarkRange("link").unsetLink().run();
+    } else {
+      editor.chain().focus().extendMarkRange("link").setLink({ href: url.trim() }).run();
+    }
+    onClose();
+  };
+
+  return (
+    <div
+      ref={popoverRef}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") {
+          e.nativeEvent.stopImmediatePropagation();
+          onClose();
+        }
+      }}
+      className="absolute top-full left-0 mt-1 z-50 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg p-2 flex items-center gap-1.5"
+    >
+      <input
+        ref={inputRef}
+        type="url"
+        value={url}
+        onChange={(e) => setUrl(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") {
+            e.stopPropagation();
+            e.nativeEvent.stopImmediatePropagation();
+            onClose();
+          }
+          if (e.key === "Enter") {
+            e.preventDefault();
+            apply();
+          }
+        }}
+        placeholder="https://example.com"
+        className="w-56 px-2 py-1 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
+      />
+      <button
+        type="button"
+        onClick={apply}
+        className="px-2 py-1 text-sm rounded bg-blue-600 text-white hover:bg-blue-700"
+      >
+        Apply
+      </button>
+      {previousUrl && (
+        <button
+          type="button"
+          onClick={() => {
+            editor.chain().focus().extendMarkRange("link").unsetLink().run();
+            onClose();
+          }}
+          className="px-2 py-1 text-sm rounded text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30"
+        >
+          Remove
+        </button>
+      )}
+    </div>
+  );
+}
+
 // Toolbar component
 function Toolbar({ editor }: { editor: Editor | null }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [showLinkPopover, setShowLinkPopover] = useState(false);
+  const linkButtonRef = useRef<HTMLDivElement>(null);
 
-  const setLink = useCallback(() => {
-    if (!editor) return;
-    const previousUrl = editor.getAttributes("link").href;
-    const url = window.prompt("Enter URL:", previousUrl || "https://");
+  const toggleLinkPopover = useCallback(() => {
+    setShowLinkPopover((prev) => !prev);
+  }, []);
 
-    if (url === null) return;
-
-    if (url === "") {
-      editor.chain().focus().extendMarkRange("link").unsetLink().run();
-      return;
-    }
-
-    editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run();
-  }, [editor]);
+  const closeLinkPopover = useCallback(() => {
+    setShowLinkPopover(false);
+  }, []);
 
   const insertImage = useCallback(() => {
     fileInputRef.current?.click();
@@ -234,16 +593,25 @@ function Toolbar({ editor }: { editor: Editor | null }) {
       </ToolbarButton>
 
       {/* Link */}
-      <ToolbarButton onClick={setLink} active={editor.isActive("link")} title="Insert link">
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"
-          />
-        </svg>
-      </ToolbarButton>
+      <div className="relative" ref={linkButtonRef}>
+        <ToolbarButton
+          onClick={toggleLinkPopover}
+          active={editor.isActive("link")}
+          title="Insert link"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"
+            />
+          </svg>
+        </ToolbarButton>
+        {showLinkPopover && (
+          <LinkPopover editor={editor} onClose={closeLinkPopover} anchorRef={linkButtonRef} />
+        )}
+      </div>
 
       <div className="w-px h-5 bg-gray-300 dark:bg-gray-600 mx-1" />
 
@@ -312,8 +680,16 @@ export function ComposeEditor({
   className = "",
   autoFocus = false,
   onAddToCc,
+  recipientEmail,
 }: ComposeEditorProps) {
   const isDark = useAppStore((s) => s.resolvedTheme) === "dark";
+  const snippets = useAppStore((s) => s.snippets);
+  const currentAccountId = useAppStore((s) => s.currentAccountId);
+  const accounts = useAppStore((s) => s.accounts);
+  const accountSnippets = snippets.filter((s) => s.accountId === currentAccountId);
+  const currentAccountRecord = accounts.find((a) => a.id === currentAccountId);
+  const senderName =
+    currentAccountRecord?.displayName || currentAccountRecord?.email?.split("@")[0];
 
   // Ref keeps the latest onAddToCc without recreating extensions
   const onAddToCcRef = useRef<((email: string) => void) | null>(onAddToCc ?? null);
@@ -324,11 +700,23 @@ export function ComposeEditor({
   // Stable ref object for the extension (created once)
   const stableRef = useMemo(() => onAddToCcRef, []);
 
+  // Snippet suggestion context (stable ref, extension reads latest via ref)
+  const snippetContextRef = useRef<SnippetContext>({
+    snippets: accountSnippets,
+    recipientEmail,
+    senderName,
+  });
+  useEffect(() => {
+    snippetContextRef.current = { snippets: accountSnippets, recipientEmail, senderName };
+  }, [accountSnippets, recipientEmail, senderName]);
+  const stableContextRef = useMemo(() => snippetContextRef, []);
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
         heading: false,
         codeBlock: false,
+        link: false, // Link is configured explicitly below
       }),
       Link.configure({
         openOnClick: false,
@@ -351,6 +739,9 @@ export function ComposeEditor({
       }),
       ContactMention.configure({
         onAddToCcRef: stableRef,
+      }),
+      SnippetMention.configure({
+        contextRef: stableContextRef,
       }),
     ],
     content: initialContent,
@@ -438,7 +829,7 @@ export function ComposeEditor({
 
   return (
     <div
-      className={`border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden bg-white dark:bg-gray-800 ${className}`}
+      className={`border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 ${className}`}
     >
       <Toolbar editor={editor} />
       <div className="dark:text-gray-100">

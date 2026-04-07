@@ -678,10 +678,10 @@ export async function learnFromDraftEdit(params: {
 
   // 2. Normalize both to plain text for comparison
   const originalDraft = htmlToPlainText(rawDraftBody);
-  const strippedHtml = sentBodyHtml.replace(
-    /<div[^>]*class="[^"]*gmail_quote[^"]*"[^>]*>[\s\S]*$/i,
-    "",
-  );
+  const strippedHtml = sentBodyHtml
+    // Strip email signature (includes "Sent by Exo" branding) — added at send time, not a user edit
+    .replace(/<div[^>]*class="[^"]*email-signature[^"]*"[^>]*>[\s\S]*$/i, "")
+    .replace(/<div[^>]*class="[^"]*gmail_quote[^"]*"[^>]*>[\s\S]*$/i, "");
   const sentPlainText = htmlToPlainText(strippedHtml);
 
   // 3. Check if the edit is meaningful

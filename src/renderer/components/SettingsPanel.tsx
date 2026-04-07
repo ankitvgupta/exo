@@ -22,6 +22,7 @@ import {
 import { useAppStore, type Account, type SettingsTab } from "../store";
 import { reconfigurePostHog, trackEvent } from "../services/posthog";
 import { SplitConfigEditor } from "./SplitConfigEditor";
+import { SnippetsEditor } from "./SnippetsEditor";
 import { MemoriesTab } from "./MemoriesTab";
 import { ExtensionsTab } from "./ExtensionsTab";
 
@@ -147,11 +148,15 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
   const [cliTools, setCliTools] = useState<(CliToolConfig & { _key: number })[]>([]);
   const [isSavingCliTools, setIsSavingCliTools] = useState(false);
   const [cliToolsSaved, setCliToolsSaved] = useState(false);
+  const [extraPathDirs, setExtraPathDirs] = useState<string[]>([]);
+  const [isSavingPathDirs, setIsSavingPathDirs] = useState(false);
+  const [pathDirsSaved, setPathDirsSaved] = useState(false);
 
   // Signature management state
   const [signatures, setSignatures] = useState<Signature[]>([]);
   const [editingSignature, setEditingSignature] = useState<Signature | null>(null);
   const [isSavingSignatures, setIsSavingSignatures] = useState(false);
+  const [showExoBranding, setShowExoBranding] = useState(true);
 
   // Fetch current prompts
   const { data: prompts, isLoading } = useQuery({
@@ -232,6 +237,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
       }
       setMcpServers(generalConfig.mcpServers ?? {});
       setCliTools((generalConfig.cliTools ?? []).map((t) => ({ ...t, _key: nextCliToolKey() })));
+      setExtraPathDirs(generalConfig.extraPathDirs ?? []);
       // PostHog analytics config — only set once to avoid clobbering unsaved edits on refetch
       if (!analyticsInitialized.current) {
         analyticsInitialized.current = true;
@@ -246,6 +252,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
   useEffect(() => {
     if (generalConfig) {
       setSignatures(generalConfig.signatures ?? []);
+      setShowExoBranding(generalConfig.showExoBranding !== false);
     }
   }, [generalConfig]);
 
@@ -505,6 +512,16 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
     }
   };
 
+  const handleToggleExoBranding = async (enabled: boolean) => {
+    try {
+      await window.api.settings.set({ showExoBranding: enabled });
+      setShowExoBranding(enabled);
+      queryClient.invalidateQueries({ queryKey: ["general-config"] });
+    } catch {
+      // state stays at previous value; next config load will re-sync
+    }
+  };
+
   const handleAddSignature = () => {
     setEditingSignature({
       id: crypto.randomUUID(),
@@ -733,6 +750,17 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
             }`}
           >
             Splits
+          </button>
+          <button
+            onClick={() => setActiveTab("snippets")}
+            data-active={activeTab === "snippets" ? "true" : undefined}
+            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+              activeTab === "snippets"
+                ? "bg-blue-100 dark:bg-blue-900/60 text-blue-800 dark:text-blue-300"
+                : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+            }`}
+          >
+            Snippets
           </button>
           <button
             onClick={() => setActiveTab("signatures")}
@@ -1590,6 +1618,12 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
           </div>
         )}
 
+        {activeTab === "snippets" && (
+          <div className="max-w-3xl">
+            <SnippetsEditor />
+          </div>
+        )}
+
         {activeTab === "signatures" && (
           <div className="max-w-3xl space-y-6">
             <div>
@@ -1600,6 +1634,30 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                 Create and manage email signatures. The default signature is automatically appended
                 when composing new emails.
               </p>
+
+              {/* Exo branding toggle */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600 p-4 mb-6">
+                <label className="flex items-center space-x-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={showExoBranding}
+                    onChange={(e) => handleToggleExoBranding(e.target.checked)}
+                    className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+                  />
+                  <div>
+                    <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                      Show &quot;Sent by Exo&quot; branding
+                    </span>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      Appends a small &quot;Sent by{" "}
+                      <a href="https://exo.email" className="text-blue-500 hover:underline">
+                        Exo
+                      </a>
+                      &quot; line after your signature.
+                    </p>
+                  </div>
+                </label>
+              </div>
 
               {/* Signature list */}
               {!editingSignature && (
@@ -2965,6 +3023,92 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                   }`}
                 >
                   {isSavingCliTools ? "Saving..." : cliToolsSaved ? "Saved" : "Save"}
+                </button>
+              </div>
+            </div>
+
+            {/* Extra PATH Directories */}
+            <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600 p-6">
+              <div className="mb-4">
+                <h4 className="text-base font-medium text-gray-900 dark:text-gray-100">
+                  Additional Tool Directories
+                </h4>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                  Extra directories to add to the system PATH so agents can find CLI tools installed
+                  in non-standard locations.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                {extraPathDirs.map((dir, idx) => (
+                  <div key={idx} className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={dir}
+                      onChange={(e) => {
+                        const updated = [...extraPathDirs];
+                        updated[idx] = e.target.value;
+                        setExtraPathDirs(updated);
+                      }}
+                      placeholder="/path/to/tools/bin"
+                      className="flex-1 px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 font-mono"
+                    />
+                    <button
+                      onClick={() => setExtraPathDirs(extraPathDirs.filter((_, i) => i !== idx))}
+                      className="p-1.5 text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors"
+                      title="Remove directory"
+                    >
+                      <svg
+                        className="w-4 h-4"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M6 18L18 6M6 6l12 12"
+                        />
+                      </svg>
+                    </button>
+                  </div>
+                ))}
+
+                <button
+                  onClick={() => setExtraPathDirs([...extraPathDirs, ""])}
+                  className="text-sm text-purple-600 dark:text-purple-400 hover:underline"
+                >
+                  + Add Directory
+                </button>
+              </div>
+
+              <div className="mt-4 flex justify-end">
+                <button
+                  onClick={async () => {
+                    setIsSavingPathDirs(true);
+                    setPathDirsSaved(false);
+                    try {
+                      const validDirs = extraPathDirs.filter((d) => d.trim());
+                      await window.api.settings.set({
+                        extraPathDirs: validDirs.length > 0 ? validDirs : undefined,
+                      });
+                      queryClient.invalidateQueries({ queryKey: ["general-config"] });
+                      setExtraPathDirs(validDirs);
+                      setPathDirsSaved(true);
+                      setTimeout(() => setPathDirsSaved(false), 2000);
+                    } finally {
+                      setIsSavingPathDirs(false);
+                    }
+                  }}
+                  disabled={isSavingPathDirs}
+                  className={`px-4 py-2 text-white text-sm font-medium rounded-lg disabled:opacity-50 transition-colors ${
+                    pathDirsSaved
+                      ? "bg-green-600 dark:bg-green-500"
+                      : "bg-purple-600 hover:bg-purple-700"
+                  }`}
+                >
+                  {isSavingPathDirs ? "Saving..." : pathDirsSaved ? "Saved" : "Save"}
                 </button>
               </div>
             </div>

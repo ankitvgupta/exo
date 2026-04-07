@@ -1,4 +1,4 @@
-import type { InboxSplit, DashboardEmail } from "../../shared/types";
+import type { InboxSplit, DashboardEmail, LocalDraft } from "../../shared/types";
 
 // Convert a glob-like pattern to a regex
 // Supports: * (matches anything), ? (matches single char)
@@ -64,5 +64,44 @@ export function evaluateCondition(
 // Takes the email to evaluate against (typically the latest email in the thread).
 export function emailMatchesSplit(email: DashboardEmail, split: InboxSplit): boolean {
   const results = split.conditions.map((c) => evaluateCondition(email, c));
+  return split.conditionLogic === "and" ? results.every(Boolean) : results.some(Boolean);
+}
+
+// Evaluate a split condition against a local draft's available fields.
+// Drafts have to/cc/bcc/subject but no from/labels/attachments.
+function evaluateConditionForDraft(
+  draft: LocalDraft,
+  condition: InboxSplit["conditions"][0],
+): boolean {
+  let matches = false;
+  switch (condition.type) {
+    case "from":
+      // Drafts don't have a meaningful "from" — skip (no match)
+      break;
+    case "to": {
+      const allRecipients = [...draft.to, ...(draft.cc ?? []), ...(draft.bcc ?? [])];
+      matches = allRecipients.some(
+        (r) =>
+          matchesPattern(r, condition.value) ||
+          matchesPattern(extractEmailAddress(r), condition.value),
+      );
+      break;
+    }
+    case "subject":
+      matches = matchesPattern(draft.subject, condition.value);
+      break;
+    case "label":
+      // Drafts don't have Gmail labels
+      break;
+    case "has_attachment":
+      // Drafts don't track attachments in LocalDraft
+      break;
+  }
+  return condition.negate ? !matches : matches;
+}
+
+// Check if a local draft matches a split's conditions.
+export function draftMatchesSplit(draft: LocalDraft, split: InboxSplit): boolean {
+  const results = split.conditions.map((c) => evaluateConditionForDraft(draft, c));
   return split.conditionLogic === "and" ? results.every(Boolean) : results.some(Boolean);
 }
