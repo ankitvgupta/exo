@@ -8,7 +8,7 @@ import Link from "@tiptap/extension-link";
 import Image from "@tiptap/extension-image";
 import Placeholder from "@tiptap/extension-placeholder";
 import TextAlign from "@tiptap/extension-text-align";
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAppStore } from "../store";
 import { ContactMention } from "./MentionSuggestion";
 
@@ -67,24 +67,114 @@ function readFileAsDataUrl(file: File): Promise<string> {
   });
 }
 
+// Inline popover for entering a link URL
+function LinkPopover({
+  editor,
+  onClose,
+  anchorRef,
+}: {
+  editor: Editor;
+  onClose: () => void;
+  anchorRef: React.RefObject<HTMLDivElement | null>;
+}) {
+  const previousUrl = editor.getAttributes("link").href;
+  const [url, setUrl] = useState(previousUrl || "https://");
+  const inputRef = useRef<HTMLInputElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    inputRef.current?.select();
+  }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as Node;
+      // Ignore clicks on the popover itself or the anchor button (toggle handles that)
+      if (popoverRef.current?.contains(target)) return;
+      if (anchorRef.current?.contains(target)) return;
+      onClose();
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [onClose, anchorRef]);
+
+  const apply = () => {
+    if (url.trim() === "") {
+      editor.chain().focus().extendMarkRange("link").unsetLink().run();
+    } else {
+      editor.chain().focus().extendMarkRange("link").setLink({ href: url.trim() }).run();
+    }
+    onClose();
+  };
+
+  return (
+    <div
+      ref={popoverRef}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") {
+          e.nativeEvent.stopImmediatePropagation();
+          onClose();
+        }
+      }}
+      className="absolute top-full left-0 mt-1 z-50 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg p-2 flex items-center gap-1.5"
+    >
+      <input
+        ref={inputRef}
+        type="url"
+        value={url}
+        onChange={(e) => setUrl(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") {
+            e.stopPropagation();
+            e.nativeEvent.stopImmediatePropagation();
+            onClose();
+          }
+          if (e.key === "Enter") {
+            e.preventDefault();
+            apply();
+          }
+        }}
+        placeholder="https://example.com"
+        className="w-56 px-2 py-1 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
+      />
+      <button
+        type="button"
+        onClick={apply}
+        className="px-2 py-1 text-sm rounded bg-blue-600 text-white hover:bg-blue-700"
+      >
+        Apply
+      </button>
+      {previousUrl && (
+        <button
+          type="button"
+          onClick={() => {
+            editor.chain().focus().extendMarkRange("link").unsetLink().run();
+            onClose();
+          }}
+          className="px-2 py-1 text-sm rounded text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30"
+        >
+          Remove
+        </button>
+      )}
+    </div>
+  );
+}
+
 // Toolbar component
 function Toolbar({ editor }: { editor: Editor | null }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [showLinkPopover, setShowLinkPopover] = useState(false);
+  const linkButtonRef = useRef<HTMLDivElement>(null);
 
-  const setLink = useCallback(() => {
-    if (!editor) return;
-    const previousUrl = editor.getAttributes("link").href;
-    const url = window.prompt("Enter URL:", previousUrl || "https://");
+  const toggleLinkPopover = useCallback(() => {
+    setShowLinkPopover((prev) => !prev);
+  }, []);
 
-    if (url === null) return;
-
-    if (url === "") {
-      editor.chain().focus().extendMarkRange("link").unsetLink().run();
-      return;
-    }
-
-    editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run();
-  }, [editor]);
+  const closeLinkPopover = useCallback(() => {
+    setShowLinkPopover(false);
+  }, []);
 
   const insertImage = useCallback(() => {
     fileInputRef.current?.click();
@@ -234,16 +324,25 @@ function Toolbar({ editor }: { editor: Editor | null }) {
       </ToolbarButton>
 
       {/* Link */}
-      <ToolbarButton onClick={setLink} active={editor.isActive("link")} title="Insert link">
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"
-          />
-        </svg>
-      </ToolbarButton>
+      <div className="relative" ref={linkButtonRef}>
+        <ToolbarButton
+          onClick={toggleLinkPopover}
+          active={editor.isActive("link")}
+          title="Insert link"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"
+            />
+          </svg>
+        </ToolbarButton>
+        {showLinkPopover && (
+          <LinkPopover editor={editor} onClose={closeLinkPopover} anchorRef={linkButtonRef} />
+        )}
+      </div>
 
       <div className="w-px h-5 bg-gray-300 dark:bg-gray-600 mx-1" />
 
@@ -329,6 +428,7 @@ export function ComposeEditor({
       StarterKit.configure({
         heading: false,
         codeBlock: false,
+        link: false, // Link is configured explicitly below
       }),
       Link.configure({
         openOnClick: false,
