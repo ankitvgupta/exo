@@ -110,7 +110,12 @@ export function registerAnalysisIpc(): void {
         };
 
         const labelNames = await resolveLabelNames(email.labelIds, email.accountId);
-        const result = await analyzerInstance.analyze(emailForAnalysis, userEmail, email.accountId, labelNames);
+        const result = await analyzerInstance.analyze(
+          emailForAnalysis,
+          userEmail,
+          email.accountId,
+          labelNames,
+        );
 
         // Save analysis to database
         saveAnalysis(emailId, result.needs_reply, result.reason, result.priority);

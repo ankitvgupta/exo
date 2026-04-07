@@ -146,7 +146,12 @@ export class EmailAnalyzer {
     this.customPrompt = prompt && prompt !== DEFAULT_ANALYSIS_PROMPT ? prompt : null;
   }
 
-  async analyze(email: Email, userEmail?: string, accountId?: string, labelNames?: string[]): Promise<AnalysisResult> {
+  async analyze(
+    email: Email,
+    userEmail?: string,
+    accountId?: string,
+    labelNames?: string[],
+  ): Promise<AnalysisResult> {
     const emailContent = this.formatEmailForAnalysis(email);
 
     // Always append JSON format suffix to ensure structured output,

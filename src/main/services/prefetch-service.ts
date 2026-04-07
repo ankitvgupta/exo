@@ -30,9 +30,19 @@ const labelNameCache = new Map<string, { map: Map<string, string>; ts: number }>
 const labelFetchInFlight = new Map<string, Promise<Map<string, string>>>();
 
 // System labels the analyzer doesn't need to see (already obvious from context)
-const HIDDEN_LABELS = new Set(["INBOX", "UNREAD", "SENT", "DRAFT", "SPAM", "TRASH",
-  "CATEGORY_PERSONAL", "CATEGORY_SOCIAL", "CATEGORY_UPDATES",
-  "CATEGORY_FORUMS", "CATEGORY_PROMOTIONS"]);
+const HIDDEN_LABELS = new Set([
+  "INBOX",
+  "UNREAD",
+  "SENT",
+  "DRAFT",
+  "SPAM",
+  "TRASH",
+  "CATEGORY_PERSONAL",
+  "CATEGORY_SOCIAL",
+  "CATEGORY_UPDATES",
+  "CATEGORY_FORUMS",
+  "CATEGORY_PROMOTIONS",
+]);
 
 async function fetchLabelsForAccount(accountId: string): Promise<Map<string, string>> {
   const { getClient } = await import("../ipc/gmail.ipc");
@@ -45,7 +55,10 @@ async function fetchLabelsForAccount(accountId: string): Promise<Map<string, str
   return map;
 }
 
-export async function resolveLabelNames(labelIds: string[] | undefined, accountId: string | undefined): Promise<string[]> {
+export async function resolveLabelNames(
+  labelIds: string[] | undefined,
+  accountId: string | undefined,
+): Promise<string[]> {
   if (!labelIds?.length || !accountId) return [];
 
   // Check cache freshness
@@ -807,7 +820,12 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
       const userEmail = account?.email;
 
       const labelNames = await resolveLabelNames(email.labelIds, email.accountId);
-      const result = await analyzer.analyze(emailForAnalysis, userEmail, email.accountId, labelNames);
+      const result = await analyzer.analyze(
+        emailForAnalysis,
+        userEmail,
+        email.accountId,
+        labelNames,
+      );
       saveAnalysis(emailId, result.needs_reply, result.reason, result.priority);
       this.processedAnalysis.add(emailId);
       this.processedCounts.analysis++;

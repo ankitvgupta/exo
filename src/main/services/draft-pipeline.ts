@@ -140,7 +140,12 @@ export async function generateDraftForEmail(
       config.analysisPrompt ?? undefined,
     );
     const labelNames = await resolveLabelNames(email.labelIds, emailAccountId);
-    const analysisResult = await analyzer.analyze(emailForDraft, undefined, emailAccountId, labelNames);
+    const analysisResult = await analyzer.analyze(
+      emailForDraft,
+      undefined,
+      emailAccountId,
+      labelNames,
+    );
     saveAnalysis(
       emailId,
       analysisResult.needs_reply,
