@@ -38,6 +38,9 @@ function safeSonicBoomWrapper(dest: SonicBoom): Writable & { flushSync?: () => v
         callback();
       }
     },
+    // Intentionally does NOT forward end() to the underlying SonicBoom.
+    // closeLogs() calls dest.end() on the raw _destinations refs directly,
+    // which flushes SonicBoom's internal buffer before closing.
     final(callback) {
       callback();
     },
