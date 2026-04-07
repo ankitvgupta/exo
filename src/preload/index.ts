@@ -590,6 +590,7 @@ const api = {
     },
     reauth: (accountId: string): Promise<unknown> =>
       ipcRenderer.invoke("auth:reauth", { accountId }),
+    cancelReauth: (): Promise<void> => ipcRenderer.invoke("gmail:cancel-reauth"),
     removeAllListeners: (): void => {
       ipcRenderer.removeAllListeners("auth:token-expired");
       ipcRenderer.removeAllListeners("auth:extension-auth-required");

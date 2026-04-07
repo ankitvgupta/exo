@@ -1,4 +1,4 @@
-import { ipcMain, BrowserWindow } from "electron";
+import { app, ipcMain, BrowserWindow } from "electron";
 import { GmailClient, isAuthError } from "../services/gmail-client";
 import { emailSyncService, type SyncStatus, type AccountInfo } from "../services/email-sync";
 import { prefetchService } from "../services/prefetch-service";
@@ -259,17 +259,26 @@ export function registerSyncIpc(): void {
     }
   });
 
+  // Track client undergoing re-authentication so it can be cancelled
+  let pendingReauthClient: GmailClient | null = null;
+
   // Re-authenticate a Gmail account (triggered by user clicking "Re-authenticate" in banner)
   ipcMain.handle(
     "auth:reauth",
     async (_, { accountId }: { accountId: string }): Promise<IpcResponse<void>> => {
       try {
+        if (pendingReauthClient) {
+          return { success: false, error: "Another re-authentication is already in progress" };
+        }
+
         const client = activeClients.get(accountId);
         if (!client) {
           return { success: false, error: "Account not connected" };
         }
 
+        pendingReauthClient = client;
         await client.reauth();
+        pendingReauthClient = null;
 
         // Re-register with sync service and restart sync
         await emailSyncService.registerAccount(client);
@@ -278,6 +287,7 @@ export function registerSyncIpc(): void {
         log.info(`[Auth] Re-authenticated account ${accountId}, sync restarted`);
         return { success: true, data: undefined };
       } catch (error) {
+        pendingReauthClient = null;
         return {
           success: false,
           error: error instanceof Error ? error.message : "Unknown error",
@@ -285,6 +295,22 @@ export function registerSyncIpc(): void {
       }
     },
   );
+
+  // Cancel an in-progress re-authentication OAuth flow
+  ipcMain.handle("gmail:cancel-reauth", async (): Promise<void> => {
+    if (pendingReauthClient) {
+      pendingReauthClient.abortOAuth();
+      pendingReauthClient = null;
+    }
+  });
+
+  // Abort any in-progress reauth on quit so the IPC reply rejects cleanly
+  app.on("before-quit", () => {
+    if (pendingReauthClient) {
+      pendingReauthClient.abortOAuth();
+      pendingReauthClient = null;
+    }
+  });
 
   // Get all accounts
   ipcMain.handle("accounts:list", async (): Promise<IpcResponse<AccountRecord[]>> => {

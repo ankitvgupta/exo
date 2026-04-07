@@ -1454,7 +1454,10 @@ export default function App() {
     }
   };
 
+  const [reauthingAccountId, setReauthingAccountId] = useState<string | null>(null);
+
   const handleReauth = async (accountId: string) => {
+    setReauthingAccountId(accountId);
     try {
       const result = await window.api.auth.reauth(accountId);
       if ((result as Record<string, unknown>).success) {
@@ -1486,13 +1489,27 @@ export default function App() {
         // Trigger a sync to pick up any new messages from Gmail
         window.api.sync.now(accountId).catch(console.error);
       } else {
-        console.error("[Auth] Re-auth failed");
-        addBreadcrumb("error", "Re-auth failed");
+        const error = (result as Record<string, unknown>).error;
+        if (error === "Authorization cancelled") {
+          // User cancelled — don't show as an error
+        } else {
+          console.error("[Auth] Re-auth failed");
+          addBreadcrumb("error", "Re-auth failed");
+        }
       }
     } catch (err) {
-      console.error("[Auth] Re-auth error:", err);
-      captureException(err instanceof Error ? err : new Error(String(err)), { context: "re-auth" });
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg !== "Authorization cancelled") {
+        console.error("[Auth] Re-auth error:", err);
+        captureException(err instanceof Error ? err : new Error(msg), { context: "re-auth" });
+      }
+    } finally {
+      setReauthingAccountId(null);
     }
+  };
+
+  const handleCancelReauth = async () => {
+    await window.api.auth.cancelReauth();
   };
 
   const handleSetupComplete = () => {
@@ -1915,12 +1932,27 @@ export default function App() {
               <strong>{account.email}</strong> session expired
             </span>
           </div>
-          <button
-            onClick={() => handleReauth(account.id)}
-            className="px-3 py-1 text-sm font-medium text-amber-800 dark:text-amber-200 bg-amber-200 dark:bg-amber-800 hover:bg-amber-300 dark:hover:bg-amber-700 rounded transition-colors"
-          >
-            Re-authenticate
-          </button>
+          {reauthingAccountId === account.id ? (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-amber-600 dark:text-amber-400">
+                Waiting for browser…
+              </span>
+              <button
+                onClick={handleCancelReauth}
+                className="px-3 py-1 text-sm font-medium text-red-800 dark:text-red-200 bg-red-200 dark:bg-red-800 hover:bg-red-300 dark:hover:bg-red-700 rounded transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => handleReauth(account.id)}
+              disabled={reauthingAccountId !== null}
+              className="px-3 py-1 text-sm font-medium text-amber-800 dark:text-amber-200 bg-amber-200 dark:bg-amber-800 hover:bg-amber-300 dark:hover:bg-amber-700 rounded transition-colors disabled:opacity-50"
+            >
+              Re-authenticate
+            </button>
+          )}
         </div>
       ))}
       {[...extensionAuthRequired.entries()].map(([extId, { displayName, message }]) => (
