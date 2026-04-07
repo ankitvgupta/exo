@@ -777,6 +777,10 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
           agentCoordinator.cancel(activeTaskId);
         }
         this.processedDrafts.delete(emailId);
+        // Also clear thread-level dedup so new emails in the thread can get drafts
+        if (email.threadId) {
+          this.processedDraftThreads.delete(email.threadId);
+        }
       }
 
       log.info(
