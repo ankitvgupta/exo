@@ -166,6 +166,10 @@ function Toolbar({ editor }: { editor: Editor | null }) {
     setShowLinkPopover((prev) => !prev);
   }, []);
 
+  const closeLinkPopover = useCallback(() => {
+    setShowLinkPopover(false);
+  }, []);
+
   const insertImage = useCallback(() => {
     fileInputRef.current?.click();
   }, []);
@@ -332,7 +336,7 @@ function Toolbar({ editor }: { editor: Editor | null }) {
         {showLinkPopover && (
           <LinkPopover
             editor={editor}
-            onClose={() => setShowLinkPopover(false)}
+            onClose={closeLinkPopover}
             anchorRef={linkButtonRef}
           />
         )}
