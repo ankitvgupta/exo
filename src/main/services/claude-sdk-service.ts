@@ -253,7 +253,10 @@ export async function createMessageViaSdk(
     const queryResult = sdkQuery({ prompt, options: sdkOptions });
     const { assistantMessage, result } = await collectSdkResponse(queryResult);
 
-    if (result && result.is_error && result.subtype !== "success") {
+    if (!result) {
+      throw new Error("SDK query produced no result message");
+    }
+    if (result.is_error && result.subtype !== "success") {
       const errMsg = result.errors?.join("; ") || "SDK query failed";
       throw new Error(errMsg);
     }
@@ -297,6 +300,7 @@ export async function createStreamingMessageViaSdk(
   params: {
     model: string;
     max_tokens: number;
+    system?: string;
     thinking?: ThinkingConfig;
     messages: Array<{ role: string; content: string }>;
   },
@@ -326,6 +330,7 @@ export async function createStreamingMessageViaSdk(
     thinking: params.thinking ?? { type: "disabled" },
     permissionMode: "dontAsk",
     settingSources: [],
+    ...(params.system ? { systemPrompt: params.system } : {}),
   };
 
   log.info(
