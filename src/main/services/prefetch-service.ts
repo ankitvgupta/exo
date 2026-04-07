@@ -25,7 +25,7 @@ const log = createLogger("prefetch");
 // Cached label ID→name map per account, populated lazily from Gmail API
 const labelNameCache = new Map<string, Map<string, string>>();
 
-async function resolveLabelNames(labelIds: string[] | undefined, accountId: string | undefined): Promise<string[]> {
+export async function resolveLabelNames(labelIds: string[] | undefined, accountId: string | undefined): Promise<string[]> {
   if (!labelIds?.length || !accountId) return [];
 
   // Populate cache on first use for this account
