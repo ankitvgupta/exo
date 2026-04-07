@@ -306,7 +306,14 @@ export function registerComposeIpc(): void {
         // Still trigger draft-edit learning in demo mode so we can test it
         if (options.threadId && !options.isForward) {
           const draftSnapshot = getThreadDraftBody(options.threadId, options.accountId);
-          deleteThreadDrafts(options.threadId, options.accountId);
+          const demoCleanups = deleteThreadDrafts(options.threadId, options.accountId);
+          // Cancel in-flight agents (agent drafts now run in demo mode)
+          for (const cleanup of demoCleanups) {
+            if (cleanup.agentTaskId) {
+              const { agentCoordinator } = await import("../agents/agent-coordinator");
+              agentCoordinator.cancel(cleanup.agentTaskId);
+            }
+          }
           learnFromDraftEdit({
             threadId: options.threadId,
             accountId: options.accountId,

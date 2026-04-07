@@ -1485,7 +1485,7 @@ export function saveAnalysis(
   needsReply: boolean,
   reason: string,
   priority?: string,
-): DraftCleanupInfo | null {
+): DraftCleanupInfo[] | null {
   const db = getDatabase();
   const effectivePriority = priority || null;
 
