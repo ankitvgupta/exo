@@ -44,5 +44,14 @@ export default defineConfig({
       fullyParallel: false,
       workers: 1,
     },
+    {
+      name: "benchmark",
+      testDir: "./benchmarks",
+      testMatch: /.*\.spec\.ts/,
+      // Performance benchmarks — not part of CI, run manually with:
+      // npx playwright test --project=benchmark
+      fullyParallel: false,
+      workers: 1,
+    },
   ],
 });
