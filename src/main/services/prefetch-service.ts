@@ -748,7 +748,12 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
       const userEmail = account?.email;
 
       const result = await analyzer.analyze(emailForAnalysis, userEmail, email.accountId);
-      const draftCleanup = saveAnalysis(emailId, result.needs_reply, result.reason, result.priority);
+      const draftCleanup = saveAnalysis(
+        emailId,
+        result.needs_reply,
+        result.reason,
+        result.priority,
+      );
       this.processedAnalysis.add(emailId);
       this.processedCounts.analysis++;
 

@@ -256,9 +256,7 @@ export function registerAnalysisIpc(): void {
         if (draftCleanup) {
           log.info(`[Analysis] Cleaning up draft for ${emailId} after skip reclassification`);
           if (draftCleanup.gmailDraftId && draftCleanup.accountId) {
-            deleteGmailDraftById(draftCleanup.accountId, draftCleanup.gmailDraftId).catch(
-              () => {},
-            );
+            deleteGmailDraftById(draftCleanup.accountId, draftCleanup.gmailDraftId).catch(() => {});
           }
           const { agentCoordinator } = await import("../agents/agent-coordinator");
           if (draftCleanup.agentTaskId) {
