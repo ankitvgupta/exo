@@ -73,11 +73,16 @@ export function LabelsPanel({
   // Fetch all labels for the picker
   useEffect(() => {
     const accountId = email.accountId || "default";
-    window.api.labels.list(accountId).then((result: { success: boolean; data?: LabelInfo[] }) => {
-      if (result.success && result.data) {
-        setAllLabels(result.data);
-      }
-    });
+    window.api.labels
+      .list(accountId)
+      .then((result: { success: boolean; data?: LabelInfo[] }) => {
+        if (result.success && result.data) {
+          setAllLabels(result.data);
+        }
+      })
+      .catch(() => {
+        // Labels list failed — picker will show empty, which is safe
+      });
   }, [email.accountId]);
 
   // Focus input when picker opens
