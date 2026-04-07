@@ -304,11 +304,15 @@ export function registerArchiveReadyIpc(): void {
         if (archivedIds.length > 0) {
           dismissArchiveReady(threadId, accountId);
 
-          // Clean up drafts and agent traces for archived thread
+          // Clean up drafts, agent traces, and in-flight agents for archived thread
           const draftCleanups = deleteThreadDrafts(threadId, accountId);
           for (const cleanup of draftCleanups) {
             if (cleanup.gmailDraftId) {
               deleteGmailDraftById(accountId, cleanup.gmailDraftId).catch(() => {});
+            }
+            if (cleanup.agentTaskId) {
+              const { agentCoordinator } = await import("../agents/agent-coordinator");
+              agentCoordinator.cancel(cleanup.agentTaskId);
             }
           }
 
@@ -401,11 +405,15 @@ export function registerArchiveReadyIpc(): void {
             for (const email of threadEmails) {
               allRemovedIds.push(email.id);
             }
-            // Clean up drafts and agent traces for archived thread
+            // Clean up drafts, agent traces, and in-flight agents for archived thread
             const draftCleanups = deleteThreadDrafts(row.threadId, accountId);
             for (const cleanup of draftCleanups) {
               if (cleanup.gmailDraftId) {
                 deleteGmailDraftById(accountId, cleanup.gmailDraftId).catch(() => {});
+              }
+              if (cleanup.agentTaskId) {
+                const { agentCoordinator } = await import("../agents/agent-coordinator");
+                agentCoordinator.cancel(cleanup.agentTaskId);
               }
             }
             dismissArchiveReady(row.threadId, accountId);

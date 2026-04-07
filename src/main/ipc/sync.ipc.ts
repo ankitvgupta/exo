@@ -1198,11 +1198,15 @@ export function registerSyncIpc(): void {
         );
       }
 
-      // Clean up unsent drafts and agent traces for archived thread
+      // Clean up unsent drafts, agent traces, and in-flight agents for archived thread
       const draftCleanups = deleteThreadDrafts(threadId, accountId);
       for (const cleanup of draftCleanups) {
         if (cleanup.gmailDraftId && cleanup.accountId) {
           deleteGmailDraftById(cleanup.accountId, cleanup.gmailDraftId).catch(() => {});
+        }
+        if (cleanup.agentTaskId) {
+          const { agentCoordinator } = await import("../agents/agent-coordinator");
+          agentCoordinator.cancel(cleanup.agentTaskId);
         }
       }
 
