@@ -129,8 +129,8 @@ test.describe("Compose - New Email", () => {
     await expect(ccField).toBeVisible({ timeout: 3000 });
     await expect(bccField).toBeVisible({ timeout: 3000 });
 
-    // Toggle button should disappear once expanded
-    await expect(toggleButton).not.toBeVisible();
+    // Toggle button stays visible (chevron that can collapse)
+    await expect(toggleButton).toBeVisible();
 
     // Verify we can type in the Cc field
     const ccInput = ccField.locator("input[type='text']");

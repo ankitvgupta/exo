@@ -379,6 +379,7 @@ export const ConfigSchema = z.object({
   inboxDensity: z.enum(["default", "compact"]).default("compact"),
   undoSendDelay: z.number().min(0).max(30).default(5), // seconds; 0 = disabled
   signatures: z.array(SignatureSchema).optional(),
+  showExoBranding: z.boolean().default(true),
   stylePrompt: z.string().optional(),
   githubToken: z.string().optional(),
   allowPrereleaseUpdates: z.boolean().optional(),
@@ -487,6 +488,14 @@ export type ComposeAttachment = {
   size?: number;
 };
 
+// Gmail send-as alias (cached from Gmail settings)
+export type SendAsAlias = {
+  email: string;
+  displayName?: string;
+  isDefault: boolean;
+  replyToAddress?: string;
+};
+
 // Options for composing a message (used internally)
 export type ComposeMessageOptions = {
   from?: string;
@@ -529,6 +538,7 @@ export const LocalDraftSchema = z.object({
   subject: z.string(),
   bodyHtml: z.string(),
   bodyText: z.string().optional(),
+  fromAddress: z.string().optional(),
   isReply: z.boolean().default(false),
   isForward: z.boolean().default(false),
   createdAt: z.number(),

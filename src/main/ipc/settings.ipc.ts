@@ -58,6 +58,7 @@ function getStore(): Store<{ config: Config }> {
           theme: "system" as const,
           inboxDensity: "compact" as const,
           undoSendDelay: 5,
+          showExoBranding: true,
           autoDraft: {
             enabled: true,
             priorities: ["high", "medium", "low"],
