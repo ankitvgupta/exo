@@ -54,6 +54,7 @@ import type {
   SnoozedEmail,
   IpcResponse,
   InboxSplit,
+  Snippet,
 } from "../shared/types";
 import type { ScopedAgentEvent, AgentProviderConfig } from "../shared/agent-types";
 import { mergeAndThreadSearchResults } from "./utils/searchResults";
@@ -602,68 +603,70 @@ export default function App() {
   const scheduledPanelRef = useRef<HTMLDivElement>(null);
   const extensionsRegistered = useRef(false);
 
-  const {
-    setEmails,
-    addEmails,
-    setLoading,
-    setError,
-    showSettings,
-    settingsInitialTab,
-    setShowSettings,
-    accounts,
-    setAccounts,
-    currentAccountId,
-    setCurrentAccountId,
-    setSyncStatus,
-    setSyncProgress,
-    getSyncStatus,
-    setPrefetchProgress,
-    setBackgroundSyncProgress,
-    composeState,
-    openCompose,
-    isSearchOpen,
-    openSearch,
-    closeSearch,
-    isCommandPaletteOpen,
-    closeCommandPalette,
-    isFindBarOpen,
-    isAgentPaletteOpen,
-    setAgentPaletteOpen,
-    isAgentsSidebarOpen,
-    viewMode,
-    setViewMode,
-    activeSearchQuery,
-    activeSearchResults: _activeSearchResults,
-    clearActiveSearch: _clearActiveSearch,
-    setSelectedEmailId: _setSelectedEmailId,
-    expiredAccountIds,
-    extensionAuthRequired,
-    agentAuthRequired,
-    addExpiredAccount,
-    removeExpiredAccount,
-    addExtensionAuthRequired,
-    removeExtensionAuthRequired,
-    addAgentAuthRequired,
-    removeAgentAuthRequired,
-    isOnline,
-    outboxStats,
-    scheduledMessageStats,
-    setOnline,
-    setOutboxStats,
-    restorePendingRemoval,
-    clearPendingRemoval,
-    setScheduledMessageStats,
-    resolvedTheme,
-    setThemePreference,
-    setResolvedTheme,
-    setInboxDensity,
-    setKeyboardBindings,
-    setUndoSendDelay,
-    setSentEmails,
-    addSentEmails,
-    setSplits,
-    syncProgress,
-  } = useAppStore();
+  // State values — individual selectors to avoid re-rendering the entire App on unrelated changes
+  const showSettings = useAppStore((s) => s.showSettings);
+  const settingsInitialTab = useAppStore((s) => s.settingsInitialTab);
+  const accounts = useAppStore((s) => s.accounts);
+  const currentAccountId = useAppStore((s) => s.currentAccountId);
+  const composeState = useAppStore((s) => s.composeState);
+  const isSearchOpen = useAppStore((s) => s.isSearchOpen);
+  const isCommandPaletteOpen = useAppStore((s) => s.isCommandPaletteOpen);
+  const isFindBarOpen = useAppStore((s) => s.isFindBarOpen);
+  const isAgentPaletteOpen = useAppStore((s) => s.isAgentPaletteOpen);
+  const isAgentsSidebarOpen = useAppStore((s) => s.isAgentsSidebarOpen);
+  const viewMode = useAppStore((s) => s.viewMode);
+  const activeSearchQuery = useAppStore((s) => s.activeSearchQuery);
+  const _activeSearchResults = useAppStore((s) => s.activeSearchResults);
+  const expiredAccountIds = useAppStore((s) => s.expiredAccountIds);
+  const extensionAuthRequired = useAppStore((s) => s.extensionAuthRequired);
+  const agentAuthRequired = useAppStore((s) => s.agentAuthRequired);
+  const isOnline = useAppStore((s) => s.isOnline);
+  const outboxStats = useAppStore((s) => s.outboxStats);
+  const scheduledMessageStats = useAppStore((s) => s.scheduledMessageStats);
+  const resolvedTheme = useAppStore((s) => s.resolvedTheme);
+  const syncProgress = useAppStore((s) => s.syncProgress);
+
+  // Actions — individual selectors so useAppStore() without selector doesn't subscribe to all state
+  const setEmails = useAppStore((s) => s.setEmails);
+  const addEmails = useAppStore((s) => s.addEmails);
+  const setLoading = useAppStore((s) => s.setLoading);
+  const setError = useAppStore((s) => s.setError);
+  const setShowSettings = useAppStore((s) => s.setShowSettings);
+  const setAccounts = useAppStore((s) => s.setAccounts);
+  const setCurrentAccountId = useAppStore((s) => s.setCurrentAccountId);
+  const setSyncStatus = useAppStore((s) => s.setSyncStatus);
+  const setSyncProgress = useAppStore((s) => s.setSyncProgress);
+  const syncStatuses = useAppStore((s) => s.syncStatuses);
+  const setPrefetchProgress = useAppStore((s) => s.setPrefetchProgress);
+  const setBackgroundSyncProgress = useAppStore((s) => s.setBackgroundSyncProgress);
+  const openCompose = useAppStore((s) => s.openCompose);
+  const openSearch = useAppStore((s) => s.openSearch);
+  const closeSearch = useAppStore((s) => s.closeSearch);
+  const closeCommandPalette = useAppStore((s) => s.closeCommandPalette);
+  const setAgentPaletteOpen = useAppStore((s) => s.setAgentPaletteOpen);
+  const setViewMode = useAppStore((s) => s.setViewMode);
+  const _clearActiveSearch = useAppStore((s) => s.clearActiveSearch);
+  const _setSelectedEmailId = useAppStore((s) => s.setSelectedEmailId);
+  const addExpiredAccount = useAppStore((s) => s.addExpiredAccount);
+  const removeExpiredAccount = useAppStore((s) => s.removeExpiredAccount);
+  const addExtensionAuthRequired = useAppStore((s) => s.addExtensionAuthRequired);
+  const removeExtensionAuthRequired = useAppStore((s) => s.removeExtensionAuthRequired);
+  const addAgentAuthRequired = useAppStore((s) => s.addAgentAuthRequired);
+  const removeAgentAuthRequired = useAppStore((s) => s.removeAgentAuthRequired);
+  const setOnline = useAppStore((s) => s.setOnline);
+  const setOutboxStats = useAppStore((s) => s.setOutboxStats);
+  const restorePendingRemoval = useAppStore((s) => s.restorePendingRemoval);
+  const clearPendingRemoval = useAppStore((s) => s.clearPendingRemoval);
+  const setScheduledMessageStats = useAppStore((s) => s.setScheduledMessageStats);
+  const setThemePreference = useAppStore((s) => s.setThemePreference);
+  const setResolvedTheme = useAppStore((s) => s.setResolvedTheme);
+  const setInboxDensity = useAppStore((s) => s.setInboxDensity);
+  const setKeyboardBindings = useAppStore((s) => s.setKeyboardBindings);
+  const setUndoSendDelay = useAppStore((s) => s.setUndoSendDelay);
+  const setSentEmails = useAppStore((s) => s.setSentEmails);
+  const addSentEmails = useAppStore((s) => s.addSentEmails);
+  const setSplits = useAppStore((s) => s.setSplits);
+  const setSnippets = useAppStore((s) => s.setSnippets);
 
   // Initialize keyboard shortcuts
   useKeyboardShortcuts({
@@ -776,6 +779,20 @@ export default function App() {
       });
   }, [setSplits]);
 
+  // Load snippets on mount (stored in electron-store, independent of sync)
+  useEffect(() => {
+    window.api.snippets
+      .getAll()
+      .then((result: { success: boolean; data?: Snippet[] }) => {
+        if (result.success && result.data) {
+          setSnippets(result.data);
+        }
+      })
+      .catch((err: unknown) => {
+        console.error("Failed to load snippets on mount:", err);
+      });
+  }, [setSnippets]);
+
   // Initialize sync and accounts
   const initializeSync = useCallback(async () => {
     try {
@@ -794,9 +811,10 @@ export default function App() {
         const accountsResult = await window.api.accounts.list();
         if (accountsResult.success && accountsResult.data) {
           const fullAccounts: Account[] = accountsResult.data.map(
-            (acc: { id: string; email: string; isPrimary: boolean }) => ({
+            (acc: { id: string; email: string; isPrimary: boolean; displayName?: string }) => ({
               id: acc.id,
               email: acc.email,
+              displayName: acc.displayName,
               isPrimary: acc.isPrimary,
               isConnected: accountList.find((a) => a.id === acc.id)?.isConnected ?? false,
             }),
@@ -818,13 +836,15 @@ export default function App() {
         }
 
         // Load cached emails for all accounts (including expired ones)
+        // Fetch all accounts in parallel instead of sequentially
         const allEmails: DashboardEmail[] = [];
         const allSentEmails: DashboardEmail[] = [];
-        for (const acc of accountList) {
-          const [emailsResult, sentResult] = await Promise.all([
-            window.api.sync.getEmails(acc.id),
-            window.api.sync.getSentEmails(acc.id),
-          ]);
+        const accountResults = await Promise.all(
+          accountList.map((acc) =>
+            Promise.all([window.api.sync.getEmails(acc.id), window.api.sync.getSentEmails(acc.id)]),
+          ),
+        );
+        for (const [emailsResult, sentResult] of accountResults) {
           if (emailsResult.success && emailsResult.data) {
             allEmails.push(...emailsResult.data);
           }
@@ -1451,7 +1471,10 @@ export default function App() {
     }
   };
 
+  const [reauthingAccountId, setReauthingAccountId] = useState<string | null>(null);
+
   const handleReauth = async (accountId: string) => {
+    setReauthingAccountId(accountId);
     try {
       const result = await window.api.auth.reauth(accountId);
       if ((result as Record<string, unknown>).success) {
@@ -1483,13 +1506,27 @@ export default function App() {
         // Trigger a sync to pick up any new messages from Gmail
         window.api.sync.now(accountId).catch(console.error);
       } else {
-        console.error("[Auth] Re-auth failed");
-        addBreadcrumb("error", "Re-auth failed");
+        const error = (result as Record<string, unknown>).error;
+        if (error === "Authorization cancelled") {
+          // User cancelled — don't show as an error
+        } else {
+          console.error("[Auth] Re-auth failed");
+          addBreadcrumb("error", "Re-auth failed");
+        }
       }
     } catch (err) {
-      console.error("[Auth] Re-auth error:", err);
-      captureException(err instanceof Error ? err : new Error(String(err)), { context: "re-auth" });
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg !== "Authorization cancelled") {
+        console.error("[Auth] Re-auth error:", err);
+        captureException(err instanceof Error ? err : new Error(msg), { context: "re-auth" });
+      }
+    } finally {
+      setReauthingAccountId(null);
     }
+  };
+
+  const handleCancelReauth = async () => {
+    await window.api.auth.cancelReauth();
   };
 
   const handleSetupComplete = () => {
@@ -1512,7 +1549,9 @@ export default function App() {
 
   // Get current account and its sync status
   const currentAccount = accounts.find((a) => a.id === currentAccountId);
-  const currentSyncStatus = currentAccountId ? getSyncStatus(currentAccountId) : "idle";
+  const currentSyncStatus = currentAccountId
+    ? syncStatuses.get(currentAccountId) || "idle"
+    : "idle";
   const isSyncing = currentSyncStatus === "syncing";
   const isCurrentAccountExpired =
     currentAccountId != null && expiredAccountIds.has(currentAccountId);
@@ -1910,12 +1949,27 @@ export default function App() {
               <strong>{account.email}</strong> session expired
             </span>
           </div>
-          <button
-            onClick={() => handleReauth(account.id)}
-            className="px-3 py-1 text-sm font-medium text-amber-800 dark:text-amber-200 bg-amber-200 dark:bg-amber-800 hover:bg-amber-300 dark:hover:bg-amber-700 rounded transition-colors"
-          >
-            Re-authenticate
-          </button>
+          {reauthingAccountId === account.id ? (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-amber-600 dark:text-amber-400">
+                Waiting for browser…
+              </span>
+              <button
+                onClick={handleCancelReauth}
+                className="px-3 py-1 text-sm font-medium text-red-800 dark:text-red-200 bg-red-200 dark:bg-red-800 hover:bg-red-300 dark:hover:bg-red-700 rounded transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => handleReauth(account.id)}
+              disabled={reauthingAccountId !== null}
+              className="px-3 py-1 text-sm font-medium text-amber-800 dark:text-amber-200 bg-amber-200 dark:bg-amber-800 hover:bg-amber-300 dark:hover:bg-amber-700 rounded transition-colors disabled:opacity-50"
+            >
+              Re-authenticate
+            </button>
+          )}
         </div>
       ))}
       {[...extensionAuthRequired.entries()].map(([extId, { displayName, message }]) => (

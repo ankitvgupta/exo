@@ -36,6 +36,7 @@ import {
 import { getEnrichmentBySender } from "../extensions/enrichment-store";
 import { autoUpdateService } from "../services/auto-updater";
 
+import { existsSync } from "fs";
 import { getDataDir } from "../data-dir";
 import { createLogger } from "../services/logger";
 
@@ -63,6 +64,7 @@ function getStore(): Store<{ config: Config }> {
           theme: "system" as const,
           inboxDensity: "compact" as const,
           undoSendDelay: 5,
+          showExoBranding: true,
           autoDraft: {
             enabled: true,
             priorities: ["high", "medium", "low"],
@@ -279,6 +281,17 @@ export function registerSettingsIpc(): void {
       // Propagate LLM backend change
       if ("llmBackend" in config && newConfig.llmBackend) {
         setLlmBackendFromConfig(newConfig.llmBackend);
+      }
+
+      // Append any new extra PATH directories so they take effect without restart
+      if ("extraPathDirs" in config) {
+        const pathEntries = new Set((process.env.PATH || "").split(":"));
+        for (const dir of newConfig.extraPathDirs ?? []) {
+          if (dir && !pathEntries.has(dir) && existsSync(dir)) {
+            process.env.PATH = `${dir}:${process.env.PATH}`;
+            pathEntries.add(dir);
+          }
+        }
       }
 
       // Reset cached analyzer/service instances when model config, API key, or backend changes,

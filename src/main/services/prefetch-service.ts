@@ -610,7 +610,8 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
         this.currentTask = batch[0]; // Show first task as current
         this.emitProgress();
 
-        // Process batch in parallel
+        // Process batch in parallel, yielding after each task's DB write
+        // to prevent synchronous write bursts from blocking the main thread
         const tBatch = performance.now();
         await Promise.all(
           batch.map(async (task) => {
@@ -618,6 +619,8 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
               const tTask = performance.now();
               await this.processTask(task);
               const taskTime = performance.now() - tTask;
+              // Yield after each task so DB writes don't pile up back-to-back
+              await new Promise((resolve) => setImmediate(resolve));
               if (taskTime > 100) {
                 log.info(
                   `[PERF] processTask ${task.type}:${task.emailId.slice(0, 8)} took ${taskTime.toFixed(1)}ms`,

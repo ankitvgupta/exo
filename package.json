@@ -31,6 +31,7 @@
     "test:e2e": "./scripts/run-tests.sh e2e",
     "test:integration": "./scripts/run-tests.sh integration",
     "test:problematic": "playwright test --project=problematic",
+    "test:bench": "playwright test --project=benchmark",
     "test:headed": "playwright test --headed",
     "test:quick": "playwright test --project=unit --project=integration",
     "lint": "eslint src/",
