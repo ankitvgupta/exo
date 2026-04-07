@@ -532,7 +532,9 @@ export class GmailClient {
   async listLabels(): Promise<{ id: string; name: string }[]> {
     const gmail = this.gmail!;
     const response = await gmail.users.labels.list({ userId: "me" });
-    return (response.data.labels || []).map((l) => ({ id: l.id!, name: l.name! }));
+    return (response.data.labels || [])
+      .filter((l) => l.id && l.name)
+      .map((l) => ({ id: l.id!, name: l.name! }));
   }
 
   /**

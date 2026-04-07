@@ -44,7 +44,8 @@ export async function resolveLabelNames(labelIds: string[] | undefined, accountI
         map.set(label.id, label.name);
       }
       labelNameCache.set(accountId, map);
-    } catch {
+    } catch (err) {
+      log.warn({ err, accountId }, "Failed to fetch labels for account");
       return [];
     }
   }
