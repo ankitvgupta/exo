@@ -316,10 +316,9 @@ function resolveSnippetVariables(
 ): string {
   let resolved = body;
 
-  // Resolve {my_name} — escape for HTML, use replacer to avoid $-pattern interpretation
+  // Resolve {my_name} — use replacer function to avoid $-pattern interpretation
   if (senderName) {
-    const escaped = escapeHtml(senderName);
-    resolved = resolved.replace(/\{my_name\}/gi, () => escaped);
+    resolved = resolved.replace(/\{my_name\}/gi, () => senderName);
   }
 
   // Resolve {first_name} from recipient email (best effort: take part before @, capitalize)
@@ -327,8 +326,7 @@ function resolveSnippetVariables(
     const localPart = recipientEmail.split("@")[0] || "";
     const firstName = localPart.split(/[._-]/)[0];
     const capitalized = firstName.charAt(0).toUpperCase() + firstName.slice(1).toLowerCase();
-    const escaped = escapeHtml(capitalized);
-    resolved = resolved.replace(/\{first_name\}/gi, () => escaped);
+    resolved = resolved.replace(/\{first_name\}/gi, () => capitalized);
   }
 
   // Custom placeholders like {inviter}, {action_item_1} are left as-is
