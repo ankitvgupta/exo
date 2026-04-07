@@ -22,40 +22,59 @@ import { createLogger } from "./logger";
 
 const log = createLogger("prefetch");
 
-// Cached label ID→name map per account, populated lazily from Gmail API
-const labelNameCache = new Map<string, Map<string, string>>();
+// Cached label ID→name map per account, populated lazily from Gmail API.
+// Entries expire after LABEL_CACHE_TTL_MS so newly created labels are picked up.
+const LABEL_CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
+const labelNameCache = new Map<string, { map: Map<string, string>; ts: number }>();
+// In-flight fetch promises, keyed by accountId, to deduplicate concurrent calls
+const labelFetchInFlight = new Map<string, Promise<Map<string, string>>>();
 
 // System labels the analyzer doesn't need to see (already obvious from context)
 const HIDDEN_LABELS = new Set(["INBOX", "UNREAD", "SENT", "DRAFT", "SPAM", "TRASH",
   "CATEGORY_PERSONAL", "CATEGORY_SOCIAL", "CATEGORY_UPDATES",
   "CATEGORY_FORUMS", "CATEGORY_PROMOTIONS"]);
 
+async function fetchLabelsForAccount(accountId: string): Promise<Map<string, string>> {
+  const { getClient } = await import("../ipc/gmail.ipc");
+  const client = await getClient(accountId);
+  const labels = await client.listLabels();
+  const map = new Map<string, string>();
+  for (const label of labels) {
+    map.set(label.id, label.name);
+  }
+  return map;
+}
+
 export async function resolveLabelNames(labelIds: string[] | undefined, accountId: string | undefined): Promise<string[]> {
   if (!labelIds?.length || !accountId) return [];
 
-  // Populate cache on first use for this account
-  if (!labelNameCache.has(accountId)) {
+  // Check cache freshness
+  const cached = labelNameCache.get(accountId);
+  if (!cached || Date.now() - cached.ts > LABEL_CACHE_TTL_MS) {
+    // Deduplicate concurrent fetches for the same account
+    if (!labelFetchInFlight.has(accountId)) {
+      const fetchPromise = fetchLabelsForAccount(accountId)
+        .then((map) => {
+          labelNameCache.set(accountId, { map, ts: Date.now() });
+          return map;
+        })
+        .finally(() => labelFetchInFlight.delete(accountId));
+      labelFetchInFlight.set(accountId, fetchPromise);
+    }
     try {
-      const { getClient } = await import("../ipc/gmail.ipc");
-      const client = await getClient(accountId);
-      const labels = await client.listLabels();
-      const map = new Map<string, string>();
-      for (const label of labels) {
-        map.set(label.id, label.name);
-      }
-      labelNameCache.set(accountId, map);
+      await labelFetchInFlight.get(accountId);
     } catch (err) {
       log.warn({ err, accountId }, "Failed to fetch labels for account");
       return [];
     }
   }
 
-  const nameMap = labelNameCache.get(accountId);
-  if (!nameMap) return [];
+  const entry = labelNameCache.get(accountId);
+  if (!entry) return [];
 
   return labelIds
     .filter((id) => !HIDDEN_LABELS.has(id))
-    .map((id) => nameMap.get(id) ?? id)
+    .map((id) => entry.map.get(id) ?? id)
     .filter((name) => !name.startsWith("Label_")); // drop unresolved IDs
 }
 
