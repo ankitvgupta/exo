@@ -26,7 +26,7 @@ function safeSonicBoomWrapper(dest: SonicBoom): Writable & { flushSync?: () => v
   const wrapper = new Writable({
     write(chunk, _encoding, callback) {
       try {
-        if (dest.destroyed) {
+        if ((dest as unknown as { destroyed: boolean }).destroyed) {
           callback();
           return;
         }
@@ -49,7 +49,7 @@ function safeSonicBoomWrapper(dest: SonicBoom): Writable & { flushSync?: () => v
   // flush the underlying SonicBoom buffer to disk.
   (wrapper as Writable & { flushSync: () => void }).flushSync = () => {
     try {
-      if (!dest.destroyed) dest.flushSync();
+      if (!(dest as unknown as { destroyed: boolean }).destroyed) dest.flushSync();
     } catch {
       /* best effort */
     }
