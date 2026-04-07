@@ -132,25 +132,30 @@ const SnippetList = forwardRef<SnippetListRef, SnippetListProps>(({ items, comma
   if (items.length === 0) return null;
 
   return (
-    <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg dark:shadow-xl dark:shadow-black/50 max-h-60 overflow-y-auto z-50 w-96">
+    <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg dark:shadow-xl dark:shadow-black/50 max-h-60 overflow-y-auto z-50">
       {items.map((item, index) => (
         <div
           key={item.id}
-          className={`px-4 py-2.5 cursor-pointer text-sm ${
+          className={`px-3 py-2 cursor-pointer text-sm ${
             index === selectedIndex
               ? "bg-blue-50 dark:bg-gray-700"
               : "hover:bg-gray-100 dark:hover:bg-gray-700/50"
           }`}
-          onClick={() => selectItem(index)}
+          // Use mousedown + preventDefault to keep editor focus (click would blur the editor
+          // and cause the suggestion plugin to close before the command fires)
+          onMouseDown={(e) => {
+            e.preventDefault();
+            selectItem(index);
+          }}
           onMouseEnter={() => setSelectedIndex(index)}
         >
           <div className="flex items-center justify-between gap-2">
-            <span className="font-medium text-gray-900 dark:text-gray-100 truncate">
+            <span className="font-medium text-gray-900 dark:text-gray-100 truncate text-xs">
               {item.name}
             </span>
-            <span className="text-xs text-gray-400 dark:text-gray-500 shrink-0">Me</span>
+            <span className="text-[10px] text-gray-400 dark:text-gray-500 shrink-0">Me</span>
           </div>
-          <p className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">
+          <p className="text-[11px] text-gray-500 dark:text-gray-400 truncate">
             {stripHtmlPreview(item.body)}
           </p>
         </div>
