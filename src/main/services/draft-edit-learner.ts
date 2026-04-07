@@ -10,6 +10,7 @@
  * Key invariant: draft memories never enter the prompt. Only promoted memories do.
  */
 import { randomUUID } from "crypto";
+import type { Message } from "@anthropic-ai/sdk/resources/messages";
 import { createMessage, getClient, recordStreamingCall, getLlmBackend } from "./anthropic-service";
 import { createStreamingMessageViaSdk } from "./claude-sdk-service";
 import {
@@ -252,7 +253,7 @@ Each item: {"scope":"...","scopeValue":"...","content":"...","emailContext":"bri
 
 Respond with ONLY the JSON array, no other text.`;
 
-  let response: { content: Array<{ type: string; thinking?: string; text?: string }> };
+  let response: Message;
 
   if (getLlmBackend() === "claude-sdk") {
     // Claude Agent SDK path — uses subscription-based billing
@@ -265,7 +266,7 @@ Respond with ONLY the JSON array, no other text.`;
       },
       { caller: "draft-edit-learner-analyze" },
     );
-    response = sdkResult.message as unknown as typeof response;
+    response = sdkResult.message;
 
     recordStreamingCall(
       "claude-opus-4-20250514",
@@ -285,29 +286,26 @@ Respond with ONLY the JSON array, no other text.`;
       },
       messages: [{ role: "user", content: userPrompt }],
     });
-    const rawResponse = await stream.finalMessage();
-    response = rawResponse as unknown as typeof response;
+    response = await stream.finalMessage();
 
-    // Record streaming call cost
-    const streamUsage = rawResponse.usage as unknown as Record<string, number>;
     recordStreamingCall(
       "claude-opus-4-20250514",
       "draft-edit-learner-analyze",
-      streamUsage,
+      { input_tokens: response.usage.input_tokens, output_tokens: response.usage.output_tokens },
       Date.now() - streamStartTime,
     );
   }
 
   // Log thinking if present
   const thinkingBlock = response.content.find((b) => b.type === "thinking");
-  if (thinkingBlock?.type === "thinking") {
+  if (thinkingBlock && "thinking" in thinkingBlock) {
     log.info(
       `[DraftEditLearner] === THINKING ===\n${thinkingBlock.thinking}\n[DraftEditLearner] === END THINKING ===`,
     );
   }
 
   const textBlock = response.content.find((b) => b.type === "text");
-  const text = (textBlock?.type === "text" ? textBlock.text : "") ?? "";
+  const text = textBlock && "text" in textBlock ? textBlock.text : "";
   log.info(`[DraftEditLearner] Raw response: ${text}`);
 
   // Parse JSON array from response

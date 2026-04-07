@@ -2417,7 +2417,8 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                 <select
                   value={llmBackend}
                   onChange={async (e) => {
-                    const value = e.target.value as "anthropic" | "claude-sdk";
+                    const value = e.target.value;
+                    if (value !== "anthropic" && value !== "claude-sdk") return;
                     setLlmBackend(value);
                     await window.api.settings.set({ llmBackend: value });
                   }}

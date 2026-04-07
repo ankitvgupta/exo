@@ -72,21 +72,24 @@ function extractUserPrompt(messages: MessageCreateParamsNonStreaming["messages"]
  */
 function hasWebSearchTool(params: MessageCreateParamsNonStreaming): boolean {
   if (!params.tools) return false;
-  return params.tools.some(
-    (tool) => "type" in tool && (tool.type as string) === "web_search_20250305",
-  );
+  return params.tools.some((tool) => {
+    if (!("type" in tool)) return false;
+    const toolType: string = tool.type;
+    return toolType === "web_search_20250305";
+  });
 }
 
 /**
- * Extract thinking config from params if present.
+ * Extract thinking config from Anthropic SDK params and convert to Claude Agent SDK format.
+ * Anthropic SDK uses snake_case (budget_tokens), Claude Agent SDK uses camelCase (budgetTokens).
  */
 function extractThinkingConfig(
   params: MessageCreateParamsNonStreaming,
 ): ThinkingConfig | undefined {
-  const thinking = (params as unknown as Record<string, unknown>).thinking as
-    | ThinkingConfig
-    | undefined;
-  return thinking;
+  const thinking = params.thinking;
+  if (!thinking) return undefined;
+  if (thinking.type === "disabled") return { type: "disabled" };
+  return { type: "enabled", budgetTokens: thinking.budget_tokens };
 }
 
 /**
@@ -112,7 +115,7 @@ function buildSdkOptions(
     // Disable thinking by default (most callers don't use it)
     thinking: thinking ?? { type: "disabled" },
     // Don't prompt for permissions
-    permissionMode: "dontAsk" as SDKOptions["permissionMode"],
+    permissionMode: "dontAsk",
     // Don't load project settings that might interfere
     settingSources: [],
   };
@@ -152,6 +155,22 @@ async function collectSdkResponse(queryResult: AsyncGenerator<SDKMessage, void>)
   return { assistantMessage, result };
 }
 
+function makeTextBlock(text: string): TextBlock {
+  return { type: "text", text, citations: null };
+}
+
+/**
+ * The SDK adapter builds a Message-compatible object from SDK responses.
+ * Some fields (model, stop_reason) come as plain strings from the SDK rather
+ * than the narrow literal unions the Anthropic SDK types declare, so a single
+ * boundary assertion is used on the return. This is preferable to double-casting
+ * every intermediate value.
+ */
+type SdkAdaptedMessage = Omit<Message, "model" | "stop_reason"> & {
+  model: string;
+  stop_reason: string | null;
+};
+
 /**
  * Adapt SDK response to match the Anthropic SDK Message shape.
  * Callers expect `response.content` with TextBlock/ThinkingBlock entries.
@@ -167,32 +186,26 @@ function adaptResponse(
   if (assistantMessage?.message?.content) {
     for (const block of assistantMessage.message.content) {
       if (block.type === "text") {
-        content.push({ type: "text", text: block.text } as TextBlock);
+        content.push(makeTextBlock(block.text));
       } else if (block.type === "thinking" && "thinking" in block) {
-        // Pass through thinking blocks as-is for callers that need them
-        content.push(block as unknown as ContentBlock);
+        // SDK content blocks from BetaMessage are structurally compatible with ContentBlock
+        content.push(block);
       }
     }
   } else if (result && "result" in result && result.subtype === "success") {
-    // Fallback: use the result text if no assistant message content
-    content.push({ type: "text", text: result.result } as TextBlock);
+    content.push(makeTextBlock(result.result));
   }
 
-  // If we still have no content, create an empty text block
   if (content.length === 0) {
-    content.push({ type: "text", text: "" } as TextBlock);
+    content.push(makeTextBlock(""));
   }
 
-  // Build usage from result metadata
   const usage = {
     input_tokens: result?.usage?.input_tokens ?? 0,
     output_tokens: result?.usage?.output_tokens ?? 0,
-    cache_read_input_tokens: 0,
-    cache_creation_input_tokens: 0,
   };
 
-  // Construct a Message-like object that satisfies the callers
-  return {
+  const adapted: SdkAdaptedMessage = {
     id: assistantMessage?.uuid ?? "sdk-msg",
     type: "message",
     role: "assistant",
@@ -201,7 +214,12 @@ function adaptResponse(
     stop_reason: result?.stop_reason ?? "end_turn",
     stop_sequence: null,
     usage,
-  } as unknown as Message;
+  };
+
+  // Single boundary assertion: SdkAdaptedMessage differs from Message only in
+  // model (string vs Model) and stop_reason (string vs StopReason), both of
+  // which are compatible at runtime.
+  return adapted as Message;
 }
 
 /**
@@ -235,9 +253,8 @@ export async function createMessageViaSdk(
     const queryResult = sdkQuery({ prompt, options: sdkOptions });
     const { assistantMessage, result } = await collectSdkResponse(queryResult);
 
-    if (result && "is_error" in result && result.is_error) {
-      const errorResult = result as SDKResultError;
-      const errMsg = errorResult.errors?.join("; ") || "SDK query failed";
+    if (result && result.is_error && result.subtype !== "success") {
+      const errMsg = result.errors?.join("; ") || "SDK query failed";
       throw new Error(errMsg);
     }
 
@@ -307,7 +324,7 @@ export async function createStreamingMessageViaSdk(
     tools: [],
     persistSession: false,
     thinking: params.thinking ?? { type: "disabled" },
-    permissionMode: "dontAsk" as SDKOptions["permissionMode"],
+    permissionMode: "dontAsk",
     settingSources: [],
   };
 
@@ -320,9 +337,8 @@ export async function createStreamingMessageViaSdk(
     const queryResult = sdkQuery({ prompt, options: sdkOptions });
     const { assistantMessage, result } = await collectSdkResponse(queryResult);
 
-    if (result && "is_error" in result && result.is_error) {
-      const errorResult = result as SDKResultError;
-      const errMsg = errorResult.errors?.join("; ") || "SDK streaming query failed";
+    if (result && result.is_error && result.subtype !== "success") {
+      const errMsg = result.errors?.join("; ") || "SDK streaming query failed";
       throw new Error(errMsg);
     }
 

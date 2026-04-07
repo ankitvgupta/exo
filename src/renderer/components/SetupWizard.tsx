@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import type { IpcResponse } from "../../shared/types";
 import { reconfigurePostHog } from "../services/posthog";
 
@@ -20,8 +20,13 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Track which steps are in the flow (determined at init)
-  const [visibleSteps, setVisibleSteps] = useState<Step[]>([]);
+  // Auth state from IPC — drives visibleSteps derivation
+  const [authState, setAuthState] = useState<{
+    hasCredentials: boolean;
+    hasTokens: boolean;
+    hasAnthropicKey: boolean;
+  } | null>(null);
+  const [showExtensions, setShowExtensions] = useState(true);
 
   // Google OAuth credentials input
   const [googleClientId, setGoogleClientId] = useState("");
@@ -40,9 +45,27 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
   // Analytics opt-in (default ON — session replay is bundled under analytics)
   const [analyticsEnabled, setAnalyticsEnabled] = useState(true);
 
+  // Derive visible steps from auth state, backend choice, and extension state
+  const visibleSteps = useMemo((): Step[] => {
+    if (!authState) return [];
+    const { hasCredentials, hasAnthropicKey, hasTokens } = authState;
+
+    const flow: Step[] = [];
+    if (!hasAnthropicKey) {
+      flow.push("backend");
+      if (setupBackend === "anthropic") flow.push("apikey");
+    }
+    if (!hasCredentials) flow.push("credentials");
+    if (!hasTokens) flow.push("oauth");
+    if (showExtensions) flow.push("extensions");
+    flow.push("analytics");
+    return flow;
+  }, [authState, setupBackend, showExtensions]);
+
   // Check what's already configured and skip to the right step.
   // Backend choice is always the first step so the user picks how to connect to Claude.
   useEffect(() => {
+    const defaultAuth = { hasCredentials: false, hasTokens: false, hasAnthropicKey: false };
     (
       window.api.gmail.checkAuth() as Promise<
         IpcResponse<{ hasCredentials: boolean; hasTokens: boolean; hasAnthropicKey: boolean }>
@@ -51,16 +74,9 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
       .then((authResult) => {
         if (authResult.success) {
           const { hasCredentials, hasAnthropicKey, hasTokens } = authResult.data;
+          setAuthState({ hasCredentials, hasAnthropicKey, hasTokens });
 
-          // If the user already has a working LLM backend, skip the backend step
           if (hasAnthropicKey) {
-            const flow: Step[] = [];
-            if (!hasCredentials) flow.push("credentials");
-            if (!hasTokens) flow.push("oauth");
-            flow.push("extensions");
-            flow.push("analytics");
-            setVisibleSteps(flow);
-
             if (!hasCredentials) {
               setStep("credentials");
             } else if (!hasTokens) {
@@ -69,22 +85,15 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
               enterExtensionsStep();
             }
           } else {
-            // No LLM backend configured — start with backend choice
-            const flow: Step[] = ["backend"];
-            if (!hasCredentials) flow.push("credentials");
-            if (!hasTokens) flow.push("oauth");
-            flow.push("extensions");
-            flow.push("analytics");
-            setVisibleSteps(flow);
             setStep("backend");
           }
         } else {
-          setVisibleSteps(["backend", "credentials", "oauth", "extensions", "analytics"]);
+          setAuthState(defaultAuth);
           setStep("backend");
         }
       })
       .catch(() => {
-        setVisibleSteps(["backend", "credentials", "oauth", "extensions", "analytics"]);
+        setAuthState(defaultAuth);
         setStep("backend");
       });
   }, []);
@@ -166,7 +175,6 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
     setError(null);
 
     try {
-      // Save the backend choice
       const result = (await window.api.settings.set({
         llmBackend: setupBackend,
       })) as IpcResponse<void>;
@@ -176,23 +184,13 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
       }
 
       if (setupBackend === "anthropic") {
-        // Need an API key — insert apikey step after backend if not already there
-        const backendIdx = visibleSteps.indexOf("backend");
-        if (!visibleSteps.includes("apikey")) {
-          const updated = [...visibleSteps];
-          updated.splice(backendIdx + 1, 0, "apikey");
-          setVisibleSteps(updated);
-        }
         setStep("apikey");
       } else {
-        // Claude SDK — skip apikey, go to next step (credentials or oauth)
+        // Claude SDK — skip apikey, go to next step after backend
+        // visibleSteps is derived and will already exclude "apikey"
         const backendIdx = visibleSteps.indexOf("backend");
         const next = visibleSteps[backendIdx + 1];
-        if (next) {
-          setStep(next);
-        } else {
-          setStep("credentials");
-        }
+        setStep(next ?? "credentials");
       }
     } finally {
       setIsLoading(false);
@@ -228,17 +226,16 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
         setStep("extensions");
         setIsLoading(false);
       } else {
-        // No extensions need auth (or IPC failed) — skip extensions step entirely
         if (!result.success) {
           console.error("[SetupWizard] getPendingAuths failed:", result.error);
         }
-        setVisibleSteps((prev) => prev.filter((s) => s !== "extensions"));
+        setShowExtensions(false);
         setIsLoading(false);
         setStep("analytics");
       }
     } catch (err) {
       console.error("[SetupWizard] getPendingAuths failed:", err);
-      setVisibleSteps((prev) => prev.filter((s) => s !== "extensions"));
+      setShowExtensions(false);
       setIsLoading(false);
       setStep("analytics");
     }
