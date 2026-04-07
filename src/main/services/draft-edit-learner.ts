@@ -291,7 +291,12 @@ Respond with ONLY the JSON array, no other text.`;
     recordStreamingCall(
       "claude-opus-4-20250514",
       "draft-edit-learner-analyze",
-      { input_tokens: response.usage.input_tokens, output_tokens: response.usage.output_tokens },
+      {
+        input_tokens: response.usage.input_tokens,
+        output_tokens: response.usage.output_tokens,
+        cache_read_input_tokens: response.usage.cache_read_input_tokens ?? 0,
+        cache_creation_input_tokens: response.usage.cache_creation_input_tokens ?? 0,
+      },
       Date.now() - streamStartTime,
     );
   }

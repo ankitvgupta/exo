@@ -159,7 +159,10 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
         if (authResult.success && authResult.data.hasTokens) {
           await enterExtensionsStep();
         } else {
-          setStep("oauth");
+          // Navigate to the next step in the flow — credentials may still be needed
+          const apikeyIdx = visibleSteps.indexOf("apikey");
+          const next = visibleSteps[apikeyIdx + 1];
+          setStep(next ?? "oauth");
         }
       } else {
         setError(result.error ?? "Failed to save API key");

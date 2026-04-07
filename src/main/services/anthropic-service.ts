@@ -492,6 +492,7 @@ async function createMessageViaClaudeSdk(
 ): Promise<Message> {
   const { caller, emailId, accountId, timeoutMs } = options;
   const model = params.model;
+  const startTime = Date.now();
 
   try {
     const { message, durationMs, inputTokens, outputTokens } = await createMessageViaSdk(params, {
@@ -519,7 +520,7 @@ async function createMessageViaClaudeSdk(
     return message;
   } catch (error) {
     const errMsg = error instanceof Error ? error.message : String(error);
-    recordCall(model, caller, emailId || null, accountId || null, 0, 0, 0, 0, 0, false, errMsg);
+    recordCall(model, caller, emailId || null, accountId || null, 0, 0, 0, 0, Date.now() - startTime, false, errMsg);
     throw error;
   }
 }

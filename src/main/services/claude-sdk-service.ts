@@ -98,11 +98,13 @@ function extractThinkingConfig(
 function buildSdkOptions(
   params: MessageCreateParamsNonStreaming,
   timeoutMs?: number,
-): { prompt: string; options: SDKOptions } {
+): { prompt: string; options: SDKOptions; timeoutHandle: ReturnType<typeof setTimeout> | null } {
   const systemPrompt = extractSystemPrompt(params.system);
   const prompt = extractUserPrompt(params.messages);
   const thinking = extractThinkingConfig(params);
   const needsWebSearch = hasWebSearchTool(params);
+
+  let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
 
   const options: SDKOptions = {
     model: params.model,
@@ -126,11 +128,11 @@ function buildSdkOptions(
 
   if (timeoutMs) {
     const abortController = new AbortController();
-    setTimeout(() => abortController.abort(), timeoutMs);
+    timeoutHandle = setTimeout(() => abortController.abort(), timeoutMs);
     options.abortController = abortController;
   }
 
-  return { prompt, options };
+  return { prompt, options, timeoutHandle };
 }
 
 /**
@@ -242,7 +244,7 @@ export async function createMessageViaSdk(
   outputTokens: number;
 }> {
   const startTime = Date.now();
-  const { prompt, options: sdkOptions } = buildSdkOptions(params, options.timeoutMs);
+  const { prompt, options: sdkOptions, timeoutHandle } = buildSdkOptions(params, options.timeoutMs);
 
   log.info(
     { caller: options.caller, model: params.model },
@@ -289,6 +291,8 @@ export async function createMessageViaSdk(
       "SDK message creation failed",
     );
     throw error;
+  } finally {
+    if (timeoutHandle) clearTimeout(timeoutHandle);
   }
 }
 
