@@ -73,7 +73,7 @@ export function LabelsPanel({
   // Fetch all labels for the picker
   useEffect(() => {
     const accountId = email.accountId || "default";
-    window.api.labels.list(accountId).then((result) => {
+    window.api.labels.list(accountId).then((result: { success: boolean; data?: LabelInfo[] }) => {
       if (result.success && result.data) {
         setAllLabels(result.data);
       }
