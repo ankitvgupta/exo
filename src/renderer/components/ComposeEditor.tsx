@@ -422,6 +422,7 @@ export function ComposeEditor({
       StarterKit.configure({
         heading: false,
         codeBlock: false,
+        link: false, // Link is configured explicitly below
       }),
       Link.configure({
         openOnClick: false,
