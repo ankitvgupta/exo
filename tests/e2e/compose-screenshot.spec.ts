@@ -67,8 +67,8 @@ test.describe("Compose View - CC/BCC Toggle", () => {
     await expect(page.locator("[data-testid='address-input-cc']")).toBeVisible();
     await expect(page.locator("[data-testid='address-input-bcc']")).toBeVisible();
 
-    // Toggle button should be gone
-    await expect(page.locator("[data-testid='compose-cc-bcc-toggle']")).not.toBeVisible();
+    // Toggle button stays visible (chevron that can collapse)
+    await expect(page.locator("[data-testid='compose-cc-bcc-toggle']")).toBeVisible();
 
     // Can add CC and BCC recipients
     const ccInput = page.locator("[data-testid='address-input-cc'] input[type='text']");

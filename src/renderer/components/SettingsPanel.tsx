@@ -152,6 +152,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
   const [signatures, setSignatures] = useState<Signature[]>([]);
   const [editingSignature, setEditingSignature] = useState<Signature | null>(null);
   const [isSavingSignatures, setIsSavingSignatures] = useState(false);
+  const [showExoBranding, setShowExoBranding] = useState(true);
 
   // Fetch current prompts
   const { data: prompts, isLoading } = useQuery({
@@ -246,6 +247,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
   useEffect(() => {
     if (generalConfig) {
       setSignatures(generalConfig.signatures ?? []);
+      setShowExoBranding(generalConfig.showExoBranding !== false);
     }
   }, [generalConfig]);
 
@@ -502,6 +504,16 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
       queryClient.invalidateQueries({ queryKey: ["general-config"] });
     } finally {
       setIsSavingSignatures(false);
+    }
+  };
+
+  const handleToggleExoBranding = async (enabled: boolean) => {
+    try {
+      await window.api.settings.set({ showExoBranding: enabled });
+      setShowExoBranding(enabled);
+      queryClient.invalidateQueries({ queryKey: ["general-config"] });
+    } catch {
+      // state stays at previous value; next config load will re-sync
     }
   };
 
@@ -1600,6 +1612,30 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                 Create and manage email signatures. The default signature is automatically appended
                 when composing new emails.
               </p>
+
+              {/* Exo branding toggle */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600 p-4 mb-6">
+                <label className="flex items-center space-x-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={showExoBranding}
+                    onChange={(e) => handleToggleExoBranding(e.target.checked)}
+                    className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+                  />
+                  <div>
+                    <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                      Show &quot;Sent by Exo&quot; branding
+                    </span>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      Appends a small &quot;Sent by{" "}
+                      <a href="https://exo.email" className="text-blue-500 hover:underline">
+                        Exo
+                      </a>
+                      &quot; line after your signature.
+                    </p>
+                  </div>
+                </label>
+              </div>
 
               {/* Signature list */}
               {!editingSignature && (
