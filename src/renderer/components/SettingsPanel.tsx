@@ -62,6 +62,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
   const [isSaving, setIsSaving] = useState(false);
   const [saveResult, setSaveResult] = useState<string | null>(null);
   const [stylePrompt, setStylePrompt] = useState("");
+  const [isInferring, setIsInferring] = useState(false);
   const [agentDrafterPrompt, setAgentDrafterPrompt] = useState("");
   const [isRerunningAll, setIsRerunningAll] = useState(false);
   const [rerunResult, setRerunResult] = useState<string | null>(null);
@@ -475,6 +476,22 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
 
   const handleResetStylePrompt = () => {
     setStylePrompt(DEFAULT_STYLE_PROMPT);
+  };
+
+  const handleInferStyle = async () => {
+    setIsInferring(true);
+    try {
+      const result = (await window.api.style.infer()) as {
+        success: boolean;
+        data?: string;
+        error?: string;
+      };
+      if (result.success && result.data) {
+        setStylePrompt(result.data);
+      }
+    } finally {
+      setIsInferring(false);
+    }
   };
 
   const handleSaveEA = async () => {
@@ -2062,12 +2079,21 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                     Style Prompt
                   </label>
-                  <button
-                    onClick={handleResetStylePrompt}
-                    className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
-                  >
-                    Reset to default
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={handleInferStyle}
+                      disabled={isInferring}
+                      className="text-xs text-blue-600 dark:text-blue-400 hover:underline disabled:opacity-50"
+                    >
+                      {isInferring ? "Analyzing..." : "Learn My Style"}
+                    </button>
+                    <button
+                      onClick={handleResetStylePrompt}
+                      className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                    >
+                      Reset to default
+                    </button>
+                  </div>
                 </div>
                 <textarea
                   value={stylePrompt}

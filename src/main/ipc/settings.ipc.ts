@@ -572,6 +572,27 @@ export function registerSettingsIpc(): void {
     },
   );
 
+  // Infer writing style from sent emails using Claude Opus
+  ipcMain.handle("style:infer", async (): Promise<IpcResponse<string>> => {
+    try {
+      const { inferStyleFromSentEmails } = await import("../services/style-profiler");
+      const { getEmailSyncService } = await import("./sync.ipc");
+      // Use any available gmail client for fallback (style is cross-account)
+      const syncService = getEmailSyncService();
+      const { getAccounts: getDbAccounts } = await import("../db");
+      const accounts = getDbAccounts();
+      const gmailClient =
+        accounts.length > 0 ? syncService.getClientForAccount(accounts[0].id) : null;
+      const result = await inferStyleFromSentEmails(gmailClient);
+      return { success: true, data: result };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
+  });
+
   // Get EA config
   ipcMain.handle("settings:get-ea", async (): Promise<IpcResponse<EAConfig>> => {
     try {
