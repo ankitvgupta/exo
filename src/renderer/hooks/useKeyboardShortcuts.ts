@@ -125,9 +125,10 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
       const mode = getKeyboardMode();
       const currentThreads = threadsRef.current;
       // In drafts view, scope all thread operations to visible draft threads
-      const visibleThreads = state.currentSplitId === "__drafts__"
-        ? currentThreads.filter((t) => t.draft && t.draft.body)
-        : currentThreads;
+      const visibleThreads =
+        state.currentSplitId === "__drafts__"
+          ? currentThreads.filter((t) => t.draft && t.draft.body)
+          : currentThreads;
 
       // Always allow Escape to close modals or go back in view modes
       if (e.key === "Escape") {
@@ -350,10 +351,15 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
 
         const isSnoozedView = currentSplitId === "__snoozed__";
         const isSentView = currentSplitId === "__sent__";
-        if (isDraftsView || (accountDrafts.length > 0 && currentSplitId !== "__archive-ready__" && !isSentView)) {
+        if (
+          isDraftsView ||
+          (accountDrafts.length > 0 && currentSplitId !== "__archive-ready__" && !isSentView)
+        ) {
           let draftsForNav: typeof accountDrafts;
           if (isSnoozedView) {
-            draftsForNav = accountDrafts.filter((d) => d.threadId && state.snoozedThreads.has(d.threadId));
+            draftsForNav = accountDrafts.filter(
+              (d) => d.threadId && state.snoozedThreads.has(d.threadId),
+            );
           } else {
             // Match EmailList filtering: custom splits filter by conditions, "Other" hides all
             const currentSplit = currentSplitId

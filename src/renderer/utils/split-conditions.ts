@@ -79,11 +79,7 @@ function evaluateConditionForDraft(
       // Drafts don't have a meaningful "from" — skip (no match)
       break;
     case "to": {
-      const allRecipients = [
-        ...draft.to,
-        ...(draft.cc ?? []),
-        ...(draft.bcc ?? []),
-      ];
+      const allRecipients = [...draft.to, ...(draft.cc ?? []), ...(draft.bcc ?? [])];
       matches = allRecipients.some(
         (r) =>
           matchesPattern(r, condition.value) ||
