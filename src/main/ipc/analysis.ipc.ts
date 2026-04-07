@@ -112,7 +112,12 @@ export function registerAnalysisIpc(): void {
         const result = await analyzerInstance.analyze(emailForAnalysis, userEmail, email.accountId);
 
         // Save analysis to database (also cleans up thread drafts if reclassified as skip)
-        const draftCleanup = saveAnalysis(emailId, result.needs_reply, result.reason, result.priority);
+        const draftCleanup = saveAnalysis(
+          emailId,
+          result.needs_reply,
+          result.reason,
+          result.priority,
+        );
         if (draftCleanup) {
           for (const cleanup of draftCleanup) {
             if (cleanup.gmailDraftId && cleanup.accountId) {
@@ -196,7 +201,12 @@ export function registerAnalysisIpc(): void {
               userEmail,
               email.accountId,
             );
-            const batchCleanup = saveAnalysis(emailId, result.needs_reply, result.reason, result.priority);
+            const batchCleanup = saveAnalysis(
+              emailId,
+              result.needs_reply,
+              result.reason,
+              result.priority,
+            );
             if (batchCleanup) {
               for (const cleanup of batchCleanup) {
                 if (cleanup.gmailDraftId && cleanup.accountId) {
