@@ -635,7 +635,7 @@ export default function App() {
   const setCurrentAccountId = useAppStore((s) => s.setCurrentAccountId);
   const setSyncStatus = useAppStore((s) => s.setSyncStatus);
   const setSyncProgress = useAppStore((s) => s.setSyncProgress);
-  const getSyncStatus = useAppStore((s) => s.getSyncStatus);
+  const syncStatuses = useAppStore((s) => s.syncStatuses);
   const setPrefetchProgress = useAppStore((s) => s.setPrefetchProgress);
   const setBackgroundSyncProgress = useAppStore((s) => s.setBackgroundSyncProgress);
   const openCompose = useAppStore((s) => s.openCompose);
@@ -1515,7 +1515,7 @@ export default function App() {
 
   // Get current account and its sync status
   const currentAccount = accounts.find((a) => a.id === currentAccountId);
-  const currentSyncStatus = currentAccountId ? getSyncStatus(currentAccountId) : "idle";
+  const currentSyncStatus = currentAccountId ? syncStatuses.get(currentAccountId) || "idle" : "idle";
   const isSyncing = currentSyncStatus === "syncing";
   const isCurrentAccountExpired =
     currentAccountId != null && expiredAccountIds.has(currentAccountId);
