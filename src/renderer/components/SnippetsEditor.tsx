@@ -284,9 +284,7 @@ export function SnippetsEditor() {
       {editingSnippet && (
         <SnippetForm
           snippet={editingSnippet}
-          onSave={(name, body) =>
-            handleUpdate({ ...editingSnippet, name, body })
-          }
+          onSave={(name, body) => handleUpdate({ ...editingSnippet, name, body })}
           onCancel={() => setEditingSnippet(null)}
           isSaving={isSaving}
         />
