@@ -71,9 +71,11 @@ function readFileAsDataUrl(file: File): Promise<string> {
 function LinkPopover({
   editor,
   onClose,
+  anchorRef,
 }: {
   editor: Editor;
   onClose: () => void;
+  anchorRef: React.RefObject<HTMLDivElement | null>;
 }) {
   const previousUrl = editor.getAttributes("link").href;
   const [url, setUrl] = useState(previousUrl || "https://");
@@ -86,9 +88,11 @@ function LinkPopover({
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
-        onClose();
-      }
+      const target = e.target as Node;
+      // Ignore clicks on the popover itself or the anchor button (toggle handles that)
+      if (popoverRef.current?.contains(target)) return;
+      if (anchorRef.current?.contains(target)) return;
+      onClose();
     };
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -99,7 +103,7 @@ function LinkPopover({
       document.removeEventListener("mousedown", handleClickOutside);
       document.removeEventListener("keydown", handleEscape);
     };
-  }, [onClose]);
+  }, [onClose, anchorRef]);
 
   const apply = () => {
     if (url.trim() === "") {
@@ -156,6 +160,7 @@ function LinkPopover({
 function Toolbar({ editor }: { editor: Editor | null }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showLinkPopover, setShowLinkPopover] = useState(false);
+  const linkButtonRef = useRef<HTMLDivElement>(null);
 
   const toggleLinkPopover = useCallback(() => {
     setShowLinkPopover((prev) => !prev);
@@ -309,8 +314,12 @@ function Toolbar({ editor }: { editor: Editor | null }) {
       </ToolbarButton>
 
       {/* Link */}
-      <div className="relative">
-        <ToolbarButton onClick={toggleLinkPopover} active={editor.isActive("link")} title="Insert link">
+      <div className="relative" ref={linkButtonRef}>
+        <ToolbarButton
+          onClick={toggleLinkPopover}
+          active={editor.isActive("link")}
+          title="Insert link"
+        >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
               strokeLinecap="round"
@@ -321,7 +330,11 @@ function Toolbar({ editor }: { editor: Editor | null }) {
           </svg>
         </ToolbarButton>
         {showLinkPopover && (
-          <LinkPopover editor={editor} onClose={() => setShowLinkPopover(false)} />
+          <LinkPopover
+            editor={editor}
+            onClose={() => setShowLinkPopover(false)}
+            anchorRef={linkButtonRef}
+          />
         )}
       </div>
 
