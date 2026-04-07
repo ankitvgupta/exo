@@ -64,18 +64,21 @@ export async function resolveLabelNames(
   // Check cache freshness
   const cached = labelNameCache.get(accountId);
   if (!cached || Date.now() - cached.ts > LABEL_CACHE_TTL_MS) {
-    // Deduplicate concurrent fetches for the same account
-    if (!labelFetchInFlight.has(accountId)) {
-      const fetchPromise = fetchLabelsForAccount(accountId)
+    // Deduplicate concurrent fetches for the same account.
+    // Capture the promise reference before awaiting — the .finally() cleanup
+    // may delete it from the map before this line runs.
+    let inFlight = labelFetchInFlight.get(accountId);
+    if (!inFlight) {
+      inFlight = fetchLabelsForAccount(accountId)
         .then((map) => {
           labelNameCache.set(accountId, { map, ts: Date.now() });
           return map;
         })
         .finally(() => labelFetchInFlight.delete(accountId));
-      labelFetchInFlight.set(accountId, fetchPromise);
+      labelFetchInFlight.set(accountId, inFlight);
     }
     try {
-      await labelFetchInFlight.get(accountId);
+      await inFlight;
     } catch (err) {
       log.warn({ err, accountId }, "Failed to fetch labels for account");
       return [];
