@@ -59,8 +59,9 @@ export function createLabelsProvider(context: ExtensionContext): EnrichmentProvi
     panelId: "email-labels",
     priority: 90,
 
-    canEnrich(email: DashboardEmail): boolean {
-      return !!email.labelIds?.length;
+    canEnrich(_email: DashboardEmail): boolean {
+      // Always show the labels panel — even unlabeled emails need the "Add label" button
+      return true;
     },
 
     async enrich(email: DashboardEmail): Promise<EnrichmentData | null> {

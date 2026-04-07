@@ -558,6 +558,7 @@ export class GmailClient {
     addLabelIds: string[],
     removeLabelIds: string[],
   ): Promise<void> {
+    if (addLabelIds.length === 0 && removeLabelIds.length === 0) return;
     const gmail = this.gmail!;
     await gmail.users.messages.modify({
       userId: "me",
@@ -577,6 +578,7 @@ export class GmailClient {
     addLabelIds: string[],
     removeLabelIds: string[],
   ): Promise<void> {
+    if (addLabelIds.length === 0 && removeLabelIds.length === 0) return;
     const gmail = this.gmail!;
     await gmail.users.threads.modify({
       userId: "me",

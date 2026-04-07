@@ -47,6 +47,23 @@ declare global {
   }
 }
 
+// System labels the UI already shows via other means — filter from picker and display
+const HIDDEN_SYSTEM = new Set([
+  "INBOX",
+  "UNREAD",
+  "SENT",
+  "DRAFT",
+  "SPAM",
+  "TRASH",
+  "IMPORTANT",
+  "STARRED",
+  "CATEGORY_PERSONAL",
+  "CATEGORY_SOCIAL",
+  "CATEGORY_UPDATES",
+  "CATEGORY_FORUMS",
+  "CATEGORY_PROMOTIONS",
+]);
+
 export function LabelsPanel({
   email,
   enrichment,
@@ -61,7 +78,6 @@ export function LabelsPanel({
   const [highlightIndex, setHighlightIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
-  const listRef = useRef<HTMLDivElement>(null);
 
   // Sync enrichment data into local state
   useEffect(() => {
@@ -110,12 +126,15 @@ export function LabelsPanel({
       const accountId = email.accountId || "default";
       const threadId = email.threadId;
       setBusy(true);
-      // Gmail labels are thread-level — remove from entire thread
-      const result = await window.api.labels.modifyThread(accountId, threadId, [], [labelId]);
-      if (result.success) {
-        setCurrentLabels((prev) => prev.filter((l) => l.id !== labelId));
+      try {
+        // Gmail labels are thread-level — remove from entire thread
+        const result = await window.api.labels.modifyThread(accountId, threadId, [], [labelId]);
+        if (result.success) {
+          setCurrentLabels((prev) => prev.filter((l) => l.id !== labelId));
+        }
+      } finally {
+        setBusy(false);
       }
-      setBusy(false);
     },
     [email.threadId, email.accountId],
   );
@@ -125,37 +144,23 @@ export function LabelsPanel({
       const accountId = email.accountId || "default";
       const threadId = email.threadId;
       setBusy(true);
-      // Gmail labels are thread-level — add to entire thread
-      const result = await window.api.labels.modifyThread(accountId, threadId, [label.id], []);
-      if (result.success) {
-        setCurrentLabels((prev) => {
-          if (prev.some((l) => l.id === label.id)) return prev;
-          return [...prev, label].sort((a, b) => a.name.localeCompare(b.name));
-        });
+      try {
+        // Gmail labels are thread-level — add to entire thread
+        const result = await window.api.labels.modifyThread(accountId, threadId, [label.id], []);
+        if (result.success) {
+          setCurrentLabels((prev) => {
+            if (prev.some((l) => l.id === label.id)) return prev;
+            return [...prev, label].sort((a, b) => a.name.localeCompare(b.name));
+          });
+        }
+        setShowPicker(false);
+        setSearch("");
+      } finally {
+        setBusy(false);
       }
-      setShowPicker(false);
-      setSearch("");
-      setBusy(false);
     },
     [email.threadId, email.accountId],
   );
-
-  // Labels available to add (not already applied, not system, matches search)
-  const HIDDEN_SYSTEM = new Set([
-    "INBOX",
-    "UNREAD",
-    "SENT",
-    "DRAFT",
-    "SPAM",
-    "TRASH",
-    "IMPORTANT",
-    "STARRED",
-    "CATEGORY_PERSONAL",
-    "CATEGORY_SOCIAL",
-    "CATEGORY_UPDATES",
-    "CATEGORY_FORUMS",
-    "CATEGORY_PROMOTIONS",
-  ]);
 
   // Reset highlight when search changes
   useEffect(() => {
@@ -271,7 +276,7 @@ export function LabelsPanel({
                     }
                   }}
                 />
-                <div className="max-h-48 overflow-y-auto" ref={listRef}>
+                <div className="max-h-48 overflow-y-auto">
                   {availableLabels.length === 0 && (
                     <div className="px-3 py-2 text-xs text-gray-400">No matching labels</div>
                   )}
