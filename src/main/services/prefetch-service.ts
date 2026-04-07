@@ -361,8 +361,7 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
     if (skipAgentDrafts) {
       if (autoDraft?.enabled === false)
         log.info("[Prefetch] Auto-drafting disabled in config — skipping agent drafts");
-      if (isTestMode || isDemoMode)
-        log.info("[Prefetch] Test/demo mode — skipping agent drafts");
+      if (isTestMode || isDemoMode) log.info("[Prefetch] Test/demo mode — skipping agent drafts");
     }
     const allowedPriorities = autoDraft?.priorities ?? ["high", "medium", "low"];
     const candidateEmails = skipAgentDrafts
