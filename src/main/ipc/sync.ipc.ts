@@ -267,6 +267,10 @@ export function registerSyncIpc(): void {
     "auth:reauth",
     async (_, { accountId }: { accountId: string }): Promise<IpcResponse<void>> => {
       try {
+        if (pendingReauthClient) {
+          return { success: false, error: "Another re-authentication is already in progress" };
+        }
+
         const client = activeClients.get(accountId);
         if (!client) {
           return { success: false, error: "Account not connected" };
