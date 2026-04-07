@@ -67,8 +67,14 @@ const NAMED_ENTITIES: Record<string, string> = {
 function stripHtmlTags(html: string): string {
   return html
     .replace(/<[^>]*>/g, "")
-    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCodePoint(parseInt(hex, 16)))
-    .replace(/&#(\d+);/g, (_, dec) => String.fromCodePoint(Number(dec)))
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => {
+      const cp = parseInt(hex, 16);
+      return cp <= 0x10ffff ? String.fromCodePoint(cp) : "\uFFFD";
+    })
+    .replace(/&#(\d+);/g, (_, dec) => {
+      const cp = Number(dec);
+      return cp <= 0x10ffff ? String.fromCodePoint(cp) : "\uFFFD";
+    })
     .replace(/&([a-zA-Z]+);/g, (match, name) => NAMED_ENTITIES[name] ?? match)
     .trim();
 }
