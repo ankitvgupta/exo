@@ -6,7 +6,7 @@
  * assembly → DraftGenerator call → DB save.
  */
 import { getEmail, saveAnalysis } from "../db";
-import { saveDraftAndSync } from "./gmail-draft-sync";
+import { saveDraftAndSync, deleteGmailDraftById } from "./gmail-draft-sync";
 import { getConfig, getModelIdForFeature } from "../ipc/settings.ipc";
 import { getEmailSyncService } from "../ipc/sync.ipc";
 import { buildStyleContext } from "./style-profiler";
@@ -139,12 +139,19 @@ export async function generateDraftForEmail(
       config.analysisPrompt ?? undefined,
     );
     const analysisResult = await analyzer.analyze(emailForDraft);
-    saveAnalysis(
+    const draftCleanup = saveAnalysis(
       emailId,
       analysisResult.needs_reply,
       analysisResult.reason,
       analysisResult.priority,
     );
+    if (draftCleanup) {
+      for (const cleanup of draftCleanup) {
+        if (cleanup.gmailDraftId && cleanup.accountId) {
+          deleteGmailDraftById(cleanup.accountId, cleanup.gmailDraftId).catch(() => {});
+        }
+      }
+    }
     email.analysis = {
       needsReply: analysisResult.needs_reply,
       reason: analysisResult.reason,
