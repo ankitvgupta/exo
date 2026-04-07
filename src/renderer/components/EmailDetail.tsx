@@ -3575,12 +3575,17 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
                   priority: (newPriority as "high" | "medium" | "low" | "skip" | null) ?? undefined,
                 },
               };
-              // When reclassified as skip, clear the draft from UI state
-              // (main process deletes local + Gmail draft automatically)
-              if (newPriority === "skip" || newPriority === null) {
-                updates.draft = undefined;
-              }
               updateEmail(latestReceivedEmail.id, updates);
+              // When reclassified as skip, clear drafts from ALL thread emails in UI state
+              // (main process deletes all thread drafts automatically via saveAnalysis).
+              // The draft may be on a different email than latestReceivedEmail.
+              if (newPriority === "skip" || newPriority === null) {
+                for (const email of threadEmails) {
+                  if (email.draft) {
+                    updateEmail(email.id, { draft: undefined });
+                  }
+                }
+              }
             }}
           />
         )}
