@@ -1515,7 +1515,9 @@ export default function App() {
 
   // Get current account and its sync status
   const currentAccount = accounts.find((a) => a.id === currentAccountId);
-  const currentSyncStatus = currentAccountId ? syncStatuses.get(currentAccountId) || "idle" : "idle";
+  const currentSyncStatus = currentAccountId
+    ? syncStatuses.get(currentAccountId) || "idle"
+    : "idle";
   const isSyncing = currentSyncStatus === "syncing";
   const isCurrentAccountExpired =
     currentAccountId != null && expiredAccountIds.has(currentAccountId);
