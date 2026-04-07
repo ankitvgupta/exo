@@ -146,7 +146,7 @@ export class EmailAnalyzer {
     this.customPrompt = prompt && prompt !== DEFAULT_ANALYSIS_PROMPT ? prompt : null;
   }
 
-  async analyze(email: Email, userEmail?: string, accountId?: string): Promise<AnalysisResult> {
+  async analyze(email: Email, userEmail?: string, accountId?: string, labelNames?: string[]): Promise<AnalysisResult> {
     const emailContent = this.formatEmailForAnalysis(email);
 
     // Always append JSON format suffix to ensure structured output,
@@ -184,7 +184,7 @@ export class EmailAnalyzer {
             role: "user",
             content: `${UNTRUSTED_DATA_INSTRUCTION}
 
-${userIdentityLine}${wrapUntrustedEmail(`From: ${email.from}\nTo: ${email.to}\nSubject: ${email.subject}\nDate: ${email.date}\n\n${emailContent}`)}${analysisMemoryContext}`,
+${userIdentityLine}${wrapUntrustedEmail(`From: ${email.from}\nTo: ${email.to}\nSubject: ${email.subject}\nDate: ${email.date}${labelNames?.length ? `\nLabels: ${labelNames.join(", ")}` : ""}\n\n${emailContent}`)}${analysisMemoryContext}`,
           },
         ],
       },

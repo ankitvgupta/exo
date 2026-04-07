@@ -22,6 +22,42 @@ import { createLogger } from "./logger";
 
 const log = createLogger("prefetch");
 
+// Cached label ID→name map per account, populated lazily from Gmail API
+const labelNameCache = new Map<string, Map<string, string>>();
+
+async function resolveLabelNames(labelIds: string[] | undefined, accountId: string | undefined): Promise<string[]> {
+  if (!labelIds?.length || !accountId) return [];
+
+  // Populate cache on first use for this account
+  if (!labelNameCache.has(accountId)) {
+    try {
+      const { getClient } = await import("../ipc/gmail.ipc");
+      const client = await getClient(accountId);
+      const labels = await client.listLabels();
+      const map = new Map<string, string>();
+      for (const label of labels) {
+        map.set(label.id, label.name);
+      }
+      labelNameCache.set(accountId, map);
+    } catch {
+      return [];
+    }
+  }
+
+  const nameMap = labelNameCache.get(accountId);
+  if (!nameMap) return [];
+
+  // System labels the analyzer doesn't need to see (already obvious from context)
+  const HIDDEN = new Set(["INBOX", "UNREAD", "SENT", "DRAFT", "SPAM", "TRASH",
+    "CATEGORY_PERSONAL", "CATEGORY_SOCIAL", "CATEGORY_UPDATES",
+    "CATEGORY_FORUMS", "CATEGORY_PROMOTIONS"]);
+
+  return labelIds
+    .filter((id) => !HIDDEN.has(id))
+    .map((id) => nameMap.get(id) ?? id)
+    .filter((name) => !name.startsWith("Label_")); // drop unresolved IDs
+}
+
 // Lazy import to avoid circular dependency
 let notifyEmailAnalyzed: ((emailId: string) => void) | null = null;
 async function getNotifyFn(): Promise<(emailId: string) => void> {
@@ -750,7 +786,8 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
         : (accounts.find((a) => a.isPrimary) ?? accounts[0]);
       const userEmail = account?.email;
 
-      const result = await analyzer.analyze(emailForAnalysis, userEmail, email.accountId);
+      const labelNames = await resolveLabelNames(email.labelIds, email.accountId);
+      const result = await analyzer.analyze(emailForAnalysis, userEmail, email.accountId, labelNames);
       saveAnalysis(emailId, result.needs_reply, result.reason, result.priority);
       this.processedAnalysis.add(emailId);
       this.processedCounts.analysis++;
