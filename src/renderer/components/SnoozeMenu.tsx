@@ -79,6 +79,19 @@ const DAY_NAMES: Record<string, number> = {
   saturday: 6,
 };
 
+// Match a day name exactly or by unambiguous prefix (e.g. "frid" → friday, "wednes" → wednesday).
+function matchDayName(input: string): number | undefined {
+  if (DAY_NAMES[input] !== undefined) return DAY_NAMES[input];
+  const values = [
+    ...new Set(
+      Object.keys(DAY_NAMES)
+        .filter((k) => k.startsWith(input))
+        .map((k) => DAY_NAMES[k]),
+    ),
+  ];
+  return values.length === 1 ? values[0] : undefined;
+}
+
 /**
  * Parse a flexible natural-language snooze string into a timestamp.
  * Returns null if the string can't be parsed.
@@ -177,7 +190,7 @@ export function parseSnoozeText(input: string): number | null {
   const nextDayMatch = text.match(/^(?:next\s+)?(\w+)$/);
   if (nextDayMatch) {
     const dayName = nextDayMatch[1];
-    const targetDay = DAY_NAMES[dayName];
+    const targetDay = matchDayName(dayName);
     if (targetDay !== undefined) {
       const isNext = text.startsWith("next");
       const target = new Date(today);
@@ -195,7 +208,7 @@ export function parseSnoozeText(input: string): number | null {
   const nextDayTimeMatch = text.match(/^(?:next\s+)?(\w+)\s+(?:at\s+)?(\d.*)$/);
   if (nextDayTimeMatch) {
     const dayName = nextDayTimeMatch[1];
-    const targetDay = DAY_NAMES[dayName];
+    const targetDay = matchDayName(dayName);
     if (targetDay !== undefined) {
       const timeTs = parseTimeString(nextDayTimeMatch[2]);
       if (timeTs) {
