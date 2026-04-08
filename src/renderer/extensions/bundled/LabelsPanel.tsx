@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import type { DashboardEmail, LabelInfo } from "../../../shared/types";
 import type { ExtensionEnrichmentResult } from "../../../shared/extension-types";
+import { useAppStore } from "../../store";
 
 interface LabelsPanelProps {
   email: DashboardEmail;
@@ -52,9 +53,7 @@ const HIDDEN_SYSTEM = new Set([
   "CATEGORY_PROMOTIONS",
 ]);
 
-export function LabelsPanel({
-  email,
-}: LabelsPanelProps): React.ReactElement {
+export function LabelsPanel({ email }: LabelsPanelProps): React.ReactElement {
   const [currentLabels, setCurrentLabels] = useState<LabelInfo[]>([]);
   const [allLabels, setAllLabels] = useState<LabelInfo[]>([]);
   const [labelsLoaded, setLabelsLoaded] = useState(false);
@@ -64,6 +63,16 @@ export function LabelsPanel({
   const [highlightIndex, setHighlightIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
+  const isLabelPickerOpen = useAppStore((s) => s.isLabelPickerOpen);
+  const closeLabelPicker = useAppStore((s) => s.closeLabelPicker);
+
+  // Open picker when triggered by 'l' hotkey
+  useEffect(() => {
+    if (isLabelPickerOpen && labelsLoaded) {
+      setShowPicker(true);
+      closeLabelPicker();
+    }
+  }, [isLabelPickerOpen, labelsLoaded, closeLabelPicker]);
 
   // Fetch all labels and resolve current email's labels directly
   // (bypasses sender-scoped enrichment cache which would serve wrong labels)
