@@ -164,8 +164,12 @@ export function LabelsPanel({ email, threadEmails }: LabelsPanelProps): React.Re
         const result = await window.api.labels.modifyThread(accountId, threadId, [], [labelId]);
         if (result.success) {
           setCurrentLabels((prev) => prev.filter((l) => l.id !== labelId));
-          // Sync store so navigating away and back shows correct labels
-          for (const te of threadEmails) {
+          // Sync store for all thread emails (including the current email prop,
+          // which may not be in threadEmails)
+          const seen = new Set<string>();
+          for (const te of [email, ...threadEmails]) {
+            if (seen.has(te.id)) continue;
+            seen.add(te.id);
             const updated = (te.labelIds ?? []).filter((id) => id !== labelId);
             updateEmail(te.id, { labelIds: updated });
           }
@@ -190,8 +194,11 @@ export function LabelsPanel({ email, threadEmails }: LabelsPanelProps): React.Re
             if (prev.some((l) => l.id === label.id)) return prev;
             return [...prev, label].sort((a, b) => a.name.localeCompare(b.name));
           });
-          // Sync store so navigating away and back shows correct labels
-          for (const te of threadEmails) {
+          // Sync store for all thread emails (including the current email prop)
+          const seen = new Set<string>();
+          for (const te of [email, ...threadEmails]) {
+            if (seen.has(te.id)) continue;
+            seen.add(te.id);
             const current = te.labelIds ?? [];
             if (!current.includes(label.id)) {
               updateEmail(te.id, { labelIds: [...current, label.id] });
@@ -234,7 +241,10 @@ export function LabelsPanel({ email, threadEmails }: LabelsPanelProps): React.Re
             setCurrentLabels((prev) =>
               [...prev, newLabel].sort((a, b) => a.name.localeCompare(b.name)),
             );
-            for (const te of threadEmails) {
+            const seen = new Set<string>();
+            for (const te of [email, ...threadEmails]) {
+              if (seen.has(te.id)) continue;
+              seen.add(te.id);
               const current = te.labelIds ?? [];
               if (!current.includes(newLabel.id)) {
                 updateEmail(te.id, { labelIds: [...current, newLabel.id] });
