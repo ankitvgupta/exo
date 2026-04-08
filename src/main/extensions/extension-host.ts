@@ -1,5 +1,14 @@
 import { join } from "path";
-import { existsSync, readdirSync, statSync, readFileSync, mkdirSync, rmSync, cpSync } from "fs";
+import {
+  existsSync,
+  readdirSync,
+  statSync,
+  readFileSync,
+  mkdirSync,
+  rmSync,
+  cpSync,
+  realpathSync,
+} from "fs";
 import type {
   ExtensionManifest,
   ExtensionModule,
@@ -982,13 +991,17 @@ export class ExtensionHost {
     this.extensions.delete(extensionId);
     this.bundledModules.delete(extensionId);
 
-    // Clear Node.js require cache so reinstalling loads the new module from disk
-    // require.cache is global and shared across all createRequire instances
+    // Clear Node.js require cache so reinstalling loads the new module from disk.
+    // We use createRequire to access the cache since the main process is ESM-bundled.
+    // Cache keys use realpath (symlinks resolved), so we must resolve ext.path too.
     if (ext.path) {
-      const extPathPrefix = ext.path.endsWith("/") ? ext.path : ext.path + "/";
-      for (const cached of Object.keys(require.cache)) {
+      const { createRequire } = await import("module");
+      const cache = createRequire(join(ext.path, "x")).cache;
+      const resolvedPath = realpathSync(ext.path);
+      const extPathPrefix = resolvedPath.endsWith("/") ? resolvedPath : resolvedPath + "/";
+      for (const cached of Object.keys(cache)) {
         if (cached.startsWith(extPathPrefix)) {
-          delete require.cache[cached];
+          delete cache[cached];
         }
       }
     }
