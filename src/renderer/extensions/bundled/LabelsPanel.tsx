@@ -51,6 +51,19 @@ const HIDDEN_SYSTEM = new Set([
   "CATEGORY_UPDATES",
   "CATEGORY_FORUMS",
   "CATEGORY_PROMOTIONS",
+  // Gmail star variants — redundant with the star icon in the UI
+  "YELLOW_STAR",
+  "RED_STAR",
+  "ORANGE_STAR",
+  "GREEN_STAR",
+  "BLUE_STAR",
+  "PURPLE_STAR",
+  "RED_BANG",
+  "ORANGE_GUILLEMET",
+  "YELLOW_BANG",
+  "GREEN_CHECK",
+  "BLUE_INFO",
+  "PURPLE_QUESTION",
 ]);
 
 export function LabelsPanel({ email, threadEmails }: LabelsPanelProps): React.ReactElement {
