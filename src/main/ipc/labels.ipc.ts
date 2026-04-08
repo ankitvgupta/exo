@@ -1,17 +1,10 @@
 import { ipcMain } from "electron";
 import { getClient } from "./gmail.ipc";
 import { updateEmailLabelIds, getEmailsByThread } from "../db";
-import type { IpcResponse } from "../../shared/types";
+import type { IpcResponse, LabelInfo } from "../../shared/types";
 import { createLogger } from "../services/logger";
 
 const log = createLogger("labels-ipc");
-
-interface LabelInfo {
-  id: string;
-  name: string;
-  type: string;
-  color?: { textColor: string; backgroundColor: string };
-}
 
 export function registerLabelsIpc(): void {
   // List all labels for an account
@@ -86,13 +79,14 @@ export function registerLabelsIpc(): void {
         const client = await getClient(accountId);
         await client.modifyThreadLabels(threadId, addLabelIds, removeLabelIds);
 
-        // Read back authoritative labelIds from Gmail for each thread message
+        // Read back authoritative labelIds from Gmail for each thread message (parallel)
         const threadEmails = getEmailsByThread(threadId, accountId);
-        for (const email of threadEmails) {
-          const msg = await client.readEmail(email.id);
-          const newLabelIds = msg?.labelIds ?? [];
-          updateEmailLabelIds(email.id, newLabelIds);
-        }
+        await Promise.all(
+          threadEmails.map(async (email) => {
+            const msg = await client.readEmail(email.id);
+            updateEmailLabelIds(email.id, msg?.labelIds ?? []);
+          }),
+        );
 
         return { success: true, data: undefined };
       } catch (error) {

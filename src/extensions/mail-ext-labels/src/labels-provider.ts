@@ -3,15 +3,8 @@ import type {
   EnrichmentProvider,
   EnrichmentData,
 } from "../../../shared/extension-types";
-import type { DashboardEmail } from "../../../shared/types";
+import type { DashboardEmail, LabelInfo } from "../../../shared/types";
 import { getClient } from "../../../main/ipc/gmail.ipc";
-
-export interface LabelInfo {
-  id: string;
-  name: string;
-  type: string;
-  color?: { textColor: string; backgroundColor: string };
-}
 
 // In-memory cache: accountId -> (labelId -> LabelInfo)
 const labelCache = new Map<string, Map<string, LabelInfo>>();

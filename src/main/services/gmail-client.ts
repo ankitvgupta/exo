@@ -17,6 +17,7 @@ import type {
   ComposeMessageOptions,
   AttachmentMeta,
   SendAsAlias,
+  LabelInfo,
 } from "../../shared/types";
 import { getAccounts } from "../db";
 import { getDataDir } from "../data-dir";
@@ -529,14 +530,7 @@ export class GmailClient {
    * List all labels for the authenticated account.
    * Returns id, name, type, and optional color for each label.
    */
-  async listLabels(): Promise<
-    Array<{
-      id: string;
-      name: string;
-      type: string;
-      color?: { textColor: string; backgroundColor: string };
-    }>
-  > {
+  async listLabels(): Promise<LabelInfo[]> {
     const gmail = this.gmail!;
     const response = await gmail.users.labels.list({ userId: "me" });
     const rawLabels = response.data.labels || [];

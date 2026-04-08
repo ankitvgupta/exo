@@ -1,13 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from "react";
-import type { DashboardEmail } from "../../../shared/types";
+import type { DashboardEmail, LabelInfo } from "../../../shared/types";
 import type { ExtensionEnrichmentResult } from "../../../shared/extension-types";
-
-interface LabelInfo {
-  id: string;
-  name: string;
-  type: string;
-  color?: { textColor: string; backgroundColor: string };
-}
 
 interface LabelsEnrichmentData {
   labels: LabelInfo[];
