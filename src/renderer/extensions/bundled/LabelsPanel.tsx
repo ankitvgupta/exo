@@ -78,6 +78,7 @@ export function LabelsPanel({ email, threadEmails }: LabelsPanelProps): React.Re
   const pickerRef = useRef<HTMLDivElement>(null);
   const isLabelPickerOpen = useAppStore((s) => s.isLabelPickerOpen);
   const closeLabelPicker = useAppStore((s) => s.closeLabelPicker);
+  const updateEmail = useAppStore((s) => s.updateEmail);
 
   // Open picker when triggered by 'l' hotkey
   useEffect(() => {
@@ -153,12 +154,17 @@ export function LabelsPanel({ email, threadEmails }: LabelsPanelProps): React.Re
         const result = await window.api.labels.modifyThread(accountId, threadId, [], [labelId]);
         if (result.success) {
           setCurrentLabels((prev) => prev.filter((l) => l.id !== labelId));
+          // Sync store so navigating away and back shows correct labels
+          for (const te of threadEmails) {
+            const updated = (te.labelIds ?? []).filter((id) => id !== labelId);
+            updateEmail(te.id, { labelIds: updated });
+          }
         }
       } finally {
         setBusy(false);
       }
     },
-    [email.threadId, email.accountId],
+    [email.threadId, email.accountId, threadEmails, updateEmail],
   );
 
   const addLabel = useCallback(
@@ -174,6 +180,13 @@ export function LabelsPanel({ email, threadEmails }: LabelsPanelProps): React.Re
             if (prev.some((l) => l.id === label.id)) return prev;
             return [...prev, label].sort((a, b) => a.name.localeCompare(b.name));
           });
+          // Sync store so navigating away and back shows correct labels
+          for (const te of threadEmails) {
+            const current = te.labelIds ?? [];
+            if (!current.includes(label.id)) {
+              updateEmail(te.id, { labelIds: [...current, label.id] });
+            }
+          }
         }
         setShowPicker(false);
         setSearch("");
@@ -181,7 +194,7 @@ export function LabelsPanel({ email, threadEmails }: LabelsPanelProps): React.Re
         setBusy(false);
       }
     },
-    [email.threadId, email.accountId],
+    [email.threadId, email.accountId, threadEmails, updateEmail],
   );
 
   // Reset highlight when search changes

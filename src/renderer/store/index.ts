@@ -791,7 +791,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         selectedEmailId: nextEmailId,
       };
     }),
-  setSelectedEmailId: (id) => set({ selectedEmailId: id }),
+  setSelectedEmailId: (id) => set({ selectedEmailId: id, isLabelPickerOpen: false }),
   setSelectedThreadId: (id) => set({ selectedThreadId: id }),
   setFocusedThreadEmailId: (id) => set({ focusedThreadEmailId: id }),
   toggleThreadExpanded: (threadId) =>
