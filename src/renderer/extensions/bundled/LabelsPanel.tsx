@@ -53,7 +53,7 @@ const HIDDEN_SYSTEM = new Set([
   "CATEGORY_PROMOTIONS",
 ]);
 
-export function LabelsPanel({ email }: LabelsPanelProps): React.ReactElement {
+export function LabelsPanel({ email, threadEmails }: LabelsPanelProps): React.ReactElement {
   const [currentLabels, setCurrentLabels] = useState<LabelInfo[]>([]);
   const [allLabels, setAllLabels] = useState<LabelInfo[]>([]);
   const [labelsLoaded, setLabelsLoaded] = useState(false);
@@ -85,8 +85,14 @@ export function LabelsPanel({ email }: LabelsPanelProps): React.ReactElement {
         if (result.success && result.data) {
           setAllLabels(result.data);
 
-          // Resolve this email's labelIds to full label info
-          const labelIds = email.labelIds ?? [];
+          // Aggregate labelIds across all emails in the thread (Gmail labels are thread-level)
+          const allThreadLabelIds = new Set<string>();
+          for (const e of [email, ...threadEmails]) {
+            for (const id of e.labelIds ?? []) {
+              allThreadLabelIds.add(id);
+            }
+          }
+          const labelIds = [...allThreadLabelIds];
           const labelMap = new Map(result.data.map((l) => [l.id, l]));
           const resolved: LabelInfo[] = [];
           for (const id of labelIds) {
@@ -102,7 +108,7 @@ export function LabelsPanel({ email }: LabelsPanelProps): React.ReactElement {
       .catch(() => {
         setLabelsLoaded(true);
       });
-  }, [email.id, email.accountId, email.labelIds]);
+  }, [email.id, email.accountId, email.labelIds, threadEmails]);
 
   // Focus input when picker opens
   useEffect(() => {
