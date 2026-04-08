@@ -92,6 +92,18 @@ export function LabelsPanel({ email, threadEmails }: LabelsPanelProps): React.Re
     }
   }, [isLabelPickerOpen, labelsLoaded, closeLabelPicker]);
 
+  // Stable thread label IDs — only recompute when the actual IDs change, not on
+  // every threadEmails array reference change (which triggers on each render).
+  const threadLabelKey = useMemo(() => {
+    const ids = new Set<string>();
+    for (const e of [email, ...threadEmails]) {
+      for (const id of e.labelIds ?? []) {
+        ids.add(id);
+      }
+    }
+    return [...ids].sort().join(",");
+  }, [email, threadEmails]);
+
   // Fetch all labels and resolve current email's labels directly
   // (bypasses sender-scoped enrichment cache which would serve wrong labels)
   useEffect(() => {
@@ -103,14 +115,7 @@ export function LabelsPanel({ email, threadEmails }: LabelsPanelProps): React.Re
         if (result.success && result.data) {
           setAllLabels(result.data);
 
-          // Aggregate labelIds across all emails in the thread (Gmail labels are thread-level)
-          const allThreadLabelIds = new Set<string>();
-          for (const e of [email, ...threadEmails]) {
-            for (const id of e.labelIds ?? []) {
-              allThreadLabelIds.add(id);
-            }
-          }
-          const labelIds = [...allThreadLabelIds];
+          const labelIds = threadLabelKey.split(",").filter(Boolean);
           const labelMap = new Map(result.data.map((l) => [l.id, l]));
           const resolved: LabelInfo[] = [];
           for (const id of labelIds) {
@@ -126,7 +131,7 @@ export function LabelsPanel({ email, threadEmails }: LabelsPanelProps): React.Re
       .catch(() => {
         setLabelsLoaded(true);
       });
-  }, [email.id, email.accountId, email.labelIds, threadEmails]);
+  }, [email.id, email.accountId, threadLabelKey]);
 
   // Focus input when picker opens
   useEffect(() => {
