@@ -77,6 +77,7 @@ export function LabelsPanel({ email, threadEmails }: LabelsPanelProps): React.Re
   const [showPicker, setShowPicker] = useState(false);
   const [search, setSearch] = useState("");
   const [busy, setBusy] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
   const [highlightIndex, setHighlightIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
@@ -211,9 +212,14 @@ export function LabelsPanel({ email, threadEmails }: LabelsPanelProps): React.Re
       const accountId = email.accountId || "default";
       const threadId = email.threadId;
       setBusy(true);
+      setCreateError(null);
       try {
         const createResult = await window.api.labels.create(accountId, name);
-        if (createResult.success && createResult.data) {
+        if (!createResult.success) {
+          setCreateError(createResult.error ?? "Failed to create label");
+          return;
+        }
+        if (createResult.data) {
           const newLabel = createResult.data;
           // Add to allLabels so it appears in future searches
           setAllLabels((prev) => [...prev, newLabel]);
@@ -245,9 +251,10 @@ export function LabelsPanel({ email, threadEmails }: LabelsPanelProps): React.Re
     [email.threadId, email.accountId, threadEmails, updateEmail],
   );
 
-  // Reset highlight when search changes
+  // Reset highlight and error when search changes
   useEffect(() => {
     setHighlightIndex(0);
+    setCreateError(null);
   }, [search]);
 
   const availableLabels = useMemo(() => {
@@ -352,7 +359,7 @@ export function LabelsPanel({ email, threadEmails }: LabelsPanelProps): React.Re
                     } else if (e.key === "ArrowUp") {
                       e.preventDefault();
                       setHighlightIndex((i) => Math.max(i - 1, 0));
-                    } else if (e.key === "Enter") {
+                    } else if (e.key === "Enter" && !busy) {
                       if (availableLabels.length > 0) {
                         addLabel(
                           availableLabels[Math.min(highlightIndex, availableLabels.length - 1)],
@@ -368,13 +375,20 @@ export function LabelsPanel({ email, threadEmails }: LabelsPanelProps): React.Re
                     <div className="px-3 py-2 text-xs text-gray-400">No matching labels</div>
                   )}
                   {availableLabels.length === 0 && search.trim() && (
-                    <button
-                      onClick={() => createAndAddLabel(search.trim())}
-                      disabled={busy}
-                      className="w-full text-left px-3 py-1.5 text-sm text-blue-600 dark:text-blue-400 hover:bg-gray-100 dark:hover:bg-gray-700"
-                    >
-                      Create &ldquo;{search.trim()}&rdquo;
-                    </button>
+                    <>
+                      {createError && (
+                        <div className="px-3 py-1.5 text-xs text-red-500 dark:text-red-400">
+                          {createError}
+                        </div>
+                      )}
+                      <button
+                        onClick={() => createAndAddLabel(search.trim())}
+                        disabled={busy}
+                        className="w-full text-left px-3 py-1.5 text-sm text-blue-600 dark:text-blue-400 hover:bg-gray-100 dark:hover:bg-gray-700"
+                      >
+                        Create &ldquo;{search.trim()}&rdquo;
+                      </button>
+                    </>
                   )}
                   {availableLabels.slice(0, 50).map((label, index) => (
                     <button
