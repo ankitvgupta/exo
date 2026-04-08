@@ -15,7 +15,7 @@
           "id": "email-labels",
           "title": "Labels",
           "priority": 80,
-          "scope": "email"
+          "scope": "sender"
         }
       ]
     }

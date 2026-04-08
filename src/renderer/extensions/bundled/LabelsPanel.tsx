@@ -2,11 +2,6 @@ import React, { useState, useCallback, useRef, useEffect, useMemo } from "react"
 import type { DashboardEmail, LabelInfo } from "../../../shared/types";
 import type { ExtensionEnrichmentResult } from "../../../shared/extension-types";
 
-interface LabelsEnrichmentData {
-  labels: LabelInfo[];
-  allLabelIds: string[];
-}
-
 interface LabelsPanelProps {
   email: DashboardEmail;
   threadEmails: DashboardEmail[];
@@ -59,12 +54,10 @@ const HIDDEN_SYSTEM = new Set([
 
 export function LabelsPanel({
   email,
-  enrichment,
-  isLoading,
 }: LabelsPanelProps): React.ReactElement {
-  const data = enrichment?.data as LabelsEnrichmentData | undefined;
   const [currentLabels, setCurrentLabels] = useState<LabelInfo[]>([]);
   const [allLabels, setAllLabels] = useState<LabelInfo[]>([]);
+  const [labelsLoaded, setLabelsLoaded] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
   const [search, setSearch] = useState("");
   const [busy, setBusy] = useState(false);
@@ -72,27 +65,35 @@ export function LabelsPanel({
   const inputRef = useRef<HTMLInputElement>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
 
-  // Sync enrichment data into local state
-  useEffect(() => {
-    if (data?.labels) {
-      setCurrentLabels(data.labels);
-    }
-  }, [data]);
-
-  // Fetch all labels for the picker
+  // Fetch all labels and resolve current email's labels directly
+  // (bypasses sender-scoped enrichment cache which would serve wrong labels)
   useEffect(() => {
     const accountId = email.accountId || "default";
+    setLabelsLoaded(false);
     window.api.labels
       .list(accountId)
       .then((result: { success: boolean; data?: LabelInfo[] }) => {
         if (result.success && result.data) {
           setAllLabels(result.data);
+
+          // Resolve this email's labelIds to full label info
+          const labelIds = email.labelIds ?? [];
+          const labelMap = new Map(result.data.map((l) => [l.id, l]));
+          const resolved: LabelInfo[] = [];
+          for (const id of labelIds) {
+            if (HIDDEN_SYSTEM.has(id)) continue;
+            const info = labelMap.get(id);
+            if (info) resolved.push(info);
+          }
+          resolved.sort((a, b) => a.name.localeCompare(b.name));
+          setCurrentLabels(resolved);
         }
+        setLabelsLoaded(true);
       })
       .catch(() => {
-        // Labels list failed — picker will show empty, which is safe
+        setLabelsLoaded(true);
       });
-  }, [email.accountId]);
+  }, [email.id, email.accountId, email.labelIds]);
 
   // Focus input when picker opens
   useEffect(() => {
@@ -170,7 +171,7 @@ export function LabelsPanel({
 
   return (
     <div className="p-4">
-      {isLoading && (
+      {!labelsLoaded && (
         <div className="flex items-center space-x-2 text-gray-500 dark:text-gray-400 py-4">
           <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
             <circle
@@ -191,7 +192,7 @@ export function LabelsPanel({
         </div>
       )}
 
-      {!isLoading && (
+      {labelsLoaded && (
         <>
           {/* Current labels as removable chips */}
           <div className="flex flex-wrap gap-1.5 mb-2">
