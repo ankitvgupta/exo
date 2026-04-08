@@ -14,7 +14,7 @@ const extension: ExtensionModule = {
   },
 
   async deactivate(): Promise<void> {
-    console.log("[Ext:labels] Deactivated");
+    // No cleanup needed — label cache is in-memory and clears on exit
   },
 };
 

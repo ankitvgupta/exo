@@ -354,7 +354,9 @@ export function LabelsPanel({ email, threadEmails }: LabelsPanelProps): React.Re
                     } else if (e.key === "ArrowDown") {
                       e.preventDefault();
                       setHighlightIndex((i) =>
-                        Math.min(i + 1, Math.min(availableLabels.length - 1, 49)),
+                        availableLabels.length === 0
+                          ? 0
+                          : Math.min(i + 1, Math.min(availableLabels.length - 1, 49)),
                       );
                     } else if (e.key === "ArrowUp") {
                       e.preventDefault();
