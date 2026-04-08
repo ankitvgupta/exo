@@ -22,6 +22,24 @@ export function registerLabelsIpc(): void {
     },
   );
 
+  // Create a new Gmail label
+  ipcMain.handle(
+    "labels:create",
+    async (
+      _,
+      { accountId, name }: { accountId: string; name: string },
+    ): Promise<IpcResponse<LabelInfo>> => {
+      try {
+        const client = await getClient(accountId);
+        const label = await client.createLabel(name);
+        return { success: true, data: label };
+      } catch (error) {
+        log.error({ err: error }, "[Labels] Failed to create label");
+        return { success: false, error: String(error) };
+      }
+    },
+  );
+
   // Modify labels on a single message
   ipcMain.handle(
     "labels:modify-message",

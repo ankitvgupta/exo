@@ -13,6 +13,10 @@ interface LabelsPanelProps {
 // Type for the labels API on window.api
 type LabelsAPI = {
   list: (accountId: string) => Promise<{ success: boolean; data?: LabelInfo[] }>;
+  create: (
+    accountId: string,
+    name: string,
+  ) => Promise<{ success: boolean; data?: LabelInfo; error?: string }>;
   modifyMessage: (
     accountId: string,
     emailId: string,
@@ -197,6 +201,45 @@ export function LabelsPanel({ email, threadEmails }: LabelsPanelProps): React.Re
     [email.threadId, email.accountId, threadEmails, updateEmail],
   );
 
+  const createAndAddLabel = useCallback(
+    async (name: string) => {
+      const accountId = email.accountId || "default";
+      const threadId = email.threadId;
+      setBusy(true);
+      try {
+        const createResult = await window.api.labels.create(accountId, name);
+        if (createResult.success && createResult.data) {
+          const newLabel = createResult.data;
+          // Add to allLabels so it appears in future searches
+          setAllLabels((prev) => [...prev, newLabel]);
+          // Apply to thread
+          const result = await window.api.labels.modifyThread(
+            accountId,
+            threadId,
+            [newLabel.id],
+            [],
+          );
+          if (result.success) {
+            setCurrentLabels((prev) =>
+              [...prev, newLabel].sort((a, b) => a.name.localeCompare(b.name)),
+            );
+            for (const te of threadEmails) {
+              const current = te.labelIds ?? [];
+              if (!current.includes(newLabel.id)) {
+                updateEmail(te.id, { labelIds: [...current, newLabel.id] });
+              }
+            }
+          }
+        }
+        setShowPicker(false);
+        setSearch("");
+      } finally {
+        setBusy(false);
+      }
+    },
+    [email.threadId, email.accountId, threadEmails, updateEmail],
+  );
+
   // Reset highlight when search changes
   useEffect(() => {
     setHighlightIndex(0);
@@ -304,16 +347,29 @@ export function LabelsPanel({ email, threadEmails }: LabelsPanelProps): React.Re
                     } else if (e.key === "ArrowUp") {
                       e.preventDefault();
                       setHighlightIndex((i) => Math.max(i - 1, 0));
-                    } else if (e.key === "Enter" && availableLabels.length > 0) {
-                      addLabel(
-                        availableLabels[Math.min(highlightIndex, availableLabels.length - 1)],
-                      );
+                    } else if (e.key === "Enter") {
+                      if (availableLabels.length > 0) {
+                        addLabel(
+                          availableLabels[Math.min(highlightIndex, availableLabels.length - 1)],
+                        );
+                      } else if (search.trim()) {
+                        createAndAddLabel(search.trim());
+                      }
                     }
                   }}
                 />
                 <div className="max-h-48 overflow-y-auto">
-                  {availableLabels.length === 0 && (
+                  {availableLabels.length === 0 && !search.trim() && (
                     <div className="px-3 py-2 text-xs text-gray-400">No matching labels</div>
+                  )}
+                  {availableLabels.length === 0 && search.trim() && (
+                    <button
+                      onClick={() => createAndAddLabel(search.trim())}
+                      disabled={busy}
+                      className="w-full text-left px-3 py-1.5 text-sm text-blue-600 dark:text-blue-400 hover:bg-gray-100 dark:hover:bg-gray-700"
+                    >
+                      Create &ldquo;{search.trim()}&rdquo;
+                    </button>
                   )}
                   {availableLabels.slice(0, 50).map((label, index) => (
                     <button

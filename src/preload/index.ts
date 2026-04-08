@@ -190,6 +190,8 @@ const api = {
   // Label operations
   labels: {
     list: (accountId: string): Promise<unknown> => ipcRenderer.invoke("labels:list", { accountId }),
+    create: (accountId: string, name: string): Promise<unknown> =>
+      ipcRenderer.invoke("labels:create", { accountId, name }),
     modifyMessage: (
       accountId: string,
       emailId: string,

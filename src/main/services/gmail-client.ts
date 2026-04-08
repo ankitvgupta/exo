@@ -545,6 +545,23 @@ export class GmailClient {
   }
 
   /**
+   * Create a new Gmail label. Returns the created label's id and name.
+   */
+  async createLabel(name: string): Promise<LabelInfo> {
+    const gmail = this.gmail!;
+    const response = await gmail.users.labels.create({
+      userId: "me",
+      requestBody: {
+        name,
+        labelListVisibility: "labelShow",
+        messageListVisibility: "show",
+      },
+    });
+    const l = response.data;
+    return { id: l.id!, name: l.name!, type: "user" };
+  }
+
+  /**
    * Modify labels on a message (add and/or remove arbitrary labels)
    */
   async modifyMessageLabels(
