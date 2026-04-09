@@ -2,6 +2,7 @@ import { z } from "zod";
 import { type ToolDefinition, ToolRiskLevel } from "./types";
 import type { DashboardEmail } from "../../../shared/types";
 import { draftBodyToHtml } from "../../../shared/draft-utils";
+import { stripHtmlForSearch } from "../../db";
 
 const readEmail: ToolDefinition<{ emailId: string }> = {
   name: "read_email",
@@ -16,6 +17,10 @@ const readEmail: ToolDefinition<{ emailId: string }> = {
     const email = await ctx.db("getEmail", input.emailId);
     if (!email) {
       throw new Error(`Email not found: ${input.emailId}`);
+    }
+    // Strip HTML to plain text — agents don't need markup and it wastes tokens
+    if (email.body) {
+      email.body = stripHtmlForSearch(email.body);
     }
     return email;
   },
@@ -103,6 +108,12 @@ const readThread: ToolDefinition<{ threadId: string; accountId?: string }> = {
   }),
   async execute(input, ctx) {
     const emails = await ctx.db("getEmailsByThread", input.threadId, input.accountId);
+    // Strip HTML to plain text — agents don't need markup and it wastes tokens
+    for (const email of emails) {
+      if (email.body) {
+        email.body = stripHtmlForSearch(email.body);
+      }
+    }
     return emails;
   },
 };
@@ -509,7 +520,7 @@ const searchGmail: ToolDefinition<{ accountId: string; query: string; maxResults
           from: email.from,
           to: email.to,
           date: email.date,
-          snippet: email.snippet || email.body?.slice(0, 200) || "",
+          snippet: email.snippet || (email.body ? stripHtmlForSearch(email.body).slice(0, 200) : ""),
         });
       }
     }

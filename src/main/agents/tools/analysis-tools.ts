@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { type ToolDefinition, ToolRiskLevel } from "./types";
 import type { DashboardEmail } from "../../../shared/types";
+import { stripHtmlForSearch } from "../../db";
 
 const analyzeEmail: ToolDefinition<{ emailId: string }> = {
   name: "analyze_email",
@@ -32,7 +33,7 @@ const analyzeEmail: ToolDefinition<{ emailId: string }> = {
       from: email.from,
       to: email.to,
       date: email.date,
-      body: email.body,
+      body: email.body ? stripHtmlForSearch(email.body) : undefined,
       message: "No cached analysis found. The email content is provided for inline analysis.",
     };
   },
