@@ -994,7 +994,7 @@ export class ExtensionHost {
     // Clear Node.js require cache so reinstalling loads the new module from disk.
     // We use createRequire to access the cache since the main process is ESM-bundled.
     // Cache keys use realpath (symlinks resolved), so we must resolve ext.path too.
-    if (ext.path) {
+    if (ext.path && existsSync(ext.path)) {
       const { createRequire } = await import("module");
       const cache = createRequire(join(ext.path, "x")).cache;
       const resolvedPath = realpathSync(ext.path);
