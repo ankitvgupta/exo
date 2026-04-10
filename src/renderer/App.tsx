@@ -27,6 +27,7 @@ import { DraftEditLearnedToast } from "./components/DraftEditLearnedToast";
 import { AnalysisOverrideLearnedToast } from "./components/AnalysisOverrideLearnedToast";
 import { SnoozeMenu } from "./components/SnoozeMenu";
 import { FindBar } from "./components/FindBar";
+import { useAppearance } from "./hooks/useAppearance";
 import { registerBundledExtensions } from "./extensions";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 import {
@@ -667,6 +668,9 @@ export default function App() {
   const addSentEmails = useAppStore((s) => s.addSentEmails);
   const setSplits = useAppStore((s) => s.setSplits);
   const setSnippets = useAppStore((s) => s.setSnippets);
+
+  // Apply theme CSS variables (presets, accent, vibrancy, font scale)
+  useAppearance();
 
   // Initialize keyboard shortcuts
   useKeyboardShortcuts({
