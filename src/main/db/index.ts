@@ -18,6 +18,7 @@ import type {
   AutomatedCategory,
 } from "../../shared/types";
 import { createLogger } from "../services/logger";
+import { classifySenderByHeuristics } from "../services/sender-classifier";
 
 const log = createLogger("db");
 
@@ -470,7 +471,6 @@ const NUMBERED_MIGRATIONS: Migration[] = [
       // Re-run heuristic sender classification on all analyzed emails.
       // Migration v3 conservatively set everything to "person" — now apply
       // the heuristic classifier to catch obvious automated senders.
-      const { classifySenderByHeuristics } = require("../services/sender-classifier");
       const rows = db
         .prepare(
           `SELECT a.email_id, e.from_address
