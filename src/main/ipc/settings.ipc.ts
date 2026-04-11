@@ -57,18 +57,18 @@ function getStore(): Store<{ config: Config }> {
           aiProvider: "codex" as const,
           enableAnthropicFallback: true,
           codex: {
-            model: "o3",
+            model: "gpt-5.4",
           },
           analysisPrompt: DEFAULT_ANALYSIS_PROMPT,
           draftPrompt: DEFAULT_DRAFT_PROMPT,
-          enableSenderLookup: true,
+          enableSenderLookup: false,
           theme: "system" as const,
           inboxDensity: "compact" as const,
           undoSendDelay: 5,
           showExoBranding: true,
           autoDraft: {
             enabled: true,
-            priorities: ["high", "medium", "low"],
+            priorities: ["high"],
           },
           posthog: {
             enabled: false,
@@ -132,14 +132,14 @@ export function getConfig(): Config {
     needsSave = true;
   }
   if (!config.codex) {
-    config.codex = { model: "o3" };
+    config.codex = { model: "gpt-5.4" };
     needsSave = true;
   } else if (!config.codex.model) {
-    config.codex.model = "o3";
+    config.codex.model = "gpt-5.4";
     needsSave = true;
   } else if (/^claude-/i.test(config.codex.model)) {
     // Codex cannot use Claude model IDs. Normalize legacy/misconfigured values.
-    config.codex.model = "o3";
+    config.codex.model = "gpt-5.4";
     needsSave = true;
   }
 
@@ -256,7 +256,7 @@ export function registerSettingsIpc(): void {
         agentCoordinator.updateConfig({
           aiProvider: newConfig.aiProvider ?? "codex",
           codex: {
-            model: newConfig.codex?.model || "o3",
+            model: newConfig.codex?.model || "gpt-5.4",
             cliPath: newConfig.codex?.cliPath,
           },
         });
@@ -740,7 +740,7 @@ export function registerSettingsIpc(): void {
       const cfg = getConfig();
       await testCodexConnection({
         cliPath: cfg.codex?.cliPath || "codex",
-        model: cfg.codex?.model || "o3",
+        model: cfg.codex?.model || "gpt-5.4",
       });
       return { success: true, data: undefined };
     } catch (error) {

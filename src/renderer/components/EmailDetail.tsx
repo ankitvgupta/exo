@@ -2387,7 +2387,10 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
     setIsSuggestingSplit(true);
     setSplitSuggestionError(null);
     try {
-      const result = await window.api.splits.suggestThread(currentAccountId, selectedEmail.threadId);
+      const result = await window.api.splits.suggestThread(
+        currentAccountId,
+        selectedEmail.threadId,
+      );
       if (!result.success) {
         setSplitSuggestionError(result.error || "Failed to suggest a split");
         setSplitSuggestions([]);
@@ -3708,7 +3711,9 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
             </div>
 
             {splitSuggestionError && (
-              <div className="text-xs text-amber-700 dark:text-amber-300">{splitSuggestionError}</div>
+              <div className="text-xs text-amber-700 dark:text-amber-300">
+                {splitSuggestionError}
+              </div>
             )}
 
             {splitSuggestions.length > 0 && (

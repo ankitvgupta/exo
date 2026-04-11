@@ -339,6 +339,7 @@ Respond with ONLY the JSON array.`,
     },
     {
       caller: "analysis-edit-learner-analyze",
+      feature: "analysis",
       emailId: override.emailId,
       accountId: override.accountId,
     },
@@ -408,7 +409,7 @@ Respond with ONLY a JSON array: [{"observationIndex": 0, "matchedDraftMemoryId":
         },
       ],
     },
-    { caller: "analysis-edit-learner-match" },
+    { caller: "analysis-edit-learner-match", feature: "analysis" },
   );
 
   const text = response.content[0]?.type === "text" ? response.content[0].text : "";
@@ -470,7 +471,7 @@ For global: scopeValue = null`,
         },
       ],
     },
-    { caller: "analysis-edit-learner-classify-scope" },
+    { caller: "analysis-edit-learner-classify-scope", feature: "analysis" },
   );
 
   const text = response.content[0]?.type === "text" ? response.content[0].text : "";

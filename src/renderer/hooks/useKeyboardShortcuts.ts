@@ -298,7 +298,7 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
         if (e.key === "i") {
           // g i → go to inbox (priority view)
           e.preventDefault();
-          state.setCurrentSplitId("__priority__");
+          state.setCurrentSplitId("__people__");
           // Clear selection — threads ref is stale until next render,
           // so selecting from it would pick from the wrong list.
           setSelectedThreadId(null);
@@ -384,7 +384,7 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
         const isSentView = currentSplitId === "__sent__";
         if (
           isDraftsView ||
-          (accountDrafts.length > 0 && currentSplitId !== "__archive-ready__" && !isSentView)
+          (accountDrafts.length > 0 && currentSplitId !== "__automated__" && !isSentView)
         ) {
           let draftsForNav: typeof accountDrafts;
           if (isSnoozedView) {
@@ -398,7 +398,7 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
               : undefined;
             if (currentSplit) {
               draftsForNav = accountDrafts.filter((d) => draftMatchesSplit(d, currentSplit));
-            } else if (currentSplitId === "__other__") {
+            } else if (currentSplitId === "__automated__") {
               draftsForNav = [];
             } else {
               draftsForNav = accountDrafts;
@@ -488,7 +488,7 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
         const threadEmails = getThreadEmails(selectedThreadId);
         const threadEmailIds = threadEmails.map((item) => item.id);
 
-        const isArchiveReady = currentSplitId === "__archive-ready__";
+        const isArchiveReady = false; // Archive-ready is now handled within the Automated tab
 
         // Atomically remove + advance in one render to prevent flicker
         if (activeSearchQuery) {
@@ -703,7 +703,7 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
       // a separate view that hides the tab bar entirely.
       const ALL_SENTINEL = "__all__";
       const getOrderedSplitIds = (): string[] => {
-        const ids: string[] = ["__priority__", "__other__", "__archive-ready__"];
+        const ids: string[] = ["__people__", "__automated__"];
         // Custom splits sorted by order
         const customSplits = [...state.splits]
           .filter((s) => s.accountId === currentAccountId)

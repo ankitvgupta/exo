@@ -111,7 +111,14 @@ export function registerAnalysisIpc(): void {
         const result = await analyzerInstance.analyze(emailForAnalysis, userEmail, email.accountId);
 
         // Save analysis to database
-        saveAnalysis(emailId, result.needs_reply, result.reason, result.priority);
+        saveAnalysis(
+          emailId,
+          result.needs_reply,
+          result.reason,
+          result.priority,
+          result.sender_type,
+          result.automated_category,
+        );
 
         // Return updated email with analysis
         const updatedEmail = getEmail(emailId);
@@ -188,7 +195,14 @@ export function registerAnalysisIpc(): void {
               userEmail,
               email.accountId,
             );
-            saveAnalysis(emailId, result.needs_reply, result.reason, result.priority);
+            saveAnalysis(
+              emailId,
+              result.needs_reply,
+              result.reason,
+              result.priority,
+              result.sender_type,
+              result.automated_category,
+            );
 
             const updatedEmail = getEmail(emailId);
             if (updatedEmail) {
@@ -239,16 +253,18 @@ export function registerAnalysisIpc(): void {
         const originalNeedsReply = originalAnalysis?.needsReply ?? false;
         const originalPriority = originalAnalysis?.priority ?? null;
 
-        // Update the analysis in DB
+        // Update the analysis in DB, preserving sender classification
         saveAnalysis(
           emailId,
           newNeedsReply,
           originalAnalysis?.reason ?? "User override",
           newPriority ?? undefined,
+          originalAnalysis?.senderType,
+          originalAnalysis?.automatedCategory,
         );
 
         log.info(
-          `[Analysis] Priority overridden for ${emailId}: ${originalPriority ?? "skip"} → ${newPriority ?? "skip"}`,
+          `[Analysis] Priority overridden for ${emailId}: ${originalPriority ?? "none"} → ${newPriority ?? "none"}`,
         );
 
         // Learn from the override in the background (don't block the UI)

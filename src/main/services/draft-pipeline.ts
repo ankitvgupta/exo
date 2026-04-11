@@ -144,6 +144,8 @@ export async function generateDraftForEmail(
       analysisResult.needs_reply,
       analysisResult.reason,
       analysisResult.priority,
+      analysisResult.sender_type,
+      analysisResult.automated_category,
     );
     email.analysis = {
       needsReply: analysisResult.needs_reply,

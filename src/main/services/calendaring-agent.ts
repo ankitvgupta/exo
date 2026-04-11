@@ -36,7 +36,7 @@ ${wrapUntrustedEmail(`From: ${email.from}\nTo: ${email.to}\nSubject: ${email.sub
           },
         ],
       },
-      { caller: "calendaring-agent", emailId: email.id },
+      { caller: "calendaring-agent", feature: "calendaring", emailId: email.id },
     );
 
     const textBlock = response.content.find((block) => block.type === "text");

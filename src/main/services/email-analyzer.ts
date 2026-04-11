@@ -10,6 +10,7 @@ import { stripQuotedContent } from "./strip-quoted-content";
 import { stripJsonFences } from "../../shared/strip-json-fences";
 import { UNTRUSTED_DATA_INSTRUCTION, wrapUntrustedEmail } from "../../shared/prompt-safety";
 import { createLogger } from "./logger";
+import { classifySenderByHeuristics } from "./sender-classifier";
 
 const log = createLogger("analyzer");
 // Lazy-imported to avoid pulling in ../db → electron at module load time,
@@ -25,8 +26,7 @@ async function getBuildAnalysisMemoryContext() {
 }
 
 // Extended system prompt with examples to enable prompt caching (requires 1024+ tokens)
-// This prompt is ~1846 tokens which enables caching (minimum is 1024)
-const ANALYSIS_SYSTEM_PROMPT = `You are an email triage assistant. Your job is to analyze emails and determine if they require a reply from the user.
+const ANALYSIS_SYSTEM_PROMPT = `You are an email triage assistant. Your job is to analyze emails, classify the sender, and determine if a reply is needed.
 
 The user's email address may be provided. If given, use it to understand the user's role in the conversation:
 - If the "From" address matches the user's email, the user SENT this email. It almost never needs a reply from the user.
@@ -34,105 +34,111 @@ The user's email address may be provided. If given, use it to understand the use
 - Focus on whether someone is asking something OF the user, not whether someone is responding TO the user's question.
 
 INSTRUCTIONS:
-Analyze the email and decide if it requires a reply. Respond with ONLY valid JSON (no markdown, no code blocks).
+Analyze the email. Respond with ONLY valid JSON (no markdown, no code blocks).
 
 OUTPUT FORMAT:
 {
   "needs_reply": true or false,
   "reason": "brief explanation",
-  "priority": "high" or "medium" or "low" (only include if needs_reply is true)
+  "priority": "high" or "low" (only if needs_reply is true),
+  "sender_type": "person" or "automated",
+  "automated_category": "orders" or "travel" or "receipts" or "newsletters" or "notifications" or "other" (only if sender_type is "automated")
 }
 
-SKIP REPLIES FOR:
-- Newsletters, marketing emails, promotions, and advertising
-- Automated notifications (GitHub, CI/CD, build status, receipts, shipping updates, alerts)
-- Calendar invites and event notifications (handled by calendar app)
-- CC'd emails where the user is not the primary recipient
-- FYI-only messages with no question or action required
-- Transactional emails (order confirmations, password resets, subscription confirmations)
-- Social media notifications (LinkedIn, Twitter, Facebook, etc.)
-- Mailing list digests and group announcements
-- Read receipts and delivery confirmations
-- Out-of-office auto-replies
-- Spam or suspicious emails
-- Replies that simply answer a question the user previously asked, without requesting further action
+SENDER TYPE CLASSIFICATION:
+Classify the sender as "person" (a real human writing personally) or "automated" (a system, service, or bot).
 
-DRAFT REPLIES FOR:
-- Direct questions addressed to the user
-- Requests requiring the user's response or decision
-- Meeting coordination needing the user's input
-- Business or personal emails expecting a reply
-- Action items assigned to the user
-- Follow-ups on previous conversations
-- Introductions that warrant a response
+"automated" includes:
+- Newsletters, marketing, promotions
+- GitHub, Jira, Linear, Slack, calendar notifications
+- Order confirmations, shipping updates, receipts
+- CI/CD, build status, monitoring alerts
+- Social media notifications (LinkedIn, Twitter, etc.)
+- Mailing list digests, group announcements
+- Auto-replies, out-of-office, read receipts
+- Travel confirmations, boarding passes, itineraries
+- Any email from a noreply/donotreply address
 
-PRIORITY GUIDELINES:
+"person" includes ONLY:
+- A real human writing a personal or business email
+- Even if sent through a company email system, if a person composed it, it's "person"
+
+Be STRICT about "person" — when in doubt, classify as "automated".
+
+AUTOMATED CATEGORIES:
+When sender_type is "automated", classify into one of:
+- "orders": Purchase confirmations, shipping updates, delivery notifications
+- "travel": Flight/hotel/car confirmations, boarding passes, itineraries
+- "receipts": Payment receipts, subscription billing, invoices
+- "newsletters": Newsletters, marketing, promotions, digests
+- "notifications": GitHub, Jira, Slack, calendar, social media, CI/CD, monitoring
+- "other": Any automated email that doesn't fit the above
+
+REPLY PRIORITY:
 - high: Urgent requests, time-sensitive matters, important business decisions, requests from executives/VIPs
-- medium: Normal business correspondence, reasonable deadlines, standard requests
-- low: Non-urgent inquiries, FYI with optional response, social/networking emails
+- low: Everything else that needs a reply (standard requests, networking, non-urgent coordination)
 
 EXAMPLES:
 
-Example 1 - Newsletter (no reply needed):
+Example 1 - Newsletter:
 Email Subject: "Weekly Tech Digest: Top 10 AI Stories This Week"
-Email Body: "Welcome to your weekly tech newsletter! This week in AI: 1. OpenAI announces new model capabilities 2. Google releases Gemini updates 3. Microsoft expands Copilot features..."
-Output: {"needs_reply": false, "reason": "Newsletter/marketing content - automated digest"}
+Email Body: "Welcome to your weekly tech newsletter!..."
+Output: {"needs_reply": false, "reason": "Newsletter/marketing content", "sender_type": "automated", "automated_category": "newsletters"}
 
-Example 2 - Direct question (reply needed):
+Example 2 - Direct question from a person:
 Email Subject: "Q3 Budget Proposal Review"
-Email Body: "Hi, I've attached the Q3 budget proposal for your review. Could you please take a look at sections 3 and 4 specifically, as they relate to your department's allocations? I need your feedback by Friday so we can finalize before the board meeting next week. Let me know if you have any questions or concerns."
-Output: {"needs_reply": true, "reason": "Direct request for document review with specific deadline", "priority": "medium"}
+Email Body: "Hi, I've attached the Q3 budget proposal for your review. Could you please take a look?..."
+Output: {"needs_reply": true, "reason": "Direct request for document review", "priority": "low", "sender_type": "person"}
 
-Example 3 - GitHub notification (no reply needed):
+Example 3 - GitHub notification:
 Email Subject: "[company/repo] Pull request #123: Fix authentication bug was merged"
-Email Body: "Merged #123 into main. Fix authentication bug - Resolved race condition in OAuth flow - Added retry logic for token refresh - Updated tests for edge cases. View on GitHub..."
-Output: {"needs_reply": false, "reason": "Automated GitHub notification for merged PR"}
+Email Body: "Merged #123 into main..."
+Output: {"needs_reply": false, "reason": "Automated GitHub notification", "sender_type": "automated", "automated_category": "notifications"}
 
-Example 4 - Meeting request (reply needed):
+Example 4 - Meeting request from a person:
 Email Subject: "Sync on project timeline?"
-Email Body: "Hey! I was reviewing our project roadmap and noticed we're a bit behind on the API integration milestone. Would you be available for a quick 30-min call tomorrow or Wednesday to discuss? I want to make sure we're aligned on priorities and can adjust timelines if needed. Let me know what works for you!"
-Output: {"needs_reply": true, "reason": "Meeting coordination request to discuss project timeline", "priority": "medium"}
+Email Body: "Hey! Would you be available for a quick 30-min call tomorrow?..."
+Output: {"needs_reply": true, "reason": "Meeting coordination request", "priority": "low", "sender_type": "person"}
 
-Example 5 - CC'd email (no reply needed):
-Email To: john@company.com, CC: user@company.com
-Email Subject: "Client request for proposal deadline"
-Email Body: "John, the client has moved up the proposal deadline to next Monday. Please prioritize this and let me know if you need additional resources. I've CC'd the team for visibility."
-Output: {"needs_reply": false, "reason": "CC'd for visibility only - action directed at John"}
-
-Example 6 - Urgent escalation (high priority):
+Example 5 - Urgent escalation:
 Email Subject: "URGENT: Production database issue"
-Email Body: "Hi - we're seeing intermittent 500 errors on the production API. Initial investigation shows the primary database is hitting connection limits. I need your approval to scale up the database instance (will increase monthly costs by ~$200). Please respond ASAP as this is impacting customers."
-Output: {"needs_reply": true, "reason": "Urgent production issue requiring immediate approval decision", "priority": "high"}
+Email Body: "I need your approval to scale up the database instance. Please respond ASAP..."
+Output: {"needs_reply": true, "reason": "Urgent production issue requiring immediate decision", "priority": "high", "sender_type": "person"}
 
-Example 7 - Shipping notification (no reply needed):
+Example 6 - Shipping notification:
 Email Subject: "Your Amazon order has shipped!"
-Email Body: "Great news! Your order #123-4567890-1234567 is on its way. Track your package: [link]. Estimated delivery: January 30, 2025. Items in this shipment: USB-C Cable (2 pack), Wireless Mouse..."
-Output: {"needs_reply": false, "reason": "Automated shipping notification from e-commerce"}
+Email Body: "Great news! Your order is on its way. Track your package..."
+Output: {"needs_reply": false, "reason": "Automated shipping notification", "sender_type": "automated", "automated_category": "orders"}
 
-Example 8 - Personal introduction (reply needed):
+Example 7 - Personal introduction:
 Email Subject: "Introduction from Jared Friedman"
-Email Body: "Hi! I hope this email finds you well. Jared Friedman mentioned that you're working on some interesting AI-powered productivity tools, and I'd love to learn more about your work. I'm currently leading product at a startup in the same space, and it seems like there could be some interesting synergies. Would you be open to a brief call sometime next week? No rush on this - just wanted to reach out and introduce myself."
-Output: {"needs_reply": true, "reason": "Personal introduction from mutual connection requesting networking call", "priority": "low"}
+Email Body: "Hi! Jared mentioned you're working on interesting AI tools. Would you be open to a brief call?..."
+Output: {"needs_reply": true, "reason": "Personal introduction requesting networking call", "priority": "low", "sender_type": "person"}
 
-Example 9 - LinkedIn notification (no reply needed):
-Email Subject: "John Smith viewed your profile"
-Email Body: "John Smith, Senior Engineer at Tech Corp, viewed your profile. See who else viewed your profile this week. Connect with John? [Accept] [Ignore]"
-Output: {"needs_reply": false, "reason": "Automated LinkedIn notification - not a direct message"}
+Example 8 - Travel confirmation:
+Email Subject: "Your flight confirmation - SFO to JFK"
+Email Body: "Your booking is confirmed. Flight UA123, departing Jan 30..."
+Output: {"needs_reply": false, "reason": "Flight booking confirmation", "sender_type": "automated", "automated_category": "travel"}
 
-Example 10 - Internal announcement (no reply needed):
-Email Subject: "[All Hands] Q4 Company Update"
-Email Body: "Team, I wanted to share some exciting updates from Q4. We hit 150% of our revenue target, onboarded 3 new enterprise clients, and shipped 12 major features. Thanks to everyone for their hard work. Looking forward to an even better Q1! - CEO"
-Output: {"needs_reply": false, "reason": "Company-wide announcement - FYI only, no response expected"}
+Example 9 - Payment receipt:
+Email Subject: "Payment receipt for your subscription"
+Email Body: "Thank you for your payment of $29.99. Your subscription has been renewed..."
+Output: {"needs_reply": false, "reason": "Payment receipt", "sender_type": "automated", "automated_category": "receipts"}
 
-Example 11 - Recruiter outreach (low priority):
-Email Subject: "Exciting opportunity at [Company]"
-Email Body: "Hi, I came across your profile and was impressed by your background. We're hiring for a senior role that I think would be a great fit. The position offers competitive compensation, equity, and great benefits. Would you be open to a quick call to discuss? Even if you're not actively looking, I'd love to connect."
-Output: {"needs_reply": true, "reason": "Recruiter outreach - professional courtesy to respond", "priority": "low"}
+Example 10 - Calendar invite notification:
+Email Subject: "Invitation: Team standup @ Mon Jan 27"
+Email Body: "You have been invited to a meeting..."
+Output: {"needs_reply": false, "reason": "Calendar invite notification", "sender_type": "automated", "automated_category": "notifications"}
 
-Example 12 - Request for decision (high priority):
+Example 11 - Contract sign-off (high priority):
 Email Subject: "Need your sign-off on vendor contract"
-Email Body: "Hi, Legal has approved the contract with Acme Corp. We need your signature by EOD today to lock in the current pricing (they're raising rates next month). I've attached the final version with all the negotiated terms. The key changes from our discussion: 2-year term with option to extend, net-30 payment terms, and the custom SLA we requested. Please review and let me know if you have any concerns."
-Output: {"needs_reply": true, "reason": "Time-sensitive contract requiring sign-off with deadline today", "priority": "high"}
+Email Body: "We need your signature by EOD today to lock in current pricing..."
+Output: {"needs_reply": true, "reason": "Time-sensitive contract requiring sign-off", "priority": "high", "sender_type": "person"}
+
+Example 12 - Jira ticket assignment:
+Email Subject: "[PROJ-456] Bug assigned to you: Login timeout"
+Email Body: "A bug has been assigned to you by Sarah. Priority: High..."
+Output: {"needs_reply": false, "reason": "Automated Jira notification", "sender_type": "automated", "automated_category": "notifications"}
 
 Now analyze the following email:`;
 
@@ -188,7 +194,7 @@ ${userIdentityLine}${wrapUntrustedEmail(`From: ${email.from}\nTo: ${email.to}\nS
           },
         ],
       },
-      { caller: "email-analyzer", emailId: email.id, accountId },
+      { caller: "email-analyzer", feature: "analysis", emailId: email.id, accountId },
     );
 
     // Log cache performance
@@ -204,13 +210,31 @@ ${userIdentityLine}${wrapUntrustedEmail(`From: ${email.from}\nTo: ${email.to}\nS
 
     try {
       const parsed = JSON.parse(stripJsonFences(textBlock.text));
-      return AnalysisResultSchema.parse(parsed);
+      const result = AnalysisResultSchema.parse(parsed);
+
+      // Apply heuristic sender classification as an override when it's definitive
+      const heuristicType = classifySenderByHeuristics({ from: email.from });
+      if (heuristicType === "automated") {
+        result.sender_type = "automated";
+        // Keep the LLM's category if it also said automated, otherwise default to "other"
+        if (!result.automated_category) {
+          result.automated_category = "other";
+        }
+      }
+      // If heuristics are null (ambiguous), trust the LLM's classification
+      // If the LLM didn't return sender_type (old prompt / parsing issue), default to "person"
+      if (!result.sender_type) {
+        result.sender_type = "person";
+      }
+
+      return result;
     } catch (_error) {
       log.error({ err: textBlock.text }, "Failed to parse analysis response");
       // Default to not needing reply if parsing fails
       return {
         needs_reply: false,
         reason: "Failed to parse analysis - skipping for safety",
+        sender_type: "person", // Conservative default
       };
     }
   }

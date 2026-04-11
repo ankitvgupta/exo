@@ -118,7 +118,7 @@ ${calendaringContext}
 ---
 ANALYSIS (for context):
 Reason for reply: ${analysis.reason}
-Priority: ${analysis.priority || "medium"}
+Priority: ${analysis.priority || "low"}
 
 ---
 ORIGINAL EMAIL:
@@ -127,7 +127,7 @@ ${wrapUntrustedEmail(`From: ${email.from}\nTo: ${email.to}\nSubject: ${email.sub
           },
         ],
       },
-      { caller: "draft-generator", emailId: email.id },
+      { caller: "draft-generator", feature: "drafts", emailId: email.id },
     );
 
     const textBlock = response.content.find((block) => block.type === "text");
@@ -189,7 +189,7 @@ ${instructions}`,
           },
         ],
       },
-      { caller: "draft-generator-compose" },
+      { caller: "draft-generator-compose", feature: "drafts" },
     );
 
     const textBlock = response.content.find((block) => block.type === "text");
@@ -252,7 +252,7 @@ ${wrapUntrustedEmail(`From: ${email.from}\nTo: ${email.to}\nSubject: ${email.sub
           },
         ],
       },
-      { caller: "draft-generator-forward", emailId: email.id },
+      { caller: "draft-generator-forward", feature: "drafts", emailId: email.id },
     );
 
     const textBlock = response.content.find((block) => block.type === "text");

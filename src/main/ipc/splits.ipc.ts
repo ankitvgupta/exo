@@ -309,10 +309,7 @@ export function registerSplitsIpc(): void {
   // Get persisted thread assignments for one account
   ipcMain.handle(
     "splits:get-assignments",
-    async (
-      _,
-      { accountId }: { accountId: string },
-    ): Promise<IpcResponse<SplitAssignment[]>> => {
+    async (_, { accountId }: { accountId: string }): Promise<IpcResponse<SplitAssignment[]>> => {
       try {
         const assignments = getSplitAssignments(accountId);
         const data = Object.entries(assignments).map(([threadId, splitId]) => ({
@@ -436,6 +433,7 @@ export function registerSplitsIpc(): void {
           },
           {
             caller: "splits-suggest-thread",
+            feature: "analysis",
             accountId,
             emailId: latestReceivedEmail.id,
           },

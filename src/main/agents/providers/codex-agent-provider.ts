@@ -45,7 +45,10 @@ export class CodexAgentProvider implements AgentProvider {
 
     const convo: ConversationEntry[] = [];
     if (params.context.conversationHistory) {
-      convo.push({ role: "user", content: `Prior conversation context:\n${params.context.conversationHistory}` });
+      convo.push({
+        role: "user",
+        content: `Prior conversation context:\n${params.context.conversationHistory}`,
+      });
     }
     convo.push({ role: "user", content: params.prompt });
 
@@ -169,8 +172,11 @@ export class CodexAgentProvider implements AgentProvider {
   }
 }
 
-function resolveCodexModel(modelOverride: string | undefined, defaultModel: string | undefined): string {
-  const fallback = defaultModel || "o3";
+function resolveCodexModel(
+  modelOverride: string | undefined,
+  defaultModel: string | undefined,
+): string {
+  const fallback = defaultModel || "gpt-5.4";
   if (!modelOverride) return fallback;
 
   // Interactive agent runs may pass a model tier resolved for Claude (e.g. "claude-opus-4-6").
@@ -185,9 +191,7 @@ function resolveCodexModel(modelOverride: string | undefined, defaultModel: stri
 }
 
 function buildCodexAgentPrompt(convo: ConversationEntry[], params: AgentRunParams): string {
-  const toolList = params.tools
-    .map((tool) => `- ${tool.name}: ${tool.description}`)
-    .join("\n");
+  const toolList = params.tools.map((tool) => `- ${tool.name}: ${tool.description}`).join("\n");
 
   const contextLines = [
     `accountId=${params.context.accountId}`,

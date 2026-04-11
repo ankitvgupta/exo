@@ -114,7 +114,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
 
   // Agent authentication state
   const [aiProvider, setAiProvider] = useState<AiProvider>("codex");
-  const [codexModel, setCodexModel] = useState("o3");
+  const [codexModel, setCodexModel] = useState("gpt-5.4");
   const [enableAnthropicFallback, setEnableAnthropicFallback] = useState(true);
   const [codexCliAvailable, setCodexCliAvailable] = useState(false);
   const [codexAuthStatus, setCodexAuthStatus] = useState<
@@ -242,7 +242,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
       setGithubToken(generalConfig.githubToken ?? "");
       setAllowPrereleaseUpdates(generalConfig.allowPrereleaseUpdates ?? false);
       setAiProvider(generalConfig.aiProvider ?? "codex");
-      setCodexModel(generalConfig.codex?.model ?? "o3");
+      setCodexModel(generalConfig.codex?.model ?? "gpt-5.4");
       setEnableAnthropicFallback(generalConfig.enableAnthropicFallback ?? true);
       setAnthropicApiKey(generalConfig.anthropicApiKey ?? "");
       const browser = generalConfig.agentBrowser;
@@ -2608,7 +2608,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                     type="text"
                     value={codexModel}
                     onChange={(e) => setCodexModel(e.target.value)}
-                    placeholder="o3"
+                    placeholder="gpt-5.4"
                     className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                   />
                   <button
