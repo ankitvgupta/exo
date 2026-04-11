@@ -786,7 +786,9 @@ export function EmailList() {
                     density={inboxDensity}
                     onClick={(e) => handleThreadClick(thread, e)}
                     onCheckboxChange={() => handleCheckboxToggle(thread.threadId)}
-                    onKeepToggle={isAutomatedView ? () => toggleKeptThread(thread.threadId) : undefined}
+                    onKeepToggle={
+                      isAutomatedView ? () => toggleKeptThread(thread.threadId) : undefined
+                    }
                     snoozeInfo={isSnoozedView ? snoozedThreads.get(thread.threadId) : undefined}
                     returnTime={unsnoozedReturnTimes.get(thread.threadId)}
                   />

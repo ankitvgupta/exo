@@ -290,10 +290,24 @@ export const EmailRow = memo(
                     ? "text-white/30 opacity-0 group-hover:opacity-100"
                     : "text-gray-300 dark:text-gray-600 opacity-0 group-hover:opacity-100"
               }`}
-              title={thread.archiveKept ? "Remove Keep (allow bulk archive)" : "Keep (exclude from bulk archive)"}
+              title={
+                thread.archiveKept
+                  ? "Remove Keep (allow bulk archive)"
+                  : "Keep (exclude from bulk archive)"
+              }
             >
-              <svg className="w-3.5 h-3.5" fill={thread.archiveKept ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+              <svg
+                className="w-3.5 h-3.5"
+                fill={thread.archiveKept ? "currentColor" : "none"}
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"
+                />
               </svg>
             </button>
           )}

@@ -72,6 +72,28 @@ export function classifySenderByHeuristics(headers: {
         return "automated";
       }
     }
+
+    // Subdomain patterns that indicate automated senders
+    // e.g. notifications.pge.com, alerts.chase.com, mailer.spotify.com
+    const automatedSubdomains =
+      /^(notifications?|alerts?|mailer|mail|bounce|email|updates?|info|news|newsletter|marketing|promo|campaigns?|transactional|system|service|support|billing|receipts?|orders?)\./;
+    if (automatedSubdomains.test(domain)) {
+      return "automated";
+    }
+  }
+
+  // Local part patterns that indicate automated senders
+  // e.g. customerservice@, support@, info@, newsletter@
+  const localMatch = from.match(/([^<\s]+)@/);
+  if (localMatch) {
+    const local = localMatch[1].toLowerCase();
+    if (
+      /^(customerservice|customer-service|customer_service|support|info|newsletter|news|marketing|billing|sales|admin|system|automated|robot|bot|notifications?|alerts?|updates?)$/.test(
+        local,
+      )
+    ) {
+      return "automated";
+    }
   }
 
   // Ambiguous — let the LLM decide

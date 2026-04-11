@@ -463,6 +463,43 @@ const NUMBERED_MIGRATIONS: Migration[] = [
       db.exec("UPDATE analyses SET sender_type = 'person' WHERE sender_type IS NULL");
     },
   },
+  {
+    version: 4,
+    name: "reclassify_senders_with_heuristics",
+    up: (db) => {
+      // Re-run heuristic sender classification on all analyzed emails.
+      // Migration v3 conservatively set everything to "person" — now apply
+      // the heuristic classifier to catch obvious automated senders.
+      const { classifySenderByHeuristics } = require("../services/sender-classifier");
+      const rows = db
+        .prepare(
+          `SELECT a.email_id, e.from_address
+           FROM analyses a
+           JOIN emails e ON e.id = a.email_id
+           WHERE a.sender_type = 'person' OR a.sender_type IS NULL`,
+        )
+        .all() as Array<{ email_id: string; from_address: string }>;
+
+      if (rows.length === 0) return;
+
+      const updateStmt = db.prepare(
+        "UPDATE analyses SET sender_type = ?, automated_category = COALESCE(automated_category, ?) WHERE email_id = ?",
+      );
+      let reclassified = 0;
+      for (const row of rows) {
+        const result = classifySenderByHeuristics({ from: row.from_address });
+        if (result === "automated") {
+          updateStmt.run("automated", "other", row.email_id);
+          reclassified++;
+        }
+      }
+      if (reclassified > 0) {
+        log.info(
+          `[Migration v4] Reclassified ${reclassified}/${rows.length} emails as automated via heuristics`,
+        );
+      }
+    },
+  },
 ];
 
 function runNumberedMigrations(db: DatabaseInstance): void {
