@@ -10,6 +10,7 @@ import {
   type Email,
   type EAConfig,
   type GeneratedDraftResponse,
+  type LlmProvider,
 } from "../../shared/types";
 import { UNTRUSTED_DATA_INSTRUCTION, wrapUntrustedEmail } from "../../shared/prompt-safety";
 import { createLogger } from "./logger";
@@ -44,16 +45,22 @@ export class DraftGenerator {
   private model: string;
   private calendaringModel: string;
   private prompt: string;
+  private provider?: LlmProvider;
+  private calendaringProvider?: LlmProvider;
 
   constructor(
     model: string = "claude-sonnet-4-20250514",
     prompt: string = DEFAULT_DRAFT_PROMPT,
     calendaringModel?: string,
+    provider?: LlmProvider,
+    calendaringProvider?: LlmProvider,
   ) {
     this.model = model;
     this.calendaringModel = calendaringModel ?? model;
     // Always append format suffix so the user can't accidentally remove it
     this.prompt = prompt + DRAFT_FORMAT_SUFFIX;
+    this.provider = provider;
+    this.calendaringProvider = calendaringProvider;
   }
 
   async generateDraft(
@@ -91,7 +98,7 @@ ${profile.summary}
 
     // Check for scheduling if EA is enabled
     if (eaConfig?.enabled && eaConfig.email) {
-      const calAgent = new CalendaringAgent(this.calendaringModel);
+      const calAgent = new CalendaringAgent(this.calendaringModel, undefined, this.calendaringProvider);
       calendaringResult = await calAgent.analyze(email);
 
       if (calendaringResult.hasSchedulingContext && calendaringResult.action === "defer_to_ea") {
@@ -127,7 +134,7 @@ ${wrapUntrustedEmail(`From: ${email.from}\nTo: ${email.to}\nSubject: ${email.sub
           },
         ],
       },
-      { caller: "draft-generator", emailId: email.id },
+      { caller: "draft-generator", emailId: email.id, provider: this.provider },
     );
 
     const textBlock = response.content.find((block) => block.type === "text");
@@ -189,7 +196,7 @@ ${instructions}`,
           },
         ],
       },
-      { caller: "draft-generator-compose" },
+      { caller: "draft-generator-compose", provider: this.provider },
     );
 
     const textBlock = response.content.find((block) => block.type === "text");
@@ -252,7 +259,7 @@ ${wrapUntrustedEmail(`From: ${email.from}\nTo: ${email.to}\nSubject: ${email.sub
           },
         ],
       },
-      { caller: "draft-generator-forward", emailId: email.id },
+      { caller: "draft-generator-forward", emailId: email.id, provider: this.provider },
     );
 
     const textBlock = response.content.find((block) => block.type === "text");

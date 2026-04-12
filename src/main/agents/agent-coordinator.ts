@@ -9,7 +9,7 @@ import type {
   WorkerMessage,
 } from "./types";
 import { getEmailSyncService } from "../ipc/sync.ipc";
-import { getConfig, getModelIdForFeature } from "../ipc/settings.ipc";
+import { getConfig, getModelIdForFeature, getFeatureModelConfig } from "../ipc/settings.ipc";
 import * as db from "../db";
 import { buildStyleContext } from "../services/style-profiler";
 import { buildAgentMemoryContext } from "../services/memory-context";
@@ -142,10 +142,14 @@ export class AgentCoordinator {
       }
 
       const enableSenderLookup = config.enableSenderLookup ?? true;
+      const dConfig = getFeatureModelConfig("drafts");
+      const cConfig = getFeatureModelConfig("calendaring");
       const generator = new DraftGenerator(
-        getModelIdForFeature("drafts"),
+        dConfig.model,
         prompt,
-        getModelIdForFeature("calendaring"),
+        cConfig.model,
+        dConfig.provider,
+        cConfig.provider,
       );
       return generator.composeNewEmail(to, subject, instructions, { enableSenderLookup });
     },
