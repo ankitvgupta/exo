@@ -105,7 +105,7 @@ test.describe("AnalysisResultSchema", () => {
   });
 
   test("validates all priority levels", () => {
-    for (const priority of ["high", "medium", "low", "skip"]) {
+    for (const priority of ["high", "low"]) {
       const result = AnalysisResultSchema.safeParse({
         needs_reply: true,
         reason: "test",

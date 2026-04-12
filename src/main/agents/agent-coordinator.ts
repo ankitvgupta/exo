@@ -64,8 +64,14 @@ export class AgentCoordinator {
     getInboxEmails: (accountId?: string) => db.getInboxEmails(accountId),
     getAllEmails: (accountId?: string) => db.getAllEmails(accountId),
     searchEmails: (query: string, options?: db.SearchOptions) => db.searchEmails(query, options),
-    saveAnalysis: (emailId: string, needsReply: boolean, reason: string, priority?: string) =>
-      db.saveAnalysis(emailId, needsReply, reason, priority),
+    saveAnalysis: (
+      emailId: string,
+      needsReply: boolean,
+      reason: string,
+      priority?: string,
+      senderType?: string,
+      automatedCategory?: string,
+    ) => db.saveAnalysis(emailId, needsReply, reason, priority, senderType, automatedCategory),
     saveDraft: (
       emailId: string,
       draftBody: string,
@@ -242,7 +248,7 @@ export class AgentCoordinator {
       aiProvider: appConfig.aiProvider ?? "codex",
       anthropicApiKey: apiKey,
       codex: {
-        model: appConfig.codex?.model || "o3",
+        model: appConfig.codex?.model || "gpt-5.4",
         cliPath: appConfig.codex?.cliPath,
       },
       browserConfig: browser
@@ -286,7 +292,7 @@ export class AgentCoordinator {
               anthropicApiKey:
                 getConfig().anthropicApiKey || process.env.ANTHROPIC_API_KEY || undefined,
               codex: {
-                model: getConfig().codex?.model || "o3",
+                model: getConfig().codex?.model || "gpt-5.4",
                 cliPath: getConfig().codex?.cliPath,
               },
             },
@@ -529,7 +535,7 @@ export class AgentCoordinator {
       aiProvider: appConfig.aiProvider ?? "codex",
       anthropicApiKey: appConfig.anthropicApiKey || process.env.ANTHROPIC_API_KEY || undefined,
       codex: {
-        model: appConfig.codex?.model || "o3",
+        model: appConfig.codex?.model || "gpt-5.4",
         cliPath: appConfig.codex?.cliPath,
       },
     };

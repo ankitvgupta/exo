@@ -1,15 +1,59 @@
 import { ipcMain, BrowserWindow } from "electron";
 import { snoozeService } from "../services/snooze-service";
-import { getDueSnoozedEmails, unsnoozeEmail } from "../db";
+import { getDueSnoozedEmails, unsnoozeEmail, getEmailsByThread, saveAnalysis } from "../db";
 import type { IpcResponse, SnoozedEmail } from "../../shared/types";
 import { createLogger } from "../services/logger";
 import { prefetchService } from "../services/prefetch-service";
+import { classifySenderByHeuristics } from "../services/sender-classifier";
 
 const log = createLogger("snooze-ipc");
+
+/**
+ * When threads come out of snooze, ensure they have sender_type classification
+ * so they route to the correct tab (People vs Automated). Runs heuristics
+ * synchronously (instant, zero API cost). For ambiguous cases, the email
+ * defaults to People until the next analysis cycle picks it up.
+ */
+function reclassifyUnsnoozedThreads(snoozedEmails: SnoozedEmail[]): void {
+  for (const snoozed of snoozedEmails) {
+    const threadEmails = getEmailsByThread(snoozed.threadId, snoozed.accountId);
+    for (const email of threadEmails) {
+      // Skip emails that already have senderType classified
+      if (email.analysis && !email.analysis.senderType) {
+        const heuristicType = classifySenderByHeuristics({ from: email.from });
+        if (heuristicType === "automated") {
+          saveAnalysis(
+            email.id,
+            email.analysis.needsReply,
+            email.analysis.reason,
+            email.analysis.priority,
+            "automated",
+            "other",
+          );
+          log.info(
+            `[Snooze] Heuristic reclassified ${email.id} as automated (from: ${email.from})`,
+          );
+        } else {
+          // Ambiguous or person — set to "person" so it routes to People tab
+          saveAnalysis(
+            email.id,
+            email.analysis.needsReply,
+            email.analysis.reason,
+            email.analysis.priority,
+            "person",
+          );
+        }
+      }
+    }
+  }
+}
 
 export function registerSnoozeIpc(): void {
   // Set up the unsnooze callback to broadcast to renderer
   snoozeService.setOnUnsnooze((unsnoozedEmails) => {
+    // Ensure unsnoozed threads have sender classification for People/Automated routing
+    reclassifyUnsnoozedThreads(unsnoozedEmails);
+
     for (const win of BrowserWindow.getAllWindows()) {
       win.webContents.send("snooze:unsnoozed", { emails: unsnoozedEmails });
     }
@@ -77,8 +121,9 @@ export function registerSnoozeIpc(): void {
           });
         }
 
-        // Auto-draft a reply for the manually unsnoozed thread
+        // Ensure sender classification for People/Automated routing, then auto-draft
         if (snoozeInfo) {
+          reclassifyUnsnoozedThreads([snoozeInfo]);
           prefetchService.queueDraftForUnsnoozedEmails([snoozeInfo]);
         }
 
@@ -117,6 +162,8 @@ export function registerSnoozeIpc(): void {
           log.info(
             `[Snooze IPC] Processed ${expired.length} expired snooze(s) for account ${accountId}`,
           );
+          // Ensure sender classification for People/Automated routing
+          reclassifyUnsnoozedThreads(expired);
           // Auto-draft replies for threads that expired while app was closed
           prefetchService.queueDraftForUnsnoozedEmails(expired);
         }

@@ -298,7 +298,7 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
         if (e.key === "i") {
           // g i → go to inbox (priority view)
           e.preventDefault();
-          state.setCurrentSplitId("__priority__");
+          state.setCurrentSplitId("__people__");
           // Clear selection — threads ref is stale until next render,
           // so selecting from it would pick from the wrong list.
           setSelectedThreadId(null);
@@ -384,7 +384,7 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
         const isSentView = currentSplitId === "__sent__";
         if (
           isDraftsView ||
-          (accountDrafts.length > 0 && currentSplitId !== "__archive-ready__" && !isSentView)
+          (accountDrafts.length > 0 && currentSplitId !== "__automated__" && !isSentView)
         ) {
           let draftsForNav: typeof accountDrafts;
           if (isSnoozedView) {
@@ -398,7 +398,7 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
               : undefined;
             if (currentSplit) {
               draftsForNav = accountDrafts.filter((d) => draftMatchesSplit(d, currentSplit));
-            } else if (currentSplitId === "__other__") {
+            } else if (currentSplitId === "__automated__") {
               draftsForNav = [];
             } else {
               draftsForNav = accountDrafts;
@@ -488,7 +488,7 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
         const threadEmails = getThreadEmails(selectedThreadId);
         const threadEmailIds = threadEmails.map((item) => item.id);
 
-        const isArchiveReady = currentSplitId === "__archive-ready__";
+        const isArchiveReady = false; // Archive-ready is now handled within the Automated tab
 
         // Atomically remove + advance in one render to prevent flicker
         if (activeSearchQuery) {
@@ -697,18 +697,12 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
       }
 
       // --- Helper: get ordered split IDs matching visible SplitTabs ---
-      // Uses "__all__" sentinel for the All tab (currentSplitId === null).
       // Only includes __drafts__ / __snoozed__ when they have content (matching
       // SplitTabs.tsx conditional rendering). __sent__ is excluded because it's
       // a separate view that hides the tab bar entirely.
-      const ALL_SENTINEL = "__all__";
+      // Custom splits are filter chips within Automated, not top-level tabs.
       const getOrderedSplitIds = (): string[] => {
-        const ids: string[] = ["__priority__", "__other__", "__archive-ready__"];
-        // Custom splits sorted by order
-        const customSplits = [...state.splits]
-          .filter((s) => s.accountId === currentAccountId)
-          .sort((a, b) => a.order - b.order);
-        for (const s of customSplits) ids.push(s.id);
+        const ids: string[] = ["__people__", "__automated__"];
         // Conditional virtual tabs (only when visible in SplitTabs)
         const hasLocalDrafts = state.localDrafts.some(
           (d) => !currentAccountId || d.accountId === currentAccountId,
@@ -730,18 +724,17 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
             (!currentAccountId || e.accountId === currentAccountId),
         );
         if (hasSnoozed) ids.push("__snoozed__");
-        ids.push(ALL_SENTINEL);
         return ids;
       };
 
       // --- Helper: navigate to next/prev split tab ---
       const cycleSplit = (direction: "next" | "prev") => {
         const ids = getOrderedSplitIds();
-        const currentIdx = ids.indexOf(currentSplitId ?? ALL_SENTINEL);
+        const currentIdx = ids.indexOf(currentSplitId ?? ids[0]);
         const step = direction === "next" ? 1 : -1;
         const nextIdx = (currentIdx + step + ids.length) % ids.length;
         const nextId = ids[nextIdx];
-        state.setCurrentSplitId(nextId === ALL_SENTINEL ? null : nextId);
+        state.setCurrentSplitId(nextId);
       };
 
       // Normal mode shortcuts (single-key, no modifiers)

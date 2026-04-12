@@ -534,9 +534,7 @@ class EmailSyncService {
           } else {
             account.status = "error";
             account.lastError =
-              rebaselineError instanceof Error
-                ? rebaselineError.message
-                : String(rebaselineError);
+              rebaselineError instanceof Error ? rebaselineError.message : String(rebaselineError);
             this.onSyncStatusChange?.(accountId, "error");
           }
         }
@@ -686,7 +684,8 @@ class EmailSyncService {
         const skipAnalysis = {
           needsReply: false,
           reason: "Pre-existing email before app setup",
-          priority: "skip" as const,
+          priority: "low" as const,
+          senderType: "automated" as const,
           analyzedAt: Date.now(),
         };
         for (const email of newEmails) {
@@ -824,7 +823,8 @@ class EmailSyncService {
       const skipAnalysis = {
         needsReply: false,
         reason: "Pre-existing email before app setup",
-        priority: "skip" as const,
+        priority: "low" as const,
+        senderType: "automated" as const,
         analyzedAt: Date.now(),
       };
       for (const email of newEmails) {

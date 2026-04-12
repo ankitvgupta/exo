@@ -78,6 +78,7 @@ export function EmailList() {
     setSelectedDraftId,
     removeRecentlyUnsnoozedThread,
     markThreadAsRead,
+    toggleKeptThread,
   } = useAppStore();
   const openCompose = useAppStore((s) => s.openCompose);
   const allLocalDrafts = useAppStore((s) => s.localDrafts);
@@ -86,10 +87,10 @@ export function EmailList() {
   const splits = useAppStore((s) => s.splits);
   const { threads } = useSplitFilteredThreads();
 
-  const isArchiveReadyView = currentSplitId === "__archive-ready__";
+  const isAutomatedView = currentSplitId === "__automated__";
   const isDraftsView = currentSplitId === "__drafts__";
   const isSnoozedView = currentSplitId === "__snoozed__";
-  const _isPriorityView = currentSplitId === "__priority__";
+  const _isPeopleView = currentSplitId === "__people__";
   const isSentView = currentSplitId === "__sent__";
 
   // Filter local drafts for the current account
@@ -265,11 +266,15 @@ export function EmailList() {
   const handleArchiveAll = useCallback(() => {
     if (!currentAccountId || threads.length === 0) return;
 
-    const archiveReadyThreadIds = threads.map((t) => t.threadId);
+    // Only archive threads that are NOT kept by the user
+    const archivableThreads = threads.filter((t) => !t.archiveKept);
+    if (archivableThreads.length === 0) return;
+
+    const archiveReadyThreadIds = archivableThreads.map((t) => t.threadId);
     const allEmailIds: string[] = [];
     const allEmails: DashboardEmail[] = [];
     const { emails: currentEmails } = useAppStore.getState();
-    for (const thread of threads) {
+    for (const thread of archivableThreads) {
       const threadEmails = currentEmails.filter((e) => e.threadId === thread.threadId);
       for (const email of threadEmails) {
         allEmailIds.push(email.id);
@@ -278,7 +283,6 @@ export function EmailList() {
     }
 
     removeEmails(allEmailIds);
-    setCurrentSplitId("__priority__");
 
     addUndoAction({
       id: `archive-all-${Date.now()}`,
@@ -413,18 +417,18 @@ export function EmailList() {
     if (isDraftsView) return []; // Drafts view is non-virtualized
     const result: ListItem[] = [];
     // Drafts at top (except in archive-ready and sent views)
-    if (localDrafts.length > 0 && !isArchiveReadyView && !isSentView) {
+    if (localDrafts.length > 0 && !isAutomatedView && !isSentView) {
       let draftsToShow: LocalDraft[];
       if (isSnoozedView) {
         draftsToShow = localDrafts.filter((d) => d.threadId && snoozedThreads.has(d.threadId));
       } else if (currentSplit) {
         // Custom split: only show drafts whose recipients/subject match the split
         draftsToShow = localDrafts.filter((d) => draftMatchesSplit(d, currentSplit));
-      } else if (currentSplitId === "__other__") {
-        // "Other" is a catch-all for low-priority — don't surface drafts here
+      } else if (currentSplitId === "__automated__") {
+        // Automated tab has no draft workflow
         draftsToShow = [];
       } else {
-        // "All", "Priority" — show all drafts
+        // "People" or other views — show all drafts
         draftsToShow = localDrafts;
       }
       for (const draft of draftsToShow) {
@@ -439,7 +443,7 @@ export function EmailList() {
     threads,
     localDrafts,
     isDraftsView,
-    isArchiveReadyView,
+    isAutomatedView,
     isSentView,
     isSnoozedView,
     snoozedThreads,
@@ -523,7 +527,7 @@ export function EmailList() {
         <div className="flex items-center gap-1">
           <button
             onClick={() => {
-              if (isSentView) setCurrentSplitId("__priority__");
+              if (isSentView) setCurrentSplitId("__people__");
             }}
             className={`px-2.5 py-1 text-sm font-medium rounded-md transition-colors focus:outline-none ${
               !isSentView
@@ -553,7 +557,7 @@ export function EmailList() {
           </button>
         </div>
         <div className="flex items-center gap-2">
-          {isArchiveReadyView && threads.length > 0 && (
+          {isAutomatedView && threads.length > 0 && (
             <button
               onClick={handleArchiveAll}
               className="px-2.5 py-1 text-xs font-medium text-white bg-green-600 dark:bg-green-500 hover:bg-green-700 dark:hover:bg-green-600 rounded transition-colors flex items-center gap-1"
@@ -782,6 +786,9 @@ export function EmailList() {
                     density={inboxDensity}
                     onClick={(e) => handleThreadClick(thread, e)}
                     onCheckboxChange={() => handleCheckboxToggle(thread.threadId)}
+                    onKeepToggle={
+                      isAutomatedView ? () => toggleKeptThread(thread.threadId) : undefined
+                    }
                     snoozeInfo={isSnoozedView ? snoozedThreads.get(thread.threadId) : undefined}
                     returnTime={unsnoozedReturnTimes.get(thread.threadId)}
                   />

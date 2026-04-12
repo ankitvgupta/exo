@@ -15,6 +15,7 @@ import type {
   SendMessageOptions,
   LocalDraft,
 } from "../../shared/types";
+import { KEEP_BY_DEFAULT_CATEGORIES } from "../../shared/types";
 import { emailMatchesSplit } from "../utils/split-conditions";
 import type {
   AgentProviderConfig,
@@ -79,6 +80,8 @@ export type EmailThread = {
   userReplied: boolean;
   // Best sender to display (handles edge cases where latestReceivedEmail is from user)
   displaySender: string;
+  // User toggle to exclude this thread from bulk archive (Automated tab)
+  archiveKept?: boolean;
 };
 
 // Account representation
@@ -246,6 +249,10 @@ interface AppState {
   splits: InboxSplit[];
   currentSplitId: string | null;
   splitAssignments: Map<string, string>; // threadId -> splitId for current account
+  // Automated tab category filter (null = show all)
+  currentAutomatedCategory: string | null;
+  // Thread IDs the user has toggled "Keep" on — excluded from bulk Archive All
+  keptThreadIds: Set<string>;
 
   // Snippets state
   snippets: Snippet[];
@@ -422,6 +429,8 @@ interface AppState {
   // Inbox splits actions
   setSplits: (splits: InboxSplit[]) => void;
   setCurrentSplitId: (id: string | null) => void;
+  setCurrentAutomatedCategory: (category: string | null) => void;
+  toggleKeptThread: (threadId: string) => void;
   setSplitAssignments: (assignments: Array<{ threadId: string; splitId: string }>) => void;
   assignThreadToSplit: (threadId: string, splitId: string) => void;
   clearThreadSplitAssignment: (threadId: string) => void;
@@ -605,7 +614,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   // Inbox splits state
   splits: [],
-  currentSplitId: "__priority__",
+  currentSplitId: "__people__",
+  currentAutomatedCategory: null,
+  keptThreadIds: new Set(),
   splitAssignments: new Map(),
 
   // Snippets state
@@ -849,17 +860,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   setCurrentAccountId: (accountId) => {
     // Reset account-scoped and conditionally-rendered splits. Only preserve
     // virtual splits that are always visible regardless of account data.
-    // Default to __priority__ when resetting (matches main's convention).
-    const ALWAYS_VISIBLE_SPLITS = new Set([
-      "__priority__",
-      "__other__",
-      "__archive-ready__",
-      "__sent__",
-    ]);
+    // Default to __people__ when resetting (matches main's convention).
+    const ALWAYS_VISIBLE_SPLITS = new Set(["__people__", "__automated__", "__sent__"]);
     const { currentSplitId } = get();
     const nextSplitId =
       currentSplitId !== null && !ALWAYS_VISIBLE_SPLITS.has(currentSplitId)
-        ? "__priority__"
+        ? "__people__"
         : currentSplitId;
     set({
       currentAccountId: accountId,
@@ -1053,6 +1059,17 @@ export const useAppStore = create<AppState>((set, get) => ({
   // Inbox splits actions
   setSplits: (splits) => set({ splits }),
   setCurrentSplitId: (id) => set({ currentSplitId: id }),
+  setCurrentAutomatedCategory: (category) => set({ currentAutomatedCategory: category }),
+  toggleKeptThread: (threadId) =>
+    set((state) => {
+      const newKept = new Set(state.keptThreadIds);
+      if (newKept.has(threadId)) {
+        newKept.delete(threadId);
+      } else {
+        newKept.add(threadId);
+      }
+      return { keptThreadIds: newKept };
+    }),
   setSplitAssignments: (assignments) =>
     set({
       splitAssignments: new Map(assignments.map((item) => [item.threadId, item.splitId])),
@@ -1887,21 +1904,21 @@ export function useThreadedEmails() {
     );
     const unanalyzed = activeThreads.filter((t) => !t.analysis && !effectiveUserReplied(t));
 
-    // Sort needsReply by priority (high > medium > low)
-    const priorityOrder: Record<string, number> = { high: 0, medium: 1, low: 2 };
-    const sortedNeedsReply = [...needsReply].sort((a, b) => {
-      const aPriority = priorityOrder[a.analysis?.priority || "medium"] ?? 1;
-      const bPriority = priorityOrder[b.analysis?.priority || "medium"] ?? 1;
-      return aPriority - bPriority;
-    });
+    // Split by sender type for People / Automated tabs
+    const peopleThreads = activeThreads.filter(
+      (t) => !t.analysis?.senderType || t.analysis.senderType === "person",
+    );
+    const automatedThreads = activeThreads.filter((t) => t.analysis?.senderType === "automated");
 
-    // Ordered threads: unanalyzed → needs reply (by priority) → done → skipped
-    const threads = [...unanalyzed, ...sortedNeedsReply, ...done, ...skipped];
+    // All threads in flat chronological order (newest first, from groupByThread)
+    const threads = activeThreads;
 
     return {
       threads,
       chronologicalThreads: activeThreads, // sorted by latestReceivedDate desc (from groupByThread)
-      needsReply: sortedNeedsReply,
+      peopleThreads,
+      automatedThreads,
+      needsReply,
       done,
       skipped,
       skippedCount: skipped.length,
@@ -1929,7 +1946,8 @@ export function useSplitFilteredThreads() {
   const currentAccountId = useAppStore((state) => state.currentAccountId);
   const accounts = useAppStore((state) => state.accounts);
   const currentSplitId = useAppStore((state) => state.currentSplitId);
-  const archiveReadyThreadIds = useAppStore((state) => state.archiveReadyThreadIds);
+  const currentAutomatedCategory = useAppStore((state) => state.currentAutomatedCategory);
+  const keptThreadIds = useAppStore((state) => state.keptThreadIds);
   const snoozedThreads = useAppStore((state) => state.snoozedThreads);
   const recentlyUnsnoozedThreadIds = useAppStore((state) => state.recentlyUnsnoozedThreadIds);
   const unsnoozedReturnTimes = useAppStore((state) => state.unsnoozedReturnTimes);
@@ -1941,7 +1959,6 @@ export function useSplitFilteredThreads() {
     const splits = allSplits.filter((s) => s.accountId === currentAccountId);
     const getAssignedSplitId = (thread: EmailThread): string | undefined =>
       splitAssignments.get(thread.threadId);
-    const isArchiveReadyEligible = (thread: EmailThread): boolean => !thread.analysis?.needsReply;
 
     // Helper to filter out threads matching exclusive splits (unless recently unsnoozed)
     const exclusiveSplits = splits.filter((s) => s.exclusive);
@@ -1972,6 +1989,8 @@ export function useSplitFilteredThreads() {
 
       return {
         threads: sortedSnoozed,
+        peopleThreads: [],
+        automatedThreads: [],
         needsReply: [],
         done: [],
         skipped: [],
@@ -1995,6 +2014,8 @@ export function useSplitFilteredThreads() {
 
       return {
         threads: sentThreads,
+        peopleThreads: [],
+        automatedThreads: [],
         needsReply: [],
         done: [],
         skipped: [],
@@ -2005,70 +2026,66 @@ export function useSplitFilteredThreads() {
       };
     }
 
-    // Handle archive-ready virtual split
-    // Archive Ready is a strict subset of the "All" inbox — exclude threads
-    // that belong to exclusive splits so they only appear in their own tab.
-    if (currentSplitId === "__archive-ready__") {
-      const filterByArchiveReady = (threads: EmailThread[]) =>
-        excludeExclusive(threads).filter(
-          (t) => archiveReadyThreadIds.has(t.threadId) && isArchiveReadyEligible(t),
-        );
-
-      const threads = filterByArchiveReady(baseResult.threads);
-      const needsReply = filterByArchiveReady(baseResult.needsReply);
-      const done = filterByArchiveReady(baseResult.done);
-      const skipped = filterByArchiveReady(baseResult.skipped);
-      const unanalyzed = filterByArchiveReady(baseResult.unanalyzed);
-
-      return {
-        threads,
-        needsReply,
-        done,
-        skipped,
-        skippedCount: skipped.length,
-        unanalyzed,
-        snoozed: baseResult.snoozed,
-        snoozedCount: baseResult.snoozedCount,
-      };
-    }
-
-    // "All" tab (null): chronological order, no priority grouping.
-    // Unsnoozed threads sort by their return time instead of received date.
-    if (!currentSplitId) {
-      let chronoThreads = excludeExclusive(baseResult.chronologicalThreads);
+    // "People" tab: real humans only, flat chronological (newest first)
+    if (currentSplitId === "__people__") {
+      let threads = excludeExclusive(baseResult.peopleThreads);
 
       // Re-sort with unsnoozed return times overriding the received date
       if (unsnoozedReturnTimes.size > 0) {
-        chronoThreads = [...chronoThreads].sort((a, b) => {
+        threads = [...threads].sort((a, b) => {
           const aTime = unsnoozedReturnTimes.get(a.threadId) ?? a.latestReceivedDate;
           const bTime = unsnoozedReturnTimes.get(b.threadId) ?? b.latestReceivedDate;
           return bTime - aTime;
         });
       }
 
-      const skipped = excludeExclusive(baseResult.skipped);
       return {
-        threads: chronoThreads,
-        needsReply: excludeExclusive(baseResult.needsReply),
-        done: excludeExclusive(baseResult.done),
-        skipped,
-        skippedCount: skipped.length,
-        unanalyzed: excludeExclusive(baseResult.unanalyzed),
+        threads,
+        peopleThreads: threads,
+        automatedThreads: [],
+        needsReply: threads.filter((t) => t.analysis?.needsReply && t.draft?.status !== "created"),
+        done: threads.filter((t) => t.analysis?.needsReply && t.draft?.status === "created"),
+        skipped: [],
+        skippedCount: 0,
+        unanalyzed: threads.filter((t) => !t.analysis),
         snoozed: baseResult.snoozed,
         snoozedCount: baseResult.snoozedCount,
       };
     }
 
-    // "Priority" tab: only emails with a priority (high/medium/low) — subset of inbox
-    if (currentSplitId === "__priority__") {
-      const needsReply = excludeExclusive(baseResult.needsReply);
-      const done = excludeExclusive(baseResult.done);
-      const threads = [...needsReply, ...done];
+    // "Automated" tab: non-person emails with optional subcategory filter + custom split filter
+    if (currentSplitId === "__automated__") {
+      let threads = excludeExclusive(baseResult.automatedThreads);
+
+      // Apply subcategory filter if set
+      if (currentAutomatedCategory) {
+        threads = threads.filter((t) => t.analysis?.automatedCategory === currentAutomatedCategory);
+      }
+
+      // Also apply custom split filters on the Automated tab
+      const currentCustomSplit = splits.find((s) => s.id === currentAutomatedCategory);
+      if (currentCustomSplit) {
+        threads = threads.filter((t) =>
+          threadMatchesSplit(t, currentCustomSplit, getAssignedSplitId(t)),
+        );
+      }
+
+      // Apply archiveKept: default-keep categories + user toggles
+      const keepByDefaultSet = new Set<string>(KEEP_BY_DEFAULT_CATEGORIES);
+      threads = threads.map((t) => {
+        const categoryKept = keepByDefaultSet.has(t.analysis?.automatedCategory ?? "");
+        // User explicit toggle overrides category default
+        const userToggled = keptThreadIds.has(t.threadId);
+        const kept = userToggled ? !categoryKept : categoryKept;
+        return kept !== (t.archiveKept ?? false) ? { ...t, archiveKept: kept } : t;
+      });
 
       return {
         threads,
-        needsReply,
-        done,
+        peopleThreads: [],
+        automatedThreads: threads,
+        needsReply: [],
+        done: [],
         skipped: [],
         skippedCount: 0,
         unanalyzed: [],
@@ -2077,64 +2094,34 @@ export function useSplitFilteredThreads() {
       };
     }
 
-    // "Other" tab: everything in All minus Priority (needsReply + done)
-    if (currentSplitId === "__other__") {
-      const priorityThreadIds = new Set(
-        [...excludeExclusive(baseResult.needsReply), ...excludeExclusive(baseResult.done)].map(
-          (t) => t.threadId,
-        ),
-      );
+    // Custom split: filter automated threads by the split's conditions
+    const currentSplit = splits.find((s) => s.id === currentSplitId);
+    if (currentSplit) {
+      const filterBySplit = (threads: EmailThread[]) =>
+        threads.filter((t) => threadMatchesSplit(t, currentSplit, getAssignedSplitId(t)));
 
-      let otherThreads = excludeExclusive(baseResult.chronologicalThreads).filter(
-        (t) => !priorityThreadIds.has(t.threadId),
-      );
+      // Custom splits live within the Automated tab — filter automated threads only
+      const threads = filterBySplit(baseResult.automatedThreads);
 
-      if (unsnoozedReturnTimes.size > 0) {
-        otherThreads = [...otherThreads].sort((a, b) => {
-          const aTime = unsnoozedReturnTimes.get(a.threadId) ?? a.latestReceivedDate;
-          const bTime = unsnoozedReturnTimes.get(b.threadId) ?? b.latestReceivedDate;
-          return bTime - aTime;
-        });
-      }
-
-      const skipped = excludeExclusive(baseResult.skipped);
-      const unanalyzed = excludeExclusive(baseResult.unanalyzed);
       return {
-        threads: otherThreads,
+        threads,
+        peopleThreads: [],
+        automatedThreads: threads,
         needsReply: [],
         done: [],
-        skipped,
-        skippedCount: skipped.length,
-        unanalyzed,
+        skipped: [],
+        skippedCount: 0,
+        unanalyzed: [],
         snoozed: baseResult.snoozed,
         snoozedCount: baseResult.snoozedCount,
       };
     }
 
-    const currentSplit = splits.find((s) => s.id === currentSplitId);
-    if (!currentSplit) {
-      return baseResult;
-    }
-
-    // Apply split filter to each category
-    const filterBySplit = (threads: EmailThread[]) =>
-      threads.filter((t) => threadMatchesSplit(t, currentSplit, getAssignedSplitId(t)));
-
-    const threads = filterBySplit(baseResult.threads);
-    const needsReply = filterBySplit(baseResult.needsReply);
-    const done = filterBySplit(baseResult.done);
-    const skipped = filterBySplit(baseResult.skipped);
-    const unanalyzed = filterBySplit(baseResult.unanalyzed);
-
+    // Fallback — return all threads chronologically
     return {
-      threads,
-      needsReply,
-      done,
-      skipped,
-      skippedCount: skipped.length,
-      unanalyzed,
-      snoozed: baseResult.snoozed,
-      snoozedCount: baseResult.snoozedCount,
+      ...baseResult,
+      peopleThreads: baseResult.peopleThreads,
+      automatedThreads: baseResult.automatedThreads,
     };
   }, [
     baseResult,
@@ -2142,7 +2129,8 @@ export function useSplitFilteredThreads() {
     currentAccountId,
     accounts,
     currentSplitId,
-    archiveReadyThreadIds,
+    currentAutomatedCategory,
+    keptThreadIds,
     snoozedThreads,
     recentlyUnsnoozedThreadIds,
     unsnoozedReturnTimes,

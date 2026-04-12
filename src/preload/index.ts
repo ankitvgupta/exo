@@ -218,7 +218,8 @@ const api = {
     validateApiKey: (apiKey: string): Promise<unknown> =>
       ipcRenderer.invoke("settings:validate-api-key", { apiKey }),
     codexAuthStatus: (): Promise<unknown> => ipcRenderer.invoke("settings:codex-auth-status"),
-    testCodexConnection: (): Promise<unknown> => ipcRenderer.invoke("settings:test-codex-connection"),
+    testCodexConnection: (): Promise<unknown> =>
+      ipcRenderer.invoke("settings:test-codex-connection"),
     getPrompts: (): Promise<unknown> => ipcRenderer.invoke("settings:get-prompts"),
     setPrompts: (prompts: {
       analysisPrompt?: string;

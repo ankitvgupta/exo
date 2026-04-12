@@ -10,6 +10,8 @@ const log = createLogger("llm-router");
 
 interface CreateOptions {
   caller: string;
+  /** Feature key from ModelConfig — used to select the right Codex model override. */
+  feature?: string;
   emailId?: string;
   accountId?: string;
   timeoutMs?: number;
@@ -28,8 +30,9 @@ export async function createMessage(
     return createAnthropicMessage(params, options);
   }
 
+  const codexModel = resolveCodexModel(runtimeConfig, options.feature);
   try {
-    return await createCodexMessage(params, options, runtimeConfig.codexModel, runtimeConfig.codexCliPath);
+    return await createCodexMessage(params, options, codexModel, runtimeConfig.codexCliPath);
   } catch (error) {
     if (runtimeConfig.enableAnthropicFallback && runtimeConfig.hasAnthropicAuth) {
       log.warn(
@@ -59,13 +62,10 @@ async function createCodexMessage(
     timeoutMs: options.timeoutMs,
   });
 
-  recordStreamingCall(
-    `codex:${codexModel}`,
-    options.caller,
-    res.usage,
-    Date.now() - startedAt,
-    { emailId: options.emailId, accountId: options.accountId },
-  );
+  recordStreamingCall(`codex:${codexModel}`, options.caller, res.usage, Date.now() - startedAt, {
+    emailId: options.emailId,
+    accountId: options.accountId,
+  });
 
   const message: Message = {
     id: `msg_codex_${Date.now()}`,
@@ -113,7 +113,12 @@ function serializeSystemPrompt(
     return system
       .map((entry) => {
         if (typeof entry === "string") return entry;
-        if (typeof entry === "object" && entry && "text" in entry && typeof entry.text === "string") {
+        if (
+          typeof entry === "object" &&
+          entry &&
+          "text" in entry &&
+          typeof entry.text === "string"
+        ) {
           return entry.text;
         }
         return JSON.stringify(entry);
@@ -144,20 +149,33 @@ function serializeContent(content: unknown): string {
   return String(content ?? "");
 }
 
-async function getRuntimeAiConfig(): Promise<{
+function resolveCodexModel(config: RuntimeAiConfig, feature?: string): string {
+  if (feature) {
+    const override = config.codexModelOverrides?.[feature];
+    if (override) return override;
+  }
+  return config.codexModel;
+}
+
+interface RuntimeAiConfig {
   aiProvider: AiProvider;
   enableAnthropicFallback: boolean;
   hasAnthropicAuth: boolean;
   codexModel: string;
+  codexModelOverrides?: Record<string, string>;
   codexCliPath?: string;
-}> {
+}
+
+async function getRuntimeAiConfig(): Promise<RuntimeAiConfig> {
+  const { DEFAULT_CODEX_MODEL_OVERRIDES } = await import("../../shared/types");
   const settings = await import("../ipc/settings.ipc");
   const cfg = settings.getConfig();
   return {
     aiProvider: cfg.aiProvider ?? "codex",
     enableAnthropicFallback: cfg.enableAnthropicFallback ?? true,
     hasAnthropicAuth: Boolean(cfg.anthropicApiKey || process.env.ANTHROPIC_API_KEY),
-    codexModel: cfg.codex?.model || "o3",
+    codexModel: cfg.codex?.model || "gpt-5.4",
+    codexModelOverrides: { ...DEFAULT_CODEX_MODEL_OVERRIDES, ...cfg.codex?.modelOverrides },
     codexCliPath: cfg.codex?.cliPath,
   };
 }

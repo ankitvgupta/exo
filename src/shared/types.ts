@@ -40,11 +40,31 @@ export const EmailSearchResultSchema = z.object({
 
 export type EmailSearchResult = z.infer<typeof EmailSearchResultSchema>;
 
-// Analysis result from Claude
+// Sender type: real person vs automated system
+export const SenderTypeSchema = z.enum(["person", "automated"]);
+export type SenderType = z.infer<typeof SenderTypeSchema>;
+
+// Subcategory for automated emails
+export const AutomatedCategorySchema = z.enum([
+  "orders",
+  "travel",
+  "receipts",
+  "newsletters",
+  "notifications",
+  "other",
+]);
+export type AutomatedCategory = z.infer<typeof AutomatedCategorySchema>;
+
+// Categories that should default to "Keep" (not archive-suggested)
+export const KEEP_BY_DEFAULT_CATEGORIES: AutomatedCategory[] = ["orders", "travel", "receipts"];
+
+// Analysis result from LLM
 export const AnalysisResultSchema = z.object({
   needs_reply: z.boolean(),
   reason: z.string(),
-  priority: z.enum(["high", "medium", "low", "skip"]).optional(),
+  priority: z.enum(["high", "low"]).optional(),
+  sender_type: SenderTypeSchema.optional(),
+  automated_category: AutomatedCategorySchema.optional(),
 });
 
 export type AnalysisResult = z.infer<typeof AnalysisResultSchema>;
@@ -112,7 +132,9 @@ RESPOND WITH ONLY VALID JSON (no markdown, no code blocks):
 {
   "needs_reply": true or false,
   "reason": "brief explanation",
-  "priority": "high" or "medium" or "low" (only if needs_reply is true)
+  "priority": "high" or "low" (only if needs_reply is true),
+  "sender_type": "person" or "automated",
+  "automated_category": "orders" or "travel" or "receipts" or "newsletters" or "notifications" or "other" (only if sender_type is "automated")
 }`;
 
 // The user-editable draft prompt contains only the behavioral guidelines.
@@ -246,7 +268,7 @@ export type GeneratedDraftResponse = z.infer<typeof GeneratedDraftResponseSchema
 // Auto-draft configuration
 export const AutoDraftConfigSchema = z.object({
   enabled: z.boolean(),
-  priorities: z.array(z.enum(["high", "medium", "low"])),
+  priorities: z.array(z.enum(["high", "low"])),
 });
 
 export type AutoDraftConfig = z.infer<typeof AutoDraftConfigSchema>;
@@ -362,11 +384,19 @@ export const AiProviderSchema = z.enum(["codex", "anthropic"]);
 export type AiProvider = z.infer<typeof AiProviderSchema>;
 
 export const CodexConfigSchema = z.object({
-  // Single model used across all Codex-backed features.
-  model: z.string().default("o3"),
+  // Default model for all Codex-backed features.
+  model: z.string().default("gpt-5.4"),
+  // Per-feature model overrides. Keys are feature names from ModelConfig.
+  // Features not listed here use the default `model` above.
+  modelOverrides: z.record(z.string(), z.string()).optional(),
   // Optional custom codex binary path. Defaults to `codex` on PATH.
   cliPath: z.string().optional(),
 });
+
+export const DEFAULT_CODEX_MODEL_OVERRIDES: Record<string, string> = {
+  calendaring: "gpt-5.4-mini",
+  agentChat: "gpt-5.4-mini",
+};
 
 export type CodexConfig = z.infer<typeof CodexConfigSchema>;
 
@@ -389,7 +419,7 @@ export const ConfigSchema = z.object({
   archiveReadyPrompt: z.string().optional(),
   autoDraft: AutoDraftConfigSchema.optional(),
   agentDrafterPrompt: z.string().optional(),
-  enableSenderLookup: z.boolean().default(true),
+  enableSenderLookup: z.boolean().default(false),
   theme: z.enum(["light", "dark", "system"]).default("system"),
   inboxDensity: z.enum(["default", "compact"]).default("compact"),
   undoSendDelay: z.number().min(0).max(30).default(5), // seconds; 0 = disabled
@@ -450,7 +480,9 @@ export type DashboardEmail = {
   analysis?: {
     needsReply: boolean;
     reason: string;
-    priority?: "high" | "medium" | "low" | "skip";
+    priority?: "high" | "low";
+    senderType?: SenderType;
+    automatedCategory?: AutomatedCategory;
     analyzedAt: number;
   };
   draft?: {

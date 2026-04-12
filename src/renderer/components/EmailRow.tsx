@@ -11,6 +11,7 @@ interface EmailRowProps {
   density: InboxDensity;
   onClick: (e: React.MouseEvent) => void;
   onCheckboxChange: () => void;
+  onKeepToggle?: () => void; // Only provided in Automated tab
   snoozeInfo?: SnoozedEmail;
   returnTime?: number; // Unsnooze return time — shown instead of last message time
 }
@@ -93,21 +94,16 @@ function getPriorityLabel(thread: EmailThread): { text: string; className: strin
   // may show "Skip" while the thread still sits in Priority. This is acceptable:
   // the user just replied so "Skip" is the correct eventual state.
   if (!thread.analysis.needsReply || thread.userReplied) {
+    return null; // No badge for threads that don't need a reply
+  }
+  // Only show a badge for high priority — low is the default, no badge needed
+  if (thread.analysis.priority === "high") {
     return {
-      text: "Skip",
-      className: "priority-skipped",
+      text: "High",
+      className: "priority-high",
     };
   }
-  const priority = thread.analysis.priority || "medium";
-  const colors: Record<string, string> = {
-    high: "priority-high",
-    medium: "priority-medium",
-    low: "priority-low",
-  };
-  return {
-    text: priority.charAt(0).toUpperCase() + priority.slice(1),
-    className: colors[priority] || colors.medium,
-  };
+  return null;
 }
 
 // Memoized so that j/k navigation only re-renders the two rows whose
@@ -122,6 +118,7 @@ export const EmailRow = memo(
     density,
     onClick,
     onCheckboxChange,
+    onKeepToggle,
     snoozeInfo,
     returnTime,
   }: EmailRowProps) {
@@ -278,6 +275,44 @@ export const EmailRow = memo(
             )}
           </div>
 
+          {/* Keep toggle (Automated tab only) */}
+          {onKeepToggle && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onKeepToggle();
+              }}
+              className={`flex-shrink-0 p-0.5 rounded transition-colors focus:outline-none ${
+                thread.archiveKept
+                  ? isSelected && !isChecked
+                    ? "text-white"
+                    : "text-amber-500 dark:text-amber-400"
+                  : isSelected && !isChecked
+                    ? "text-white/30 opacity-0 group-hover:opacity-100"
+                    : "text-gray-300 dark:text-gray-600 opacity-0 group-hover:opacity-100"
+              }`}
+              title={
+                thread.archiveKept
+                  ? "Remove Keep (allow bulk archive)"
+                  : "Keep (exclude from bulk archive)"
+              }
+            >
+              <svg
+                className="w-3.5 h-3.5"
+                fill={thread.archiveKept ? "currentColor" : "none"}
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"
+                />
+              </svg>
+            </button>
+          )}
+
           {/* Snooze indicator */}
           {snoozeInfo && (
             <span
@@ -337,6 +372,6 @@ export const EmailRow = memo(
     prev.density === next.density &&
     prev.snoozeInfo === next.snoozeInfo &&
     prev.returnTime === next.returnTime,
-  // onClick / onCheckboxChange intentionally omitted — they are stable in behavior
-  // but are new arrow function references on each parent render.
+  // onClick / onCheckboxChange / onKeepToggle intentionally omitted — they are stable
+  // in behavior but are new arrow function references on each parent render.
 );

@@ -51,7 +51,7 @@ function getDefaultAgentProviderId(): string {
   return cfg.aiProvider === "anthropic" ? "claude" : "codex-agent";
 }
 
-type _PrefetchPriority = "high" | "medium" | "low";
+type _PrefetchPriority = "high" | "low";
 type PrefetchStatus = "idle" | "running" | "error";
 
 interface PrefetchTask {
@@ -243,14 +243,14 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
       const senderEmail = this.extractSenderEmail(email.from);
       if (this.processedSenderProfiles.has(senderEmail)) continue;
 
-      // Only prefetch for high and medium priority
+      // Only prefetch for high priority people emails
       const priority = email.analysis?.priority;
-      if (priority !== "high" && priority !== "medium") continue;
+      if (priority !== "high" || email.analysis?.senderType !== "person") continue;
 
       this.queue.push({
         emailId: email.id,
         type: "sender-profile",
-        priority: priority === "high" ? 10 : 20,
+        priority: 10,
       });
     }
 
@@ -299,9 +299,7 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
     if (config.enableSenderLookup ?? true) {
       const needsSenderProfile = inboxEmails.filter((e) => {
         if (!e.analysis) return false; // Not analyzed yet
-        // Onboarding-skipped emails have priority="skip" — bulk-marked old emails
-        // that don't need any prefetching.
-        if (e.analysis.priority === "skip") return false;
+        if (e.analysis.senderType !== "person") return false; // Only look up people
         const senderEmail = this.extractSenderEmail(e.from);
         if (this.processedSenderProfiles.has(senderEmail)) return false;
         return true;
@@ -320,9 +318,6 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
             switch (email.analysis.priority) {
               case "high":
                 priority = 10;
-                break;
-              case "medium":
-                priority = 20;
                 break;
               case "low":
                 priority = 30;
@@ -368,7 +363,7 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
         log.info("[Prefetch] Auto-drafting disabled in config — skipping agent drafts");
       if (isTestMode || isDemoMode) log.info("[Prefetch] Test/demo mode — skipping agent drafts");
     }
-    const allowedPriorities = autoDraft?.priorities ?? ["high", "medium", "low"];
+    const allowedPriorities = autoDraft?.priorities ?? ["high"];
     const threadsWithPersistedDrafts = new Set(
       inboxEmails.filter((e) => e.draft).map((e) => e.threadId),
     );
@@ -377,7 +372,7 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
       : inboxEmails.filter(
           (e) =>
             e.analysis?.needsReply &&
-            e.analysis?.priority !== "skip" &&
+            e.analysis?.senderType === "person" &&
             allowedPriorities.includes(e.analysis?.priority || "low") &&
             !e.draft &&
             !this.processedDrafts.has(e.id) &&
@@ -432,8 +427,7 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
 
     if (needsDraft.length > 0) {
       for (const email of needsDraft) {
-        const priority =
-          email.analysis?.priority === "high" ? 5 : email.analysis?.priority === "medium" ? 15 : 25;
+        const priority = email.analysis?.priority === "high" ? 5 : 25;
         this.queue.push({
           emailId: email.id,
           type: "agent-draft",
@@ -729,9 +723,6 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
             case "high":
               priority = 10;
               break;
-            case "medium":
-              priority = 20;
-              break;
             case "low":
               priority = 30;
               break;
@@ -772,7 +763,14 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
       const userEmail = account?.email;
 
       const result = await analyzer.analyze(emailForAnalysis, userEmail, email.accountId);
-      saveAnalysis(emailId, result.needs_reply, result.reason, result.priority);
+      saveAnalysis(
+        emailId,
+        result.needs_reply,
+        result.reason,
+        result.priority,
+        result.sender_type,
+        result.automated_category,
+      );
       this.processedAnalysis.add(emailId);
       this.processedCounts.analysis++;
 
@@ -799,9 +797,6 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
             switch (result.priority) {
               case "high":
                 priority = 10;
-                break;
-              case "medium":
-                priority = 20;
                 break;
               case "low":
                 priority = 30;
@@ -839,22 +834,21 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
         // since the agent drafting system operates on the whole thread.
         const autoDraftConfig = config.autoDraft;
         const autoDraftAllowed = autoDraftConfig?.enabled !== false;
-        const autoDraftPriorities = autoDraftConfig?.priorities ?? ["high", "medium", "low"];
+        const autoDraftPriorities = autoDraftConfig?.priorities ?? ["high"];
         const isTest = process.env.EXO_TEST_MODE === "true";
         const isDemo = process.env.EXO_DEMO_MODE === "true";
         if (
           autoDraftAllowed &&
           !isTest &&
           !isDemo &&
-          result.priority !== "skip" &&
+          result.sender_type === "person" &&
           autoDraftPriorities.includes(result.priority || "low") &&
           !email.draft &&
           !this.processedDrafts.has(emailId) &&
           !this.isThreadAlreadyQueuedForDraft(email.threadId) &&
           !this.hasPersistedDraftInThread(email.threadId, email.accountId)
         ) {
-          const draftPriority =
-            result.priority === "high" ? 5 : result.priority === "medium" ? 15 : 25;
+          const draftPriority = result.priority === "high" ? 5 : 25;
           this.queue.push({
             emailId,
             type: "agent-draft",
@@ -1448,7 +1442,7 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
     const isDemo = process.env.EXO_DEMO_MODE === "true";
     if (isTest || isDemo) return;
 
-    const allowedPriorities = autoDraft?.priorities ?? ["high", "medium", "low"];
+    const allowedPriorities = autoDraft?.priorities ?? ["high"];
     let queuedCount = 0;
 
     for (const snoozed of snoozedEmails) {
@@ -1457,13 +1451,13 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
       if (this.isThreadAlreadyQueuedForDraft(threadId)) continue;
       if (this.hasPersistedDraftInThread(threadId, accountId)) continue;
 
-      // Find newest email in thread that needs a reply
+      // Find newest email in thread that needs a reply (people only)
       const threadEmails = getEmailsByThread(threadId, accountId);
       const candidate = threadEmails
         .filter(
           (e) =>
             e.analysis?.needsReply &&
-            e.analysis?.priority !== "skip" &&
+            e.analysis?.senderType === "person" &&
             allowedPriorities.includes(e.analysis?.priority || "low") &&
             !e.draft &&
             !this.processedDrafts.has(e.id),
@@ -1472,12 +1466,7 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
 
       if (!candidate) continue;
 
-      const priority =
-        candidate.analysis?.priority === "high"
-          ? 5
-          : candidate.analysis?.priority === "medium"
-            ? 15
-            : 25;
+      const priority = candidate.analysis?.priority === "high" ? 5 : 25;
 
       this.queue.push({
         emailId: candidate.id,
@@ -1489,9 +1478,7 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
     }
 
     if (queuedCount > 0) {
-      log.info(
-        `[Prefetch] Queued ${queuedCount} agent draft(s) for unsnoozed threads`,
-      );
+      log.info(`[Prefetch] Queued ${queuedCount} agent draft(s) for unsnoozed threads`);
       this.processQueue();
     }
   }

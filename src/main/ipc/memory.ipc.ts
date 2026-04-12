@@ -208,7 +208,7 @@ Respond in JSON only: {"scope":"...","scopeValue":"...","content":"..."}`,
               },
             ],
           },
-          { caller: "memory-classify" },
+          { caller: "memory-classify", feature: "analysis" },
         );
 
         const text = response.content[0]?.type === "text" ? response.content[0].text : "";
