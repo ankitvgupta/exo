@@ -209,8 +209,8 @@ export function setAnthropicServiceDb(db: DatabaseInstance): void {
   _insertStmt = db.prepare(`
     INSERT INTO llm_calls (id, model, caller, email_id, account_id,
       input_tokens, output_tokens, cache_read_tokens, cache_create_tokens,
-      cost_cents, duration_ms, success, error_message)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      cost_cents, duration_ms, success, error_message, provider)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 }
 
@@ -271,6 +271,7 @@ function recordCall(
       durationMs,
       success ? 1 : 0,
       errorMessage,
+      provider ?? "anthropic",
     );
   } catch (err) {
     // Recording failure must never break the LLM call

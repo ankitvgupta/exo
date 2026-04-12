@@ -7,6 +7,7 @@ import {
   type ThemePreference,
   type ModelConfig,
   type ModelTier,
+  type LlmProvider,
   DEFAULT_ANALYSIS_PROMPT,
   DEFAULT_DRAFT_PROMPT,
   DEFAULT_ARCHIVE_READY_PROMPT,
@@ -18,7 +19,7 @@ import {
 } from "../../shared/types";
 import { resetAnalyzer } from "./analysis.ipc";
 import { resetArchiveReadyAnalyzer } from "./archive-ready.ipc";
-import { resetClient, getUsageStats, getCallHistory } from "../services/llm-service";
+import { resetClient, resetOllamaClient, setOllamaConfig, getUsageStats, getCallHistory } from "../services/llm-service";
 import { prefetchService } from "../services/prefetch-service";
 import { agentCoordinator } from "../agents/agent-coordinator";
 import {
@@ -130,6 +131,23 @@ export function getModelIdForFeature(feature: keyof ModelConfig): string {
   return resolveModelId(mc[feature]);
 }
 
+/** Resolve provider + model for a feature, supporting Ollama Cloud routing. */
+export function getFeatureModelConfig(
+  feature: keyof ModelConfig,
+): { provider: LlmProvider; model: string } {
+  const config = getConfig();
+  const provider = (config.featureProviders?.[feature] ?? "anthropic") as LlmProvider;
+  if (provider === "ollama-cloud") {
+    const model =
+      config.ollamaCloud?.featureModels?.[feature] ??
+      config.ollamaCloud?.defaultModel ??
+      "minimax-m2.7:cloud";
+    return { provider, model };
+  }
+  const mc = getModelConfig();
+  return { provider: "anthropic", model: resolveModelId(mc[feature]) };
+}
+
 export function registerSettingsIpc(): void {
   // Validate an Anthropic API key with a minimal API call
   ipcMain.handle(
@@ -170,6 +188,41 @@ export function registerSettingsIpc(): void {
         }
         const msg = error instanceof Error ? error.message : "Unknown error";
         return { success: false, error: `API key validation failed: ${msg}` };
+      }
+    },
+  );
+
+  // Validate an Ollama Cloud API key by listing models
+  ipcMain.handle(
+    "settings:validate-ollama-key",
+    async (_, { apiKey }: { apiKey: string }): Promise<IpcResponse<void>> => {
+      try {
+        const Anthropic = (await import("@anthropic-ai/sdk")).default;
+        const client = new Anthropic({
+          baseURL: "https://ollama.com",
+          authToken: apiKey,
+          timeout: 10_000,
+        });
+        // Use a minimal messages.create call to validate the key
+        await client.messages.create({
+          model: "minimax-m2.7:cloud",
+          max_tokens: 1,
+          messages: [{ role: "user", content: "hi" }],
+        });
+        return { success: true, data: undefined };
+      } catch (error) {
+        const Anthropic = (await import("@anthropic-ai/sdk")).default;
+        if (error instanceof Anthropic.AuthenticationError) {
+          return { success: false, error: "Invalid API key. Please check and try again." };
+        }
+        if (
+          error instanceof Anthropic.RateLimitError ||
+          error instanceof Anthropic.PermissionDeniedError
+        ) {
+          return { success: true, data: undefined };
+        }
+        const msg = error instanceof Error ? error.message : "Unknown error";
+        return { success: false, error: `Ollama Cloud validation failed: ${msg}` };
       }
     },
   );
@@ -259,6 +312,21 @@ export function registerSettingsIpc(): void {
               gatewayToken: newConfig.openclaw?.gatewayToken ?? "",
             },
           },
+        });
+      }
+
+      // Propagate Ollama Cloud config to agent providers and LLM service.
+      if ("ollamaCloud" in config) {
+        const oc = newConfig.ollamaCloud;
+        setOllamaConfig(oc?.apiKey ?? "");
+        agentCoordinator.updateConfig({
+          ollamaCloud: oc?.apiKey
+            ? {
+                enabled: true,
+                apiKey: oc.apiKey,
+                model: oc.defaultModel ?? "minimax-m2.7:cloud",
+              }
+            : undefined,
         });
       }
 

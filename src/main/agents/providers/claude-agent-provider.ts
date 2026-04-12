@@ -347,8 +347,9 @@ export class ClaudeAgentProvider implements AgentProvider {
 
   /**
    * Build the child process env for the SDK.
-   * If an API key is configured, include it. Otherwise, delete ANTHROPIC_API_KEY
-   * from the env entirely so Claude Code falls through to its stored OAuth.
+   * When Ollama Cloud is configured, sets ANTHROPIC_BASE_URL and AUTH_TOKEN
+   * so the spawned CLI process routes to Ollama. Otherwise, sets ANTHROPIC_API_KEY
+   * for Anthropic, or clears it to fall through to Claude Code's stored OAuth.
    */
   private buildChildEnv(): Record<string, string> {
     // Filter out undefined values — Node's child_process coerces undefined to "undefined"
@@ -356,11 +357,23 @@ export class ClaudeAgentProvider implements AgentProvider {
     for (const [key, value] of Object.entries(process.env)) {
       if (value !== undefined) env[key] = value;
     }
-    if (this.frameworkConfig.anthropicApiKey) {
+
+    const ollama = this.frameworkConfig.ollamaCloud;
+    if (ollama?.enabled && ollama.apiKey) {
+      // Point Claude Agent SDK at Ollama Cloud's Anthropic-compatible endpoint
+      env.ANTHROPIC_BASE_URL = "https://ollama.com";
+      env.ANTHROPIC_AUTH_TOKEN = ollama.apiKey;
+      delete env.ANTHROPIC_API_KEY;
+    } else if (this.frameworkConfig.anthropicApiKey) {
       env.ANTHROPIC_API_KEY = this.frameworkConfig.anthropicApiKey;
+      delete env.ANTHROPIC_BASE_URL;
+      delete env.ANTHROPIC_AUTH_TOKEN;
     } else {
       delete env.ANTHROPIC_API_KEY;
+      delete env.ANTHROPIC_BASE_URL;
+      delete env.ANTHROPIC_AUTH_TOKEN;
     }
+
     // Prevent cli.js from detecting a "nested session" if CLAUDECODE leaks into
     // the Electron process env (e.g. when launched from a Claude Code terminal).
     delete env.CLAUDECODE;
