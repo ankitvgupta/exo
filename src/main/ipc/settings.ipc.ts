@@ -19,7 +19,7 @@ import {
 } from "../../shared/types";
 import { resetAnalyzer } from "./analysis.ipc";
 import { resetArchiveReadyAnalyzer } from "./archive-ready.ipc";
-import { resetClient, resetOllamaClient, setOllamaConfig, getUsageStats, getCallHistory } from "../services/llm-service";
+import { resetClient, setOllamaConfig, getUsageStats, getCallHistory } from "../services/llm-service";
 import { prefetchService } from "../services/prefetch-service";
 import { agentCoordinator } from "../agents/agent-coordinator";
 import {

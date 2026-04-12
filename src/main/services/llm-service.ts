@@ -201,7 +201,8 @@ export function setAnthropicServiceDb(db: DatabaseInstance): void {
       cost_cents REAL NOT NULL,
       duration_ms INTEGER NOT NULL,
       success INTEGER NOT NULL DEFAULT 1,
-      error_message TEXT
+      error_message TEXT,
+      provider TEXT DEFAULT 'anthropic'
     );
     CREATE INDEX IF NOT EXISTS idx_llm_calls_created ON llm_calls(created_at);
     CREATE INDEX IF NOT EXISTS idx_llm_calls_caller ON llm_calls(caller);
