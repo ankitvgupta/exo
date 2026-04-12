@@ -1314,12 +1314,12 @@ export default function App() {
         result: IpcResponse<{
           hasCredentials: boolean;
           hasTokens: boolean;
-          hasAnthropicKey: boolean;
+          hasLlmProvider: boolean;
         }>,
       ) => {
         if (result.success) {
-          // Credentials are always bundled at build time — only check API key and tokens
-          setNeedsSetup(!result.data.hasAnthropicKey || !result.data.hasTokens);
+          // Credentials are always bundled at build time — only check LLM provider and tokens
+          setNeedsSetup(!result.data.hasLlmProvider || !result.data.hasTokens);
         } else {
           setNeedsSetup(true);
         }

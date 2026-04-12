@@ -18,6 +18,8 @@ import {
   type ModelConfig,
   type ModelTier,
   type CliToolConfig,
+  LLM_PROVIDERS,
+  type LlmProvider,
 } from "../../shared/types";
 import { useAppStore, type Account, type SettingsTab } from "../store";
 import { reconfigurePostHog, trackEvent } from "../services/posthog";
@@ -82,6 +84,8 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
   // General settings state
   const [enableSenderLookup, setEnableSenderLookup] = useState(true);
   const [modelConfig, setModelConfig] = useState<ModelConfig>(DEFAULT_MODEL_CONFIG);
+  const [featureProviders, setFeatureProviders] = useState<Record<string, LlmProvider>>({});
+  const [ollamaModels, setOllamaModels] = useState<Record<string, string>>({});
   const [isSavingGeneral, setIsSavingGeneral] = useState(false);
   const [isExportingLogs, setIsExportingLogs] = useState(false);
   const [exportLogsError, setExportLogsError] = useState<string | null>(null);
@@ -226,6 +230,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
     if (generalConfig) {
       setEnableSenderLookup(generalConfig.enableSenderLookup ?? true);
       setModelConfig({ ...DEFAULT_MODEL_CONFIG, ...generalConfig.modelConfig });
+      setFeatureProviders(generalConfig.featureProviders ?? {});
       setGithubToken(generalConfig.githubToken ?? "");
       setAllowPrereleaseUpdates(generalConfig.allowPrereleaseUpdates ?? false);
       setAnthropicApiKey(generalConfig.anthropicApiKey ?? "");
@@ -381,6 +386,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
       await window.api.settings.set({
         enableSenderLookup,
         modelConfig,
+        featureProviders,
         githubToken: githubToken || undefined,
         allowPrereleaseUpdates,
       });
@@ -1137,7 +1143,9 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                       label: "Agent Chat",
                       description: "Interactive agent sidebar conversations",
                     },
-                  ].map(({ key, label, description }) => (
+                  ].map(({ key, label, description }) => {
+                    const provider = featureProviders[key] ?? "anthropic";
+                    return (
                     <div
                       key={key}
                       className="flex items-center justify-between py-2 border-b border-gray-100 dark:border-gray-700 last:border-0"
@@ -1148,24 +1156,52 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                         </p>
                         <p className="text-xs text-gray-500 dark:text-gray-400">{description}</p>
                       </div>
-                      <select
-                        value={modelConfig[key]}
-                        onChange={(e) => {
-                          const tier = e.target.value;
-                          if ((MODEL_TIERS as readonly string[]).includes(tier)) {
-                            setModelConfig((prev) => ({ ...prev, [key]: tier as ModelTier }));
-                          }
-                        }}
-                        className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-500 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      >
-                        {MODEL_TIERS.map((tier) => (
-                          <option key={tier} value={tier}>
-                            {MODEL_TIER_LABELS[tier]}
-                          </option>
-                        ))}
-                      </select>
+                      <div className="flex items-center gap-2">
+                        <select
+                          value={provider}
+                          onChange={(e) => {
+                            const p = e.target.value;
+                            if ((LLM_PROVIDERS as readonly string[]).includes(p)) {
+                              setFeatureProviders((prev) => ({ ...prev, [key]: p as LlmProvider }));
+                            }
+                          }}
+                          className="px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-500 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        >
+                          <option value="anthropic">Anthropic</option>
+                          <option value="ollama-cloud">Ollama Cloud</option>
+                        </select>
+                        {provider === "anthropic" ? (
+                          <select
+                            value={modelConfig[key]}
+                            onChange={(e) => {
+                              const tier = e.target.value;
+                              if ((MODEL_TIERS as readonly string[]).includes(tier)) {
+                                setModelConfig((prev) => ({ ...prev, [key]: tier as ModelTier }));
+                              }
+                            }}
+                            className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-500 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          >
+                            {MODEL_TIERS.map((tier) => (
+                              <option key={tier} value={tier}>
+                                {MODEL_TIER_LABELS[tier]}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <input
+                            type="text"
+                            value={ollamaModels[key] ?? "minimax-m2.7:cloud"}
+                            onChange={(e) =>
+                              setOllamaModels((prev) => ({ ...prev, [key]: e.target.value }))
+                            }
+                            placeholder="minimax-m2.7:cloud"
+                            className="w-48 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-500 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          />
+                        )}
+                      </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 

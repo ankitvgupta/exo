@@ -41,6 +41,13 @@ export function ExtensionsTab() {
   } | null>(null);
   const [retryingProvider, setRetryingProvider] = useState<string | null>(null);
 
+  // Ollama Cloud settings
+  const [ollamaCloudEnabled, setOllamaCloudEnabled] = useState(false);
+  const [ollamaCloudApiKey, setOllamaCloudApiKey] = useState("");
+  const [ollamaCloudModel, setOllamaCloudModel] = useState("minimax-m2.7:cloud");
+  const [ollamaCloudTestResult, setOllamaCloudTestResult] = useState<{ success: boolean; error?: string } | null>(null);
+  const [ollamaCloudTesting, setOllamaCloudTesting] = useState(false);
+
   // OpenClaw agent provider settings
   const [openclawEnabled, setOpenclawEnabled] = useState(false);
   const [openclawGatewayUrl, setOpenclawGatewayUrl] = useState("");
@@ -199,6 +206,12 @@ export function ExtensionsTab() {
         data?: Record<string, unknown>;
       };
       const config = result.data ?? (result as Record<string, unknown>);
+      const oc2 = config.ollamaCloud as Record<string, unknown> | undefined;
+      if (oc2) {
+        setOllamaCloudEnabled(!!oc2.apiKey);
+        setOllamaCloudApiKey((oc2.apiKey as string) || "");
+        setOllamaCloudModel((oc2.defaultModel as string) || "minimax-m2.7:cloud");
+      }
       const oc = config.openclaw as Record<string, unknown> | undefined;
       if (oc) {
         setOpenclawEnabled(Boolean(oc.enabled));
@@ -522,6 +535,112 @@ export function ExtensionsTab() {
             <p className="text-sm text-gray-500 dark:text-gray-400 italic">Loading...</p>
           )}
         </div>
+      </div>
+
+      {/* Ollama Cloud Provider */}
+      <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600 p-6">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h4 className="text-base font-medium text-gray-900 dark:text-gray-100">
+              Ollama Cloud
+            </h4>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+              Use Ollama Cloud models as an alternative AI provider for email analysis and drafting.
+            </p>
+          </div>
+          <label className="relative inline-flex items-center cursor-pointer">
+            <input
+              type="checkbox"
+              className="sr-only peer"
+              checked={ollamaCloudEnabled}
+              onChange={async (e) => {
+                const val = e.target.checked;
+                setOllamaCloudEnabled(val);
+                if (!val) {
+                  await window.api.settings.set({
+                    ollamaCloud: { apiKey: "", defaultModel: ollamaCloudModel },
+                  });
+                }
+              }}
+            />
+            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-500 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:after:border-gray-600 peer-checked:bg-blue-600" />
+          </label>
+        </div>
+
+        {ollamaCloudEnabled && (
+          <div className="space-y-3 mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                API Key
+              </label>
+              <input
+                type="password"
+                className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400"
+                placeholder="ollama-cloud-..."
+                value={ollamaCloudApiKey}
+                onChange={(e) => setOllamaCloudApiKey(e.target.value)}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Default Model
+              </label>
+              <input
+                type="text"
+                className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400"
+                placeholder="minimax-m2.7:cloud"
+                value={ollamaCloudModel}
+                onChange={(e) => setOllamaCloudModel(e.target.value)}
+              />
+            </div>
+
+            <div className="flex items-center gap-3">
+              <button
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 dark:bg-blue-500 rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-50 transition-colors"
+                disabled={ollamaCloudTesting || !ollamaCloudApiKey.trim()}
+                onClick={async () => {
+                  setOllamaCloudTesting(true);
+                  setOllamaCloudTestResult(null);
+                  const result = (await window.api.settings.validateOllamaKey(
+                    ollamaCloudApiKey.trim(),
+                  )) as {
+                    success: boolean;
+                    error?: string;
+                  };
+                  setOllamaCloudTestResult(result);
+                  setOllamaCloudTesting(false);
+                }}
+              >
+                {ollamaCloudTesting ? "Testing..." : "Test Connection"}
+              </button>
+
+              <button
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 dark:bg-blue-500 rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors"
+                onClick={async () => {
+                  await window.api.settings.set({
+                    ollamaCloud: {
+                      apiKey: ollamaCloudApiKey,
+                      defaultModel: ollamaCloudModel,
+                    },
+                  });
+                }}
+              >
+                Save
+              </button>
+
+              {ollamaCloudTestResult && (
+                <span
+                  className={`text-sm ${ollamaCloudTestResult.success ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}
+                >
+                  {ollamaCloudTestResult.success
+                    ? "Connected"
+                    : (ollamaCloudTestResult.error ?? "Connection failed")}
+                </span>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* OpenClaw Agent Provider */}
