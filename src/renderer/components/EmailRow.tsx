@@ -96,14 +96,12 @@ function getPriorityLabel(thread: EmailThread): { text: string; className: strin
   if (!thread.analysis.needsReply || thread.userReplied) {
     return null; // No badge for threads that don't need a reply
   }
-  // Only show a badge for high priority — low is the default, no badge needed
-  if (thread.analysis.priority === "high") {
-    return {
-      text: "High",
-      className: "priority-high",
-    };
-  }
-  return null;
+  const priority = thread.analysis.priority || "low";
+  const badges: Record<string, { text: string; className: string }> = {
+    high: { text: "High", className: "priority-high" },
+    low: { text: "Low", className: "priority-low" },
+  };
+  return badges[priority] ?? null;
 }
 
 // Memoized so that j/k navigation only re-renders the two rows whose
