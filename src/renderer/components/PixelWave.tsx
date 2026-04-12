@@ -50,12 +50,12 @@ export function PixelWave() {
 
       const isDark = document.documentElement.classList.contains("dark");
 
-      // Color channels
-      const r = isDark ? 91 : 33;
-      const g = isDark ? 131 : 85;
-      const b = isDark ? 255 : 255;
-      const opacityMin = isDark ? 0.08 : 0.04;
-      const opacityMax = isDark ? 0.55 : 0.25;
+      // Color channels — orange accent in dark, blue in light
+      const r = isDark ? 255 : 33;
+      const g = isDark ? 90 : 85;
+      const b = isDark ? 31 : 255;
+      const opacityMin = isDark ? 0.06 : 0.04;
+      const opacityMax = isDark ? 0.5 : 0.25;
 
       const cols = Math.ceil(w / SPACING) + 2;
       const rows = Math.ceil(h / SPACING) + 2;

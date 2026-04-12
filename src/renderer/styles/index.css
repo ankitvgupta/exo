@@ -41,24 +41,24 @@
 }
 
 .dark {
-  --exo-bg-app: #060b16;
-  --exo-bg-surface: #0c1324;
-  --exo-bg-elevated: #121a30;
-  --exo-bg-surface-soft: #0f1929;
-  --exo-bg-surface-hover: #15203a;
+  --exo-bg-app: #030508;
+  --exo-bg-surface: #0a0e17;
+  --exo-bg-elevated: #0f1520;
+  --exo-bg-surface-soft: #0c111c;
+  --exo-bg-surface-hover: #151c28;
 
   --exo-text-primary: #eaf0ff;
   --exo-text-secondary: #a6b4d3;
   --exo-text-muted: #7e8eb0;
   --exo-text-inverse: #0b1220;
 
-  --exo-border-subtle: #24314d;
-  --exo-border-strong: #34466b;
+  --exo-border-subtle: #1a2236;
+  --exo-border-strong: #283548;
 
-  --exo-accent: #5b83ff;
-  --exo-accent-strong: #7a9cff;
-  --exo-accent-soft: #192544;
-  --exo-focus-ring: #7a9cff;
+  --exo-accent: #ff5a1f;
+  --exo-accent-strong: #ff7a45;
+  --exo-accent-soft: #2a1508;
+  --exo-focus-ring: #ff7a45;
 
   --exo-priority-low-bg: #123124;
   --exo-priority-low-text: #7dffb3;
@@ -212,8 +212,8 @@ body {
 
 .dark .exo-pixel-grid {
   background-image:
-    linear-gradient(rgba(91, 131, 255, 0.15) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(91, 131, 255, 0.12) 1px, transparent 1px);
+    linear-gradient(rgba(255, 90, 31, 0.12) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 90, 31, 0.09) 1px, transparent 1px);
 }
 
 /* Subtle horizontal scanline texture for dark mode panels */
@@ -222,24 +222,24 @@ body {
     0deg,
     transparent,
     transparent 2px,
-    rgba(91, 131, 255, 0.02) 2px,
-    rgba(91, 131, 255, 0.02) 4px
+    rgba(255, 90, 31, 0.02) 2px,
+    rgba(255, 90, 31, 0.02) 4px
   );
 }
 
 /* Neon glow on selected row in dark mode */
 .dark .exo-list-row-selected {
-  box-shadow: 0 0 12px rgba(91, 131, 255, 0.25), inset 0 0 12px rgba(91, 131, 255, 0.08);
+  box-shadow: 0 0 12px rgba(255, 90, 31, 0.3), inset 0 0 12px rgba(255, 90, 31, 0.1);
 }
 
 /* Neon glow on active segment button in dark mode */
 .dark .exo-segment-btn[data-active="true"] {
-  box-shadow: 0 0 10px rgba(91, 131, 255, 0.3);
+  box-shadow: 0 0 10px rgba(255, 90, 31, 0.35);
 }
 
 /* Enhanced focus ring with glow in dark mode */
 .dark .exo-focus-ring:focus-visible {
-  box-shadow: 0 0 0 2px var(--exo-focus-ring), 0 0 12px rgba(122, 156, 255, 0.25);
+  box-shadow: 0 0 0 2px var(--exo-focus-ring), 0 0 12px rgba(255, 122, 69, 0.3);
 }
 
 /* Neon glow on priority badges in dark mode */
@@ -258,7 +258,7 @@ body {
 
 /* Accent glow on elevated cards in dark mode */
 .dark .exo-settings-card {
-  box-shadow: 0 0 1px rgba(91, 131, 255, 0.2), 0 1px 3px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 0 1px rgba(255, 90, 31, 0.2), 0 1px 3px rgba(0, 0, 0, 0.5);
 }
 
 /* Monospace heading for settings sections — cyberpunk tech feel */
