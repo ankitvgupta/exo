@@ -758,19 +758,16 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
   };
 
   return (
-    <div
-      data-testid="settings-panel"
-      className="h-screen flex flex-col bg-gray-100 dark:bg-gray-900"
-    >
+    <div data-testid="settings-panel" className="h-screen flex flex-col exo-app-bg">
       {/* Titlebar */}
-      <div className="titlebar-drag h-12 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between px-4">
+      <div className="titlebar-drag h-12 exo-elevated border-b exo-border-subtle flex items-center justify-between px-4">
         <div className="flex items-center space-x-4">
           <div className="w-20" /> {/* Space for traffic lights */}
-          <h1 className="text-lg font-semibold text-gray-800 dark:text-gray-200">Settings</h1>
+          <h1 className="text-lg font-semibold exo-text-primary">Settings</h1>
         </div>
         <button
           onClick={onClose}
-          className="titlebar-no-drag p-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+          className="titlebar-no-drag p-2 text-[var(--exo-text-secondary)] hover:text-[var(--exo-text-primary)] hover:bg-[var(--exo-bg-surface-hover)] rounded-md transition-colors"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
@@ -784,49 +781,33 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
       </div>
 
       {/* Tabs */}
-      <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+      <div className="exo-elevated border-b exo-border-subtle">
         <div className="flex space-x-1 p-2">
           <button
             onClick={() => setActiveTab("general")}
             data-active={activeTab === "general" ? "true" : undefined}
-            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-              activeTab === "general"
-                ? "bg-blue-100 dark:bg-blue-900/60 text-blue-800 dark:text-blue-300"
-                : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-            }`}
+            className="px-4 py-2 text-sm font-medium transition-colors exo-segment-btn"
           >
             General
           </button>
           <button
             onClick={() => setActiveTab("accounts")}
             data-active={activeTab === "accounts" ? "true" : undefined}
-            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-              activeTab === "accounts"
-                ? "bg-blue-100 dark:bg-blue-900/60 text-blue-800 dark:text-blue-300"
-                : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-            }`}
+            className="px-4 py-2 text-sm font-medium transition-colors exo-segment-btn"
           >
             Accounts
           </button>
           <button
             onClick={() => setActiveTab("calendar")}
             data-active={activeTab === "calendar" ? "true" : undefined}
-            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-              activeTab === "calendar"
-                ? "bg-blue-100 dark:bg-blue-900/60 text-blue-800 dark:text-blue-300"
-                : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-            }`}
+            className="px-4 py-2 text-sm font-medium transition-colors exo-segment-btn"
           >
             Calendar
           </button>
           <button
             onClick={() => setActiveTab("splits")}
             data-active={activeTab === "splits" ? "true" : undefined}
-            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-              activeTab === "splits"
-                ? "bg-blue-100 dark:bg-blue-900/60 text-blue-800 dark:text-blue-300"
-                : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-            }`}
+            className="px-4 py-2 text-sm font-medium transition-colors exo-segment-btn"
           >
             Splits
           </button>
@@ -844,70 +825,46 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
           <button
             onClick={() => setActiveTab("signatures")}
             data-active={activeTab === "signatures" ? "true" : undefined}
-            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-              activeTab === "signatures"
-                ? "bg-blue-100 dark:bg-blue-900/60 text-blue-800 dark:text-blue-300"
-                : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-            }`}
+            className="px-4 py-2 text-sm font-medium transition-colors exo-segment-btn"
           >
             Signatures
           </button>
           <button
             onClick={() => setActiveTab("prompts")}
             data-active={activeTab === "prompts" ? "true" : undefined}
-            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-              activeTab === "prompts"
-                ? "bg-blue-100 dark:bg-blue-900/60 text-blue-800 dark:text-blue-300"
-                : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-            }`}
+            className="px-4 py-2 text-sm font-medium transition-colors exo-segment-btn"
           >
             Prompts
           </button>
           <button
             onClick={() => setActiveTab("style")}
             data-active={activeTab === "style" ? "true" : undefined}
-            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-              activeTab === "style"
-                ? "bg-blue-100 dark:bg-blue-900/60 text-blue-800 dark:text-blue-300"
-                : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-            }`}
+            className="px-4 py-2 text-sm font-medium transition-colors exo-segment-btn"
           >
             Writing Style
           </button>
           <button
             onClick={() => setActiveTab("assistant")}
             data-active={activeTab === "assistant" ? "true" : undefined}
-            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-              activeTab === "assistant"
-                ? "bg-blue-100 dark:bg-blue-900/60 text-blue-800 dark:text-blue-300"
-                : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-            }`}
+            className="px-4 py-2 text-sm font-medium transition-colors exo-segment-btn"
           >
             Executive Assistant
           </button>
           <button
             onClick={() => setActiveTab("memories")}
             data-active={activeTab === "memories" ? "true" : undefined}
-            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-              activeTab === "memories"
-                ? "bg-blue-100 dark:bg-blue-900/60 text-blue-800 dark:text-blue-300"
-                : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-            }`}
+            className="px-4 py-2 text-sm font-medium transition-colors exo-segment-btn"
           >
             AI Memories
           </button>
           <button
             onClick={() => setActiveTab("queue")}
             data-active={activeTab === "queue" ? "true" : undefined}
-            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-              activeTab === "queue"
-                ? "bg-blue-100 dark:bg-blue-900/60 text-blue-800 dark:text-blue-300"
-                : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-            }`}
+            className="px-4 py-2 text-sm font-medium transition-colors exo-segment-btn"
           >
             Queue
             {prefetchProgress.status === "running" && (
-              <span className="ml-2 inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-blue-600 dark:bg-blue-500 rounded-full">
+              <span className="ml-2 inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-[var(--exo-accent)] rounded-full">
                 {prefetchProgress.queueLength}
               </span>
             )}
@@ -915,32 +872,21 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
           <button
             onClick={() => setActiveTab("agents")}
             data-active={activeTab === "agents" ? "true" : undefined}
-            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-              activeTab === "agents"
-                ? "bg-blue-100 dark:bg-blue-900/60 text-blue-800 dark:text-blue-300"
-                : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-            }`}
+            className="px-4 py-2 text-sm font-medium transition-colors exo-segment-btn"
           >
             Agents
           </button>
           <button
             onClick={() => setActiveTab("extensions")}
             data-active={activeTab === "extensions" ? "true" : undefined}
-            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-              activeTab === "extensions"
-                ? "bg-blue-100 dark:bg-blue-900/60 text-blue-800 dark:text-blue-300"
-                : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-            }`}
+            className="px-4 py-2 text-sm font-medium transition-colors exo-segment-btn"
           >
             Extensions
           </button>
           <button
             onClick={() => setActiveTab("analytics")}
-            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-              activeTab === "analytics"
-                ? "bg-blue-100 dark:bg-blue-900/60 text-blue-800 dark:text-blue-300"
-                : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-            }`}
+            data-active={activeTab === "analytics" ? "true" : undefined}
+            className="px-4 py-2 text-sm font-medium transition-colors exo-segment-btn"
           >
             Analytics
           </button>
@@ -948,22 +894,22 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto p-6">
+      <div className="flex-1 overflow-y-auto p-6 exo-app-bg">
         {activeTab === "general" && (
           <div className="max-w-3xl space-y-6">
             <div>
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
+              <h2 className="text-lg font-semibold exo-text-primary mb-2">
                 General Settings
               </h2>
-              <p className="text-gray-600 dark:text-gray-400 mb-4">
+              <p className="exo-text-secondary mb-4">
                 Configure how Exo generates draft replies.
               </p>
 
               {/* Appearance / Theme Toggle */}
-              <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-600 mb-6">
+              <div className="exo-settings-card p-4 mb-6">
                 <div className="mb-3">
-                  <h3 className="font-semibold text-gray-900 dark:text-gray-100">Appearance</h3>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                  <h3 className="font-semibold exo-text-primary exo-micro-label">Appearance</h3>
+                  <p className="text-sm exo-text-secondary mt-1">
                     Choose your preferred color theme.
                   </p>
                 </div>
@@ -971,33 +917,21 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                   <button
                     onClick={() => handleThemeChange("light")}
                     data-active={themePreference === "light" ? "true" : undefined}
-                    className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-                      themePreference === "light"
-                        ? "bg-blue-600 dark:bg-blue-500 text-white"
-                        : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
-                    }`}
+                    className="px-4 py-2 text-sm font-medium transition-colors exo-segment-btn"
                   >
                     Light
                   </button>
                   <button
                     onClick={() => handleThemeChange("dark")}
                     data-active={themePreference === "dark" ? "true" : undefined}
-                    className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-                      themePreference === "dark"
-                        ? "bg-blue-600 dark:bg-blue-500 text-white"
-                        : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
-                    }`}
+                    className="px-4 py-2 text-sm font-medium transition-colors exo-segment-btn"
                   >
                     Dark
                   </button>
                   <button
                     onClick={() => handleThemeChange("system")}
                     data-active={themePreference === "system" ? "true" : undefined}
-                    className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-                      themePreference === "system"
-                        ? "bg-blue-600 dark:bg-blue-500 text-white"
-                        : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
-                    }`}
+                    className="px-4 py-2 text-sm font-medium transition-colors exo-segment-btn"
                   >
                     System
                   </button>
@@ -1005,10 +939,10 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
               </div>
 
               {/* Inbox Density */}
-              <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-600 mb-6">
+              <div className="exo-settings-card p-4 mb-6">
                 <div className="mb-3">
-                  <h3 className="font-semibold text-gray-900 dark:text-gray-100">Inbox Density</h3>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                  <h3 className="font-semibold exo-text-primary exo-micro-label">Inbox Density</h3>
+                  <p className="text-sm exo-text-secondary mt-1">
                     Control how much space each email takes in the inbox list.
                   </p>
                 </div>
@@ -1016,22 +950,14 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                   <button
                     onClick={() => handleDensityChange("default")}
                     data-active={inboxDensity === "default" ? "true" : undefined}
-                    className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-                      inboxDensity === "default"
-                        ? "bg-blue-600 dark:bg-blue-500 text-white"
-                        : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
-                    }`}
+                    className="px-4 py-2 text-sm font-medium transition-colors exo-segment-btn"
                   >
                     Default
                   </button>
                   <button
                     onClick={() => handleDensityChange("compact")}
                     data-active={inboxDensity === "compact" ? "true" : undefined}
-                    className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-                      inboxDensity === "compact"
-                        ? "bg-blue-600 dark:bg-blue-500 text-white"
-                        : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
-                    }`}
+                    className="px-4 py-2 text-sm font-medium transition-colors exo-segment-btn"
                   >
                     Compact
                   </button>
@@ -1039,12 +965,12 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
               </div>
 
               {/* Keyboard Bindings */}
-              <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-600 mb-6">
+              <div className="exo-settings-card p-4 mb-6">
                 <div className="mb-3">
-                  <h3 className="font-semibold text-gray-900 dark:text-gray-100">
+                  <h3 className="font-semibold exo-text-primary exo-micro-label">
                     Keyboard Shortcuts
                   </h3>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                  <p className="text-sm exo-text-secondary mt-1">
                     Choose which keyboard shortcut preset to use. Gmail adds extra bindings like o,
                     n/p, y, z, a, and section navigation.
                   </p>
@@ -1053,22 +979,14 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                   <button
                     onClick={() => handleKeyboardBindingsChange("superhuman")}
                     data-active={keyboardBindings === "superhuman" ? "true" : undefined}
-                    className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-                      keyboardBindings === "superhuman"
-                        ? "bg-blue-600 dark:bg-blue-500 text-white"
-                        : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
-                    }`}
+                    className="px-4 py-2 text-sm font-medium transition-colors exo-segment-btn"
                   >
                     Superhuman
                   </button>
                   <button
                     onClick={() => handleKeyboardBindingsChange("gmail")}
                     data-active={keyboardBindings === "gmail" ? "true" : undefined}
-                    className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-                      keyboardBindings === "gmail"
-                        ? "bg-blue-600 dark:bg-blue-500 text-white"
-                        : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
-                    }`}
+                    className="px-4 py-2 text-sm font-medium transition-colors exo-segment-btn"
                   >
                     Gmail
                   </button>
@@ -1076,10 +994,10 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
               </div>
 
               {/* Undo Send */}
-              <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-600 mb-6">
+              <div className="exo-settings-card p-4 mb-6">
                 <div className="mb-3">
-                  <h3 className="font-semibold text-gray-900 dark:text-gray-100">Undo Send</h3>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                  <h3 className="font-semibold exo-text-primary exo-micro-label">Undo Send</h3>
+                  <p className="text-sm exo-text-secondary mt-1">
                     Set a delay before emails are actually sent. During the delay you can click Undo
                     to cancel.
                   </p>
@@ -1096,11 +1014,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                       key={value}
                       onClick={() => handleUndoSendDelayChange(value)}
                       data-active={undoSendDelaySeconds === value ? "true" : undefined}
-                      className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-                        undoSendDelaySeconds === value
-                          ? "bg-blue-600 dark:bg-blue-500 text-white"
-                          : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
-                      }`}
+                      className="px-4 py-2 text-sm font-medium transition-colors exo-segment-btn"
                     >
                       {label}
                     </button>
@@ -1109,7 +1023,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
               </div>
 
               {/* Default Mail App */}
-              <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-600 mb-6">
+              <div className="exo-settings-card p-4 mb-6">
                 <div className="flex items-center justify-between">
                   <div>
                     <h3 className="font-semibold text-gray-900 dark:text-gray-100">
@@ -1166,7 +1080,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
               </div>
 
               {/* AI Models */}
-              <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-600 mb-6">
+              <div className="exo-settings-card p-4 mb-6">
                 <div className="mb-3">
                   <h3 className="font-semibold text-gray-900 dark:text-gray-100">AI Models</h3>
                   <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
@@ -1250,7 +1164,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
               </div>
 
               {/* Updates */}
-              <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-600 mb-6">
+              <div className="exo-settings-card p-4 mb-6">
                 <div className="mb-3">
                   <h3 className="font-semibold text-gray-900 dark:text-gray-100">Updates</h3>
                   {appVersion && (
@@ -1412,7 +1326,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
               </div>
 
               {/* Sender Lookup Toggle */}
-              <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-600 mb-6">
+              <div className="exo-settings-card p-4 mb-6">
                 <div className="flex items-center justify-between mb-3">
                   <div>
                     <h3 className="font-semibold text-gray-900 dark:text-gray-100">
@@ -2292,7 +2206,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
               </p>
 
               {/* Status indicator */}
-              <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-600 mb-6">
+              <div className="exo-settings-card p-4 mb-6">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center space-x-3">
                     <div

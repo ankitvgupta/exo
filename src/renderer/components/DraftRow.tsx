@@ -91,11 +91,11 @@ export const DraftRow = React.memo(
         onClick={onClick}
         className={`
         w-full ${ds.row} flex items-center text-left
-        border-b border-gray-100 dark:border-gray-700/50 transition-colors group
+        exo-list-row group
         ${
           isSelected
-            ? "bg-blue-600 text-white"
-            : "hover:bg-gray-50 dark:hover:bg-gray-700/50 text-gray-900 dark:text-gray-100"
+            ? "exo-list-row-selected text-white"
+            : "exo-text-primary"
         }
       `}
       >
@@ -109,7 +109,7 @@ export const DraftRow = React.memo(
         {/* Recipients */}
         <div
           className={`${ds.recipientWidth} truncate font-medium flex-shrink-0 ${
-            isSelected ? "text-white" : "text-gray-600 dark:text-gray-400"
+            isSelected ? "text-white" : "text-[var(--exo-text-secondary)]"
           }`}
         >
           {recipients || "(no recipients)"}
@@ -122,7 +122,7 @@ export const DraftRow = React.memo(
         ${
           isSelected
             ? "bg-white/20 text-white"
-            : "bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300"
+            : "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700"
         }
       `}
         >
@@ -135,7 +135,7 @@ export const DraftRow = React.memo(
         >
           <span
             className={`font-medium truncate ${
-              isSelected ? "text-white" : "text-gray-700 dark:text-gray-300"
+              isSelected ? "text-white" : "text-[var(--exo-text-secondary)]"
             }`}
           >
             {draft.subject || "(no subject)"}
@@ -143,12 +143,12 @@ export const DraftRow = React.memo(
           {snippet && (
             <>
               <span
-                className={`flex-shrink-0 ${isSelected ? "text-white/40" : "text-gray-300 dark:text-gray-600"}`}
+                className={`flex-shrink-0 ${isSelected ? "text-white/40" : "text-[var(--exo-border-strong)]"}`}
               >
                 —
               </span>
               <span
-                className={`truncate ${isSelected ? "text-white/60" : "text-gray-400 dark:text-gray-500"}`}
+                className={`truncate ${isSelected ? "text-white/60" : "text-[var(--exo-text-muted)]"}`}
               >
                 {snippet}
               </span>
@@ -158,8 +158,8 @@ export const DraftRow = React.memo(
 
         {/* Time */}
         <span
-          className={`${ds.time} text-right flex-shrink-0 tabular-nums ${
-            isSelected ? "text-white/60" : "text-gray-400 dark:text-gray-500"
+          className={`${ds.time} text-right flex-shrink-0 tabular-nums exo-micro-label ${
+            isSelected ? "text-white/60" : "text-[var(--exo-text-muted)]"
           }`}
         >
           {time}

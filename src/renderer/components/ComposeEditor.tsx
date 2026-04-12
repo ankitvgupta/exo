@@ -64,8 +64,8 @@ function ToolbarButton({
       tabIndex={-1}
       className={`p-1.5 rounded text-sm ${
         active
-          ? "bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400"
-          : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
+          ? "bg-[var(--exo-accent-soft)] text-[var(--exo-accent)] border border-[var(--exo-border-strong)]"
+          : "text-[var(--exo-text-secondary)] hover:bg-[var(--exo-bg-surface-hover)]"
       } ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
     >
       {children}
@@ -475,7 +475,7 @@ function Toolbar({ editor }: { editor: Editor | null }) {
   if (!editor) return null;
 
   return (
-    <div className="flex items-center gap-0.5 p-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
+    <div className="flex items-center gap-0.5 p-2 border-b exo-border-subtle exo-surface-soft">
       {/* Text formatting */}
       <ToolbarButton
         onClick={() => editor.chain().focus().toggleBold().run()}
@@ -529,7 +529,7 @@ function Toolbar({ editor }: { editor: Editor | null }) {
         </svg>
       </ToolbarButton>
 
-      <div className="w-px h-5 bg-gray-300 dark:bg-gray-600 mx-1" />
+      <div className="w-px h-5 bg-[var(--exo-border-strong)] mx-1" />
 
       {/* Lists */}
       <ToolbarButton
@@ -574,7 +574,7 @@ function Toolbar({ editor }: { editor: Editor | null }) {
         </svg>
       </ToolbarButton>
 
-      <div className="w-px h-5 bg-gray-300 dark:bg-gray-600 mx-1" />
+      <div className="w-px h-5 bg-[var(--exo-border-strong)] mx-1" />
 
       {/* Block quote */}
       <ToolbarButton
@@ -613,7 +613,7 @@ function Toolbar({ editor }: { editor: Editor | null }) {
         )}
       </div>
 
-      <div className="w-px h-5 bg-gray-300 dark:bg-gray-600 mx-1" />
+      <div className="w-px h-5 bg-[var(--exo-border-strong)] mx-1" />
 
       {/* Insert image */}
       <ToolbarButton onClick={insertImage} title="Insert image">
@@ -636,7 +636,7 @@ function Toolbar({ editor }: { editor: Editor | null }) {
         onChange={handleFileSelected}
       />
 
-      <div className="w-px h-5 bg-gray-300 dark:bg-gray-600 mx-1" />
+      <div className="w-px h-5 bg-[var(--exo-border-strong)] mx-1" />
 
       {/* Text alignment */}
       <ToolbarButton
@@ -721,7 +721,7 @@ export function ComposeEditor({
       Link.configure({
         openOnClick: false,
         HTMLAttributes: {
-          class: "text-blue-600 underline",
+          class: "exo-accent-text underline",
         },
       }),
       Image.configure({
@@ -829,17 +829,17 @@ export function ComposeEditor({
 
   return (
     <div
-      className={`border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 ${className}`}
+      className={`border exo-border-subtle rounded-md overflow-hidden exo-elevated ${className}`}
     >
       <Toolbar editor={editor} />
-      <div className="dark:text-gray-100">
+      <div className="text-[var(--exo-text-primary)]">
         <EditorContent editor={editor} />
       </div>
       {/* Quoted content rendered as non-editable HTML */}
       {quotedContent && (
-        <div className="border-t border-gray-200 dark:border-gray-700">
+        <div className="border-t exo-border-subtle">
           <div
-            className="p-3 text-sm text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-800/50"
+            className="p-3 text-sm exo-text-secondary exo-surface-soft"
             style={{ maxHeight: "300px", overflowY: "auto" }}
           >
             {/* Use an iframe to safely render the original email HTML with all its styles */}
@@ -854,19 +854,19 @@ export function ComposeEditor({
                       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
                       font-size: 14px;
                       line-height: 1.5;
-                      color: ${isDark ? "#e5e7eb" : "#333"};
-                      background: ${isDark ? "#1f2937" : "transparent"};
+                      color: ${isDark ? "#eaf0ff" : "#0b1220"};
+                      background: ${isDark ? "#0e1526" : "transparent"};
                       margin: 0;
                       padding: 0;
                     }
                     blockquote {
-                      border-left: 2px solid ${isDark ? "#4b5563" : "#ccc"};
+                      border-left: 2px solid ${isDark ? "#34466b" : "#d7dfec"};
                       margin: 8px 0;
                       padding-left: 12px;
-                      color: ${isDark ? "#9ca3af" : "#555"};
+                      color: ${isDark ? "#a6b4d3" : "#4f5f7a"};
                     }
                     img { max-width: 100%; height: auto; }
-                    a { color: ${isDark ? "#60a5fa" : "#1a73e8"}; }
+                    a { color: ${isDark ? "#5b83ff" : "#2155ff"}; }
                   </style>
                 </head>
                 <body>${quotedContent}</body>

@@ -25,19 +25,17 @@ function Tab({ active, onClick, count, children }: TabProps) {
       onClick={onClick}
       className={`
         px-3 py-2 text-sm font-medium whitespace-nowrap
-        border-b-2 transition-colors focus:outline-none
+        border-b transition-colors focus:outline-none
         ${
           active
-            ? "border-blue-500 dark:border-blue-400 text-blue-600 dark:text-blue-400"
-            : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600"
+            ? "border-[var(--exo-accent)] text-[var(--exo-accent)] bg-[var(--exo-accent-soft)]"
+            : "border-transparent text-[var(--exo-text-muted)] hover:text-[var(--exo-text-primary)] hover:border-[var(--exo-border-strong)] hover:bg-[var(--exo-bg-surface-hover)]"
         }
       `}
     >
       {children}
       {count !== undefined && (
-        <span
-          className={`ml-1.5 text-xs ${active ? "text-blue-500 dark:text-blue-400" : "text-gray-400"}`}
-        >
+        <span className={`ml-1.5 text-xs ${active ? "text-[var(--exo-accent)]" : "exo-text-muted"}`}>
           {count}
         </span>
       )}
@@ -125,7 +123,7 @@ export function SplitTabs() {
 
   // Always show the tab bar — Priority, Other, Archive Ready always visible; All on the far right
   return (
-    <div className="flex h-10 border-b border-gray-200 dark:border-gray-700 px-2 overflow-x-auto">
+    <div className="flex h-10 border-b exo-border-subtle px-2 overflow-x-auto exo-surface">
       {/* Primary tabs: Priority, Other */}
       <Tab
         active={currentSplitId === "__priority__"}

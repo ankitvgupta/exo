@@ -810,23 +810,23 @@ function ThreadMessage({
     return (
       <button
         onClick={onToggle}
-        className="w-full flex items-center gap-4 py-3 px-2 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors text-left border-b border-gray-100 dark:border-gray-700/50"
+        className="w-full flex items-center gap-4 py-3 px-2 hover:bg-[var(--exo-bg-surface-hover)] transition-colors text-left border-b exo-border-subtle"
       >
         {/* Sender */}
         <div className="w-28 flex-shrink-0">
-          <span className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate block">
+          <span className="text-sm font-medium exo-text-primary truncate block">
             {isFromMe ? "Me" : senderName}
           </span>
         </div>
 
         {/* Preview */}
         <div className="flex-1 min-w-0">
-          <span className="text-sm text-gray-500 dark:text-gray-400 truncate block">{snippet}</span>
+          <span className="text-sm exo-text-secondary truncate block">{snippet}</span>
         </div>
 
         {/* Date */}
         <div className="flex-shrink-0">
-          <span className="text-sm text-gray-400 dark:text-gray-500">{formatDate(email.date)}</span>
+          <span className="text-sm exo-text-muted exo-micro-label">{formatDate(email.date)}</span>
         </div>
       </button>
     );
@@ -838,30 +838,30 @@ function ThreadMessage({
     <div
       className={`group/msg ${
         useWhiteCard
-          ? `bg-white rounded-lg${isFocused ? " ring-1 ring-blue-300 dark:ring-blue-500" : ""}`
-          : `relative before:absolute before:left-[-6px] before:top-0 before:bottom-0 before:rounded-full bg-gray-50/50 dark:bg-gray-800/30 ${
+          ? `exo-elevated rounded-md border exo-border-subtle${isFocused ? " ring-1 ring-[var(--exo-focus-ring)]" : ""}`
+          : `relative before:absolute before:left-[-6px] before:top-0 before:bottom-0 before:rounded-full bg-[var(--exo-bg-surface-soft)] ${
               isFocused
-                ? "before:w-1 before:bg-blue-600 before:dark:bg-blue-400"
-                : "before:w-0.5 before:bg-blue-500 before:dark:bg-blue-400"
+                ? "before:w-1 before:bg-[var(--exo-accent)]"
+                : "before:w-0.5 before:bg-[var(--exo-accent-strong)]"
             }`
       }`}
     >
       {/* Header */}
       <button
         onClick={onToggle}
-        className={`w-full flex items-center gap-2 py-3 px-2 transition-colors text-left ${
-          useWhiteCard ? "hover:bg-gray-100/50" : "hover:bg-gray-100/50 dark:hover:bg-gray-700/30"
-        }`}
+        className="w-full flex items-center gap-2 py-3 px-2 transition-colors text-left hover:bg-[var(--exo-bg-surface-hover)]"
       >
         <span
           onClick={handleHeaderClick}
-          className={`min-w-0 truncate text-sm font-medium cursor-pointer ${useWhiteCard ? "text-gray-900" : "text-gray-900 dark:text-gray-100"}`}
+          className={`min-w-0 truncate text-sm font-medium cursor-pointer ${useWhiteCard ? "exo-text-primary" : "exo-text-primary"}`}
         >
           {formatMessageHeader(email, currentUserEmail, nameMap)}
         </span>
         <svg
           onClick={handleHeaderClick}
-          className={`flex-shrink-0 w-3 h-3 transition-transform cursor-pointer ${showHeaderDetails ? "rotate-180" : ""} ${useWhiteCard ? "text-gray-400" : "text-gray-400 dark:text-gray-500"}`}
+          className={`flex-shrink-0 w-3 h-3 transition-transform cursor-pointer ${
+            showHeaderDetails ? "rotate-180" : ""
+          } ${useWhiteCard ? "exo-text-muted" : "exo-text-muted"}`}
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
@@ -869,7 +869,7 @@ function ThreadMessage({
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
         </svg>
         <span
-          className={`flex-shrink-0 ml-auto text-sm ${useWhiteCard ? "text-gray-400" : "text-gray-400 dark:text-gray-500"}`}
+          className={`flex-shrink-0 ml-auto text-sm exo-text-muted exo-micro-label`}
         >
           {formatDate(email.date)}
         </span>
@@ -2060,14 +2060,14 @@ function NewEmailCompose({
   return (
     <div
       ref={containerRef}
-      className="flex-1 flex flex-col bg-white dark:bg-gray-800 overflow-hidden"
+      className="flex-1 flex flex-col exo-surface overflow-hidden"
     >
       {/* Header */}
-      <div className="h-9 px-4 bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700/50 flex items-center flex-shrink-0">
-        <span className="text-gray-900 dark:text-gray-100 font-medium text-sm">New Message</span>
+      <div className="h-9 px-4 exo-surface border-b exo-border-subtle flex items-center flex-shrink-0">
+        <span className="exo-text-primary font-medium text-sm exo-micro-label">New Message</span>
         <button
           onClick={onDiscard ?? (() => onCancel(getFormState()))}
-          className="ml-auto p-1.5 text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 rounded transition-colors"
+          className="ml-auto p-1.5 exo-text-muted hover:text-red-500 rounded transition-colors"
           title="Discard draft"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2108,7 +2108,7 @@ function NewEmailCompose({
             </div>
             <button
               onClick={() => form.setShowCcBcc(!form.showCcBcc)}
-              className="ml-2 flex-shrink-0 p-1 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+              className="ml-2 flex-shrink-0 p-1 exo-text-muted hover:text-[var(--exo-text-primary)] transition-colors"
               data-testid="compose-cc-bcc-toggle"
               title={form.showCcBcc ? "Hide Cc/Bcc/From" : "Show Cc/Bcc/From"}
             >
@@ -2169,8 +2169,8 @@ function NewEmailCompose({
             </>
           )}
 
-          <div className="flex items-baseline gap-2 py-1.5 border-b border-gray-200 dark:border-gray-700/50">
-            <label className="w-10 text-sm text-gray-500 dark:text-gray-400 flex-shrink-0">
+          <div className="flex items-baseline gap-2 py-1.5 border-b exo-border-subtle">
+            <label className="w-10 text-sm exo-text-secondary flex-shrink-0 exo-micro-label">
               Subject
             </label>
             <input
@@ -2185,7 +2185,7 @@ function NewEmailCompose({
                 }
               }}
               placeholder="Subject"
-              className="flex-1 outline-none border-none text-sm dark:text-gray-100 dark:placeholder-gray-400 bg-transparent"
+              className="flex-1 outline-none border-none text-sm text-[var(--exo-text-primary)] placeholder-[var(--exo-text-muted)] bg-transparent"
               style={{ outline: "none", boxShadow: "none" }}
             />
           </div>
@@ -3328,13 +3328,13 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
   };
 
   return (
-    <div className="flex-1 flex flex-col bg-white dark:bg-gray-800 overflow-hidden">
+    <div className="flex-1 flex flex-col exo-surface overflow-hidden">
       {/* Back button for full view */}
       {isFullView && (
-        <div className="h-10 px-4 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center flex-shrink-0">
+        <div className="h-10 px-4 exo-surface border-b exo-border-subtle flex items-center flex-shrink-0">
           <button
             onClick={handleBackToSplit}
-            className="flex items-center gap-1 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors text-sm"
+            className="flex items-center gap-1 exo-text-secondary hover:text-[var(--exo-text-primary)] transition-colors text-sm"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
@@ -3352,14 +3352,14 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
       {/* Single scroll container for entire thread */}
       <div ref={scrollContainerRef} className="flex-1 overflow-y-auto">
         {/* Thread header */}
-        <div className="px-6 pt-6 pb-4 border-b border-gray-100 dark:border-gray-700/50">
+        <div className="px-6 pt-6 pb-4 border-b exo-border-subtle">
           <div className="flex items-start justify-between">
             <div className="flex-1 min-w-0">
-              <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-100 leading-tight">
+              <h1 className="text-xl font-semibold exo-text-primary leading-tight">
                 {cleanSubject}
               </h1>
               {threadEmails.length > 1 && (
-                <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">
+                <p className="text-sm exo-text-muted exo-micro-label mt-1">
                   {threadEmails.length} messages
                 </p>
               )}
@@ -3368,7 +3368,7 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
               <div className="flex items-center">
                 <button
                   onClick={handleArchive}
-                  className="p-1.5 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+                  className="p-1.5 exo-text-muted hover:text-[var(--exo-text-primary)] hover:bg-[var(--exo-bg-surface-hover)] rounded-md transition-colors"
                   title="Archive"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -3382,7 +3382,7 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
                 </button>
                 <button
                   onClick={handleTrash}
-                  className="p-1.5 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+                  className="p-1.5 exo-text-muted hover:text-[var(--exo-text-primary)] hover:bg-[var(--exo-bg-surface-hover)] rounded-md transition-colors"
                   title="Delete"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -3396,7 +3396,7 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
                 </button>
                 <button
                   onClick={handleMarkUnread}
-                  className="p-1.5 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+                  className="p-1.5 exo-text-muted hover:text-[var(--exo-text-primary)] hover:bg-[var(--exo-bg-surface-hover)] rounded-md transition-colors"
                   title="Mark as unread"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -3410,10 +3410,10 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
                 </button>
                 <button
                   onClick={handleToggleStar}
-                  className={`p-1.5 rounded transition-colors hover:bg-gray-100 dark:hover:bg-gray-700 ${
+                  className={`p-1.5 rounded-md transition-colors hover:bg-[var(--exo-bg-surface-hover)] ${
                     isStarred
                       ? "text-yellow-400 hover:text-yellow-500"
-                      : "text-gray-400 dark:text-gray-500 hover:text-yellow-400"
+                      : "exo-text-muted hover:text-yellow-400"
                   }`}
                   title={isStarred ? "Unstar" : "Star"}
                 >
@@ -3434,10 +3434,10 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
                 {/* Snooze button */}
                 <button
                   onClick={() => setShowSnoozeMenu(!showSnoozeMenu)}
-                  className={`p-1.5 rounded transition-colors ${
+                  className={`p-1.5 rounded-md transition-colors ${
                     snoozedThreads.has(latestEmail.threadId)
                       ? "text-amber-500 dark:text-amber-400 hover:text-amber-600 dark:hover:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-900/20"
-                      : "text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                      : "exo-text-muted hover:text-[var(--exo-text-primary)] hover:bg-[var(--exo-bg-surface-hover)]"
                   }`}
                   title={snoozedThreads.has(latestEmail.threadId) ? "Snoozed" : "Snooze (h)"}
                 >
@@ -3451,7 +3451,7 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
                   </svg>
                 </button>
               </div>
-              <div className="w-px h-4 bg-gray-200 dark:bg-gray-600 mx-1" />
+              <div className="w-px h-4 bg-[var(--exo-border-strong)] mx-1" />
               <div className="flex items-center">
                 <button
                   onClick={() =>
@@ -3460,7 +3460,7 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
                       focusedThreadEmailId ?? replyTargetEmailId ?? latestEmail.id,
                     )
                   }
-                  className="p-1.5 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+                  className="p-1.5 exo-text-muted hover:text-[var(--exo-text-primary)] hover:bg-[var(--exo-bg-surface-hover)] rounded-md transition-colors"
                   title="Reply All"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -3485,7 +3485,7 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
                       focusedThreadEmailId ?? replyTargetEmailId ?? latestEmail.id,
                     )
                   }
-                  className="p-1.5 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+                  className="p-1.5 exo-text-muted hover:text-[var(--exo-text-primary)] hover:bg-[var(--exo-bg-surface-hover)] rounded-md transition-colors"
                   title="Forward"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -3542,12 +3542,12 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
 
         {/* Action buttons (Track Package, Unsubscribe) */}
         {(trackingNumbers.length > 0 || unsubscribeUrl) && (
-          <div className="px-6 py-2.5 border-b border-gray-100 flex items-center gap-2 flex-wrap">
+          <div className="px-6 py-2.5 border-b exo-border-subtle flex items-center gap-2 flex-wrap">
             {trackingNumbers.map((t, i) => (
               <button
                 key={i}
                 onClick={() => window.open(t.url, "_blank")}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-full transition-colors"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[var(--exo-accent)] bg-[var(--exo-accent-soft)] hover:bg-[var(--exo-bg-surface-hover)] border border-[var(--exo-border-strong)] rounded-md transition-colors exo-micro-label"
                 title={`Track ${t.carrier} package ${t.trackingNumber}`}
               >
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -3564,7 +3564,7 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
             {unsubscribeUrl && (
               <button
                 onClick={() => window.open(unsubscribeUrl!, "_blank")}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-full transition-colors"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium exo-text-secondary exo-surface-soft hover:bg-[var(--exo-bg-surface-hover)] border exo-border-subtle rounded-md transition-colors exo-micro-label"
                 title="Unsubscribe from this mailing list"
               >
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

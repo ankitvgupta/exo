@@ -66,8 +66,8 @@ test.describe("Dark Mode", () => {
     const bodyBg = await page.evaluate(() => {
       return window.getComputedStyle(document.body).backgroundColor;
     });
-    // gray-900 is rgb(17, 24, 39) in Tailwind
-    expect(bodyBg).toBe("rgb(17, 24, 39)");
+    // Exo dark app background token (#080d18)
+    expect(bodyBg).toBe("rgb(8, 13, 24)");
   });
 
   test("dark mode applies to settings panel", async () => {
@@ -109,8 +109,8 @@ test.describe("Dark Mode", () => {
     const bodyBg = await page.evaluate(() => {
       return window.getComputedStyle(document.body).backgroundColor;
     });
-    // gray-100 is rgb(243, 244, 246) in Tailwind
-    expect(bodyBg).toBe("rgb(243, 244, 246)");
+    // Exo light app background token (#f4f7fb)
+    expect(bodyBg).toBe("rgb(244, 247, 251)");
   });
 
   test("can switch to system mode", async () => {
@@ -158,7 +158,7 @@ test.describe("Dark Mode", () => {
     const bodyBg = await page.evaluate(() => {
       return window.getComputedStyle(document.body).backgroundColor;
     });
-    expect(bodyBg).toBe("rgb(17, 24, 39)");
+    expect(bodyBg).toBe("rgb(8, 13, 24)");
   });
 
   test("inbox email list renders with dark colors", async () => {
@@ -198,14 +198,16 @@ test.describe("Dark Mode", () => {
       await emailButton.click();
       await page.waitForTimeout(500);
 
-      // The detail view should have dark background
-      // Check that the main content area is dark
+      // Check that a visible email detail surface is using the dark palette.
       const hasDarkBg = await page.evaluate(() => {
-        // Look for the email detail container
-        const elements = document.querySelectorAll('[class*="bg-gray-800"]');
-        return elements.length > 0;
+        const darkPalette = new Set(["rgb(8, 13, 24)", "rgb(14, 21, 38)", "rgb(20, 29, 52)"]);
+        const elements = Array.from(document.querySelectorAll("div"));
+        return elements.some((el) => {
+          if (!(el instanceof HTMLElement) || el.offsetParent === null) return false;
+          const bg = window.getComputedStyle(el).backgroundColor;
+          return darkPalette.has(bg);
+        });
       });
-      // In dark mode, there should be elements with dark backgrounds
       expect(hasDarkBg).toBe(true);
     }
   });
@@ -229,72 +231,55 @@ test.describe("Dark Mode", () => {
     );
   }
 
-  test("WCAG contrast: email snippet text uses gray-400 level contrast", async () => {
-    // Snippet text in EmailRow uses text-gray-400 in both light and dark mode.
-    // gray-400 ≈ rgb(156, 163, 175), gray-500 ≈ rgb(107, 114, 128).
-    // We verify the CSS class is text-gray-400 (not gray-500) to ensure WCAG contrast.
-    // Checking the class avoids issues with selected-row color overrides (text-white/60).
-    //
+  test("WCAG contrast: email snippet text stays readable in dark mode", async () => {
+    // Verify snippet text resolves to a muted-but-readable tone.
     // Prior test may have opened email detail hiding the list — press Escape to go back.
     await page.keyboard.press("Escape");
     await page.waitForTimeout(300);
     await page.waitForSelector("[data-thread-id]", { timeout: 5000 });
 
-    const hasCorrectSnippetClass = await page.evaluate(() => {
+    const hasReadableSnippetColor = await page.evaluate(() => {
       const rows = document.querySelectorAll("[data-thread-id]");
       for (const row of rows) {
         const truncateSpans = row.querySelectorAll("span.truncate");
-        // Snippet is the last truncate span (subject is first)
         if (truncateSpans.length >= 2) {
           const snippet = truncateSpans[truncateSpans.length - 1];
-          // Accept text-gray-400 (unselected) or text-white/60 (selected row)
-          if (
-            snippet.className.includes("text-gray-400") ||
-            snippet.className.includes("text-white")
-          ) {
-            return true;
-          }
+          const rgb = window
+            .getComputedStyle(snippet)
+            .color.match(/\d+/g)
+            ?.map(Number) ?? [0, 0, 0];
+          const maxChannel = Math.max(...rgb);
+          if (maxChannel >= 120) return true;
         }
       }
       return false;
     });
 
-    expect(hasCorrectSnippetClass).toBe(true);
+    expect(hasReadableSnippetColor).toBe(true);
   });
 
-  test("settings panel card borders are visible (not gray-700)", async () => {
+  test("settings panel card borders are visible with the new dark border token", async () => {
     // Open settings
     const settingsButton = page.locator("button[title='Settings']");
     await settingsButton.click();
     await expect(page.locator("h1:has-text('Settings')")).toBeVisible({ timeout: 5000 });
     await page.waitForTimeout(300);
 
-    // Settings cards use: border border-gray-200 dark:border-gray-600
-    // gray-600 ≈ rgb(75, 85, 99) — visible against gray-800 bg
-    // gray-700 ≈ rgb(55, 65, 81) — too close to bg, would be invisible
     const borderColor = await page.evaluate(() => {
-      const cards = document.querySelectorAll(".rounded-lg.border");
-      for (const card of cards) {
-        if (card.closest("[class*='bg-gray-800']") || card.classList.contains("bg-white")) {
-          return window.getComputedStyle(card).borderColor;
-        }
-      }
-      // Fallback: find any card with border in settings
+      const cards = document.querySelectorAll(".exo-settings-card");
       for (const card of cards) {
         const bc = window.getComputedStyle(card).borderColor;
-        if (bc && bc !== "rgb(0, 0, 0)") return bc;
+        if (bc && bc !== "rgb(0, 0, 0)") {
+          return bc;
+        }
       }
       return null;
     });
 
     expect(borderColor).not.toBeNull();
     const rgb = parseRgb(borderColor!);
-    // gray-600 ≈ (75, 85, 99) — check it's in range, not gray-700 (55, 65, 81)
-    // Each channel should be above 60 to not be gray-700
-    expect(rgb[0]).toBeGreaterThan(60);
-    expect(rgb[1]).toBeGreaterThan(60);
-    expect(rgb[2]).toBeGreaterThan(60);
-    expect(rgbWithinTolerance(rgb, [75, 85, 99], 25)).toBe(true);
+    // Dark border token: #24314d => rgb(36, 49, 77)
+    expect(rgbWithinTolerance(rgb, [36, 49, 77], 35)).toBe(true);
   });
 
   test("account switcher dropdown has dark background", async () => {
@@ -388,7 +373,7 @@ test.describe("Dark Mode", () => {
     await page.waitForTimeout(300);
   });
 
-  test("settings textarea borders use gray-500 level contrast", async () => {
+  test("settings textarea borders remain visible in dark mode", async () => {
     // Open settings
     const settingsButton = page.locator("button[title='Settings']");
     await settingsButton.click();
@@ -400,9 +385,6 @@ test.describe("Dark Mode", () => {
     await promptsTab.click();
     await page.waitForTimeout(300);
 
-    // Textareas use: border border-gray-300 dark:border-gray-500
-    // gray-500 ≈ rgb(107, 114, 128) — good contrast against gray-700 bg
-    // gray-600 ≈ rgb(75, 85, 99) — would be too subtle
     const textareaBorderColor = await page.evaluate(() => {
       const textareas = document.querySelectorAll("textarea");
       for (const ta of textareas) {
@@ -416,12 +398,8 @@ test.describe("Dark Mode", () => {
 
     expect(textareaBorderColor).not.toBeNull();
     const rgb = parseRgb(textareaBorderColor!);
-    // gray-500 ≈ (107, 114, 128) — should be close, not gray-600 (75, 85, 99)
-    // Each channel should be above 85 to not be gray-600
-    expect(rgb[0]).toBeGreaterThan(85);
-    expect(rgb[1]).toBeGreaterThan(85);
-    expect(rgb[2]).toBeGreaterThan(85);
-    expect(rgbWithinTolerance(rgb, [107, 114, 128], 25)).toBe(true);
+    // Ensure it's not near-black against dark surfaces.
+    expect(Math.max(...rgb)).toBeGreaterThan(70);
 
     // Close settings
     const closeButton = page
@@ -432,5 +410,71 @@ test.describe("Dark Mode", () => {
       await closeButton.click();
       await page.waitForTimeout(300);
     }
+  });
+
+  test("priority chips use semantic colors in dark mode", async () => {
+    // Ensure inbox list is visible
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(300);
+    await page.waitForSelector("[data-thread-id]", { timeout: 5000 });
+
+    const priorityStyles = await page.evaluate(() => {
+      const targets = ["High", "Medium", "Low"] as const;
+      const result: Record<string, string | null> = { High: null, Medium: null, Low: null };
+
+      for (const label of targets) {
+        const candidates = Array.from(document.querySelectorAll("[data-thread-id] span"));
+        const match = candidates.find((el) => {
+          if (!(el instanceof HTMLElement)) return false;
+          return (
+            el.textContent?.trim() === label &&
+            el.closest("[data-selected='true']") === null &&
+            el.offsetParent !== null
+          );
+        }) as HTMLElement | undefined;
+        result[label] = match ? window.getComputedStyle(match).backgroundColor : null;
+      }
+
+      return result;
+    });
+
+    expect(priorityStyles.High).toBe("rgb(58, 17, 22)");
+    expect(priorityStyles.Medium).toBe("rgb(58, 45, 0)");
+    expect(priorityStyles.Low).toBe("rgb(18, 49, 36)");
+  });
+
+  test("priority chips use semantic colors in light mode", async () => {
+    const settingsButton = page.locator("button[title='Settings']");
+    await settingsButton.click();
+    await expect(page.locator("h1:has-text('Settings')")).toBeVisible({ timeout: 5000 });
+    await page.locator("button:has-text('Light')").first().click();
+    await page.waitForTimeout(300);
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(300);
+    await page.waitForSelector("[data-thread-id]", { timeout: 5000 });
+
+    const priorityStyles = await page.evaluate(() => {
+      const targets = ["High", "Medium", "Low"] as const;
+      const result: Record<string, string | null> = { High: null, Medium: null, Low: null };
+
+      for (const label of targets) {
+        const candidates = Array.from(document.querySelectorAll("[data-thread-id] span"));
+        const match = candidates.find((el) => {
+          if (!(el instanceof HTMLElement)) return false;
+          return (
+            el.textContent?.trim() === label &&
+            el.closest("[data-selected='true']") === null &&
+            el.offsetParent !== null
+          );
+        }) as HTMLElement | undefined;
+        result[label] = match ? window.getComputedStyle(match).backgroundColor : null;
+      }
+
+      return result;
+    });
+
+    expect(priorityStyles.High).toBe("rgb(254, 226, 226)");
+    expect(priorityStyles.Medium).toBe("rgb(254, 249, 195)");
+    expect(priorityStyles.Low).toBe("rgb(220, 252, 231)");
   });
 });

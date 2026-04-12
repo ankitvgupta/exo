@@ -517,28 +517,28 @@ export function EmailList() {
 
   // Email list takes available width (flex-1)
   return (
-    <div className="flex-1 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col overflow-hidden">
+    <div className="flex-1 exo-list-shell exo-pixel-grid flex flex-col overflow-hidden">
       {/* Header - top-level mailbox tabs + actions */}
-      <div className="h-10 px-4 flex items-center justify-between border-b border-gray-200 dark:border-gray-700">
+      <div className="h-10 px-4 flex items-center justify-between exo-list-header">
         <div className="flex items-center gap-1">
           <button
             onClick={() => {
               if (isSentView) setCurrentSplitId("__priority__");
             }}
-            className={`px-2 py-1 text-sm font-medium rounded transition-colors focus:outline-none ${
+            className={`px-2.5 py-1 text-sm font-medium rounded-md transition-colors focus:outline-none ${
               !isSentView
-                ? "text-gray-900 dark:text-gray-100"
-                : "text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
+                ? "bg-[var(--exo-accent-soft)] text-[var(--exo-accent)] border border-[var(--exo-border-strong)]"
+                : "text-[var(--exo-text-muted)] hover:text-[var(--exo-text-primary)] hover:bg-[var(--exo-bg-surface-hover)]"
             }`}
           >
             Inbox
           </button>
           <button
             onClick={() => setCurrentSplitId("__sent__")}
-            className={`px-2 py-1 text-sm font-medium rounded transition-colors inline-flex items-center gap-1 focus:outline-none ${
+            className={`px-2.5 py-1 text-sm font-medium rounded-md transition-colors inline-flex items-center gap-1 focus:outline-none ${
               isSentView
-                ? "text-gray-900 dark:text-gray-100"
-                : "text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
+                ? "bg-[var(--exo-accent-soft)] text-[var(--exo-accent)] border border-[var(--exo-border-strong)]"
+                : "text-[var(--exo-text-muted)] hover:text-[var(--exo-text-primary)] hover:bg-[var(--exo-bg-surface-hover)]"
             }`}
           >
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -570,7 +570,7 @@ export function EmailList() {
             </button>
           )}
           {isAnalyzingTask && (
-            <span className="flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400">
+            <span className="flex items-center gap-1 text-xs text-[var(--exo-accent)] exo-micro-label">
               <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
                 <circle
                   className="opacity-25"
@@ -591,7 +591,7 @@ export function EmailList() {
           )}
           {hasActiveAgentDrafts && (
             <span
-              className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400"
+              className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400 exo-micro-label"
               title={agentDraftIndicator?.tooltip}
             >
               <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
@@ -616,7 +616,7 @@ export function EmailList() {
           <button
             onClick={cycleDensity}
             title={`Density: ${densityLabels[inboxDensity]}`}
-            className="p-1 rounded text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            className="p-1 rounded-md text-[var(--exo-text-muted)] hover:text-[var(--exo-text-primary)] hover:bg-[var(--exo-bg-surface-hover)] transition-colors"
           >
             <svg
               className="w-4 h-4"
@@ -650,16 +650,16 @@ export function EmailList() {
 
       {/* Initial sync progress bar */}
       {isInitialSyncing && (
-        <div className="px-4 py-1.5 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-750">
+        <div className="px-4 py-1.5 border-b exo-border-subtle exo-surface-soft">
           <div className="flex items-center justify-between mb-1">
-            <span className="text-xs text-gray-500 dark:text-gray-400">
+            <span className="text-xs exo-text-secondary exo-micro-label">
               Loading inbox: {currentProgress.fetched.toLocaleString()} /{" "}
               {currentProgress.total.toLocaleString()}
             </span>
           </div>
-          <div className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+          <div className="w-full h-1 bg-[var(--exo-border-subtle)] rounded-full overflow-hidden">
             <div
-              className="h-full bg-blue-500 dark:bg-blue-400 rounded-full transition-all duration-300"
+              className="h-full bg-[var(--exo-accent)] rounded-full transition-all duration-300"
               style={{
                 width: `${Math.round((currentProgress.fetched / currentProgress.total) * 100)}%`,
               }}
@@ -687,7 +687,7 @@ export function EmailList() {
         {isDraftsView ? (
           <>
             {localDrafts.length === 0 && threadsWithDrafts.length === 0 && !isLoading && (
-              <div className="flex flex-col items-center justify-center py-12 text-gray-400 dark:text-gray-500">
+              <div className="flex flex-col items-center justify-center py-12 text-[var(--exo-text-muted)]">
                 <svg
                   className="w-12 h-12 mb-3"
                   fill="none"
@@ -792,7 +792,7 @@ export function EmailList() {
         ) : (
           /* Empty state (only in inbox views) */
           !isLoading && (
-            <div className="flex flex-col items-center justify-center py-12 text-gray-400 dark:text-gray-500">
+            <div className="flex flex-col items-center justify-center py-12 text-[var(--exo-text-muted)]">
               <svg className="w-12 h-12 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 {isSnoozedView ? (
                   <path
