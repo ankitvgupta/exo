@@ -687,7 +687,7 @@ export function EmailList() {
       />
 
       {/* Thread list - flat, chronological */}
-      <div ref={listRef} className="flex-1 overflow-y-auto exo-pixel-grid">
+      <div ref={listRef} className="flex-1 overflow-y-auto exo-pixel-grid relative">
         {/* Drafts view: local drafts (compose sessions) + threads with AI-generated drafts */}
         {isDraftsView ? (
           <>
@@ -800,7 +800,7 @@ export function EmailList() {
         ) : (
           /* Empty state with animated dot-matrix wave */
           !isLoading && (
-            <div className="flex-1 flex flex-col items-center justify-center relative min-h-[200px] bg-[var(--exo-bg-surface)]">
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-[var(--exo-bg-surface)]">
               <PixelWave />
               <p className="text-sm exo-text-muted exo-micro-label relative z-10">
                 {isSnoozedView ? "No snoozed emails" : isSentView ? "No sent emails" : "Inbox zero"}
