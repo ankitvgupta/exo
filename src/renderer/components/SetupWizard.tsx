@@ -169,6 +169,16 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
 
         const result = (await window.api.settings.set({
           ollamaCloud: { apiKey: ollamaApiKey.trim(), defaultModel: "minimax-m2.7:cloud" },
+          featureProviders: {
+            analysis: "ollama-cloud",
+            drafts: "ollama-cloud",
+            refinement: "ollama-cloud",
+            calendaring: "ollama-cloud",
+            archiveReady: "ollama-cloud",
+            senderLookup: "ollama-cloud",
+            agentDrafter: "ollama-cloud",
+            agentChat: "ollama-cloud",
+          },
         })) as IpcResponse<void>;
         if (result.success) {
           const authResult = (await window.api.gmail.checkAuth()) as IpcResponse<{

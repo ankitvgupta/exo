@@ -231,6 +231,10 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
       setEnableSenderLookup(generalConfig.enableSenderLookup ?? true);
       setModelConfig({ ...DEFAULT_MODEL_CONFIG, ...generalConfig.modelConfig });
       setFeatureProviders(generalConfig.featureProviders ?? {});
+      const ollamaFeatureModels = generalConfig.ollamaCloud?.featureModels;
+      if (ollamaFeatureModels) {
+        setOllamaModels(ollamaFeatureModels);
+      }
       setGithubToken(generalConfig.githubToken ?? "");
       setAllowPrereleaseUpdates(generalConfig.allowPrereleaseUpdates ?? false);
       setAnthropicApiKey(generalConfig.anthropicApiKey ?? "");
@@ -387,6 +391,10 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
         enableSenderLookup,
         modelConfig,
         featureProviders,
+        ollamaCloud: {
+          ...generalConfig?.ollamaCloud,
+          featureModels: ollamaModels,
+        },
         githubToken: githubToken || undefined,
         allowPrereleaseUpdates,
       });

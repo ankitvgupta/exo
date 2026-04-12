@@ -240,7 +240,9 @@ export function createWebSearchProvider(
       }
 
       try {
-        // Use Claude with web search to find information
+        // This always uses Anthropic (via the default createMessage path) because it
+        // depends on Anthropic's web_search_20250305 tool, which is provider-specific
+        // and not available on Ollama or other providers.
         const searchQuery = buildSearchQuery(senderName, realSenderEmail);
 
         const response = await createMessage(
