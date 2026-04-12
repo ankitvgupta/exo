@@ -1,4 +1,4 @@
-import { createMessage } from "./anthropic-service";
+import { createMessage } from "./llm-service";
 import type { GmailClient } from "./gmail-client";
 import { CalendaringAgent } from "./calendaring-agent";
 import { getEnrichmentBySender } from "../extensions/enrichment-store";

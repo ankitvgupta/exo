@@ -1,5 +1,5 @@
 import { ipcMain } from "electron";
-import { createMessage } from "../services/anthropic-service";
+import { createMessage } from "../services/llm-service";
 import {
   getEmail,
   deleteDraft,

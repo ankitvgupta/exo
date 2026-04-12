@@ -10,7 +10,7 @@
  * Key invariant: draft memories never enter the prompt. Only promoted memories do.
  */
 import { randomUUID } from "crypto";
-import { createMessage, getClient, recordStreamingCall } from "./anthropic-service";
+import { createMessage, getClient, recordStreamingCall } from "./llm-service";
 import {
   getThreadDraftBody,
   getDraftMemories,

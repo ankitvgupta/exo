@@ -1,5 +1,8 @@
 /**
- * AnthropicService — Central wrapper for all Claude API calls.
+ * LLM Service — Central wrapper for all LLM API calls.
+ *
+ * Supports multiple providers via the Anthropic SDK (both Anthropic's API
+ * and Ollama Cloud's Anthropic-compatible endpoint).
  *
  * Three responsibilities:
  * 1. WRAP — Thin wrapper around anthropic.messages.create()
@@ -13,10 +16,11 @@ import type {
   MessageCreateParamsNonStreaming,
   Message,
 } from "@anthropic-ai/sdk/resources/messages";
+import type { LlmProvider } from "../../shared/types";
 import { createLogger } from "./logger";
 import { randomUUID } from "crypto";
 
-const log = createLogger("anthropic");
+const log = createLogger("llm");
 
 // Approximate pricing per million tokens. Last updated: 2026-03-29.
 // These are approximate and will drift as Anthropic updates pricing.
@@ -75,7 +79,7 @@ export interface UsageStats {
   byCaller: Array<{ caller: string; costCents: number; calls: number }>;
 }
 
-interface CreateOptions {
+export interface CreateOptions {
   /** Which service is making this call, for cost attribution */
   caller: string;
   /** Optional email ID for tracing */
@@ -84,9 +88,11 @@ interface CreateOptions {
   accountId?: string;
   /** Timeout in milliseconds (default: none) */
   timeoutMs?: number;
+  /** LLM provider to use. Defaults to "anthropic". */
+  provider?: LlmProvider;
 }
 
-// Anthropic client — singleton for production, replaceable for testing
+// --- Anthropic client (api.anthropic.com) ---
 let _anthropicClient: Anthropic | null = null;
 let _defaultClient: Anthropic | null = null;
 
@@ -110,6 +116,53 @@ export function getClient(): Anthropic {
   if (_anthropicClient) return _anthropicClient;
   if (!_defaultClient) _defaultClient = new Anthropic();
   return _defaultClient;
+}
+
+// --- Ollama Cloud client (ollama.com, Anthropic-compatible endpoint) ---
+let _ollamaClient: Anthropic | null = null;
+let _ollamaApiKey: string | null = null;
+
+/**
+ * Configure the Ollama Cloud client. Call when the API key changes.
+ */
+export function setOllamaConfig(apiKey: string): void {
+  _ollamaApiKey = apiKey || null;
+  _ollamaClient = null; // Force re-creation on next use
+}
+
+/**
+ * Reset the Ollama client, forcing re-creation on next call.
+ */
+export function resetOllamaClient(): void {
+  _ollamaClient = null;
+}
+
+/**
+ * Replace the Ollama client for testing. Pass null to reset.
+ */
+export function _setOllamaClientForTesting(client: unknown): void {
+  _ollamaClient = client as Anthropic;
+}
+
+function getOllamaClient(): Anthropic {
+  // In test mode, allow the injected mock client even without an API key
+  if (_ollamaClient) return _ollamaClient;
+  if (!_ollamaApiKey) {
+    throw new Error(
+      "Ollama Cloud API key not configured. Add your key in Settings → Extensions → Ollama Cloud.",
+    );
+  }
+  _ollamaClient = new Anthropic({
+    baseURL: "https://ollama.com",
+    authToken: _ollamaApiKey,
+  });
+  return _ollamaClient;
+}
+
+/** Get the appropriate client for a provider. */
+function getClientForProvider(provider: LlmProvider | undefined): Anthropic {
+  if (provider === "ollama-cloud") return getOllamaClient();
+  return getClient();
 }
 
 // Database handle — set via setDatabase() during app init
@@ -190,19 +243,18 @@ function recordCall(
   durationMs: number,
   success: boolean,
   errorMessage: string | null,
+  provider?: LlmProvider,
 ): void {
   if (!_insertStmt) {
-    log.warn("AnthropicService: database not initialized, skipping call recording");
+    log.warn("LLM service: database not initialized, skipping call recording");
     return;
   }
 
-  const costCents = calculateCostCents(
-    model,
-    inputTokens,
-    outputTokens,
-    cacheReadTokens,
-    cacheCreateTokens,
-  );
+  // Ollama Cloud is subscription-based — no per-token cost
+  const costCents =
+    provider === "ollama-cloud"
+      ? 0
+      : calculateCostCents(model, inputTokens, outputTokens, cacheReadTokens, cacheCreateTokens);
 
   try {
     _insertStmt.run(
@@ -272,17 +324,41 @@ function getRetryCategory(error: unknown): string | null {
 }
 
 /**
- * Create a message using Claude API with retry and cost tracking.
+ * Strip cache_control from system message blocks.
+ * Ollama's Anthropic-compatible endpoint doesn't support prompt caching.
+ */
+function stripCacheControl(
+  params: MessageCreateParamsNonStreaming,
+): MessageCreateParamsNonStreaming {
+  if (!params.system || !Array.isArray(params.system)) return params;
+
+  const system = params.system.map((block) => {
+    if (typeof block === "object" && "cache_control" in block) {
+      const { cache_control: _, ...rest } = block;
+      return rest;
+    }
+    return block;
+  });
+
+  return { ...params, system } as MessageCreateParamsNonStreaming;
+}
+
+/**
+ * Create a message using the configured LLM provider with retry and cost tracking.
  */
 export async function createMessage(
   params: MessageCreateParamsNonStreaming,
   options: CreateOptions,
 ): Promise<Message> {
-  const { caller, emailId, accountId, timeoutMs } = options;
+  const { caller, emailId, accountId, timeoutMs, provider } = options;
+  const isOllama = provider === "ollama-cloud";
   const model = params.model;
   const startTime = Date.now();
 
-  const client = getClient();
+  // Strip cache_control for Ollama (unsupported)
+  const effectiveParams = isOllama ? stripCacheControl(params) : params;
+
+  const client = getClientForProvider(provider);
   let lastError: unknown = null;
   let totalAttempts = 0;
 
@@ -301,7 +377,7 @@ export async function createMessage(
     }
 
     try {
-      const response = await client.messages.create(params, {
+      const response = await client.messages.create(effectiveParams, {
         signal: abortController?.signal,
       });
 
@@ -324,6 +400,7 @@ export async function createMessage(
         Date.now() - startTime,
         true,
         null,
+        provider,
       );
 
       if (totalAttempts > 1) {
@@ -384,6 +461,7 @@ export async function createMessage(
     Date.now() - startTime,
     false,
     errMsg,
+    provider,
   );
 
   throw lastError;

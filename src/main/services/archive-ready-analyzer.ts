@@ -1,4 +1,4 @@
-import { createMessage } from "./anthropic-service";
+import { createMessage } from "./llm-service";
 import { stripJsonFences } from "../../shared/strip-json-fences";
 import {
   ARCHIVE_READY_JSON_FORMAT,

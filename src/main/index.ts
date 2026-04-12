@@ -390,7 +390,7 @@ ipcMain.handle("default-mail-app:get-pending", () => {
 const _db = initDatabase();
 
 // Wire up AnthropicService cost tracking
-import { setAnthropicServiceDb } from "./services/anthropic-service";
+import { setAnthropicServiceDb } from "./services/llm-service";
 setAnthropicServiceDb(_db);
 
 // If no ANTHROPIC_API_KEY in env (e.g. packaged app with no .env), read from stored config

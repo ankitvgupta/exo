@@ -1,6 +1,6 @@
 import { ipcMain } from "electron";
 import { randomUUID } from "crypto";
-import { createMessage } from "../services/anthropic-service";
+import { createMessage } from "../services/llm-service";
 import {
   saveMemory,
   getMemory,

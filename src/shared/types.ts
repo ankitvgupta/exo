@@ -358,6 +358,17 @@ export function resolveModelId(tier: ModelTier): string {
   return MODEL_TIER_IDS[tier];
 }
 
+// LLM Provider types — supports routing features to different backends
+export const LLM_PROVIDERS = ["anthropic", "ollama-cloud"] as const;
+export const LlmProviderSchema = z.enum(["anthropic", "ollama-cloud"]);
+export type LlmProvider = z.infer<typeof LlmProviderSchema>;
+
+export const OllamaCloudConfigSchema = z.object({
+  apiKey: z.string().default(""),
+  defaultModel: z.string().default("minimax-m2.7:cloud"),
+  featureModels: z.record(z.string(), z.string()).optional(),
+});
+
 // Config schema
 export const ConfigSchema = z.object({
   maxEmails: z.number().default(50),
@@ -407,6 +418,8 @@ export const ConfigSchema = z.object({
       gatewayToken: z.string().default(""),
     })
     .optional(),
+  ollamaCloud: OllamaCloudConfigSchema.optional(),
+  featureProviders: z.record(z.string(), LlmProviderSchema).optional(),
   configVersion: z.number().optional(),
 });
 
