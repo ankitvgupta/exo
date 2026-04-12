@@ -67,7 +67,7 @@ test.describe("Dark Mode", () => {
       return window.getComputedStyle(document.body).backgroundColor;
     });
     // Exo dark app background token (#080d18)
-    expect(bodyBg).toBe("rgb(8, 13, 24)");
+    expect(bodyBg).toBe("rgb(6, 11, 22)");
   });
 
   test("dark mode applies to settings panel", async () => {
@@ -158,7 +158,7 @@ test.describe("Dark Mode", () => {
     const bodyBg = await page.evaluate(() => {
       return window.getComputedStyle(document.body).backgroundColor;
     });
-    expect(bodyBg).toBe("rgb(8, 13, 24)");
+    expect(bodyBg).toBe("rgb(6, 11, 22)");
   });
 
   test("inbox email list renders with dark colors", async () => {
@@ -200,7 +200,7 @@ test.describe("Dark Mode", () => {
 
       // Check that a visible email detail surface is using the dark palette.
       const hasDarkBg = await page.evaluate(() => {
-        const darkPalette = new Set(["rgb(8, 13, 24)", "rgb(14, 21, 38)", "rgb(20, 29, 52)"]);
+        const darkPalette = new Set(["rgb(6, 11, 22)", "rgb(12, 19, 36)", "rgb(18, 26, 48)"]);
         const elements = Array.from(document.querySelectorAll("div"));
         return elements.some((el) => {
           if (!(el instanceof HTMLElement) || el.offsetParent === null) return false;

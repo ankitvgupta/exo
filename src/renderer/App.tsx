@@ -376,7 +376,7 @@ function SearchResultsView() {
   const hasMoreResults = !!remoteSearchNextPageToken && remoteSearchStatus === "complete";
 
   return (
-    <div className="flex-1 min-w-0 flex flex-col exo-surface exo-pixel-grid">
+    <div className="flex-1 min-w-0 flex flex-col exo-surface">
       {/* Search header */}
       <div className="flex items-center justify-between px-3 py-2 border-b exo-border-subtle exo-surface">
         <div className="flex items-center gap-2">

@@ -758,7 +758,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
   };
 
   return (
-    <div data-testid="settings-panel" className="h-screen flex flex-col exo-app-bg">
+    <div data-testid="settings-panel" className="h-screen flex flex-col exo-app-bg exo-scanline">
       {/* Titlebar */}
       <div className="titlebar-drag h-12 exo-elevated border-b exo-border-subtle flex items-center justify-between px-4">
         <div className="flex items-center space-x-4">

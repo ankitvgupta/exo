@@ -289,7 +289,7 @@ export const EmailRow = memo(
                     : "text-amber-500 dark:text-amber-400"
                   : isSelected && !isChecked
                     ? "text-white/30 opacity-0 group-hover:opacity-100"
-                    : "text-gray-300 dark:text-gray-600 opacity-0 group-hover:opacity-100"
+                    : "text-[var(--exo-border-strong)] opacity-0 group-hover:opacity-100"
               }`}
               title={
                 thread.archiveKept

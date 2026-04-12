@@ -14,6 +14,7 @@ import {
 import { draftBodyToHtml } from "../../shared/draft-utils";
 import { draftMatchesSplit } from "../utils/split-conditions";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { PixelWave } from "./PixelWave";
 
 /** Check if bodyHtml already contains rich formatting tags (from TipTap or draftBodyToHtml).
  *  If so, use it directly instead of re-converting from bodyText. */
@@ -521,7 +522,7 @@ export function EmailList() {
 
   // Email list takes available width (flex-1)
   return (
-    <div className="flex-1 exo-list-shell exo-pixel-grid flex flex-col overflow-hidden">
+    <div className="flex-1 exo-list-shell flex flex-col overflow-hidden">
       {/* Header - top-level mailbox tabs + actions */}
       <div className="h-10 px-4 flex items-center justify-between exo-list-header">
         <div className="flex items-center gap-1">
@@ -686,7 +687,7 @@ export function EmailList() {
       />
 
       {/* Thread list - flat, chronological */}
-      <div ref={listRef} className="flex-1 overflow-y-auto">
+      <div ref={listRef} className="flex-1 overflow-y-auto exo-pixel-grid">
         {/* Drafts view: local drafts (compose sessions) + threads with AI-generated drafts */}
         {isDraftsView ? (
           <>
@@ -797,34 +798,11 @@ export function EmailList() {
             })}
           </div>
         ) : (
-          /* Empty state (only in inbox views) */
+          /* Empty state with animated dot-matrix wave */
           !isLoading && (
-            <div className="flex flex-col items-center justify-center py-12 text-[var(--exo-text-muted)]">
-              <svg className="w-12 h-12 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                {isSnoozedView ? (
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={1.5}
-                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                ) : isSentView ? (
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={1.5}
-                    d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
-                  />
-                ) : (
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={1.5}
-                    d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"
-                  />
-                )}
-              </svg>
-              <p className="text-sm">
+            <div className="flex-1 flex flex-col items-center justify-center relative min-h-[200px] bg-[var(--exo-bg-surface)]">
+              <PixelWave />
+              <p className="text-sm exo-text-muted exo-micro-label relative z-10">
                 {isSnoozedView ? "No snoozed emails" : isSentView ? "No sent emails" : "Inbox zero"}
               </p>
             </div>

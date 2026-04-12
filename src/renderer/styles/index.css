@@ -41,11 +41,11 @@
 }
 
 .dark {
-  --exo-bg-app: #080d18;
-  --exo-bg-surface: #0e1526;
-  --exo-bg-elevated: #141d34;
-  --exo-bg-surface-soft: #111b31;
-  --exo-bg-surface-hover: #17233f;
+  --exo-bg-app: #060b16;
+  --exo-bg-surface: #0c1324;
+  --exo-bg-elevated: #121a30;
+  --exo-bg-surface-soft: #0f1929;
+  --exo-bg-surface-hover: #15203a;
 
   --exo-text-primary: #eaf0ff;
   --exo-text-secondary: #a6b4d3;
@@ -182,6 +182,7 @@ body {
 }
 
 .exo-list-row {
+  background-color: var(--exo-bg-surface);
   border-bottom: 1px solid var(--exo-border-subtle);
   color: var(--exo-text-primary);
   transition: background-color 140ms ease, color 140ms ease, border-color 140ms ease;
@@ -211,8 +212,59 @@ body {
 
 .dark .exo-pixel-grid {
   background-image:
-    linear-gradient(rgba(91, 131, 255, 0.1) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(91, 131, 255, 0.08) 1px, transparent 1px);
+    linear-gradient(rgba(91, 131, 255, 0.15) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(91, 131, 255, 0.12) 1px, transparent 1px);
+}
+
+/* Subtle horizontal scanline texture for dark mode panels */
+.dark .exo-scanline {
+  background-image: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(91, 131, 255, 0.02) 2px,
+    rgba(91, 131, 255, 0.02) 4px
+  );
+}
+
+/* Neon glow on selected row in dark mode */
+.dark .exo-list-row-selected {
+  box-shadow: 0 0 12px rgba(91, 131, 255, 0.25), inset 0 0 12px rgba(91, 131, 255, 0.08);
+}
+
+/* Neon glow on active segment button in dark mode */
+.dark .exo-segment-btn[data-active="true"] {
+  box-shadow: 0 0 10px rgba(91, 131, 255, 0.3);
+}
+
+/* Enhanced focus ring with glow in dark mode */
+.dark .exo-focus-ring:focus-visible {
+  box-shadow: 0 0 0 2px var(--exo-focus-ring), 0 0 12px rgba(122, 156, 255, 0.25);
+}
+
+/* Neon glow on priority badges in dark mode */
+.dark .priority-high {
+  box-shadow: 0 0 8px rgba(255, 122, 138, 0.3);
+}
+.dark .priority-medium {
+  box-shadow: 0 0 8px rgba(255, 214, 92, 0.25);
+}
+.dark .priority-low {
+  box-shadow: 0 0 8px rgba(125, 255, 179, 0.2);
+}
+.dark .priority-done {
+  box-shadow: 0 0 8px rgba(85, 153, 255, 0.3);
+}
+
+/* Accent glow on elevated cards in dark mode */
+.dark .exo-settings-card {
+  box-shadow: 0 0 1px rgba(91, 131, 255, 0.2), 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+/* Monospace heading for settings sections — cyberpunk tech feel */
+.exo-heading {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  letter-spacing: 0.02em;
 }
 
 .exo-micro-label {

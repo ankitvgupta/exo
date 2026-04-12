@@ -3331,7 +3331,7 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
   };
 
   return (
-    <div className="flex-1 flex flex-col exo-surface overflow-hidden">
+    <div className="flex-1 flex flex-col exo-surface exo-scanline overflow-hidden">
       {/* Back button for full view */}
       {isFullView && (
         <div className="h-10 px-4 exo-surface border-b exo-border-subtle flex items-center flex-shrink-0">
