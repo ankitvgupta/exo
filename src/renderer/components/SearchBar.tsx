@@ -312,7 +312,7 @@ export function SearchBar({ isOpen, onClose }: SearchBarProps) {
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Search emails... (try from:, to:, subject:)"
-            className="flex-1 text-lg outline-none placeholder-gray-400 dark:placeholder-gray-500 bg-transparent"
+            className="flex-1 text-lg outline-none placeholder-[var(--exo-text-muted)] bg-transparent"
           />
           {isSearching && (
             <svg className="w-5 h-5 text-[var(--exo-accent)] animate-spin" fill="none" viewBox="0 0 24 24">

@@ -156,7 +156,7 @@ export function FindBar() {
         value={query}
         onChange={(e) => handleInputChange(e.target.value)}
         placeholder="Find in page..."
-        className="flex-1 min-w-0 px-2 py-1 text-sm bg-[var(--exo-bg-surface-soft)] border exo-border-strong rounded exo-text-primary placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-[var(--exo-focus-ring)]"
+        className="flex-1 min-w-0 px-2 py-1 text-sm bg-[var(--exo-bg-surface-soft)] border exo-border-strong rounded exo-text-primary placeholder-[var(--exo-text-muted)] focus:outline-none focus:ring-1 focus:ring-[var(--exo-focus-ring)]"
         data-testid="find-bar-input"
       />
       <span

@@ -324,7 +324,7 @@ export function AddressInput({
           onBlur={handleBlur}
           placeholder={value.length === 0 ? placeholder : ""}
           autoFocus={autoFocus}
-          className="flex-1 min-w-[120px] text-sm dark:placeholder-gray-400 bg-transparent"
+          className="flex-1 min-w-[120px] text-sm dark:placeholder-[var(--exo-text-muted)] bg-transparent"
           style={{ outline: "none", border: "none", boxShadow: "none" }}
         />
       </div>

@@ -188,7 +188,7 @@ export function SnippetsEditor() {
             </button>
             <button
               onClick={() => setIsCreating(true)}
-              className="px-3 py-1.5 text-sm bg-[var(--exo-accent)] text-white rounded hover:bg-[var(--exo-accent)] dark:hover:bg-[var(--exo-accent)]"
+              className="px-3 py-1.5 text-sm bg-[var(--exo-accent)] text-white rounded hover:bg-[var(--exo-accent)]"
             >
               + New Snippet
             </button>
@@ -440,7 +440,7 @@ function SnippetForm({
         <button
           type="submit"
           disabled={isSaving || !name.trim() || !body.trim()}
-          className="px-3 py-1.5 text-sm bg-[var(--exo-accent)] text-white rounded hover:bg-[var(--exo-accent)] dark:hover:bg-[var(--exo-accent)] disabled:opacity-50"
+          className="px-3 py-1.5 text-sm bg-[var(--exo-accent)] text-white rounded hover:bg-[var(--exo-accent)] disabled:opacity-50"
         >
           {snippet ? "Save Changes" : "Create Snippet"}
         </button>

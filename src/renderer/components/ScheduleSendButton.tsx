@@ -174,7 +174,7 @@ export function ScheduleSendButton({ onSchedule, disabled, className }: Schedule
               <button
                 onClick={handleCustomSubmit}
                 disabled={!customDate || !customTime}
-                className="w-full px-3 py-2 text-sm font-medium text-white bg-[var(--exo-accent)] rounded-lg hover:bg-[var(--exo-accent-strong)] dark:hover:bg-[var(--exo-accent)] disabled:opacity-50 transition-colors"
+                className="w-full px-3 py-2 text-sm font-medium text-white bg-[var(--exo-accent)] rounded-lg hover:bg-[var(--exo-accent-strong)] disabled:opacity-50 transition-colors"
               >
                 Schedule
               </button>
@@ -331,7 +331,7 @@ export function ScheduledMessagesList({ accountId }: { accountId: string }) {
           Scheduled ({messages.length})
         </p>
       </div>
-      <div className="divide-y divide-gray-100 dark:divide-gray-700/50">
+      <div className="divide-y divide-[var(--exo-border-subtle)]">
         {messages.map((msg) => (
           <div key={msg.id} className="flex items-center justify-between px-3 py-2">
             <div className="flex-1 min-w-0">

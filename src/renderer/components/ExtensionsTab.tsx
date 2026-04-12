@@ -270,7 +270,7 @@ export function ExtensionsTab() {
         <button
           onClick={handleInstall}
           disabled={isInstalling}
-          className="px-4 py-2 text-sm font-medium text-white bg-[var(--exo-accent)] hover:bg-[var(--exo-accent-strong)] dark:hover:bg-[var(--exo-accent)] rounded-lg transition-colors disabled:opacity-50"
+          className="px-4 py-2 text-sm font-medium text-white bg-[var(--exo-accent)] hover:bg-[var(--exo-accent-strong)] rounded-lg transition-colors disabled:opacity-50"
         >
           {isInstalling ? "Installing..." : "Install Extension"}
         </button>
@@ -324,7 +324,7 @@ export function ExtensionsTab() {
                         </span>
                       )}
                       {!ext.hasAgentProvider && (
-                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-[var(--exo-accent-soft)] text-[var(--exo-accent)] dark:text-[var(--exo-accent)]">
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-[var(--exo-accent-soft)] text-[var(--exo-accent)]">
                           Extension
                         </span>
                       )}
@@ -439,7 +439,7 @@ export function ExtensionsTab() {
                           <button
                             onClick={() => handleSaveSettings(ext.id)}
                             disabled={savingSettings === ext.id}
-                            className="px-3 py-1 text-xs font-medium text-white bg-[var(--exo-accent)] hover:bg-[var(--exo-accent-strong)] dark:hover:bg-[var(--exo-accent)] rounded transition-colors disabled:opacity-50"
+                            className="px-3 py-1 text-xs font-medium text-white bg-[var(--exo-accent)] hover:bg-[var(--exo-accent-strong)] rounded transition-colors disabled:opacity-50"
                           >
                             {savingSettings === ext.id ? "Saving..." : "Save"}
                           </button>
@@ -505,7 +505,7 @@ export function ExtensionsTab() {
                       {ext.displayName}
                     </h4>
                     <span className="text-xs exo-text-muted">v{ext.version}</span>
-                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-[var(--exo-accent-soft)] text-[var(--exo-accent)] dark:text-[var(--exo-accent)]">
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-[var(--exo-accent-soft)] text-[var(--exo-accent)]">
                       Built-in
                     </span>
                   </div>
@@ -565,7 +565,7 @@ export function ExtensionsTab() {
               </label>
               <input
                 type="text"
-                className="w-full px-3 py-2 text-sm border exo-border-strong rounded-lg bg-[var(--exo-bg-elevated)] exo-text-primary placeholder-gray-400"
+                className="w-full px-3 py-2 text-sm border exo-border-strong rounded-lg bg-[var(--exo-bg-elevated)] exo-text-primary placeholder-[var(--exo-text-muted)]"
                 placeholder="ws://192.168.1.50:18789"
                 value={openclawGatewayUrl}
                 onChange={(e) => setOpenclawGatewayUrl(e.target.value)}
@@ -578,7 +578,7 @@ export function ExtensionsTab() {
               </label>
               <input
                 type="password"
-                className="w-full px-3 py-2 text-sm border exo-border-strong rounded-lg bg-[var(--exo-bg-elevated)] exo-text-primary placeholder-gray-400"
+                className="w-full px-3 py-2 text-sm border exo-border-strong rounded-lg bg-[var(--exo-bg-elevated)] exo-text-primary placeholder-[var(--exo-text-muted)]"
                 placeholder="Bearer token"
                 value={openclawGatewayToken}
                 onChange={(e) => setOpenclawGatewayToken(e.target.value)}
@@ -587,7 +587,7 @@ export function ExtensionsTab() {
 
             <div className="flex items-center gap-3">
               <button
-                className="px-4 py-2 text-sm font-medium text-white bg-[var(--exo-accent)] rounded-lg hover:bg-[var(--exo-accent-strong)] dark:hover:bg-[var(--exo-accent)] disabled:opacity-50 transition-colors"
+                className="px-4 py-2 text-sm font-medium text-white bg-[var(--exo-accent)] rounded-lg hover:bg-[var(--exo-accent-strong)] disabled:opacity-50 transition-colors"
                 disabled={openclawTesting}
                 onClick={async () => {
                   // Save first, then test
@@ -612,7 +612,7 @@ export function ExtensionsTab() {
               </button>
 
               <button
-                className="px-4 py-2 text-sm font-medium text-white bg-[var(--exo-accent)] rounded-lg hover:bg-[var(--exo-accent-strong)] dark:hover:bg-[var(--exo-accent)] transition-colors"
+                className="px-4 py-2 text-sm font-medium text-white bg-[var(--exo-accent)] rounded-lg hover:bg-[var(--exo-accent-strong)] transition-colors"
                 onClick={async () => {
                   await window.api.settings.set({
                     openclaw: {

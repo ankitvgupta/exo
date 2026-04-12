@@ -1204,7 +1204,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                       </span>
                       <button
                         onClick={() => window.api.updates.download()}
-                        className="px-3 py-1 text-sm font-medium text-white bg-[var(--exo-accent)] hover:bg-[var(--exo-accent-strong)] dark:hover:bg-[var(--exo-accent)] rounded transition-colors"
+                        className="px-3 py-1 text-sm font-medium text-white bg-[var(--exo-accent)] hover:bg-[var(--exo-accent-strong)] rounded transition-colors"
                       >
                         Download
                       </button>
@@ -1404,7 +1404,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                 <button
                   onClick={handleSaveGeneral}
                   disabled={isSavingGeneral}
-                  className="px-6 py-2 bg-[var(--exo-accent)] text-white text-sm font-medium rounded-lg hover:bg-[var(--exo-accent-strong)] dark:hover:bg-[var(--exo-accent)] transition-colors disabled:opacity-50"
+                  className="px-6 py-2 bg-[var(--exo-accent)] text-white text-sm font-medium rounded-lg hover:bg-[var(--exo-accent-strong)] transition-colors disabled:opacity-50"
                 >
                   {isSavingGeneral ? "Saving..." : "Save Changes"}
                 </button>
@@ -1431,7 +1431,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
               )}
 
               {/* Account list */}
-              <div className="exo-settings-card divide-y divide-gray-200 dark:divide-gray-700 mb-6">
+              <div className="exo-settings-card divide-y divide-[var(--exo-border-subtle)] mb-6">
                 {accounts.length === 0 ? (
                   <div className="p-6 text-center exo-text-muted">
                     No accounts connected. Click "Add Account" to connect your first Gmail account.
@@ -1560,7 +1560,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                       <h3 className="text-sm font-semibold exo-text-secondary mb-3">
                         {accountEmails[accountId] ?? accountId}
                       </h3>
-                      <div className="exo-settings-card divide-y divide-gray-200 dark:divide-gray-700">
+                      <div className="exo-settings-card divide-y divide-[var(--exo-border-subtle)]">
                         {cals.map((cal) => (
                           <div
                             key={cal.calendarId}
@@ -1656,7 +1656,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
               {/* Signature list */}
               {!editingSignature && (
                 <>
-                  <div className="exo-settings-card divide-y divide-gray-200 dark:divide-gray-700 mb-6">
+                  <div className="exo-settings-card divide-y divide-[var(--exo-border-subtle)] mb-6">
                     {signatures.length === 0 ? (
                       <div className="p-6 text-center exo-text-muted">
                         No signatures yet. Click "Add Signature" to create one.
@@ -1840,7 +1840,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                     <button
                       onClick={() => handleSaveSignature(editingSignature)}
                       disabled={isSavingSignatures || !editingSignature.name.trim()}
-                      className="px-6 py-2 bg-[var(--exo-accent)] text-white text-sm font-medium rounded-lg hover:bg-[var(--exo-accent-strong)] dark:hover:bg-[var(--exo-accent)] transition-colors disabled:opacity-50"
+                      className="px-6 py-2 bg-[var(--exo-accent)] text-white text-sm font-medium rounded-lg hover:bg-[var(--exo-accent-strong)] transition-colors disabled:opacity-50"
                     >
                       {isSavingSignatures ? "Saving..." : "Save Signature"}
                     </button>
@@ -2015,7 +2015,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                   <button
                     onClick={handleSave}
                     disabled={isSaving}
-                    className="px-6 py-2 bg-[var(--exo-accent)] text-white text-sm font-medium rounded-lg hover:bg-[var(--exo-accent-strong)] dark:hover:bg-[var(--exo-accent)] transition-colors disabled:opacity-50"
+                    className="px-6 py-2 bg-[var(--exo-accent)] text-white text-sm font-medium rounded-lg hover:bg-[var(--exo-accent-strong)] transition-colors disabled:opacity-50"
                   >
                     {isSaving ? "Saving..." : "Save Changes"}
                   </button>
@@ -2079,7 +2079,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
               <button
                 onClick={handleSaveStylePrompt}
                 disabled={isSaving}
-                className="mt-4 px-6 py-2 bg-[var(--exo-accent)] text-white font-medium rounded-lg hover:bg-[var(--exo-accent-strong)] dark:hover:bg-[var(--exo-accent)] transition-colors disabled:opacity-50"
+                className="mt-4 px-6 py-2 bg-[var(--exo-accent)] text-white font-medium rounded-lg hover:bg-[var(--exo-accent-strong)] transition-colors disabled:opacity-50"
               >
                 {isSaving ? "Saving..." : "Save Style Prompt"}
               </button>
@@ -2173,7 +2173,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                 <button
                   onClick={handleSaveEA}
                   disabled={isSavingEA || eaSaved}
-                  className="px-6 py-2 bg-[var(--exo-accent)] text-white text-sm font-medium rounded-lg hover:bg-[var(--exo-accent-strong)] dark:hover:bg-[var(--exo-accent)] transition-colors disabled:opacity-50"
+                  className="px-6 py-2 bg-[var(--exo-accent)] text-white text-sm font-medium rounded-lg hover:bg-[var(--exo-accent-strong)] transition-colors disabled:opacity-50"
                 >
                   {isSavingEA ? "Saving..." : eaSaved ? "Saved!" : "Save Changes"}
                 </button>
@@ -2555,7 +2555,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                     value={anthropicApiKey}
                     onChange={(e) => setAnthropicApiKey(e.target.value)}
                     placeholder="sk-ant-..."
-                    className="flex-1 px-3 py-2 border exo-border-strong rounded-lg text-sm bg-[var(--exo-bg-elevated)] exo-text-primary placeholder-gray-400 dark:placeholder-gray-400"
+                    className="flex-1 px-3 py-2 border exo-border-strong rounded-lg text-sm bg-[var(--exo-bg-elevated)] exo-text-primary placeholder-[var(--exo-text-muted)]"
                   />
                   <button
                     onClick={handleSaveApiKey}
@@ -2563,7 +2563,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                     className={`px-4 py-2 text-white text-sm font-medium rounded-lg disabled:opacity-50 transition-colors ${
                       apiKeySaved
                         ? "bg-green-600 dark:bg-green-500"
-                        : "bg-[var(--exo-accent)] hover:bg-[var(--exo-accent-strong)] dark:hover:bg-[var(--exo-accent)]"
+                        : "bg-[var(--exo-accent)] hover:bg-[var(--exo-accent-strong)]"
                     }`}
                   >
                     {isSavingApiKey ? "Saving..." : apiKeySaved ? "Saved" : "Save"}
@@ -2578,7 +2578,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                   className={`px-4 py-2 text-white text-sm font-medium rounded-lg disabled:opacity-50 transition-colors ${
                     aiConfigSaved
                       ? "bg-green-600 dark:bg-green-500"
-                      : "bg-[var(--exo-accent)] hover:bg-[var(--exo-accent-strong)] dark:hover:bg-[var(--exo-accent)]"
+                      : "bg-[var(--exo-accent)] hover:bg-[var(--exo-accent-strong)]"
                   }`}
                 >
                   {isSavingAiConfig ? "Saving..." : aiConfigSaved ? "Saved" : "Save AI Settings"}
@@ -2730,7 +2730,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                       value={chromeProfilePath}
                       onChange={(e) => setChromeProfilePath(e.target.value)}
                       placeholder="~/.chrome-debug-profile"
-                      className="w-full px-3 py-2 border exo-border-strong rounded-lg text-sm bg-[var(--exo-bg-elevated)] exo-text-primary placeholder-gray-400 dark:placeholder-gray-400"
+                      className="w-full px-3 py-2 border exo-border-strong rounded-lg text-sm bg-[var(--exo-bg-elevated)] exo-text-primary placeholder-[var(--exo-text-muted)]"
                     />
                     <p className="text-xs exo-text-muted mt-1">
                       Use a separate profile directory for persistent login sessions.
@@ -2829,7 +2829,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                     rows={12}
                     spellCheck={false}
                     placeholder={`Paste MCP config JSON, e.g.:\n\n{\n  "mcpServers": {\n    "exa": {\n      "url": "https://mcp.exa.ai/mcp"\n    }\n  }\n}\n\nOr stdio format:\n{\n  "mcpServers": {\n    "filesystem": {\n      "command": "npx",\n      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]\n    }\n  }\n}`}
-                    className="w-full px-3 py-2 border exo-border-strong rounded-lg text-sm bg-[var(--exo-bg-elevated)] exo-text-primary placeholder-gray-400 dark:placeholder-gray-500 font-mono leading-relaxed"
+                    className="w-full px-3 py-2 border exo-border-strong rounded-lg text-sm bg-[var(--exo-bg-elevated)] exo-text-primary placeholder-[var(--exo-text-muted)] font-mono leading-relaxed"
                   />
                   {mcpFormError && (
                     <p className="text-xs text-red-600 dark:text-red-400">{mcpFormError}</p>
@@ -3041,7 +3041,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                           setCliTools(updated);
                         }}
                         placeholder="e.g. curl, python3, jq"
-                        className="flex-1 px-3 py-1.5 border exo-border-strong rounded-lg text-sm bg-[var(--exo-bg-elevated)] exo-text-primary placeholder-gray-400 dark:placeholder-gray-500 font-mono"
+                        className="flex-1 px-3 py-1.5 border exo-border-strong rounded-lg text-sm bg-[var(--exo-bg-elevated)] exo-text-primary placeholder-[var(--exo-text-muted)] font-mono"
                       />
                       <button
                         onClick={() => {
@@ -3074,7 +3074,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                       }}
                       placeholder="Instructions for when to use this tool (optional)"
                       rows={2}
-                      className="w-full px-3 py-1.5 border exo-border-strong rounded-lg text-sm bg-[var(--exo-bg-elevated)] exo-text-primary placeholder-gray-400 dark:placeholder-gray-500"
+                      className="w-full px-3 py-1.5 border exo-border-strong rounded-lg text-sm bg-[var(--exo-bg-elevated)] exo-text-primary placeholder-[var(--exo-text-muted)]"
                     />
                   </div>
                 ))}
@@ -3148,7 +3148,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                         setExtraPathDirs(updated);
                       }}
                       placeholder="/path/to/tools/bin"
-                      className="flex-1 px-3 py-1.5 border exo-border-strong rounded-lg text-sm bg-[var(--exo-bg-elevated)] exo-text-primary placeholder-gray-400 dark:placeholder-gray-500 font-mono"
+                      className="flex-1 px-3 py-1.5 border exo-border-strong rounded-lg text-sm bg-[var(--exo-bg-elevated)] exo-text-primary placeholder-[var(--exo-text-muted)] font-mono"
                     />
                     <button
                       onClick={() => setExtraPathDirs(extraPathDirs.filter((_, i) => i !== idx))}
@@ -3322,7 +3322,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                 className={`px-4 py-2 text-white text-sm font-medium rounded-lg disabled:opacity-50 transition-colors ${
                   analyticsSaveResult === "saved"
                     ? "bg-green-600 dark:bg-green-500"
-                    : "bg-[var(--exo-accent)] hover:bg-[var(--exo-accent-strong)] dark:hover:bg-[var(--exo-accent)]"
+                    : "bg-[var(--exo-accent)] hover:bg-[var(--exo-accent-strong)]"
                 }`}
               >
                 {isSavingAnalytics

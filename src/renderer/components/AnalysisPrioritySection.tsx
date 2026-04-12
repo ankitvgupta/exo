@@ -147,7 +147,7 @@ export function AnalysisPrioritySection({
                 }
               }}
               placeholder="Reason (optional) — helps improve future classification"
-              className="w-full px-3 py-1.5 text-xs rounded border exo-border-subtle bg-[var(--exo-bg-elevated)] exo-text-secondary placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-400"
+              className="w-full px-3 py-1.5 text-xs rounded border exo-border-subtle bg-[var(--exo-bg-elevated)] exo-text-secondary placeholder-[var(--exo-text-muted)] focus:outline-none focus:ring-1 focus:ring-blue-400"
               autoFocus
             />
             <div className="flex items-center gap-2 justify-end">

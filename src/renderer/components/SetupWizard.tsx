@@ -295,7 +295,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
               <button
                 onClick={handleSaveCredentials}
                 disabled={isLoading || !googleClientId.trim() || !googleClientSecret.trim()}
-                className="w-full py-3 bg-[var(--exo-accent)] text-white font-medium rounded-lg hover:bg-[var(--exo-accent-strong)] dark:hover:bg-[var(--exo-accent)] transition-colors disabled:opacity-50"
+                className="w-full py-3 bg-[var(--exo-accent)] text-white font-medium rounded-lg hover:bg-[var(--exo-accent-strong)] transition-colors disabled:opacity-50"
               >
                 {isLoading ? "Saving..." : "Continue"}
               </button>
@@ -367,7 +367,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                       <button
                         onClick={() => handleExtensionAuth(ext.extensionId, ext.authType)}
                         disabled={authenticatingExtension !== null}
-                        className="px-4 py-1.5 text-sm bg-[var(--exo-accent)] text-white font-medium rounded-lg hover:bg-[var(--exo-accent-strong)] dark:hover:bg-[var(--exo-accent)] transition-colors disabled:opacity-50"
+                        className="px-4 py-1.5 text-sm bg-[var(--exo-accent)] text-white font-medium rounded-lg hover:bg-[var(--exo-accent-strong)] transition-colors disabled:opacity-50"
                       >
                         {authenticatingExtension === ext.extensionId ? (
                           <span className="flex items-center gap-2">
@@ -405,7 +405,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
               <button
                 onClick={() => setStep("analytics")}
                 disabled={authenticatingExtension !== null}
-                className="w-full py-3 bg-[var(--exo-accent)] text-white font-medium rounded-lg hover:bg-[var(--exo-accent-strong)] dark:hover:bg-[var(--exo-accent)] transition-colors disabled:opacity-50"
+                className="w-full py-3 bg-[var(--exo-accent)] text-white font-medium rounded-lg hover:bg-[var(--exo-accent-strong)] transition-colors disabled:opacity-50"
               >
                 Continue
               </button>
@@ -479,7 +479,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                   }
                 }}
                 disabled={isLoading}
-                className="w-full py-3 bg-[var(--exo-accent)] text-white font-medium rounded-lg hover:bg-[var(--exo-accent-strong)] dark:hover:bg-[var(--exo-accent)] transition-colors disabled:opacity-50"
+                className="w-full py-3 bg-[var(--exo-accent)] text-white font-medium rounded-lg hover:bg-[var(--exo-accent-strong)] transition-colors disabled:opacity-50"
               >
                 Get Started
               </button>

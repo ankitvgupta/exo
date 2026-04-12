@@ -609,7 +609,7 @@ export function SnoozeMenu({ emailId, threadId, accountId, onSnooze, onClose }: 
             <button
               onClick={handleCustomDateSnooze}
               disabled={!customDate}
-              className="w-full px-3 py-1.5 text-sm font-medium text-white bg-[var(--exo-accent)] rounded hover:bg-[var(--exo-accent-strong)] dark:hover:bg-[var(--exo-accent)] disabled:opacity-50 transition-colors"
+              className="w-full px-3 py-1.5 text-sm font-medium text-white bg-[var(--exo-accent)] rounded hover:bg-[var(--exo-accent-strong)] disabled:opacity-50 transition-colors"
             >
               Snooze
             </button>

@@ -1025,7 +1025,7 @@ export const AgentTabContent = memo(function AgentTabContent({ emailId }: { emai
                     : "Follow up..."
               }
               disabled={task.status === "running"}
-              className="flex-1 text-sm px-3 py-1.5 bg-[var(--exo-bg-surface-soft)] rounded-lg outline-none exo-text-secondary placeholder-gray-400 dark:placeholder-gray-500 disabled:opacity-50"
+              className="flex-1 text-sm px-3 py-1.5 bg-[var(--exo-bg-surface-soft)] rounded-lg outline-none exo-text-secondary placeholder-[var(--exo-text-muted)] disabled:opacity-50"
             />
             <button
               onClick={handleFollowUp}

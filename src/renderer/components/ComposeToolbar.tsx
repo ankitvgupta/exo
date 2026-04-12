@@ -29,7 +29,7 @@ export function ComposeToolbar({
       <button
         onClick={onSend}
         disabled={isSending || isScheduling || !canSend}
-        className="px-3 py-1.5 bg-[var(--exo-accent)] text-white text-sm font-medium rounded hover:bg-[var(--exo-accent-strong)] dark:hover:bg-[var(--exo-accent)] disabled:opacity-50 transition-colors"
+        className="px-3 py-1.5 bg-[var(--exo-accent)] text-white text-sm font-medium rounded hover:bg-[var(--exo-accent-strong)] disabled:opacity-50 transition-colors"
         data-testid="inline-compose-send"
       >
         {isSending ? "Sending..." : "Send"}

@@ -294,7 +294,7 @@ export function MemoriesTab({
           </div>
           <button
             onClick={() => setShowAddForm(!showAddForm)}
-            className="px-3 py-1.5 bg-[var(--exo-accent)] text-white text-sm font-medium rounded hover:bg-[var(--exo-accent-strong)] dark:hover:bg-[var(--exo-accent)] transition-colors"
+            className="px-3 py-1.5 bg-[var(--exo-accent)] text-white text-sm font-medium rounded hover:bg-[var(--exo-accent-strong)] transition-colors"
           >
             {showAddForm ? "Cancel" : "Add Memory"}
           </button>
@@ -379,7 +379,7 @@ export function MemoriesTab({
                 disabled={
                   !newContent.trim() || (newScope !== "global" && !newScopeValue.trim()) || isSaving
                 }
-                className="px-3 py-1.5 bg-[var(--exo-accent)] text-white text-sm font-medium rounded hover:bg-[var(--exo-accent-strong)] dark:hover:bg-[var(--exo-accent)] disabled:opacity-50 transition-colors"
+                className="px-3 py-1.5 bg-[var(--exo-accent)] text-white text-sm font-medium rounded hover:bg-[var(--exo-accent-strong)] disabled:opacity-50 transition-colors"
               >
                 {isSaving ? "Saving..." : "Save Memory"}
               </button>
