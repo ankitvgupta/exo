@@ -318,11 +318,17 @@ export function useComposeForm({
     // Convert nameMap to a plain object for IPC serialization
     const recipientNames = nameMap.size > 0 ? Object.fromEntries(nameMap) : undefined;
 
+    // Strip the selected From alias from CC so we don't CC ourselves when
+    // reply-all puts our alias in the CC list (other aliases stay — they may
+    // be intentional recipients).
+    const fromBare = from ? extractBareEmail(from).toLowerCase() : "";
+    const filteredCc = fromBare ? cc.filter((addr) => extractBareEmail(addr).toLowerCase() !== fromBare) : cc;
+
     return {
       accountId,
       from,
       to,
-      cc: cc.length > 0 ? cc : undefined,
+      cc: filteredCc.length > 0 ? filteredCc : undefined,
       bcc: bcc.length > 0 ? bcc : undefined,
       subject,
       bodyHtml: fullBodyHtml,
