@@ -194,6 +194,18 @@ export function useComposeForm({
       });
   }, [accountId]);
 
+  // When the From alias is resolved, strip it from CC so the user doesn't
+  // CC themselves on reply-all. Only removes the selected From — other aliases
+  // stay since they may be intentional recipients.
+  useEffect(() => {
+    if (!from) return;
+    const fromBare = extractBareEmail(from).toLowerCase();
+    setCc((prev) => {
+      const filtered = prev.filter((addr) => extractBareEmail(addr).toLowerCase() !== fromBare);
+      return filtered.length === prev.length ? prev : filtered;
+    });
+  }, [from]);
+
   // --- Send state ---
   const [isSending, setIsSending] = useState(false);
   const [isScheduling, setIsScheduling] = useState(false);
@@ -318,17 +330,11 @@ export function useComposeForm({
     // Convert nameMap to a plain object for IPC serialization
     const recipientNames = nameMap.size > 0 ? Object.fromEntries(nameMap) : undefined;
 
-    // Strip the selected From alias from CC so we don't CC ourselves when
-    // reply-all puts our alias in the CC list (other aliases stay — they may
-    // be intentional recipients).
-    const fromBare = from ? extractBareEmail(from).toLowerCase() : "";
-    const filteredCc = fromBare ? cc.filter((addr) => extractBareEmail(addr).toLowerCase() !== fromBare) : cc;
-
     return {
       accountId,
       from,
       to,
-      cc: filteredCc.length > 0 ? filteredCc : undefined,
+      cc: cc.length > 0 ? cc : undefined,
       bcc: bcc.length > 0 ? bcc : undefined,
       subject,
       bodyHtml: fullBodyHtml,
