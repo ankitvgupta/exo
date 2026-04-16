@@ -358,6 +358,83 @@ export function resolveModelId(tier: ModelTier): string {
   return MODEL_TIER_IDS[tier];
 }
 
+export const CODEX_DEFAULT_MODEL = "gpt-5.3-codex-spark";
+
+export const CODEX_MODEL_OPTIONS = [
+  {
+    id: "gpt-5.4",
+    label: "GPT-5.4",
+    description: "Latest frontier model",
+  },
+  {
+    id: "gpt-5.4-mini",
+    label: "GPT-5.4 Mini",
+    description: "Lower-latency GPT-5.4 option",
+  },
+  {
+    id: "gpt-5.4-nano",
+    label: "GPT-5.4 Nano",
+    description: "Lowest-latency GPT-5.4 option",
+  },
+  {
+    id: "gpt-5.3-codex",
+    label: "GPT-5.3 Codex",
+    description: "Codex coding model",
+  },
+  {
+    id: "gpt-5.2-codex",
+    label: "GPT-5.2 Codex",
+    description: "Previous Codex model",
+  },
+  {
+    id: "gpt-5-codex",
+    label: "GPT-5 Codex",
+    description: "Older Codex model",
+  },
+  {
+    id: "gpt-5.3-codex-spark",
+    label: "GPT-5.3 Codex Spark",
+    description: "Fast fallback model",
+  },
+] as const;
+
+export type CodexModelId = (typeof CODEX_MODEL_OPTIONS)[number]["id"];
+
+export function resolveCodexModelId(model?: string | null): string {
+  const trimmed = model?.trim();
+  return trimmed || CODEX_DEFAULT_MODEL;
+}
+
+export const LlmProviderSchema = z.enum(["anthropic", "codex"]);
+export type LlmProvider = z.infer<typeof LlmProviderSchema>;
+
+/**
+ * Resolve which LLM backend should be used for built-in Exo features.
+ *
+ * Existing installs may not have an explicit provider set yet, so we infer one:
+ * prefer Anthropic when an API key is configured, otherwise fall back to Codex.
+ */
+export function resolveConfiguredLlmProvider(config: {
+  llmProvider?: LlmProvider;
+  anthropicApiKey?: string;
+}): LlmProvider {
+  if (config.llmProvider) return config.llmProvider;
+  return config.anthropicApiKey ? "anthropic" : "codex";
+}
+
+/**
+ * Map the configured built-in LLM backend to the matching built-in interactive agent provider.
+ *
+ * Anthropic-backed agent tasks run through the Claude provider, while Codex-backed
+ * agent tasks run through the Codex provider.
+ */
+export function resolveDefaultBuiltInAgentProviderId(config: {
+  llmProvider?: LlmProvider;
+  anthropicApiKey?: string;
+}): "claude" | "codex" {
+  return resolveConfiguredLlmProvider(config) === "codex" ? "codex" : "claude";
+}
+
 // Config schema
 export const ConfigSchema = z.object({
   maxEmails: z.number().default(50),
@@ -365,7 +442,9 @@ export const ConfigSchema = z.object({
   // via getModelIdForFeature(). Kept in the schema so existing config files parse without error.
   model: z.string().default("claude-sonnet-4-20250514"),
   modelConfig: ModelConfigSchema.optional(),
+  codexModel: z.string().trim().min(1).optional(),
   dryRun: z.boolean().default(false),
+  llmProvider: LlmProviderSchema.optional(),
   anthropicApiKey: z.string().optional(),
   analysisPrompt: z.string().default(DEFAULT_ANALYSIS_PROMPT),
   draftPrompt: z.string().default(DEFAULT_DRAFT_PROMPT),
@@ -378,6 +457,7 @@ export const ConfigSchema = z.object({
   theme: z.enum(["light", "dark", "system"]).default("system"),
   inboxDensity: z.enum(["default", "compact"]).default("compact"),
   undoSendDelay: z.number().min(0).max(30).default(5), // seconds; 0 = disabled
+  selectedAccountId: z.string().nullable().optional(), // null = unified "All accounts" view
   signatures: z.array(SignatureSchema).optional(),
   showExoBranding: z.boolean().default(true),
   stylePrompt: z.string().optional(),

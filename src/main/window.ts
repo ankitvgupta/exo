@@ -15,6 +15,10 @@ let mainWindow: BrowserWindow | null = null;
 // Check if running in test/headless mode
 const isTestMode = process.env.NODE_ENV === "test" || process.env.EXO_HEADLESS === "true";
 
+type CreateWindowOptions = {
+  showInactive?: boolean;
+};
+
 // Resolve initial background color from persisted theme to prevent white flash
 function getInitialBackgroundColor(): string {
   try {
@@ -27,7 +31,7 @@ function getInitialBackgroundColor(): string {
   }
 }
 
-export function createWindow(): BrowserWindow {
+export function createWindow(options: CreateWindowOptions = {}): BrowserWindow {
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
@@ -48,7 +52,7 @@ export function createWindow(): BrowserWindow {
       sandbox: false, // ESM preload requires sandbox disabled
       contextIsolation: true,
       nodeIntegration: false,
-      // Allow loading external images in emails
+      // Keep Chromium's normal web security protections on for email content.
       webSecurity: true,
       allowRunningInsecureContent: false,
     },
@@ -57,7 +61,11 @@ export function createWindow(): BrowserWindow {
   mainWindow.on("ready-to-show", () => {
     // Don't show window in test/headless mode
     if (!isTestMode) {
-      mainWindow?.show();
+      if (options.showInactive) {
+        mainWindow?.showInactive();
+      } else {
+        mainWindow?.show();
+      }
     }
   });
 

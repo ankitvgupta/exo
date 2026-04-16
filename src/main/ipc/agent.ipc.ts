@@ -7,6 +7,7 @@ import { getAgentTrace } from "../db";
 import type { AgentContext } from "../agents/types";
 import type { ScopedAgentEvent } from "../agents/types";
 import type { IpcResponse } from "../../shared/types";
+import { getCodexAuthStatus } from "../services/codex-cli";
 
 /** Check if `claude` CLI is available on PATH. Cached after first check. */
 let claudeCliAvailable: boolean | null = null;
@@ -122,6 +123,20 @@ export function registerAgentIpc(): void {
   );
 
   // Check if Claude CLI is available and whether it has stored OAuth credentials
+  ipcMain.handle(
+    "agent:codex-auth-status",
+    async (): Promise<IpcResponse<{ cliAvailable: boolean; authenticated: boolean }>> => {
+      try {
+        return { success: true, data: await getCodexAuthStatus() };
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
   ipcMain.handle(
     "agent:claude-auth-status",
     async (): Promise<

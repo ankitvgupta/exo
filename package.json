@@ -46,6 +46,8 @@
     "@electron-toolkit/utils": "^4.0.0",
     "@floating-ui/dom": "^1.7.6",
     "@modelcontextprotocol/sdk": "^1.26.0",
+    "@openai/codex": "^0.120.0",
+    "@openai/codex-sdk": "^0.120.0",
     "@tanstack/react-query": "^5.62.0",
     "@tanstack/react-virtual": "^3.13.21",
     "@tiptap/extension-image": "^3.19.0",
@@ -88,10 +90,10 @@
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@types/semver": "^7.7.1",
-    "@vitejs/plugin-react": "^4.3.4",
-    "autoprefixer": "^10.4.20",
     "@typescript-eslint/eslint-plugin": "^8.57.2",
     "@typescript-eslint/parser": "^8.57.2",
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.20",
     "electron": "^39.8.5",
     "electron-builder": "^25.1.8",
     "electron-vite": "^3.0.0",
@@ -143,7 +145,9 @@
       }
     ],
     "asarUnpack": [
-      "node_modules/@anthropic-ai/claude-agent-sdk/**"
+      "node_modules/@anthropic-ai/claude-agent-sdk/**",
+      "node_modules/@openai/codex/**",
+      "node_modules/@openai/codex-*/**"
     ],
     "files": [
       "out/**/*",

@@ -14,6 +14,9 @@ import {
   resolveModelId,
   MODEL_TIER_IDS,
   DEFAULT_MODEL_CONFIG,
+  CODEX_DEFAULT_MODEL,
+  CODEX_MODEL_OPTIONS,
+  resolveCodexModelId,
   DEFAULT_ANALYSIS_PROMPT,
   DEFAULT_DRAFT_PROMPT,
   type ModelTier,
@@ -217,6 +220,22 @@ test.describe("resolveModelId", () => {
   });
 });
 
+test.describe("resolveCodexModelId", () => {
+  test("uses Spark as the default fallback", () => {
+    expect(resolveCodexModelId()).toBe(CODEX_DEFAULT_MODEL);
+    expect(resolveCodexModelId("")).toBe(CODEX_DEFAULT_MODEL);
+  });
+
+  test("preserves configured Codex model IDs", () => {
+    expect(resolveCodexModelId("gpt-5.3-codex")).toBe("gpt-5.3-codex");
+  });
+
+  test("ships known preset options", () => {
+    expect(CODEX_MODEL_OPTIONS.map((option) => option.id)).toContain(CODEX_DEFAULT_MODEL);
+    expect(CODEX_MODEL_OPTIONS.map((option) => option.id)).toContain("gpt-5.3-codex");
+  });
+});
+
 // ============================================================
 // EAConfig validation
 // ============================================================
@@ -265,6 +284,7 @@ test.describe("ConfigSchema", () => {
       theme: "dark",
       undoSendDelay: 10,
       inboxDensity: "default",
+      selectedAccountId: null,
       enableSenderLookup: false,
       modelConfig: {
         analysis: "haiku",
@@ -293,6 +313,12 @@ test.describe("ConfigSchema", () => {
       undoSendDelay: -1,
     });
     expect(result.success).toBe(false);
+  });
+
+  test("validates persisted account selection", () => {
+    expect(ConfigSchema.safeParse({ selectedAccountId: null }).success).toBe(true);
+    expect(ConfigSchema.safeParse({ selectedAccountId: "default" }).success).toBe(true);
+    expect(ConfigSchema.safeParse({ selectedAccountId: 123 }).success).toBe(false);
   });
 });
 

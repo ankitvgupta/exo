@@ -175,7 +175,7 @@ const api = {
     getThread: (threadId: string, accountId: string): Promise<unknown> =>
       ipcRenderer.invoke("emails:get-thread", { threadId, accountId }),
 
-    search: (query: string, accountId: string, maxResults?: number): Promise<unknown> =>
+    search: (query: string, accountId?: string, maxResults?: number): Promise<unknown> =>
       ipcRenderer.invoke("emails:search", { query, accountId, maxResults }),
 
     searchRemote: (
@@ -900,6 +900,7 @@ const api = {
       ipcRenderer.invoke("agent:authenticate", { providerId }),
     getTrace: (taskId: string): Promise<unknown> =>
       ipcRenderer.invoke("agent:get-trace", { taskId }),
+    codexAuthStatus: (): Promise<unknown> => ipcRenderer.invoke("agent:codex-auth-status"),
     claudeAuthStatus: (): Promise<unknown> => ipcRenderer.invoke("agent:claude-auth-status"),
     claudeLogin: (): Promise<unknown> => ipcRenderer.invoke("agent:claude-login"),
     onEvent: (callback: (data: unknown) => void): void => {

@@ -4,6 +4,7 @@ import {
   type Config,
   type EAConfig,
   type IpcResponse,
+  resolveConfiguredLlmProvider,
   type ThemePreference,
   type ModelConfig,
   type ModelTier,
@@ -13,12 +14,15 @@ import {
   DEFAULT_STYLE_PROMPT,
   DEFAULT_AGENT_DRAFTER_PROMPT,
   DEFAULT_MODEL_CONFIG,
+  CODEX_DEFAULT_MODEL,
   MODEL_TIER_IDS,
   resolveModelId,
+  resolveCodexModelId,
 } from "../../shared/types";
 import { resetAnalyzer } from "./analysis.ipc";
 import { resetArchiveReadyAnalyzer } from "./archive-ready.ipc";
 import { resetClient, getUsageStats, getCallHistory } from "../services/anthropic-service";
+import { configureLlmService } from "../services/llm-service";
 import { prefetchService } from "../services/prefetch-service";
 import { agentCoordinator } from "../agents/agent-coordinator";
 import {
@@ -52,6 +56,7 @@ function getStore(): Store<{ config: Config }> {
           maxEmails: 50,
           model: "claude-sonnet-4-20250514",
           modelConfig: DEFAULT_MODEL_CONFIG,
+          codexModel: CODEX_DEFAULT_MODEL,
           dryRun: false,
           analysisPrompt: DEFAULT_ANALYSIS_PROMPT,
           draftPrompt: DEFAULT_DRAFT_PROMPT,
@@ -126,6 +131,10 @@ export function getModelConfig(): ModelConfig {
 
 /** Resolve the concrete model ID for a given feature. */
 export function getModelIdForFeature(feature: keyof ModelConfig): string {
+  const config = getConfig();
+  if (resolveConfiguredLlmProvider(config) === "codex") {
+    return resolveCodexModelId(config.codexModel);
+  }
   const mc = getModelConfig();
   return resolveModelId(mc[feature]);
 }
@@ -220,6 +229,13 @@ export function registerSettingsIpc(): void {
         });
       }
 
+      if ("llmProvider" in config || "anthropicApiKey" in config) {
+        configureLlmService({
+          llmProvider: resolveConfiguredLlmProvider(newConfig),
+          anthropicApiKey: newConfig.anthropicApiKey || undefined,
+        });
+      }
+
       // Propagate agent browser config changes
       if ("agentBrowser" in config) {
         const browser = newConfig.agentBrowser;
@@ -266,7 +282,7 @@ export function registerSettingsIpc(): void {
       // Only agentDrafter needs propagation here — it's the worker's default model for
       // auto-draft tasks that don't pass a per-task override. The agentChat model is
       // resolved fresh per-invocation in agent.ipc.ts via getModelIdForFeature("agentChat").
-      if ("modelConfig" in config) {
+      if ("modelConfig" in config || "codexModel" in config || "llmProvider" in config) {
         agentCoordinator.updateConfig({
           model: getModelIdForFeature("agentDrafter"),
         });
@@ -285,7 +301,12 @@ export function registerSettingsIpc(): void {
 
       // Reset cached analyzer/service instances when model config or API key changes,
       // since they hold Anthropic client instances that capture the key at construction.
-      if ("modelConfig" in config || "anthropicApiKey" in config) {
+      if (
+        "modelConfig" in config ||
+        "codexModel" in config ||
+        "anthropicApiKey" in config ||
+        "llmProvider" in config
+      ) {
         resetClient();
         resetAnalyzer();
         resetArchiveReadyAnalyzer();

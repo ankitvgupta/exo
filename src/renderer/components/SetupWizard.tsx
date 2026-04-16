@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import type { IpcResponse } from "../../shared/types";
+import type { IpcResponse, LlmProvider } from "../../shared/types";
 import { reconfigurePostHog } from "../services/posthog";
 
 interface SetupWizardProps {
@@ -13,6 +13,16 @@ interface ExtensionAuthInfo {
   displayName: string;
   needsAuth: boolean;
   authType: "extension" | "agent";
+}
+
+interface AuthCheckResult {
+  hasCredentials: boolean;
+  hasTokens: boolean;
+  hasAnthropicKey: boolean;
+  codexCliAvailable: boolean;
+  hasCodexAuth: boolean;
+  hasLlmAuth: boolean;
+  llmProvider: LlmProvider;
 }
 
 export function SetupWizard({ onComplete }: SetupWizardProps) {
@@ -29,6 +39,9 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
 
   // API key input
   const [apiKey, setApiKey] = useState("");
+  const [llmProvider, setLlmProvider] = useState<LlmProvider>("codex");
+  const [codexCliAvailable, setCodexCliAvailable] = useState(false);
+  const [codexAuthenticated, setCodexAuthenticated] = useState(false);
 
   // Extension auth state
   const [extensionAuths, setExtensionAuths] = useState<ExtensionAuthInfo[]>([]);
@@ -39,18 +52,24 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
 
   // Check what's already configured and skip to the right step.
   useEffect(() => {
-    (
-      window.api.gmail.checkAuth() as Promise<
-        IpcResponse<{ hasCredentials: boolean; hasTokens: boolean; hasAnthropicKey: boolean }>
-      >
-    )
+    (window.api.gmail.checkAuth() as Promise<IpcResponse<AuthCheckResult>>)
       .then((authResult) => {
         if (authResult.success) {
-          const { hasCredentials, hasAnthropicKey, hasTokens } = authResult.data;
+          const {
+            hasCredentials,
+            hasTokens,
+            hasLlmAuth,
+            codexCliAvailable,
+            hasCodexAuth,
+            llmProvider: configuredProvider,
+          } = authResult.data;
+          setLlmProvider(configuredProvider);
+          setCodexCliAvailable(codexCliAvailable);
+          setCodexAuthenticated(hasCodexAuth);
 
           const flow: Step[] = [];
           if (!hasCredentials) flow.push("credentials");
-          if (!hasAnthropicKey) flow.push("apikey");
+          if (!hasLlmAuth) flow.push("apikey");
           if (!hasTokens) flow.push("oauth");
           flow.push("extensions");
           flow.push("analytics");
@@ -58,7 +77,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
 
           if (!hasCredentials) {
             setStep("credentials");
-          } else if (!hasAnthropicKey) {
+          } else if (!hasLlmAuth) {
             setStep("apikey");
           } else if (!hasTokens) {
             setStep("oauth");
@@ -126,14 +145,11 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
       }
 
       const result = (await window.api.settings.set({
+        llmProvider: "anthropic",
         anthropicApiKey: apiKey.trim(),
       })) as IpcResponse<void>;
       if (result.success) {
-        const authResult = (await window.api.gmail.checkAuth()) as IpcResponse<{
-          hasCredentials: boolean;
-          hasTokens: boolean;
-          hasAnthropicKey: boolean;
-        }>;
+        const authResult = (await window.api.gmail.checkAuth()) as IpcResponse<AuthCheckResult>;
         if (authResult.success && authResult.data.hasTokens) {
           await enterExtensionsStep();
         } else {
@@ -141,6 +157,51 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
         }
       } else {
         setError(result.error ?? "Failed to save API key");
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const refreshCodexStatus = useCallback(async () => {
+    const result = (await window.api.agent.codexAuthStatus()) as IpcResponse<{
+      cliAvailable: boolean;
+      authenticated: boolean;
+    }>;
+    if (result.success) {
+      setCodexCliAvailable(result.data.cliAvailable);
+      setCodexAuthenticated(result.data.authenticated);
+      if (result.data.authenticated) {
+        setError(null);
+      }
+    } else {
+      setError(result.error ?? "Failed to check Codex login status");
+    }
+  }, []);
+
+  const handleUseCodex = async () => {
+    if (!codexAuthenticated) {
+      setError("Codex is not logged in on this machine yet. Run `codex login`, then refresh.");
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const result = (await window.api.settings.set({
+        llmProvider: "codex",
+      })) as IpcResponse<void>;
+      if (!result.success) {
+        setError(result.error ?? "Failed to save Codex as the AI provider");
+        return;
+      }
+
+      const authResult = (await window.api.gmail.checkAuth()) as IpcResponse<AuthCheckResult>;
+      if (authResult.success && authResult.data.hasTokens) {
+        await enterExtensionsStep();
+      } else {
+        setStep("oauth");
       }
     } finally {
       setIsLoading(false);
@@ -352,49 +413,116 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
           {step === "apikey" && (
             <>
               <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">
-                Anthropic API Key
+                AI Provider
               </h2>
               <p className="text-gray-600 dark:text-gray-400 mb-6">
-                Exo uses Claude to analyze your emails, generate drafts, and look up sender
-                information. You'll need an Anthropic API key to enable these features.
+                Choose how Exo should run email analysis and draft generation.
               </p>
 
-              <div className="bg-blue-50 dark:bg-blue-900/30 p-4 rounded-lg mb-6">
-                <h3 className="font-semibold text-blue-900 dark:text-blue-200 mb-2">
-                  Get your API key:
-                </h3>
-                <ol className="text-sm text-blue-800 dark:text-blue-300 space-y-2 list-decimal list-inside">
-                  <li>
-                    Go to{" "}
-                    <a
-                      href="https://console.anthropic.com/settings/keys"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="underline hover:no-underline"
-                    >
-                      console.anthropic.com
-                    </a>
-                  </li>
-                  <li>Create a new API key (or use an existing one)</li>
-                  <li>Paste it below</li>
-                </ol>
+              <div className="grid grid-cols-2 gap-2 mb-6">
+                <button
+                  onClick={() => setLlmProvider("codex")}
+                  className={`px-4 py-3 rounded-lg border text-sm font-medium transition-colors ${
+                    llmProvider === "codex"
+                      ? "border-blue-600 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-900/30 dark:text-blue-200"
+                      : "border-gray-300 text-gray-700 dark:border-gray-600 dark:text-gray-300"
+                  }`}
+                >
+                  Codex
+                </button>
+                <button
+                  onClick={() => setLlmProvider("anthropic")}
+                  className={`px-4 py-3 rounded-lg border text-sm font-medium transition-colors ${
+                    llmProvider === "anthropic"
+                      ? "border-blue-600 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-900/30 dark:text-blue-200"
+                      : "border-gray-300 text-gray-700 dark:border-gray-600 dark:text-gray-300"
+                  }`}
+                >
+                  Anthropic API
+                </button>
               </div>
 
-              <div className="space-y-4 mb-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    API Key
-                  </label>
-                  <input
-                    type="password"
-                    value={apiKey}
-                    onChange={(e) => setApiKey(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && !isLoading && handleSaveApiKey()}
-                    placeholder="sk-ant-api03-..."
-                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
+              {llmProvider === "codex" ? (
+                <div className="space-y-4 mb-6">
+                  <div className="bg-blue-50 dark:bg-blue-900/30 p-4 rounded-lg">
+                    <h3 className="font-semibold text-blue-900 dark:text-blue-200 mb-2">
+                      Use your ChatGPT-backed Codex login
+                    </h3>
+                    <p className="text-sm text-blue-800 dark:text-blue-300">
+                      Exo will use the local Codex CLI login already configured on this machine.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center justify-between rounded-lg border border-gray-200 dark:border-gray-600 px-4 py-3">
+                    <div>
+                      <div className="font-medium text-gray-900 dark:text-gray-100">Codex CLI</div>
+                      <div className="text-sm text-gray-500 dark:text-gray-400">
+                        {codexCliAvailable
+                          ? codexAuthenticated
+                            ? "Authenticated"
+                            : "Installed, but not logged in"
+                          : "Not detected"}
+                      </div>
+                    </div>
+                    <button
+                      onClick={refreshCodexStatus}
+                      disabled={isLoading}
+                      className="px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors disabled:opacity-50"
+                    >
+                      Refresh
+                    </button>
+                  </div>
+
+                  {!codexAuthenticated && (
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      Run{" "}
+                      <code className="rounded bg-gray-100 px-1 py-0.5 dark:bg-gray-800">
+                        codex login
+                      </code>{" "}
+                      on this machine, then refresh and continue.
+                    </p>
+                  )}
                 </div>
-              </div>
+              ) : (
+                <>
+                  <div className="bg-blue-50 dark:bg-blue-900/30 p-4 rounded-lg mb-6">
+                    <h3 className="font-semibold text-blue-900 dark:text-blue-200 mb-2">
+                      Get your API key:
+                    </h3>
+                    <ol className="text-sm text-blue-800 dark:text-blue-300 space-y-2 list-decimal list-inside">
+                      <li>
+                        Go to{" "}
+                        <a
+                          href="https://console.anthropic.com/settings/keys"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="underline hover:no-underline"
+                        >
+                          console.anthropic.com
+                        </a>
+                      </li>
+                      <li>Create a new API key (or use an existing one)</li>
+                      <li>Paste it below</li>
+                    </ol>
+                  </div>
+
+                  <div className="space-y-4 mb-6">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        API Key
+                      </label>
+                      <input
+                        type="password"
+                        value={apiKey}
+                        onChange={(e) => setApiKey(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && !isLoading && handleSaveApiKey()}
+                        placeholder="sk-ant-api03-..."
+                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
 
               {error && (
                 <div className="p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg mb-4">
@@ -403,11 +531,15 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
               )}
 
               <button
-                onClick={handleSaveApiKey}
-                disabled={isLoading}
+                onClick={llmProvider === "codex" ? handleUseCodex : handleSaveApiKey}
+                disabled={isLoading || (llmProvider === "codex" && !codexAuthenticated)}
                 className="w-full py-3 bg-blue-600 dark:bg-blue-500 text-white font-medium rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors disabled:opacity-50"
               >
-                {isLoading ? "Saving..." : "Continue"}
+                {isLoading
+                  ? "Saving..."
+                  : llmProvider === "codex"
+                    ? "Continue with Codex"
+                    : "Continue"}
               </button>
             </>
           )}

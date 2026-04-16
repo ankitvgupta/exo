@@ -1,5 +1,5 @@
-import { resolve } from 'path'
-import { defineConfig } from 'vite'
+import { resolve } from "path";
+import { defineConfig } from "vite";
 
 /**
  * Separate build config for the agent-worker utility process.
@@ -14,26 +14,32 @@ import { defineConfig } from 'vite'
  */
 export default defineConfig({
   build: {
-    outDir: 'out/worker',
+    outDir: "out/worker",
     emptyOutDir: false,
     lib: {
-      entry: resolve(__dirname, 'src/main/agents/agent-worker.ts'),
-      formats: ['cjs'],
-      fileName: () => 'agent-worker.cjs',
+      entry: resolve(__dirname, "src/main/agents/agent-worker.ts"),
+      formats: ["cjs"],
+      fileName: () => "agent-worker.cjs",
     },
     rollupOptions: {
-      external: [
-        'electron',
-        'better-sqlite3',
-        // Externalize all bare imports (node_modules)
-        /^[^./]/,
-      ],
+      external: (id) => {
+        if (id === "@openai/codex-sdk" || id.startsWith("@openai/codex-sdk/")) {
+          return false;
+        }
+
+        if (id === "electron" || id === "better-sqlite3") {
+          return true;
+        }
+
+        // Externalize all other bare imports from node_modules.
+        return /^[^./]/.test(id);
+      },
     },
-    target: 'node20',
+    target: "node20",
     minify: false,
     sourcemap: true,
   },
   resolve: {
-    conditions: ['node'],
+    conditions: ["node"],
   },
-})
+});

@@ -190,19 +190,16 @@ function recordCall(
   durationMs: number,
   success: boolean,
   errorMessage: string | null,
+  costCentsOverride?: number,
 ): void {
   if (!_insertStmt) {
     log.warn("AnthropicService: database not initialized, skipping call recording");
     return;
   }
 
-  const costCents = calculateCostCents(
-    model,
-    inputTokens,
-    outputTokens,
-    cacheReadTokens,
-    cacheCreateTokens,
-  );
+  const costCents =
+    costCentsOverride ??
+    calculateCostCents(model, inputTokens, outputTokens, cacheReadTokens, cacheCreateTokens);
 
   try {
     _insertStmt.run(
@@ -253,6 +250,38 @@ export function recordStreamingCall(
     durationMs,
     true,
     null,
+  );
+}
+
+/**
+ * Record a completed call from a non-Anthropic backend into the shared llm_calls table.
+ */
+export function recordProviderCall(
+  model: string,
+  caller: string,
+  usage: Record<string, number>,
+  durationMs: number,
+  options?: {
+    emailId?: string;
+    accountId?: string;
+    success?: boolean;
+    errorMessage?: string | null;
+    costCents?: number;
+  },
+): void {
+  recordCall(
+    model,
+    caller,
+    options?.emailId || null,
+    options?.accountId || null,
+    usage.input_tokens || 0,
+    usage.output_tokens || 0,
+    usage.cache_read_input_tokens || 0,
+    usage.cache_creation_input_tokens || 0,
+    durationMs,
+    options?.success ?? true,
+    options?.errorMessage ?? null,
+    options?.costCents,
   );
 }
 

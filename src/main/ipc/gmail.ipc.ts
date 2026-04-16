@@ -2,9 +2,15 @@ import { ipcMain } from "electron";
 import { GmailClient } from "../services/gmail-client";
 import { saveEmail, getEmailIds, getInboxEmails, getEmail, saveAccount, getAccounts } from "../db";
 import { getConfig } from "./settings.ipc";
-import type { IpcResponse, DashboardEmail } from "../../shared/types";
+import {
+  resolveConfiguredLlmProvider,
+  type IpcResponse,
+  type DashboardEmail,
+  type LlmProvider,
+} from "../../shared/types";
 import { DEMO_INBOX_EMAILS, DEMO_EXPECTED_ANALYSIS } from "../demo/fake-inbox";
 import { createLogger } from "../services/logger";
+import { getCodexAuthStatus } from "../services/codex-cli";
 
 const log = createLogger("gmail-ipc");
 
@@ -54,7 +60,15 @@ export function registerGmailIpc(): void {
   ipcMain.handle(
     "gmail:check-auth",
     async (): Promise<
-      IpcResponse<{ hasCredentials: boolean; hasTokens: boolean; hasAnthropicKey: boolean }>
+      IpcResponse<{
+        hasCredentials: boolean;
+        hasTokens: boolean;
+        hasAnthropicKey: boolean;
+        codexCliAvailable: boolean;
+        hasCodexAuth: boolean;
+        hasLlmAuth: boolean;
+        llmProvider: LlmProvider;
+      }>
     > => {
       // In demo/test mode, always return authenticated
       if (useFakeData) {
@@ -64,19 +78,32 @@ export function registerGmailIpc(): void {
             hasCredentials: true,
             hasTokens: true,
             hasAnthropicKey: true,
+            codexCliAvailable: true,
+            hasCodexAuth: true,
+            hasLlmAuth: true,
+            llmProvider: "anthropic",
           },
         };
       }
 
       try {
         const client = new GmailClient();
-        const hasAnthropicKey = !!(process.env.ANTHROPIC_API_KEY || getConfig().anthropicApiKey);
+        const config = getConfig();
+        const hasAnthropicKey = !!(process.env.ANTHROPIC_API_KEY || config.anthropicApiKey);
+        const llmProvider = resolveConfiguredLlmProvider(config);
+        const codexStatus = await getCodexAuthStatus();
+        const hasCodexAuth = codexStatus.cliAvailable && codexStatus.authenticated;
+        const hasLlmAuth = llmProvider === "anthropic" ? hasAnthropicKey : hasCodexAuth;
         return {
           success: true,
           data: {
             hasCredentials: client.hasCredentials(),
             hasTokens: client.hasTokens(),
             hasAnthropicKey,
+            codexCliAvailable: codexStatus.cliAvailable,
+            hasCodexAuth,
+            hasLlmAuth,
+            llmProvider,
           },
         };
       } catch (error) {

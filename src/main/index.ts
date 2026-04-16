@@ -392,6 +392,7 @@ const _db = initDatabase();
 // Wire up AnthropicService cost tracking
 import { setAnthropicServiceDb } from "./services/anthropic-service";
 setAnthropicServiceDb(_db);
+import { configureLlmService } from "./services/llm-service";
 
 // If no ANTHROPIC_API_KEY in env (e.g. packaged app with no .env), read from stored config
 // so that services using `new Anthropic()` pick it up automatically.
@@ -400,6 +401,10 @@ setAnthropicServiceDb(_db);
   if (!process.env.ANTHROPIC_API_KEY && config.anthropicApiKey) {
     process.env.ANTHROPIC_API_KEY = config.anthropicApiKey;
   }
+  configureLlmService({
+    llmProvider: config.llmProvider,
+    anthropicApiKey: config.anthropicApiKey,
+  });
 }
 
 app.whenReady().then(async () => {
@@ -585,7 +590,7 @@ app.whenReady().then(async () => {
     }
   });
 
-  const mainWindow = createWindow();
+  const mainWindow = createWindow({ showInactive: !app.isPackaged });
 
   // Start the agent coordinator with the main window for IPC relay
   agentCoordinator.start(mainWindow);

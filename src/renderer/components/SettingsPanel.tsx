@@ -8,8 +8,11 @@ import {
   DEFAULT_STYLE_PROMPT,
   DEFAULT_AGENT_DRAFTER_PROMPT,
   DEFAULT_MODEL_CONFIG,
+  CODEX_DEFAULT_MODEL,
+  CODEX_MODEL_OPTIONS,
   MODEL_TIERS,
   MODEL_TIER_LABELS,
+  resolveConfiguredLlmProvider,
   type EAConfig,
   type Config,
   type InboxDensity,
@@ -17,6 +20,7 @@ import {
   type McpServerConfig,
   type ModelConfig,
   type ModelTier,
+  type LlmProvider,
   type CliToolConfig,
 } from "../../shared/types";
 import { useAppStore, type Account, type SettingsTab } from "../store";
@@ -36,23 +40,21 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
   const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab ?? "general");
 
   // Account management state
-  const {
-    accounts,
-    setAccounts,
-    removeAccount: removeAccountFromStore,
-    prefetchProgress,
-    themePreference,
-    setThemePreference,
-    setResolvedTheme,
-    inboxDensity,
-    setInboxDensity,
-    keyboardBindings,
-    setKeyboardBindings,
-    undoSendDelaySeconds,
-    setUndoSendDelay,
-    currentAccountId,
-    highlightMemoryIds,
-  } = useAppStore();
+  const accounts = useAppStore((s) => s.accounts);
+  const setAccounts = useAppStore((s) => s.setAccounts);
+  const removeAccountFromStore = useAppStore((s) => s.removeAccount);
+  const prefetchProgress = useAppStore((s) => s.prefetchProgress);
+  const themePreference = useAppStore((s) => s.themePreference);
+  const setThemePreference = useAppStore((s) => s.setThemePreference);
+  const setResolvedTheme = useAppStore((s) => s.setResolvedTheme);
+  const inboxDensity = useAppStore((s) => s.inboxDensity);
+  const setInboxDensity = useAppStore((s) => s.setInboxDensity);
+  const keyboardBindings = useAppStore((s) => s.keyboardBindings);
+  const setKeyboardBindings = useAppStore((s) => s.setKeyboardBindings);
+  const undoSendDelaySeconds = useAppStore((s) => s.undoSendDelaySeconds);
+  const setUndoSendDelay = useAppStore((s) => s.setUndoSendDelay);
+  const currentAccountId = useAppStore((s) => s.currentAccountId);
+  const highlightMemoryIds = useAppStore((s) => s.highlightMemoryIds);
   const [isAddingAccount, setIsAddingAccount] = useState(false);
   const [addAccountPhase, setAddAccountPhase] = useState("Connecting...");
   const [accountError, setAccountError] = useState<string | null>(null);
@@ -82,6 +84,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
   // General settings state
   const [enableSenderLookup, setEnableSenderLookup] = useState(true);
   const [modelConfig, setModelConfig] = useState<ModelConfig>(DEFAULT_MODEL_CONFIG);
+  const [codexModel, setCodexModel] = useState(CODEX_DEFAULT_MODEL);
   const [isSavingGeneral, setIsSavingGeneral] = useState(false);
   const [isExportingLogs, setIsExportingLogs] = useState(false);
   const [exportLogsError, setExportLogsError] = useState<string | null>(null);
@@ -112,9 +115,16 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
   const [eaError, setEaError] = useState<string | null>(null);
 
   // Agent authentication state
+  const [llmProvider, setLlmProvider] = useState<LlmProvider>("codex");
+  const [isSavingLlmProvider, setIsSavingLlmProvider] = useState(false);
+  const [llmProviderSaved, setLlmProviderSaved] = useState(false);
   const [anthropicApiKey, setAnthropicApiKey] = useState("");
   const [isSavingApiKey, setIsSavingApiKey] = useState(false);
   const [apiKeySaved, setApiKeySaved] = useState(false);
+  const [codexCliAvailable, setCodexCliAvailable] = useState(false);
+  const [codexAuthStatus, setCodexAuthStatus] = useState<
+    "checking" | "authenticated" | "not_authenticated"
+  >("checking");
   const [claudeCliAvailable, setClaudeCliAvailable] = useState(false);
   const [claudeAuthStatus, setClaudeAuthStatus] = useState<
     "checking" | "authenticated" | "not_authenticated"
@@ -224,8 +234,10 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
 
   useEffect(() => {
     if (generalConfig) {
+      setLlmProvider(resolveConfiguredLlmProvider(generalConfig));
       setEnableSenderLookup(generalConfig.enableSenderLookup ?? true);
       setModelConfig({ ...DEFAULT_MODEL_CONFIG, ...generalConfig.modelConfig });
+      setCodexModel(generalConfig.codexModel ?? CODEX_DEFAULT_MODEL);
       setGithubToken(generalConfig.githubToken ?? "");
       setAllowPrereleaseUpdates(generalConfig.allowPrereleaseUpdates ?? false);
       setAnthropicApiKey(generalConfig.anthropicApiKey ?? "");
@@ -289,6 +301,27 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
   // Check Claude CLI availability and auth status when Agents tab is shown
   useEffect(() => {
     if (activeTab !== "agents") return;
+    setCodexAuthStatus("checking");
+    (
+      window.api.agent.codexAuthStatus() as Promise<{
+        success: boolean;
+        data?: { cliAvailable: boolean; authenticated: boolean };
+      }>
+    )
+      .then((result) => {
+        if (result.success && result.data) {
+          setCodexCliAvailable(result.data.cliAvailable);
+          setCodexAuthStatus(result.data.authenticated ? "authenticated" : "not_authenticated");
+        } else {
+          setCodexCliAvailable(false);
+          setCodexAuthStatus("not_authenticated");
+        }
+      })
+      .catch(() => {
+        setCodexCliAvailable(false);
+        setCodexAuthStatus("not_authenticated");
+      });
+
     setClaudeAuthStatus("checking");
     (
       window.api.agent.claudeAuthStatus() as Promise<{
@@ -381,6 +414,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
       await window.api.settings.set({
         enableSenderLookup,
         modelConfig,
+        codexModel: codexModel.trim() || CODEX_DEFAULT_MODEL,
         githubToken: githubToken || undefined,
         allowPrereleaseUpdates,
       });
@@ -558,11 +592,30 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
   };
 
   // Agent authentication handlers
+  const handleSaveLlmProvider = async () => {
+    setIsSavingLlmProvider(true);
+    setLlmProviderSaved(false);
+    try {
+      await window.api.settings.set({
+        llmProvider,
+        codexModel: codexModel.trim() || CODEX_DEFAULT_MODEL,
+      });
+      queryClient.invalidateQueries({ queryKey: ["general-config"] });
+      setLlmProviderSaved(true);
+      setTimeout(() => setLlmProviderSaved(false), 3000);
+    } finally {
+      setIsSavingLlmProvider(false);
+    }
+  };
+
   const handleSaveApiKey = async () => {
     setIsSavingApiKey(true);
     setApiKeySaved(false);
     try {
-      await window.api.settings.set({ anthropicApiKey: anthropicApiKey || undefined });
+      await window.api.settings.set({
+        llmProvider: "anthropic",
+        anthropicApiKey: anthropicApiKey || undefined,
+      });
       queryClient.invalidateQueries({ queryKey: ["general-config"] });
       setApiKeySaved(true);
       setTimeout(() => setApiKeySaved(false), 3000);
@@ -677,6 +730,9 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
       setAccountError(err instanceof Error ? err.message : "Failed to set primary account");
     }
   };
+
+  const codexModelIsPreset = CODEX_MODEL_OPTIONS.some((option) => option.id === codexModel);
+  const codexModelSelectValue = codexModelIsPreset ? codexModel : "custom";
 
   return (
     <div
@@ -1091,82 +1147,131 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                 <div className="mb-3">
                   <h3 className="font-semibold text-gray-900 dark:text-gray-100">AI Models</h3>
                   <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                    Choose which Claude model to use for each feature. Haiku is fastest and
-                    cheapest, Opus is most capable.
+                    {llmProvider === "codex"
+                      ? "Choose the model passed to the local Codex CLI for built-in analysis, drafts, sender lookup, archive-ready checks, and agents."
+                      : "Choose which Claude model to use for each feature. Haiku is fastest and cheapest, Opus is most capable."}
                   </p>
                 </div>
-                <div className="space-y-3">
-                  {[
-                    {
-                      key: "analysis" as const,
-                      label: "Email Analysis",
-                      description: "Triaging which emails need replies",
-                    },
-                    {
-                      key: "drafts" as const,
-                      label: "Draft Generation",
-                      description: "Writing reply drafts",
-                    },
-                    {
-                      key: "refinement" as const,
-                      label: "Draft Refinement",
-                      description: "Improving drafts based on feedback",
-                    },
-                    {
-                      key: "calendaring" as const,
-                      label: "Scheduling Detection",
-                      description: "Identifying calendar-related emails",
-                    },
-                    {
-                      key: "archiveReady" as const,
-                      label: "Archive-Ready Analysis",
-                      description: "Detecting completed conversations",
-                    },
-                    {
-                      key: "senderLookup" as const,
-                      label: "Sender Lookup",
-                      description: "Web search for sender info",
-                    },
-                    {
-                      key: "agentDrafter" as const,
-                      label: "Agent Drafter",
-                      description: "Background auto-draft generation",
-                    },
-                    {
-                      key: "agentChat" as const,
-                      label: "Agent Chat",
-                      description: "Interactive agent sidebar conversations",
-                    },
-                  ].map(({ key, label, description }) => (
-                    <div
-                      key={key}
-                      className="flex items-center justify-between py-2 border-b border-gray-100 dark:border-gray-700 last:border-0"
-                    >
+                {llmProvider === "codex" ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between py-2">
                       <div className="flex-1 min-w-0 mr-4">
                         <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                          {label}
+                          Codex Model
                         </p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">{description}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          Spark remains the fallback when no compatible model is configured.
+                        </p>
                       </div>
                       <select
-                        value={modelConfig[key]}
+                        value={codexModelSelectValue}
                         onChange={(e) => {
-                          const tier = e.target.value;
-                          if ((MODEL_TIERS as readonly string[]).includes(tier)) {
-                            setModelConfig((prev) => ({ ...prev, [key]: tier as ModelTier }));
+                          const selected = e.target.value;
+                          if (selected === "custom") {
+                            if (codexModelIsPreset) setCodexModel("");
+                          } else {
+                            setCodexModel(selected);
                           }
                         }}
                         className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-500 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       >
-                        {MODEL_TIERS.map((tier) => (
-                          <option key={tier} value={tier}>
-                            {MODEL_TIER_LABELS[tier]}
+                        {CODEX_MODEL_OPTIONS.map((option) => (
+                          <option key={option.id} value={option.id}>
+                            {option.label}
                           </option>
                         ))}
+                        <option value="custom">Custom model ID</option>
                       </select>
                     </div>
-                  ))}
-                </div>
+                    {!codexModelIsPreset && (
+                      <div>
+                        <input
+                          value={codexModel}
+                          onChange={(e) => setCodexModel(e.target.value)}
+                          placeholder={CODEX_DEFAULT_MODEL}
+                          className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-500 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                          Use any model ID accepted by your installed Codex CLI. Blank saves the
+                          Spark fallback.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {[
+                      {
+                        key: "analysis" as const,
+                        label: "Email Analysis",
+                        description: "Triaging which emails need replies",
+                      },
+                      {
+                        key: "drafts" as const,
+                        label: "Draft Generation",
+                        description: "Writing reply drafts",
+                      },
+                      {
+                        key: "refinement" as const,
+                        label: "Draft Refinement",
+                        description: "Improving drafts based on feedback",
+                      },
+                      {
+                        key: "calendaring" as const,
+                        label: "Scheduling Detection",
+                        description: "Identifying calendar-related emails",
+                      },
+                      {
+                        key: "archiveReady" as const,
+                        label: "Archive-Ready Analysis",
+                        description: "Detecting completed conversations",
+                      },
+                      {
+                        key: "senderLookup" as const,
+                        label: "Sender Lookup",
+                        description: "Web search for sender info",
+                      },
+                      {
+                        key: "agentDrafter" as const,
+                        label: "Agent Drafter",
+                        description: "Background auto-draft generation",
+                      },
+                      {
+                        key: "agentChat" as const,
+                        label: "Agent Chat",
+                        description: "Interactive agent sidebar conversations",
+                      },
+                    ].map(({ key, label, description }) => (
+                      <div
+                        key={key}
+                        className="flex items-center justify-between py-2 border-b border-gray-100 dark:border-gray-700 last:border-0"
+                      >
+                        <div className="flex-1 min-w-0 mr-4">
+                          <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                            {label}
+                          </p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">{description}</p>
+                        </div>
+                        <select
+                          value={modelConfig[key]}
+                          onChange={(e) => {
+                            const tier = e.target.value;
+                            if ((MODEL_TIERS as readonly string[]).includes(tier)) {
+                              setModelConfig((prev) => ({ ...prev, [key]: tier as ModelTier }));
+                            }
+                          }}
+                          className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-500 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        >
+                          {MODEL_TIERS.map((tier) => (
+                            <option key={tier} value={tier}>
+                              {MODEL_TIER_LABELS[tier]}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Updates */}
@@ -1363,7 +1468,10 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                   <div className="bg-blue-50 dark:bg-blue-900/30 p-3 rounded-lg text-sm text-blue-800 dark:text-blue-300">
                     <p className="font-medium mb-1">How it works:</p>
                     <ul className="list-disc list-inside space-y-1">
-                      <li>Uses Claude's web search to find information about the sender</li>
+                      <li>
+                        Uses the configured AI provider to search for public information about the
+                        sender
+                      </li>
                       <li>Results are cached for the session to avoid repeated lookups</li>
                       <li>Includes professional background and context in the draft prompt</li>
                     </ul>
@@ -2458,13 +2566,123 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                 Authentication
               </h4>
 
+              <div className="mb-6">
+                <h5 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Built-in AI Provider
+                </h5>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                  Choose which backend Exo should use for built-in analysis and draft generation.
+                </p>
+
+                <div className="flex gap-2 mb-3">
+                  <button
+                    onClick={() => setLlmProvider("codex")}
+                    className={`px-4 py-2 text-sm font-medium rounded-lg border transition-colors ${
+                      llmProvider === "codex"
+                        ? "border-blue-600 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-900/30 dark:text-blue-200"
+                        : "border-gray-300 text-gray-700 dark:border-gray-600 dark:text-gray-300"
+                    }`}
+                  >
+                    Codex
+                  </button>
+                  <button
+                    onClick={() => setLlmProvider("anthropic")}
+                    className={`px-4 py-2 text-sm font-medium rounded-lg border transition-colors ${
+                      llmProvider === "anthropic"
+                        ? "border-blue-600 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-900/30 dark:text-blue-200"
+                        : "border-gray-300 text-gray-700 dark:border-gray-600 dark:text-gray-300"
+                    }`}
+                  >
+                    Anthropic API
+                  </button>
+                </div>
+
+                <button
+                  onClick={handleSaveLlmProvider}
+                  disabled={
+                    isSavingLlmProvider ||
+                    (llmProvider === "codex" && codexAuthStatus !== "authenticated")
+                  }
+                  className={`px-4 py-2 text-white text-sm font-medium rounded-lg disabled:opacity-50 transition-colors ${
+                    llmProviderSaved
+                      ? "bg-green-600 dark:bg-green-500"
+                      : "bg-blue-600 dark:bg-blue-500 hover:bg-blue-700 dark:hover:bg-blue-600"
+                  }`}
+                >
+                  {isSavingLlmProvider ? "Saving..." : llmProviderSaved ? "Saved" : "Save Provider"}
+                </button>
+              </div>
+
+              <div className="mb-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+                <h5 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Codex</h5>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                  Uses the local Codex CLI login tied to your ChatGPT plan.
+                </p>
+
+                <div className="flex items-center gap-3 mb-2">
+                  {codexAuthStatus === "checking" && (
+                    <span className="text-sm text-gray-500 dark:text-gray-400">Checking...</span>
+                  )}
+                  {codexAuthStatus === "authenticated" && (
+                    <span className="text-sm text-green-700 dark:text-green-400">Logged in</span>
+                  )}
+                  {codexAuthStatus === "not_authenticated" && (
+                    <span className="text-sm text-gray-500 dark:text-gray-400">
+                      {codexCliAvailable ? "Not logged in" : "Codex CLI not detected"}
+                    </span>
+                  )}
+                </div>
+
+                <div className="mb-3">
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                    Model
+                  </label>
+                  <select
+                    value={codexModelSelectValue}
+                    onChange={(e) => {
+                      const selected = e.target.value;
+                      if (selected === "custom") {
+                        if (codexModelIsPreset) setCodexModel("");
+                      } else {
+                        setCodexModel(selected);
+                      }
+                    }}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                  >
+                    {CODEX_MODEL_OPTIONS.map((option) => (
+                      <option key={option.id} value={option.id}>
+                        {option.label}
+                      </option>
+                    ))}
+                    <option value="custom">Custom model ID</option>
+                  </select>
+                  {!codexModelIsPreset && (
+                    <input
+                      value={codexModel}
+                      onChange={(e) => setCodexModel(e.target.value)}
+                      placeholder={CODEX_DEFAULT_MODEL}
+                      className="mt-2 w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-400"
+                    />
+                  )}
+                </div>
+
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Run{" "}
+                  <code className="rounded bg-gray-100 px-1 py-0.5 dark:bg-gray-700">
+                    codex login
+                  </code>{" "}
+                  on this machine if needed, then reopen this panel or save Codex once the status
+                  turns green.
+                </p>
+              </div>
+
               {/* Anthropic API Key */}
               <div className="mb-6">
                 <h5 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Anthropic API Key
                 </h5>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
-                  Required for email analysis, draft generation, and sender lookup.
+                  Used when Anthropic API is selected as the built-in AI provider.
                 </p>
                 <div className="flex gap-2">
                   <input
