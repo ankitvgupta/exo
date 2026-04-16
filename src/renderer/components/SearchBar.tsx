@@ -28,7 +28,7 @@ declare global {
       emails: {
         search: (
           query: string,
-          accountId: string,
+          accountId?: string,
           maxResults?: number,
         ) => Promise<IpcResponse<DashboardEmail[]>>;
         searchRemote: (
@@ -60,16 +60,14 @@ export function SearchBar({ isOpen, onClose }: SearchBarProps) {
   const [hasNavigated, setHasNavigated] = useState(false); // Track if user used arrow keys
   const [isSearching, setIsSearching] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const {
-    setSelectedEmailId,
-    currentAccountId,
-    setActiveSearch,
-    setViewMode,
-    isOnline,
-    setRemoteSearchResults,
-    setRemoteSearchError,
-    setCurrentSplitId,
-  } = useAppStore();
+  const setSelectedEmailId = useAppStore((s) => s.setSelectedEmailId);
+  const currentAccountId = useAppStore((s) => s.currentAccountId);
+  const setActiveSearch = useAppStore((s) => s.setActiveSearch);
+  const setViewMode = useAppStore((s) => s.setViewMode);
+  const isOnline = useAppStore((s) => s.isOnline);
+  const setRemoteSearchResults = useAppStore((s) => s.setRemoteSearchResults);
+  const setRemoteSearchError = useAppStore((s) => s.setRemoteSearchError);
+  const setCurrentSplitId = useAppStore((s) => s.setCurrentSplitId);
 
   // The "search all mail" affordance is at index === results.length
   const searchAllMailIndex = results.length;
@@ -123,7 +121,7 @@ export function SearchBar({ isOpen, onClose }: SearchBarProps) {
 
   // Perform full Gmail search and show results (local + remote in parallel)
   const performFullSearch = useCallback(() => {
-    if (!query.trim() || !currentAccountId) return;
+    if (!query.trim()) return;
 
     // Special handling for "in:draft" / "in:drafts" — switch to drafts view instead of searching
     const trimmed = query.trim().toLowerCase();
@@ -141,7 +139,7 @@ export function SearchBar({ isOpen, onClose }: SearchBarProps) {
 
     // Fire local search — results stream into the store when ready
     window.api.emails
-      .search(query, currentAccountId, 500)
+      .search(query, currentAccountId ?? undefined, 500)
       .then((localResponse: IpcResponse<DashboardEmail[]>) => {
         if (useAppStore.getState().activeSearchQuery !== query) return;
         if (localResponse.success && localResponse.data) {
@@ -153,7 +151,7 @@ export function SearchBar({ isOpen, onClose }: SearchBarProps) {
       });
 
     // Fire remote search (slow) — results stream into the store when ready
-    if (isOnline) {
+    if (isOnline && currentAccountId) {
       window.api.emails
         .searchRemote(query, currentAccountId, 500)
         .then(

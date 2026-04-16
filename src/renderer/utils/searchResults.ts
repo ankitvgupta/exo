@@ -39,7 +39,7 @@ export function mergeAndSortSearchResults(
 export function mergeAndThreadSearchResults(
   localResults: readonly DashboardEmail[],
   remoteResults: readonly DashboardEmail[],
-  currentUserEmail?: string,
+  currentUserEmail?: string | ReadonlyMap<string, string>,
 ): EmailThread[] {
   const merged = mergeAndSortSearchResults(localResults, remoteResults);
   const threads = groupByThread(merged, currentUserEmail);

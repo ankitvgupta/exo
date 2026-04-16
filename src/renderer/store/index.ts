@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { create } from "zustand";
+import { useStoreWithEqualityFn } from "zustand/traditional";
 import { clearPendingLabelUpdates } from "../hooks-bridge";
 import { applyOptimisticReads, addOptimisticReads } from "../optimistic-reads";
 import type {
@@ -80,6 +81,44 @@ export type EmailThread = {
   // Best sender to display (handles edge cases where latestReceivedEmail is from user)
   displaySender: string;
 };
+
+type CurrentUserEmailLookup = string | ReadonlyMap<string, string> | undefined;
+
+function areThreadingEmailsEqual(prev: DashboardEmail[], next: DashboardEmail[]): boolean {
+  if (prev === next) return true;
+  if (prev.length !== next.length) return false;
+
+  for (let index = 0; index < prev.length; index += 1) {
+    const previousEmail = prev[index];
+    const nextEmail = next[index];
+
+    if (previousEmail === nextEmail) continue;
+
+    if (
+      previousEmail.id !== nextEmail.id ||
+      previousEmail.threadId !== nextEmail.threadId ||
+      previousEmail.accountId !== nextEmail.accountId ||
+      previousEmail.subject !== nextEmail.subject ||
+      previousEmail.from !== nextEmail.from ||
+      previousEmail.to !== nextEmail.to ||
+      previousEmail.cc !== nextEmail.cc ||
+      previousEmail.bcc !== nextEmail.bcc ||
+      previousEmail.date !== nextEmail.date ||
+      previousEmail.snippet !== nextEmail.snippet ||
+      previousEmail.labelIds !== nextEmail.labelIds ||
+      previousEmail.isUnread !== nextEmail.isUnread ||
+      previousEmail.attachments !== nextEmail.attachments ||
+      previousEmail.messageId !== nextEmail.messageId ||
+      previousEmail.inReplyTo !== nextEmail.inReplyTo ||
+      previousEmail.analysis !== nextEmail.analysis ||
+      previousEmail.draft !== nextEmail.draft
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
 
 // Account representation
 export type Account = {
@@ -346,7 +385,7 @@ interface AppState {
   setShowSettings: (show: boolean, initialTab?: SettingsTab) => void;
   updateEmail: (id: string, updates: Partial<DashboardEmail>) => void;
   // Multi-account actions
-  setAccounts: (accounts: Account[]) => void;
+  setAccounts: (accounts: Account[], currentAccountId?: string | null) => void;
   addAccount: (account: Account) => void;
   removeAccount: (accountId: string) => void;
   setCurrentAccountId: (accountId: string | null) => void;
@@ -805,19 +844,37 @@ export const useAppStore = create<AppState>((set, get) => ({
       highlightMemoryIds: show ? get().highlightMemoryIds : [],
     }),
   updateEmail: (id, updates) =>
-    set((state) => ({
-      emails: state.emails.map((email) => (email.id === id ? { ...email, ...updates } : email)),
-      sentEmails: state.sentEmails.map((email) =>
-        email.id === id ? { ...email, ...updates } : email,
-      ),
-    })),
+    set((state) => {
+      const nextState: Partial<AppState> = {};
+
+      const emailIndex = state.emails.findIndex((email) => email.id === id);
+      if (emailIndex !== -1) {
+        const emails = state.emails.slice();
+        emails[emailIndex] = { ...emails[emailIndex], ...updates };
+        nextState.emails = emails;
+      }
+
+      const sentEmailIndex = state.sentEmails.findIndex((email) => email.id === id);
+      if (sentEmailIndex !== -1) {
+        const sentEmails = state.sentEmails.slice();
+        sentEmails[sentEmailIndex] = { ...sentEmails[sentEmailIndex], ...updates };
+        nextState.sentEmails = sentEmails;
+      }
+
+      return Object.keys(nextState).length > 0 ? nextState : state;
+    }),
   // Multi-account actions
-  setAccounts: (accounts) =>
-    set({
-      accounts,
-      // Set current to primary or first account if not set
-      currentAccountId:
-        get().currentAccountId || accounts.find((a) => a.isPrimary)?.id || accounts[0]?.id || null,
+  setAccounts: (accounts, currentAccountId) =>
+    set((state) => {
+      let nextCurrentAccountId =
+        currentAccountId !== undefined ? currentAccountId : state.currentAccountId;
+      if (
+        nextCurrentAccountId !== null &&
+        !accounts.some((account) => account.id === nextCurrentAccountId)
+      ) {
+        nextCurrentAccountId = accounts.find((a) => a.isPrimary)?.id || accounts[0]?.id || null;
+      }
+      return { accounts, currentAccountId: nextCurrentAccountId };
     }),
   addAccount: (account) =>
     set((state) => {
@@ -1586,10 +1643,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   markThreadAsRead: (threadId) => {
     const state = get();
-    const accountId = state.currentAccountId;
-    if (!accountId) return;
-
     const threadEmails = state.emails.filter((e) => e.threadId === threadId);
+    const accountId = threadEmails[0]?.accountId ?? state.currentAccountId;
+    if (!accountId) return;
     const unreadEmails = threadEmails.filter((e) => e.labelIds?.includes("UNREAD"));
     if (unreadEmails.length === 0) return;
 
@@ -1684,16 +1740,27 @@ export function getAppStateSnapshot(): Record<string, unknown> {
 }
 
 // Check if an email is sent by the user (not received)
-function isSentEmail(email: DashboardEmail, currentUserEmail?: string): boolean {
+function resolveCurrentUserEmail(
+  email: DashboardEmail,
+  currentUserEmail: CurrentUserEmailLookup,
+): string | undefined {
+  if (typeof currentUserEmail === "string") {
+    return currentUserEmail;
+  }
+  return currentUserEmail?.get(email.accountId);
+}
+
+function isSentEmail(email: DashboardEmail, currentUserEmail?: CurrentUserEmailLookup): boolean {
   // Check labelIds first (most reliable)
   if (email.labelIds?.includes("SENT")) {
     return true;
   }
 
   // Fall back to checking the from field
-  if (!currentUserEmail) return false;
+  const resolvedCurrentUserEmail = resolveCurrentUserEmail(email, currentUserEmail);
+  if (!resolvedCurrentUserEmail) return false;
   const fromLower = email.from.toLowerCase();
-  const userEmailLower = currentUserEmail.toLowerCase();
+  const userEmailLower = resolvedCurrentUserEmail.toLowerCase();
   // Extract email from "Name <email>" format if present
   const emailMatch = fromLower.match(/<([^>]+)>/) || [null, fromLower];
   const fromEmail = emailMatch[1] || fromLower;
@@ -1701,7 +1768,10 @@ function isSentEmail(email: DashboardEmail, currentUserEmail?: string): boolean 
 }
 
 // Helper to group emails by thread
-export function groupByThread(emails: DashboardEmail[], currentUserEmail?: string): EmailThread[] {
+export function groupByThread(
+  emails: DashboardEmail[],
+  currentUserEmail?: CurrentUserEmailLookup,
+): EmailThread[] {
   const threadMap = new Map<string, DashboardEmail[]>();
 
   // Pre-compute timestamps once to avoid creating Date objects in every sort
@@ -1795,7 +1865,11 @@ const REPLY_GRACE_PERIOD_MS = 3 * 60 * 1000; // 3 minutes
 
 // Selector for threaded and filtered emails
 export function useThreadedEmails() {
-  const emails = useAppStore((state) => state.emails);
+  const emails = useStoreWithEqualityFn(
+    useAppStore,
+    (state) => state.emails,
+    areThreadingEmailsEqual,
+  );
   const currentAccountId = useAppStore((state) => state.currentAccountId);
   const accounts = useAppStore((state) => state.accounts);
   const snoozedThreadIds = useAppStore((state) => state.snoozedThreadIds);
@@ -1804,6 +1878,15 @@ export function useThreadedEmails() {
   // Get current user's email for sent detection
   const currentAccount = accounts.find((a) => a.id === currentAccountId);
   const currentUserEmail = currentAccount?.email;
+  const currentUserEmailsByAccount = useMemo(
+    () =>
+      new Map(
+        accounts
+          .map((account) => [account.id, account.email] as const)
+          .filter((entry) => entry[1].length > 0),
+      ),
+    [accounts],
+  );
 
   // Memoize the expensive thread computation. j/k navigation only changes
   // selectedEmailId — none of these deps change, so the memo short-circuits
@@ -1828,7 +1911,8 @@ export function useThreadedEmails() {
     // Then filter out sent-only threads — threads where no email has the INBOX label.
     // Sent emails within inbox threads are kept (for conversation context), but threads
     // consisting solely of sent emails belong in the Sent view, not the inbox.
-    const allThreads = groupByThread(accountEmails, currentUserEmail).filter((t) =>
+    const userEmailLookup = currentAccountId ? currentUserEmail : currentUserEmailsByAccount;
+    const allThreads = groupByThread(accountEmails, userEmailLookup).filter((t) =>
       t.emails.some((e) => !e.labelIds || e.labelIds.includes("INBOX")),
     );
 
@@ -1886,7 +1970,14 @@ export function useThreadedEmails() {
       snoozed,
       snoozedCount: snoozed.length,
     };
-  }, [emails, currentAccountId, currentUserEmail, snoozedThreadIds, recentlyRepliedThreadIds]);
+  }, [
+    emails,
+    currentAccountId,
+    currentUserEmail,
+    currentUserEmailsByAccount,
+    snoozedThreadIds,
+    recentlyRepliedThreadIds,
+  ]);
 }
 
 function threadMatchesSplit(thread: EmailThread, split: InboxSplit): boolean {
@@ -1905,6 +1996,15 @@ export function useSplitFilteredThreads() {
   const recentlyUnsnoozedThreadIds = useAppStore((state) => state.recentlyUnsnoozedThreadIds);
   const unsnoozedReturnTimes = useAppStore((state) => state.unsnoozedReturnTimes);
   const sentEmails = useAppStore((state) => state.sentEmails);
+  const currentUserEmailsByAccount = useMemo(
+    () =>
+      new Map(
+        accounts
+          .map((account) => [account.id, account.email] as const)
+          .filter((entry) => entry[1].length > 0),
+      ),
+    [accounts],
+  );
 
   return useMemo(() => {
     // Filter splits for current account
@@ -1942,7 +2042,8 @@ export function useSplitFilteredThreads() {
       const sentAccountEmails = currentAccountId
         ? sentEmails.filter((e) => e.accountId === currentAccountId)
         : sentEmails;
-      const sentThreads = groupByThread(sentAccountEmails, currentUserEmail).sort(
+      const userEmailLookup = currentAccountId ? currentUserEmail : currentUserEmailsByAccount;
+      const sentThreads = groupByThread(sentAccountEmails, userEmailLookup).sort(
         (a, b) => new Date(b.latestEmail.date).getTime() - new Date(a.latestEmail.date).getTime(),
       );
 

@@ -144,6 +144,15 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
         state.currentSplitId === "__drafts__"
           ? currentThreads.filter((t) => t.draft && t.draft.body)
           : currentThreads;
+      const selectedEmail = emails.find((email) => email.id === selectedEmailId);
+      const selectedAccountId = selectedEmail?.accountId ?? currentAccountId;
+      const currentUserEmailLookup = currentAccountId
+        ? accounts.find((account) => account.id === currentAccountId)?.email
+        : new Map(
+            accounts
+              .map((account) => [account.id, account.email] as const)
+              .filter((entry) => entry[1].length > 0),
+          );
 
       // Always allow Escape to close modals or go back in view modes
       if (e.key === "Escape") {
@@ -445,11 +454,12 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
       };
 
       // --- Helper: merge+dedup+thread search results (same order as rendered list) ---
-      const currentUserEmail = accounts.find(
-        (a: { id: string }) => a.id === currentAccountId,
-      )?.email;
       const getSearchThreads = () =>
-        mergeAndThreadSearchResults(activeSearchResults, remoteSearchResults, currentUserEmail);
+        mergeAndThreadSearchResults(
+          activeSearchResults,
+          remoteSearchResults,
+          currentUserEmailLookup,
+        );
 
       // --- Helper: navigate search results up/down (by thread) ---
       const navigateSearchResults = (direction: "up" | "down") => {
@@ -473,16 +483,24 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
 
       // --- Helper: get thread emails, falling back to search results if not in global store ---
       const getThreadEmails = (threadId: string) => {
-        const storeEmails = emails.filter((item) => item.threadId === threadId);
+        const storeEmails = emails.filter(
+          (item) =>
+            item.threadId === threadId &&
+            (selectedAccountId ? item.accountId === selectedAccountId : true),
+        );
         if (storeEmails.length > 0) return storeEmails;
         // Fallback: thread may only exist in search results, not yet in the global store
-        const searchThread = getSearchThreads().find((t) => t.threadId === threadId);
+        const searchThread = getSearchThreads().find(
+          (t) =>
+            t.threadId === threadId &&
+            (selectedAccountId ? t.latestEmail.accountId === selectedAccountId : true),
+        );
         return searchThread?.emails ?? [];
       };
 
       // --- Helper: archive selected thread (all messages) ---
       const archiveSelected = () => {
-        if (!selectedEmailId || !selectedThreadId || !currentAccountId) return;
+        if (!selectedEmailId || !selectedThreadId || !selectedAccountId) return;
 
         // Collect ALL emails in the thread for optimistic removal
         const threadEmails = getThreadEmails(selectedThreadId);
@@ -536,7 +554,7 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
           id: `archive-${selectedThreadId}-${Date.now()}`,
           type: "archive",
           threadCount: 1,
-          accountId: currentAccountId,
+          accountId: selectedAccountId,
           emails: [...threadEmails],
           scheduledAt: Date.now(),
           delayMs: 5000,
@@ -549,7 +567,7 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
 
       // --- Helper: trash selected thread ---
       const trashSelected = () => {
-        if (!selectedEmailId || !selectedThreadId || !currentAccountId) return;
+        if (!selectedEmailId || !selectedThreadId || !selectedAccountId) return;
 
         const threadEmails = getThreadEmails(selectedThreadId);
         const threadEmailIds = threadEmails.map((item) => item.id);
@@ -600,7 +618,7 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
           id: `trash-${selectedThreadId}-${Date.now()}`,
           type: "trash",
           threadCount: 1,
-          accountId: currentAccountId,
+          accountId: selectedAccountId,
           emails: [...threadEmails],
           scheduledAt: Date.now(),
           delayMs: 5000,
@@ -611,9 +629,11 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
 
       // --- Helper: mark selected thread as unread ---
       const markSelectedUnread = () => {
-        if (!selectedThreadId || !currentAccountId) return;
+        if (!selectedThreadId || !selectedAccountId) return;
 
-        const threadEmails = emails.filter((item) => item.threadId === selectedThreadId);
+        const threadEmails = emails.filter(
+          (item) => item.threadId === selectedThreadId && item.accountId === selectedAccountId,
+        );
         if (threadEmails.length === 0) return;
 
         const latestEmail = threadEmails.reduce((a, b) =>
@@ -630,7 +650,7 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
             id: `mark-unread-${selectedThreadId}-${Date.now()}`,
             type: "mark-unread",
             threadCount: 1,
-            accountId: currentAccountId,
+            accountId: selectedAccountId,
             emails: [latestEmail],
             scheduledAt: Date.now(),
             delayMs: 5000,
@@ -959,7 +979,7 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
         // Shift+I: mark as read and return to list (Gmail only)
         case "I":
           if (isGmail && e.shiftKey) {
-            if (selectedThreadId && currentAccountId) {
+            if (selectedThreadId) {
               e.preventDefault();
               markThreadAsRead(selectedThreadId);
               if (viewMode === "full") {
@@ -974,9 +994,9 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
           if (isMultiSelect) {
             e.preventDefault();
             batchToggleStar();
-          } else if (isGmail && selectedThreadId && currentAccountId) {
+          } else if (isGmail && selectedThreadId && selectedAccountId) {
             e.preventDefault();
-            const threadEmails = emails.filter((item) => item.threadId === selectedThreadId);
+            const threadEmails = getThreadEmails(selectedThreadId);
             if (threadEmails.length === 0) break;
             const latestEmail = threadEmails.reduce((a, b) =>
               new Date(a.date).getTime() >= new Date(b.date).getTime() ? a : b,
@@ -1000,7 +1020,7 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
                 id: `unstar-${selectedThreadId}-${Date.now()}`,
                 type: "unstar",
                 threadCount: 1,
-                accountId: currentAccountId,
+                accountId: selectedAccountId,
                 emails: starredEmails,
                 scheduledAt: Date.now(),
                 delayMs: 5000,
@@ -1016,7 +1036,7 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
                 id: `star-${selectedThreadId}-${Date.now()}`,
                 type: "star",
                 threadCount: 1,
-                accountId: currentAccountId,
+                accountId: selectedAccountId,
                 emails: [latestEmail],
                 scheduledAt: Date.now(),
                 delayMs: 5000,
@@ -1077,9 +1097,15 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
 
         // Shift+N: force refresh/sync current account (Gmail only)
         case "N":
-          if (isGmail && e.shiftKey && currentAccountId) {
+          if (isGmail && e.shiftKey) {
             e.preventDefault();
-            window.api.sync.now(currentAccountId).catch(console.error);
+            if (currentAccountId) {
+              window.api.sync.now(currentAccountId).catch(console.error);
+            } else {
+              accounts.forEach((account) => {
+                window.api.sync.now(account.id).catch(console.error);
+              });
+            }
           }
           break;
 

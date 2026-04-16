@@ -55,6 +55,7 @@ import type {
   IpcResponse,
   InboxSplit,
   Snippet,
+  Config,
 } from "../shared/types";
 import type { ScopedAgentEvent, AgentProviderConfig } from "../shared/agent-types";
 import { mergeAndThreadSearchResults } from "./utils/searchResults";
@@ -83,12 +84,40 @@ function formatSearchDate(dateStr: string): string {
   return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
+function getDefaultAccountId(accounts: Account[]): string | null {
+  return accounts.find((account) => account.isPrimary)?.id || accounts[0]?.id || null;
+}
+
+function resolveStoredAccountSelection(
+  config: Pick<Config, "selectedAccountId"> | undefined,
+  accounts: Account[],
+): string | null {
+  if (!config || !Object.prototype.hasOwnProperty.call(config, "selectedAccountId")) {
+    return getDefaultAccountId(accounts);
+  }
+
+  if (config.selectedAccountId === null) {
+    return null;
+  }
+
+  if (
+    typeof config.selectedAccountId === "string" &&
+    accounts.some((account) => account.id === config.selectedAccountId)
+  ) {
+    return config.selectedAccountId;
+  }
+
+  return getDefaultAccountId(accounts);
+}
+
 function SearchResultThreadRow({
   thread,
+  accountLabel,
   isSelected,
   onClick,
 }: {
   thread: EmailThread;
+  accountLabel?: string;
   isSelected: boolean;
   onClick: () => void;
 }) {
@@ -133,6 +162,18 @@ function SearchResultThreadRow({
         >
           {senderName}
         </span>
+
+        {accountLabel && (
+          <span
+            className={`text-[9px] px-1 py-px rounded flex-shrink-0 uppercase font-medium ${
+              isSelected
+                ? "bg-white/20 text-white"
+                : "bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400"
+            }`}
+          >
+            {accountLabel}
+          </span>
+        )}
 
         {/* Sent badge - show if user replied (latest email is from user) */}
         {thread.userReplied && (
@@ -226,28 +267,34 @@ function SearchResultThreadRow({
 }
 
 function SearchResultsView() {
-  const {
-    activeSearchQuery,
-    activeSearchResults,
-    remoteSearchResults,
-    remoteSearchStatus,
-    remoteSearchError: _remoteSearchError,
-    clearActiveSearch,
-    addEmails,
-    setSelectedEmailId,
-    setSelectedThreadId,
-    setViewMode,
-    selectedThreadId,
-    setRemoteSearchResults,
-    setRemoteSearchError,
-    currentAccountId,
-    accounts,
-    isOnline,
-    remoteSearchNextPageToken,
-    remoteSearchLoadingMore,
-  } = useAppStore();
+  const activeSearchQuery = useAppStore((s) => s.activeSearchQuery);
+  const activeSearchResults = useAppStore((s) => s.activeSearchResults);
+  const remoteSearchResults = useAppStore((s) => s.remoteSearchResults);
+  const remoteSearchStatus = useAppStore((s) => s.remoteSearchStatus);
+  const clearActiveSearch = useAppStore((s) => s.clearActiveSearch);
+  const addEmails = useAppStore((s) => s.addEmails);
+  const setSelectedEmailId = useAppStore((s) => s.setSelectedEmailId);
+  const setSelectedThreadId = useAppStore((s) => s.setSelectedThreadId);
+  const setViewMode = useAppStore((s) => s.setViewMode);
+  const selectedThreadId = useAppStore((s) => s.selectedThreadId);
+  const setRemoteSearchResults = useAppStore((s) => s.setRemoteSearchResults);
+  const setRemoteSearchError = useAppStore((s) => s.setRemoteSearchError);
+  const currentAccountId = useAppStore((s) => s.currentAccountId);
+  const accounts = useAppStore((s) => s.accounts);
+  const isOnline = useAppStore((s) => s.isOnline);
+  const remoteSearchNextPageToken = useAppStore((s) => s.remoteSearchNextPageToken);
+  const remoteSearchLoadingMore = useAppStore((s) => s.remoteSearchLoadingMore);
 
   const currentUserEmail = accounts.find((a) => a.id === currentAccountId)?.email;
+  const currentUserEmailsByAccount = useMemo(
+    () =>
+      new Map(
+        accounts
+          .map((account) => [account.id, account.email] as const)
+          .filter((entry) => entry[1].length > 0),
+      ),
+    [accounts],
+  );
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
 
@@ -361,8 +408,19 @@ function SearchResultsView() {
 
   // Merge local and remote results, deduplicate, and group into threads
   const searchThreads = useMemo(
-    () => mergeAndThreadSearchResults(activeSearchResults, remoteSearchResults, currentUserEmail),
-    [activeSearchResults, remoteSearchResults, currentUserEmail],
+    () =>
+      mergeAndThreadSearchResults(
+        activeSearchResults,
+        remoteSearchResults,
+        currentAccountId ? currentUserEmail : currentUserEmailsByAccount,
+      ),
+    [
+      activeSearchResults,
+      remoteSearchResults,
+      currentAccountId,
+      currentUserEmail,
+      currentUserEmailsByAccount,
+    ],
   );
 
   const hasMoreResults = !!remoteSearchNextPageToken && remoteSearchStatus === "complete";
@@ -446,9 +504,16 @@ function SearchResultsView() {
           <div>
             {searchThreads.map((thread) => (
               <SearchResultThreadRow
-                key={thread.threadId}
+                key={`${thread.latestEmail.accountId}:${thread.threadId}`}
                 thread={thread}
                 isSelected={thread.threadId === selectedThreadId}
+                accountLabel={
+                  currentAccountId === null
+                    ? accounts
+                        .find((account) => account.id === thread.latestEmail.accountId)
+                        ?.email.split("@")[0]
+                    : undefined
+                }
                 onClick={() => handleThreadClick(thread)}
               />
             ))}
@@ -819,13 +884,18 @@ export default function App() {
               isConnected: accountList.find((a) => a.id === acc.id)?.isConnected ?? false,
             }),
           );
-          setAccounts(fullAccounts);
 
-          // Set current account to primary or first available
+          const settingsResult = (await window.api.settings.get()) as IpcResponse<Config>;
+          const selectedAccountId = resolveStoredAccountSelection(
+            settingsResult.success ? settingsResult.data : undefined,
+            fullAccounts,
+          );
+          setAccounts(fullAccounts, selectedAccountId);
+
+          // Identify user in analytics with the primary account even if the UI
+          // opens in the unified account view.
           const primaryAccount = fullAccounts.find((a) => a.isPrimary) || fullAccounts[0];
           if (primaryAccount) {
-            setCurrentAccountId(primaryAccount.id);
-            // Identify user in PostHog using primary email
             identifyUser(primaryAccount.email, {
               account_count: fullAccounts.length,
             });
@@ -885,7 +955,7 @@ export default function App() {
         context: "initializeSync",
       });
     }
-  }, [setAccounts, setCurrentAccountId, addEmails, setSentEmails]);
+  }, [setAccounts, addEmails, setSentEmails]);
 
   // Set up sync event listeners
   useEffect(() => {
@@ -1107,7 +1177,8 @@ export default function App() {
             // Save sidebar tab — startAgentTask unconditionally sets it to "agent",
             // but background auto-drafts shouldn't steal focus from the user
             const prevTab = store.sidebarTab;
-            store.startAgentTask(taskId, emailId, ["claude"], "", {
+            const providerId = event.providerId ?? "codex";
+            store.startAgentTask(taskId, emailId, [providerId], "", {
               accountId: email.accountId || "",
               currentEmailId: emailId,
               currentThreadId: email.threadId,
@@ -1315,11 +1386,14 @@ export default function App() {
           hasCredentials: boolean;
           hasTokens: boolean;
           hasAnthropicKey: boolean;
+          codexCliAvailable: boolean;
+          hasCodexAuth: boolean;
+          hasLlmAuth: boolean;
         }>,
       ) => {
         if (result.success) {
           // Credentials are always bundled at build time — only check API key and tokens
-          setNeedsSetup(!result.data.hasAnthropicKey || !result.data.hasTokens);
+          setNeedsSetup(!result.data.hasLlmAuth || !result.data.hasTokens);
         } else {
           setNeedsSetup(true);
         }
@@ -1382,7 +1456,7 @@ export default function App() {
   const hasActiveProgressiveSync = Object.values(syncProgress).some(
     (p) => p !== null && p.fetched < p.total,
   );
-  const { refetch: fetchEmails, isFetching } = useQuery({
+  const { isFetching } = useQuery({
     queryKey: ["emails", currentAccountId],
     queryFn: async () => {
       const result = await window.api.gmail.fetchUnread(100, currentAccountId ?? undefined);
@@ -1463,8 +1537,20 @@ export default function App() {
         // Reload sent emails too
         await reloadSentEmailsForAccount(currentAccountId);
       } else {
-        // Fallback to legacy fetch for default account
-        await fetchEmails();
+        await Promise.all(accounts.map((account) => window.api.sync.now(account.id)));
+        const [emailResults, sentResults] = await Promise.all([
+          Promise.all(accounts.map((account) => window.api.sync.getEmails(account.id))),
+          Promise.all(accounts.map((account) => window.api.sync.getSentEmails(account.id))),
+        ]);
+        const refreshedEmails = emailResults.flatMap((result) =>
+          result.success && result.data ? result.data : [],
+        );
+        const refreshedSent = sentResults.flatMap((result) =>
+          result.success && result.data ? result.data : [],
+        );
+        setEmails(refreshedEmails);
+        setSentEmails(refreshedSent);
+        prefetchEmailBodies(refreshedEmails.map((e: DashboardEmail) => e.id)).catch(console.error);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch emails");
@@ -1487,6 +1573,7 @@ export default function App() {
         setAccounts(updatedAccounts);
 
         setCurrentAccountId(accountId);
+        window.api.settings.set({ selectedAccountId: accountId }).catch(console.error);
 
         // Load emails from DB now that sync is running
         const emailsResult = await window.api.sync.getEmails(accountId);
@@ -1551,10 +1638,14 @@ export default function App() {
   const currentAccount = accounts.find((a) => a.id === currentAccountId);
   const currentSyncStatus = currentAccountId
     ? syncStatuses.get(currentAccountId) || "idle"
-    : "idle";
+    : accounts.some((account) => (syncStatuses.get(account.id) || "idle") === "syncing")
+      ? "syncing"
+      : accounts.some((account) => (syncStatuses.get(account.id) || "idle") === "error")
+        ? "error"
+        : "idle";
   const isSyncing = currentSyncStatus === "syncing";
   const isCurrentAccountExpired =
-    currentAccountId != null && expiredAccountIds.has(currentAccountId);
+    currentAccountId != null ? expiredAccountIds.has(currentAccountId) : expiredAccountIds.size > 0;
 
   // Build list of expired accounts with their email addresses for the banner
   const expiredAccounts = accounts.filter((a) => expiredAccountIds.has(a.id));
@@ -1563,11 +1654,22 @@ export default function App() {
   // already in the store from initial load + background sync. We just flip
   // currentAccountId and let useThreadedEmails filter; background sync
   // picks up anything new without blocking the UI.
-  const handleAccountSwitch = (accountId: string) => {
+  const handleAccountSwitch = (accountId: string | null) => {
     setCurrentAccountId(accountId);
+    window.api.settings.set({ selectedAccountId: accountId }).catch(console.error);
     setAccountMenuOpen(false);
 
-    trackEvent("account_switched", { account_count: accounts.length });
+    trackEvent("account_switched", {
+      account_count: accounts.length,
+      scope: accountId ?? "all",
+    });
+
+    if (accountId === null) {
+      accounts.forEach((account) => {
+        window.api.sync.now(account.id).catch(console.error);
+      });
+      return;
+    }
 
     // Backfill inbox/sent emails independently if missing for this account.
     const storeState = useAppStore.getState();
@@ -1634,7 +1736,9 @@ export default function App() {
                 className="flex items-center space-x-2 px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
               >
                 <span className="text-gray-700 dark:text-gray-300 truncate max-w-[200px]">
-                  {currentAccount?.email || "Select account"}
+                  {currentAccountId === null
+                    ? "All accounts"
+                    : currentAccount?.email || "Select account"}
                 </span>
                 {/* Sync status indicator */}
                 {isSyncing && (
@@ -1686,6 +1790,25 @@ export default function App() {
               {accountMenuOpen && (
                 <div className="absolute top-full left-0 mt-1 w-64 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg dark:shadow-black/40 z-50">
                   <div className="py-1">
+                    <button
+                      onClick={() => handleAccountSwitch(null)}
+                      className={`w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center justify-between ${
+                        currentAccountId === null ? "bg-blue-50 dark:bg-blue-900/30" : ""
+                      }`}
+                    >
+                      <div className="flex items-center space-x-2">
+                        <span
+                          className={`w-2 h-2 rounded-full ${
+                            expiredAccounts.length > 0
+                              ? "bg-amber-500"
+                              : accounts.every((account) => account.isConnected)
+                                ? "bg-green-500"
+                                : "bg-gray-400 dark:bg-gray-500"
+                          }`}
+                        />
+                        <span className="truncate">All accounts</span>
+                      </div>
+                    </button>
                     {accounts.map((account) => (
                       <button
                         key={account.id}
@@ -2165,25 +2288,21 @@ export default function App() {
 }
 
 function SnoozeOverlay() {
-  const {
-    selectedEmailId,
-    selectedThreadId,
-    currentAccountId,
-    emails,
-    setSelectedEmailId: _setSelectedEmailId2,
-    setSelectedThreadId: _setSelectedThreadId2,
-    setViewMode: _setViewMode2,
-    selectedThreadIds,
-    clearSelectedThreads,
-    addUndoAction,
-  } = useAppStore();
+  const selectedEmailId = useAppStore((s) => s.selectedEmailId);
+  const selectedThreadId = useAppStore((s) => s.selectedThreadId);
+  const currentAccountId = useAppStore((s) => s.currentAccountId);
+  const emails = useAppStore((s) => s.emails);
+  const selectedThreadIds = useAppStore((s) => s.selectedThreadIds);
+  const clearSelectedThreads = useAppStore((s) => s.clearSelectedThreads);
+  const addUndoAction = useAppStore((s) => s.addUndoAction);
   const showSnoozeMenu = useAppStore((s) => s.showSnoozeMenu);
   const setShowSnoozeMenu = useAppStore((s) => s.setShowSnoozeMenu);
   const { threads: currentThreads } = useThreadedEmails();
 
   const selectedEmail = emails.find((e) => e.id === selectedEmailId);
+  const snoozeAccountId = selectedEmail?.accountId ?? currentAccountId;
 
-  if (!showSnoozeMenu || !selectedEmail || !currentAccountId) return null;
+  if (!showSnoozeMenu || !selectedEmail || !snoozeAccountId) return null;
 
   // Determine if we're in batch mode (any multi-select, even 1 thread via 'x')
   const isBatchSnooze = selectedThreadIds.size > 0;
@@ -2203,7 +2322,7 @@ function SnoozeOverlay() {
         <SnoozeMenu
           emailId={selectedEmail.id}
           threadId={selectedEmail.threadId}
-          accountId={currentAccountId}
+          accountId={snoozeAccountId}
           onSnooze={(snoozedEmail: SnoozedEmail) => {
             if (isBatchSnooze) {
               // Batch snooze: snooze all selected threads using the same snoozeUntil time
@@ -2243,7 +2362,7 @@ function SnoozeOverlay() {
                       id: `snooze-${tid}-${Date.now()}`,
                       emailId: thread.latestEmail.id,
                       threadId: tid,
-                      accountId: currentAccountId,
+                      accountId: thread.latestEmail.accountId,
                       snoozeUntil: snoozedEmail.snoozeUntil,
                       snoozedAt: snoozedEmail.snoozedAt,
                     });
@@ -2254,23 +2373,33 @@ function SnoozeOverlay() {
               });
 
               // Queue undo synchronously to avoid race with other actions in the rAF delay
-              addUndoAction({
-                id: `snooze-batch-${Date.now()}`,
-                type: "snooze",
-                threadCount: threadIdsToSnooze.length,
-                accountId: currentAccountId,
-                emails: [],
-                scheduledAt: Date.now(),
-                delayMs: 5000,
-                snoozedThreadIds: threadIdsToSnooze,
-              });
+              const threadIdsByAccount = new Map<string, string[]>();
+              for (const tid of threadIdsToSnooze) {
+                const thread = currentThreads.find((item) => item.threadId === tid);
+                if (!thread) continue;
+                const existing = threadIdsByAccount.get(thread.latestEmail.accountId) ?? [];
+                existing.push(tid);
+                threadIdsByAccount.set(thread.latestEmail.accountId, existing);
+              }
+              for (const [accountId, accountThreadIds] of threadIdsByAccount) {
+                addUndoAction({
+                  id: `snooze-batch-${accountId}-${Date.now()}`,
+                  type: "snooze",
+                  threadCount: accountThreadIds.length,
+                  accountId,
+                  emails: [],
+                  scheduledAt: Date.now(),
+                  delayMs: 5000,
+                  snoozedThreadIds: accountThreadIds,
+                });
+              }
 
               // Fire API calls for remaining threads in background
               for (const tid of otherThreadIds) {
                 const thread = currentThreads.find((t) => t.threadId === tid);
                 if (thread) {
                   window.api.snooze
-                    .snooze(thread.latestEmail.id, tid, currentAccountId, snoozeUntil)
+                    .snooze(thread.latestEmail.id, tid, thread.latestEmail.accountId, snoozeUntil)
                     .catch((err: unknown) =>
                       console.error("Batch snooze failed for thread", tid, err),
                     );
@@ -2316,7 +2445,7 @@ function SnoozeOverlay() {
                 id: `snooze-${snoozedThreadId}-${Date.now()}`,
                 type: "snooze",
                 threadCount: 1,
-                accountId: currentAccountId,
+                accountId: snoozeAccountId,
                 emails: [],
                 scheduledAt: Date.now(),
                 delayMs: 5000,

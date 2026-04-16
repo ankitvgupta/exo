@@ -1,7 +1,8 @@
 import { useAppStore } from "../store";
 
 export function OfflineBanner() {
-  const { isOnline, outboxStats } = useAppStore();
+  const isOnline = useAppStore((s) => s.isOnline);
+  const outboxStats = useAppStore((s) => s.outboxStats);
 
   // Don't show if online
   if (isOnline) {

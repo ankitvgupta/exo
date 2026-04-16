@@ -5,6 +5,7 @@ interface DraftRowProps {
   draft: LocalDraft;
   isSelected: boolean;
   density: InboxDensity;
+  accountLabel?: string;
   onClick: () => void;
 }
 
@@ -80,7 +81,7 @@ function stripHtmlTags(html: string): string {
 }
 
 export const DraftRow = React.memo(
-  function DraftRow({ draft, isSelected, density, onClick }: DraftRowProps) {
+  function DraftRow({ draft, isSelected, density, accountLabel, onClick }: DraftRowProps) {
     const ds = densityStyles[density] ?? densityStyles.default;
     const recipients = draft.to.join(", ");
     const snippet = draft.bodyText || stripHtmlTags(draft.bodyHtml);
@@ -114,6 +115,17 @@ export const DraftRow = React.memo(
         >
           {recipients || "(no recipients)"}
         </div>
+
+        {accountLabel && (
+          <span
+            className={`
+        ${ds.badge} rounded flex-shrink-0 uppercase font-medium
+        ${isSelected ? "bg-white/20 text-white" : "bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400"}
+      `}
+          >
+            {accountLabel}
+          </span>
+        )}
 
         {/* Draft badge */}
         <span
@@ -172,5 +184,6 @@ export const DraftRow = React.memo(
     prev.draft.id === next.draft.id &&
     prev.draft.updatedAt === next.draft.updatedAt &&
     prev.isSelected === next.isSelected &&
+    prev.accountLabel === next.accountLabel &&
     prev.density === next.density,
 );
