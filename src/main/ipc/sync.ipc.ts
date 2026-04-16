@@ -271,10 +271,7 @@ export function registerSyncIpc(): void {
           return { success: false, error: "Another re-authentication is already in progress" };
         }
 
-        const client = activeClients.get(accountId);
-        if (!client) {
-          return { success: false, error: "Account not connected" };
-        }
+        const client = activeClients.get(accountId) ?? new GmailClient(accountId);
 
         pendingReauthClient = client;
         await client.reauth();
@@ -282,6 +279,7 @@ export function registerSyncIpc(): void {
 
         // Re-register with sync service and restart sync
         await emailSyncService.registerAccount(client);
+        activeClients.set(accountId, client);
         emailSyncService.startSync(accountId);
 
         log.info(`[Auth] Re-authenticated account ${accountId}, sync restarted`);
@@ -873,9 +871,7 @@ export function registerSyncIpc(): void {
         } catch (err) {
           log.error({ err: err }, `[Sync] Failed to connect account ${account.id}`);
 
-          // Still store the client reference so reauth can use it
-          const client = new GmailClient(account.id);
-          activeClients.set(account.id, client);
+          activeClients.delete(account.id);
 
           connectedAccounts.push({
             accountId: account.id,
@@ -1556,7 +1552,7 @@ export function registerSyncIpc(): void {
         accountId,
         query,
         maxResults = 50,
-      }: { accountId: string; query: string; maxResults?: number },
+      }: { accountId?: string; query: string; maxResults?: number },
     ): Promise<IpcResponse<DashboardEmail[]>> => {
       if (useFakeData) {
         const { DEMO_INBOX_EMAILS, DEMO_EXPECTED_ANALYSIS } = await import("../demo/fake-inbox");

@@ -934,6 +934,27 @@ export function getInboxThreadIds(accountId: string): Set<string> {
   return new Set(rows.map((r) => r.thread_id));
 }
 
+export type EmailLabelState = {
+  id: string;
+  labelIds: string[] | undefined;
+};
+
+export function getVisibleInboxLabelStates(accountId: string, limit: number): EmailLabelState[] {
+  const db = getDatabase();
+  const stmt = db.prepare(`
+    SELECT id, label_ids as labelIds
+    FROM emails
+    WHERE account_id = ? AND (label_ids IS NULL OR label_ids LIKE '%"INBOX"%')
+    ORDER BY date DESC
+    LIMIT ?
+  `);
+  const rows = stmt.all(accountId, limit) as Array<{ id: string; labelIds: string | null }>;
+  return rows.map((row) => ({
+    id: row.id,
+    labelIds: parseLabelIds(row.labelIds),
+  }));
+}
+
 export function getEmailIds(accountId: string): Set<string> {
   const db = getDatabase();
   const stmt = db.prepare(`SELECT id FROM emails WHERE account_id = ?`);
@@ -1369,16 +1390,23 @@ function stripLargeDataUris(body: string): string {
   );
 }
 
-function rowToDashboardEmail(row: Record<string, unknown>): DashboardEmail {
-  // Parse labelIds from JSON string if present
-  let labelIds: string[] | undefined;
-  if (row.labelIds && typeof row.labelIds === "string") {
-    try {
-      labelIds = JSON.parse(row.labelIds);
-    } catch {
-      labelIds = undefined;
+function parseLabelIds(value: unknown): string[] | undefined {
+  if (!value || typeof value !== "string") return undefined;
+
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (Array.isArray(parsed) && parsed.every((label) => typeof label === "string")) {
+      return parsed;
     }
+  } catch {
+    return undefined;
   }
+
+  return undefined;
+}
+
+function rowToDashboardEmail(row: Record<string, unknown>): DashboardEmail {
+  const labelIds = parseLabelIds(row.labelIds);
 
   // Parse attachments from JSON string if present
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports
