@@ -135,6 +135,21 @@ export function isAuthError(error: unknown): boolean {
   return false;
 }
 
+export function isNotFoundError(error: unknown): boolean {
+  if (typeof error !== "object" || error === null) return false;
+
+  const code = Reflect.get(error, "code");
+  if (code === 404) return true;
+
+  const status = Reflect.get(error, "status");
+  if (status === 404) return true;
+
+  const response = Reflect.get(error, "response");
+  if (typeof response !== "object" || response === null) return false;
+
+  return Reflect.get(response, "status") === 404;
+}
+
 export class GmailClient {
   private oauth2Client: OAuth2Client | null = null;
   private gmail: ReturnType<typeof google.gmail> | null = null;
@@ -1434,6 +1449,28 @@ export class GmailClient {
   }
 
   /**
+   * Fetch only the current Gmail labels for a message.
+   */
+  async getMessageLabelIds(messageId: string): Promise<string[] | null> {
+    const gmail = this.gmail!;
+
+    try {
+      const response = await gmail.users.messages.get({
+        userId: "me",
+        id: messageId,
+        format: "minimal",
+      });
+      return response.data.labelIds ?? [];
+    } catch (err: unknown) {
+      if (isNotFoundError(err)) {
+        return null;
+      }
+
+      throw err;
+    }
+  }
+
+  /**
    * Mark all messages in a thread as read (removes UNREAD label from every message)
    */
   async markThreadAsRead(threadId: string): Promise<void> {
@@ -1637,15 +1674,16 @@ export class GmailClient {
     const unreadMessageIds: string[] = [];
     let latestHistoryId = startHistoryId;
 
-    // Fetch history for a single label, accumulating into the shared arrays above
-    const fetchLabel = async (labelId: string) => {
+    // Fetch unfiltered history. Using labelId-scoped history can miss exactly
+    // the label removals we care about: after Gmail removes INBOX/UNREAD, the
+    // message may no longer match the scoped label query.
+    const fetchHistory = async () => {
       let pageToken: string | undefined;
       do {
         const response = await gmail.users.history.list({
           userId: "me",
           startHistoryId,
           historyTypes: ["messageAdded", "messageDeleted", "labelAdded", "labelRemoved"],
-          labelId,
           pageToken,
         });
 
@@ -1654,7 +1692,12 @@ export class GmailClient {
         for (const item of history) {
           if (item.messagesAdded) {
             for (const msg of item.messagesAdded) {
-              if (msg.message?.id && msg.message?.labelIds?.includes(labelId)) {
+              const labels = msg.message?.labelIds ?? [];
+              if (
+                msg.message?.id &&
+                (labels.includes("INBOX") || labels.includes("SENT")) &&
+                !labels.includes("DRAFT")
+              ) {
                 newMessageIds.push(msg.message.id);
               }
             }
@@ -1688,6 +1731,12 @@ export class GmailClient {
               if (labelChange.labelIds?.includes("UNREAD")) {
                 unreadMessageIds.push(labelChange.message.id);
               }
+              // Existing archived messages can re-enter the inbox without being
+              // reported as messageAdded. Fetch them so local label state is
+              // replaced with Gmail's current labels.
+              if (labelChange.labelIds?.includes("INBOX")) {
+                newMessageIds.push(labelChange.message.id);
+              }
               // Detect draft-to-sent conversions: when a user sends our synced
               // Gmail draft, the History API reports it as labelsAdded (SENT)
               // rather than messagesAdded. Treat it as a new message so
@@ -1709,8 +1758,7 @@ export class GmailClient {
     };
 
     try {
-      // Fetch INBOX and SENT history in parallel
-      await Promise.all([fetchLabel("INBOX"), fetchLabel("SENT")]);
+      await fetchHistory();
 
       this.lastHistoryId = latestHistoryId;
 
