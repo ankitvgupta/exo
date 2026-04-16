@@ -871,7 +871,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-6">
         {activeTab === "general" && (
-          <div className="max-w-3xl space-y-6">
+          <div className="max-w-3xl mx-auto space-y-6">
             <div>
               <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
                 General Settings
@@ -1420,7 +1420,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
         )}
 
         {activeTab === "accounts" && (
-          <div className="max-w-3xl space-y-6">
+          <div className="max-w-3xl mx-auto space-y-6">
             <div>
               <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
                 Connected Accounts
@@ -1535,7 +1535,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
         )}
 
         {activeTab === "calendar" && (
-          <div className="max-w-3xl space-y-6">
+          <div className="max-w-3xl mx-auto space-y-6">
             <div>
               <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
                 Calendar Visibility
@@ -1613,19 +1613,19 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
         )}
 
         {activeTab === "splits" && (
-          <div className="max-w-3xl">
+          <div className="max-w-3xl mx-auto">
             <SplitConfigEditor />
           </div>
         )}
 
         {activeTab === "snippets" && (
-          <div className="max-w-3xl">
+          <div className="max-w-3xl mx-auto">
             <SnippetsEditor />
           </div>
         )}
 
         {activeTab === "signatures" && (
-          <div className="max-w-3xl space-y-6">
+          <div className="max-w-3xl mx-auto space-y-6">
             <div>
               <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
                 Email Signatures
@@ -1858,7 +1858,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
         )}
 
         {activeTab === "prompts" && (
-          <div className="max-w-3xl space-y-6">
+          <div className="max-w-3xl mx-auto space-y-6">
             {isLoading ? (
               <p className="text-gray-500 dark:text-gray-400">Loading settings...</p>
             ) : (
@@ -2032,7 +2032,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
         )}
 
         {activeTab === "style" && (
-          <div className="max-w-3xl space-y-6">
+          <div className="max-w-3xl mx-auto space-y-6">
             <div>
               <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
                 Writing Style
@@ -2094,7 +2094,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
         )}
 
         {activeTab === "assistant" && (
-          <div className="max-w-3xl space-y-6">
+          <div className="max-w-3xl mx-auto space-y-6">
             <div>
               <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
                 Executive Assistant Integration
@@ -2201,7 +2201,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
         )}
 
         {activeTab === "queue" && (
-          <div className="max-w-3xl space-y-6">
+          <div className="max-w-3xl mx-auto space-y-6">
             <div>
               <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
                 Background Processing Queue
@@ -3147,7 +3147,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
         {activeTab === "extensions" && <ExtensionsTab />}
 
         {activeTab === "analytics" && (
-          <div className="max-w-3xl space-y-6">
+          <div className="max-w-3xl mx-auto space-y-6">
             <div>
               <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">
                 Analytics
