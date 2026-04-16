@@ -168,21 +168,18 @@ export function AgentCommandPalette({ isOpen, onClose }: AgentCommandPaletteProp
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
-  const {
-    selectedAgentIds,
-    availableProviders,
-    setSelectedAgentIds,
-    setAvailableProviders,
-    selectedEmailId,
-    selectedThreadId,
-    selectedDraftId,
-    localDrafts,
-    currentAccountId,
-    accounts,
-    emails,
-    startAgentTask,
-    setGlobalAgentTaskKey,
-  } = useAppStore();
+  const selectedAgentIds = useAppStore((s) => s.selectedAgentIds);
+  const availableProviders = useAppStore((s) => s.availableProviders);
+  const setSelectedAgentIds = useAppStore((s) => s.setSelectedAgentIds);
+  const selectedEmailId = useAppStore((s) => s.selectedEmailId);
+  const selectedThreadId = useAppStore((s) => s.selectedThreadId);
+  const selectedDraftId = useAppStore((s) => s.selectedDraftId);
+  const localDrafts = useAppStore((s) => s.localDrafts);
+  const currentAccountId = useAppStore((s) => s.currentAccountId);
+  const accounts = useAppStore((s) => s.accounts);
+  const emails = useAppStore((s) => s.emails);
+  const startAgentTask = useAppStore((s) => s.startAgentTask);
+  const setGlobalAgentTaskKey = useAppStore((s) => s.setGlobalAgentTaskKey);
 
   const hasEmail = Boolean(selectedEmailId);
 
@@ -198,10 +195,12 @@ export function AgentCommandPalette({ isOpen, onClose }: AgentCommandPaletteProp
     [localDrafts, selectedDraftId],
   );
   const hasDraft = Boolean(selectedDraft);
+  const selectedContextAccountId =
+    selectedEmail?.accountId ?? selectedDraft?.accountId ?? currentAccountId;
 
   const currentAccount = useMemo(
-    () => accounts.find((a) => a.id === currentAccountId),
-    [accounts, currentAccountId],
+    () => accounts.find((a) => a.id === selectedContextAccountId),
+    [accounts, selectedContextAccountId],
   );
 
   // Suggested actions based on email context
@@ -221,27 +220,32 @@ export function AgentCommandPalette({ isOpen, onClose }: AgentCommandPaletteProp
     return allActions.filter((a) => fuzzyMatch(a.label, query));
   }, [query, suggestedActions, quickActions]);
 
+  const defaultProviderId = useMemo(() => {
+    return (
+      availableProviders.find((provider) => provider.id === "codex")?.id ??
+      availableProviders[0]?.id
+    );
+  }, [availableProviders]);
+
   // When the palette opens, fetch real provider list from the backend if we don't have one yet.
-  // Also auto-select "claude" when nothing is selected.
+  // Also auto-select the first available built-in provider when nothing valid is selected.
   useEffect(() => {
     if (!isOpen) return;
-
-    if (selectedAgentIds.length === 0) {
-      setSelectedAgentIds(["claude"]);
-    }
 
     if (availableProviders.length === 0) {
       // Request provider list from backend; the onProviders listener in App.tsx
       // will update the store when the response arrives.
       window.api?.agent?.providers?.();
+      return;
     }
-  }, [
-    isOpen,
-    selectedAgentIds.length,
-    availableProviders.length,
-    setSelectedAgentIds,
-    setAvailableProviders,
-  ]);
+
+    const hasValidSelection = selectedAgentIds.some((id) =>
+      availableProviders.some((provider) => provider.id === id),
+    );
+    if (!hasValidSelection && defaultProviderId) {
+      setSelectedAgentIds([defaultProviderId]);
+    }
+  }, [isOpen, selectedAgentIds, availableProviders, defaultProviderId, setSelectedAgentIds]);
 
   // Reset state when opened/closed
   useEffect(() => {
@@ -275,7 +279,7 @@ export function AgentCommandPalette({ isOpen, onClose }: AgentCommandPaletteProp
 
       // Build context — include email metadata only when an email is selected
       const context: AgentContext = {
-        accountId: currentAccountId ?? "",
+        accountId: selectedContextAccountId ?? "",
         userEmail: currentAccount?.email ?? "",
         userName: currentAccount?.displayName,
       };
@@ -335,7 +339,7 @@ export function AgentCommandPalette({ isOpen, onClose }: AgentCommandPaletteProp
     },
     [
       selectedAgentIds,
-      currentAccountId,
+      selectedContextAccountId,
       selectedEmailId,
       selectedDraftId,
       selectedThreadId,

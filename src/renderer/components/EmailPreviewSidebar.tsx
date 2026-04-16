@@ -263,11 +263,19 @@ export const EmailPreviewSidebar = memo(function EmailPreviewSidebar() {
           const email = useAppStore.getState().emails.find((e) => e.id === emailIdSnapshot);
           if (!email) return;
 
+          const providerIds = Array.from(
+            new Set(
+              result.data.events
+                .map((event) => event.providerId)
+                .filter((providerId): providerId is string => typeof providerId === "string"),
+            ),
+          );
+
           // Replay entire trace in a single store update (avoids O(n²) from N appendAgentEvent calls)
           replayAgentTrace(
             taskId,
             email.id,
-            ["claude"],
+            providerIds.length > 0 ? providerIds : ["claude"],
             "",
             {
               accountId: email.accountId || "",

@@ -1,4 +1,4 @@
-import { createMessage } from "./anthropic-service";
+import { createMessage } from "./llm-service";
 import {
   AnalysisResultSchema,
   ANALYSIS_JSON_FORMAT,
@@ -199,7 +199,7 @@ ${userIdentityLine}${wrapUntrustedEmail(`From: ${email.from}\nTo: ${email.to}\nS
 
     const textBlock = response.content.find((block) => block.type === "text");
     if (!textBlock || textBlock.type !== "text") {
-      throw new Error("No text response from Claude");
+      throw new Error("No text response from the configured LLM");
     }
 
     try {

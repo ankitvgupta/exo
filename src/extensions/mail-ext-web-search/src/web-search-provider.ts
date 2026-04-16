@@ -1,4 +1,4 @@
-import { createMessage } from "../../../main/services/anthropic-service";
+import { createMessage } from "../../../main/services/llm-service";
 import type {
   ExtensionContext,
   EnrichmentProvider,
@@ -79,7 +79,7 @@ export interface SenderProfileData {
 }
 
 /**
- * Strip citation markup from Claude's web search responses.
+ * Strip citation markup from web search responses.
  * Citations look like: <cite index="2-1,7-3">text</cite>
  */
 function stripCitations(text: string): string {
@@ -87,7 +87,7 @@ function stripCitations(text: string): string {
 }
 
 /**
- * Robustly parse Claude's response into profile data.
+ * Robustly parse the model response into profile data.
  * Handles: raw JSON, markdown-wrapped JSON, partial JSON, or plain text.
  * Always returns a valid Partial<SenderProfileData>.
  */
@@ -176,6 +176,21 @@ function validateProfileData(
   };
 }
 
+function buildUnavailableProfile(
+  senderEmail: string,
+  senderName: string,
+  isReminder: boolean,
+): SenderProfileData {
+  return {
+    email: senderEmail,
+    name: senderName,
+    summary:
+      "Sender lookup is unavailable right now. Check your AI provider authentication and try again.",
+    lookupAt: Date.now(),
+    isReminder,
+  };
+}
+
 /**
  * Create the web search enrichment provider
  */
@@ -189,8 +204,7 @@ export function createWebSearchProvider(
     priority: 100,
 
     canEnrich(email: DashboardEmail): boolean {
-      // Skip if the email is from a reminder service with no thread context
-      return !isReminderService(email.from);
+      return extractSenderEmail(email.from).trim().length > 0;
     },
 
     async enrich(
@@ -240,7 +254,7 @@ export function createWebSearchProvider(
       }
 
       try {
-        // Use Claude with web search to find information
+        // Use the configured LLM with web search to find information
         const searchQuery = buildSearchQuery(senderName, realSenderEmail);
 
         const response = await createMessage(
@@ -320,7 +334,13 @@ If you can't find specific information, return:
         };
       } catch (error) {
         context.logger.error(`Failed to look up ${realSenderEmail}:`, error);
-        return null;
+        const fallbackProfile = buildUnavailableProfile(realSenderEmail, senderName, isReminder);
+        return {
+          extensionId: "web-search",
+          panelId: "sender-profile",
+          data: fallbackProfile as unknown as Record<string, unknown>,
+          expiresAt: Date.now() + 5 * 60 * 1000, // Retry soon; don't leave the panel spinning
+        };
       }
     },
   };

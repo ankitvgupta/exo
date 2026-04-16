@@ -10,7 +10,8 @@
  * Key invariant: draft memories never enter the prompt. Only promoted memories do.
  */
 import { randomUUID } from "crypto";
-import { createMessage, getClient, recordStreamingCall } from "./anthropic-service";
+import { getClient, recordStreamingCall } from "./anthropic-service";
+import { createMessage, getCurrentLlmProvider } from "./llm-service";
 import {
   getThreadDraftBody,
   getDraftMemories,
@@ -664,6 +665,11 @@ export async function learnFromDraftEdit(params: {
   const { threadId, accountId, sentBodyHtml } = params;
   log.info(`[DraftEditLearner] Called for thread ${threadId}`);
 
+  if (getCurrentLlmProvider() !== "anthropic") {
+    log.info("[DraftEditLearner] Skipping edit learning because Anthropic is not the active LLM");
+    return null;
+  }
+
   // 1. Find the original AI draft for this thread
   const draftInfo = getThreadDraftBody(threadId, accountId);
   if (!draftInfo) {
@@ -696,7 +702,7 @@ export async function learnFromDraftEdit(params: {
   log.info(
     `[DraftEditLearner] Original draft: ${originalDraft.length} chars, sent text: ${sentPlainText.length} chars`,
   );
-  log.info(`[DraftEditLearner] Calling Claude to analyze edit for ${senderEmail}...`);
+  log.info(`[DraftEditLearner] Calling Anthropic to analyze edit for ${senderEmail}...`);
 
   // 5. Analyze the delta — extract observations (relaxed bar, no dedup against real memories)
   const observations = await analyzeDraftEdit({

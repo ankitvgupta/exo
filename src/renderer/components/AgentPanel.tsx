@@ -745,11 +745,11 @@ export const AgentTabContent = memo(function AgentTabContent({ emailId }: { emai
 
       // Call backend to delete draft, clean up trace, and launch a new agent
       const result = (await window.api?.drafts?.rerunAgent?.(emailId)) as
-        | { success: boolean; data?: { taskId: string }; error?: string }
+        | { success: boolean; data?: { taskId: string; providerIds?: string[] }; error?: string }
         | undefined;
 
       if (result?.success && result.data) {
-        const { taskId } = result.data;
+        const { taskId, providerIds } = result.data;
         // Create the in-memory tracking entry so the Agent tab shows live events.
         // The real context is built by buildAgentDraftContext on the backend — this
         // is only for the store's tracking entry.
@@ -757,7 +757,7 @@ export const AgentTabContent = memo(function AgentTabContent({ emailId }: { emai
         startAgentTask(
           taskId,
           emailId,
-          ["claude"],
+          providerIds && providerIds.length > 0 ? providerIds : (task?.providerIds ?? ["codex"]),
           task?.prompt || "",
           task?.context || {
             accountId: email?.accountId || "",

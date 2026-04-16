@@ -1,5 +1,5 @@
 import { ipcMain } from "electron";
-import { createMessage } from "../services/anthropic-service";
+import { createMessage } from "../services/llm-service";
 import {
   getEmail,
   deleteDraft,
@@ -18,7 +18,7 @@ import { buildMemoryContext } from "../services/memory-context";
 import { prefetchService } from "../services/prefetch-service";
 import { agentCoordinator } from "../agents/agent-coordinator";
 import { UNTRUSTED_DATA_INSTRUCTION, wrapUntrustedEmail } from "../../shared/prompt-safety";
-import type { IpcResponse } from "../../shared/types";
+import { resolveDefaultBuiltInAgentProviderId, type IpcResponse } from "../../shared/types";
 import { DEMO_INBOX_EMAILS } from "../demo/fake-inbox";
 import { createLogger } from "../services/logger";
 
@@ -150,7 +150,7 @@ FORMATTING: Write plain text paragraphs separated by blank lines. Do NOT use HTM
 
         const textBlock = response.content.find((block) => block.type === "text");
         if (!textBlock || textBlock.type !== "text") {
-          throw new Error("No text response from Claude");
+          throw new Error("No text response from the configured LLM");
         }
 
         const refinedDraft = textBlock.text.trim();
@@ -225,7 +225,8 @@ FORMATTING: Write plain text paragraphs separated by blank lines. Do NOT use HTM
         prefetchService.trackManualAgentDraft(emailId, taskId);
 
         // Launch agent — events auto-stream to renderer via agent:event IPC
-        await agentCoordinator.runAgent(taskId, ["claude"], prompt, context);
+        const providerIds = [resolveDefaultBuiltInAgentProviderId(getConfig())];
+        await agentCoordinator.runAgent(taskId, providerIds, prompt, context);
 
         // Link draft to agent task when it completes (async, don't block response)
         agentCoordinator
@@ -246,7 +247,7 @@ FORMATTING: Write plain text paragraphs separated by blank lines. Do NOT use HTM
             prefetchService.markAgentDraftDone(emailId, "failed");
           });
 
-        return { success: true, data: { taskId } };
+        return { success: true, data: { taskId, providerIds } };
       } catch (error) {
         return {
           success: false,

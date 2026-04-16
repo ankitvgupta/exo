@@ -16,7 +16,7 @@
  * Analysis memories are injected into the analysis prompt (not the draft prompt).
  */
 import { randomUUID } from "crypto";
-import { createMessage } from "./anthropic-service";
+import { createMessage } from "./llm-service";
 import {
   getDraftMemories,
   saveDraftMemory,

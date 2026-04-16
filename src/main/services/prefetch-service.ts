@@ -8,7 +8,6 @@ import {
   getInboxEmails,
   saveAnalysis,
   saveArchiveReady,
-  getAnalyzedArchiveThreadIds,
   getAccounts,
   updateDraftAgentTaskId,
 } from "../db";
@@ -16,7 +15,10 @@ import { getConfig, getModelIdForFeature } from "../ipc/settings.ipc";
 import { getExtensionHost } from "../extensions";
 import { agentCoordinator } from "../agents/agent-coordinator";
 import type { AgentContext } from "../agents/types";
-import { DEFAULT_AGENT_DRAFTER_PROMPT } from "../../shared/types";
+import {
+  DEFAULT_AGENT_DRAFTER_PROMPT,
+  resolveDefaultBuiltInAgentProviderId,
+} from "../../shared/types";
 import type { Email, DashboardEmail } from "../../shared/types";
 import { createLogger } from "./logger";
 
@@ -88,11 +90,26 @@ export interface PrefetchProgress {
   };
 }
 
+function getEmailDateMs(email: Pick<DashboardEmail, "date">): number {
+  return new Date(email.date).getTime();
+}
+
+function sortEmailsByNewest<T extends Pick<DashboardEmail, "date">>(emails: readonly T[]): T[] {
+  return [...emails].sort((left, right) => getEmailDateMs(right) - getEmailDateMs(left));
+}
+
+function isUsageLimitError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /usage limit/i.test(message);
+}
+
 /**
  * Background service for pre-fetching sender profiles and auto-generating drafts
  * Prioritizes high priority emails, then medium, then low
  */
 class PrefetchService {
+  private static readonly MAX_ANALYSIS_BACKFILL_PER_RUN = 25;
+  private static readonly USAGE_LIMIT_COOLDOWN_MS = 30 * 60 * 1000;
   private isRunning = false;
   private queue: PrefetchTask[] = [];
   private status: PrefetchStatus = "idle";
@@ -118,6 +135,8 @@ class PrefetchService {
   private activeAgentTaskIds = new Map<string, string>(); // emailId -> taskId (to detect superseded tasks)
   private forceQueuedDrafts = new Set<string>(); // emailIds that bypass analysis.needsReply check
   private completedAgentDraftLog: AgentDraftItem[] = []; // ring buffer, last 50
+  private usageLimitBackoffUntil: number | null = null;
+  private usageLimitBackoffTimer: ReturnType<typeof setTimeout> | null = null;
   private processedDraftThreads = new Set<string>(); // threadIds with queued/processed agent drafts
 
   // Startup cache: populated by sync:get-emails to avoid duplicate getInboxEmails() call
@@ -152,6 +171,53 @@ class PrefetchService {
 The user has an executive assistant${eaConfig.name ? ` named ${eaConfig.name}` : ""} (${eaConfig.email}) who handles scheduling on their behalf.
 
 When you see emails in a thread where ${eaName} is coordinating scheduling with a third party, assess from the email content whether ${eaName} is handling the conversation. If ${eaName} is actively managing the back-and-forth (e.g., proposing times, confirming details) and the email does not require the user's personal input beyond scheduling, do NOT generate a draft. Only draft a reply if the email content directly addresses the user or requires their personal decision or expertise.`;
+  }
+
+  private isUsageLimitBackoffActive(): boolean {
+    if (this.usageLimitBackoffUntil === null) return false;
+    if (Date.now() >= this.usageLimitBackoffUntil) {
+      this.usageLimitBackoffUntil = null;
+      return false;
+    }
+    return true;
+  }
+
+  private scheduleBackoffResume(): void {
+    if (this.usageLimitBackoffUntil === null || this.usageLimitBackoffTimer !== null) return;
+
+    const delay = Math.max(0, this.usageLimitBackoffUntil - Date.now());
+    this.usageLimitBackoffTimer = setTimeout(() => {
+      this.usageLimitBackoffTimer = null;
+      this.usageLimitBackoffUntil = null;
+      this.status = "idle";
+      this.emitProgress();
+
+      if (this.queue.length > 0) {
+        void this.processQueue();
+      }
+    }, delay);
+  }
+
+  private enterUsageLimitBackoff(error: unknown, taskType: PrefetchTask["type"]): boolean {
+    if (!isUsageLimitError(error)) return false;
+
+    const previousUntil = this.usageLimitBackoffUntil ?? 0;
+    const nextUntil = Date.now() + PrefetchService.USAGE_LIMIT_COOLDOWN_MS;
+    this.usageLimitBackoffUntil = Math.max(previousUntil, nextUntil);
+    this.status = "error";
+    this.scheduleBackoffResume();
+    this.emitProgress();
+
+    const retryAt = new Date(this.usageLimitBackoffUntil).toLocaleTimeString([], {
+      hour: "numeric",
+      minute: "2-digit",
+    });
+    const message = error instanceof Error ? error.message : String(error);
+    log.warn(
+      `[Prefetch] Pausing background ${taskType} work until ${retryAt} after usage-limit error: ${message}`,
+    );
+
+    return true;
   }
 
   private getAnalyzer(): EmailAnalyzer {
@@ -266,6 +332,14 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
       `[PERF] processAllPending getConfig took ${(performance.now() - tConfig).toFixed(1)}ms`,
     );
 
+    if (this.isUsageLimitBackoffActive()) {
+      log.warn("[Prefetch] Skipping processAllPending while usage-limit cooldown is active");
+      this.status = "error";
+      this.emitProgress();
+      this.scheduleBackoffResume();
+      return;
+    }
+
     // Use cached inbox emails from sync:get-emails if available (startup path),
     // otherwise fall back to DB query (non-startup callers like prompt change, rerun drafts).
     const tGetEmails = performance.now();
@@ -277,11 +351,19 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
       `[PERF] processAllPending getInboxEmails took ${(performance.now() - tGetEmails).toFixed(1)}ms, returned ${inboxEmails.length} emails (cache=${usedCache})`,
     );
 
-    const unanalyzed = inboxEmails.filter((e) => !e.analysis);
+    const unanalyzed = sortEmailsByNewest(inboxEmails.filter((e) => !e.analysis)).slice(
+      0,
+      PrefetchService.MAX_ANALYSIS_BACKFILL_PER_RUN,
+    );
+    const unanalyzedBacklog = inboxEmails.filter((e) => !e.analysis).length;
 
     // Queue analysis for unanalyzed emails
     if (unanalyzed.length > 0) {
-      log.info(`[Prefetch] Processing ${unanalyzed.length} unanalyzed inbox emails`);
+      const truncated =
+        unanalyzedBacklog > PrefetchService.MAX_ANALYSIS_BACKFILL_PER_RUN
+          ? ` (capped from ${unanalyzedBacklog})`
+          : "";
+      log.info(`[Prefetch] Processing ${unanalyzed.length} unanalyzed inbox emails${truncated}`);
       await this.queueEmails(unanalyzed.map((e) => e.id));
     } else {
       log.info("[Prefetch] No unanalyzed inbox emails to process");
@@ -425,65 +507,6 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
       );
       this.processQueue();
     }
-
-    // Queue archive-ready analysis for fully-analyzed threads
-    this.queueArchiveReadyTasks(inboxEmails);
-  }
-
-  /**
-   * Queue archive-ready analysis for inbox threads that are fully analyzed.
-   * Runs at low priority so it happens after analysis, sender profiles, and drafts.
-   */
-  private queueArchiveReadyTasks(inboxEmails: DashboardEmail[]): void {
-    // Group by thread
-    const threadMap = new Map<string, DashboardEmail[]>();
-    for (const email of inboxEmails) {
-      const existing = threadMap.get(email.threadId) || [];
-      existing.push(email);
-      threadMap.set(email.threadId, existing);
-    }
-
-    // Find threads already analyzed for archive-readiness, keyed by (accountId, threadId)
-    // to avoid cross-account collisions
-    const accountIds = new Set(inboxEmails.map((e) => e.accountId).filter(Boolean));
-    const alreadyAnalyzed = new Set<string>();
-    for (const accountId of accountIds) {
-      if (accountId) {
-        for (const threadId of getAnalyzedArchiveThreadIds(accountId)) {
-          alreadyAnalyzed.add(`${accountId}:${threadId}`);
-        }
-      }
-    }
-
-    let queued = 0;
-    for (const [threadId, emails] of threadMap) {
-      // Skip if already analyzed for archive-readiness or in this session
-      const accountId = emails[0]?.accountId || "";
-      if (
-        alreadyAnalyzed.has(`${accountId}:${threadId}`) ||
-        this.processedArchiveReady.has(`${accountId}:${threadId}`)
-      )
-        continue;
-
-      // Skip if any received email in thread is unanalyzed
-      // Sent emails don't need reply analysis, so exclude them from this check
-      const allAnalyzed = emails.every((e) => e.analysis || e.labelIds?.includes("SENT"));
-      if (!allAnalyzed) continue;
-
-      this.queue.push({
-        emailId: emails[0].id,
-        threadId,
-        accountId,
-        type: "archive-ready",
-        priority: 90, // Run after everything else
-      });
-      queued++;
-    }
-
-    if (queued > 0) {
-      log.info(`[Prefetch] Queueing ${queued} threads for archive-ready analysis`);
-      this.processQueue();
-    }
   }
 
   /**
@@ -567,6 +590,14 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
       this.queue.sort((a, b) => a.priority - b.priority);
 
       while (this.queue.length > 0) {
+        if (this.isUsageLimitBackoffActive()) {
+          this.status = "error";
+          this.currentTask = undefined;
+          this.emitProgress();
+          this.scheduleBackoffResume();
+          break;
+        }
+
         // Yield to event loop before each batch to let IPC handlers run
         await new Promise((resolve) => setImmediate(resolve));
 
@@ -656,7 +687,7 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
       }
     } finally {
       this.isRunning = false;
-      this.status = "idle";
+      this.status = this.isUsageLimitBackoffActive() ? "error" : "idle";
       this.currentTask = undefined;
       this.emitProgress();
       log.info(`[PERF] processQueue END total ${(performance.now() - t0).toFixed(1)}ms`);
@@ -665,7 +696,7 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
       // happened during our run), restart to pick them up.
       // Only check this.queue — agentDraftBacklog is drained independently by
       // drainAgentDraftBacklog() and would cause infinite recursion here.
-      if (this.queue.length > 0) {
+      if (this.queue.length > 0 && !this.isUsageLimitBackoffActive()) {
         this.processQueue();
       }
     }
@@ -860,6 +891,10 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
     } catch (error) {
       log.error({ err: error }, `[Prefetch] Failed to analyze ${emailId}`);
 
+      if (this.enterUsageLimitBackoff(error, "analysis")) {
+        return;
+      }
+
       // Still queue sender-profile even when analysis fails.
       // Extension enrichments (e.g. third-party services) don't depend on
       // the Anthropic API, so they can run independently of analysis.
@@ -972,6 +1007,7 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
       this.pendingSenderLookups.delete(senderEmail);
     } catch (error) {
       log.error({ err: error }, `[Prefetch] Failed to run extension enrichment for ${senderEmail}`);
+      this.enterUsageLimitBackoff(error, "sender-profile");
       // Clean up pending lookups even on failure
       this.pendingSenderLookups.delete(senderEmail);
     }
@@ -1118,7 +1154,12 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
       this.activeAgentTaskIds.set(emailId, taskId);
 
       // Launch the agent and await its actual completion (not just startup)
-      await agentCoordinator.runAgent(taskId, ["claude"], prompt, context);
+      await agentCoordinator.runAgent(
+        taskId,
+        [resolveDefaultBuiltInAgentProviderId(config)],
+        prompt,
+        context,
+      );
       await agentCoordinator.waitForCompletion(taskId);
 
       // Link the draft record to the agent task so the trace can be loaded later
@@ -1139,6 +1180,7 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
       log.info(`[Prefetch] Agent draft completed for ${emailId} (taskId=${taskId})`);
     } catch (error) {
       log.error({ err: error }, `[Prefetch] Failed agent draft for ${emailId}`);
+      this.enterUsageLimitBackoff(error, "agent-draft");
       // Only mark as processed if this task hasn't been superseded by a rerun.
       // When drafts:rerun-agent cancels the old task, its catch block runs asynchronously
       // after removeFromProcessedDrafts() has already cleared the email for re-queuing.
@@ -1209,6 +1251,7 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
       notify(threadId, accountId, result.archive_ready, result.reason);
     } catch (error) {
       log.error({ err: error }, `[Prefetch] Failed archive-ready analysis for thread ${threadId}`);
+      this.enterUsageLimitBackoff(error, "archive-ready");
     }
   }
 

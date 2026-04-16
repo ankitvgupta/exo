@@ -1,4 +1,4 @@
-import { createMessage } from "./anthropic-service";
+import { createMessage } from "./llm-service";
 import { stripJsonFences } from "../../shared/strip-json-fences";
 import {
   DEFAULT_CALENDARING_PROMPT,
@@ -41,7 +41,7 @@ ${wrapUntrustedEmail(`From: ${email.from}\nTo: ${email.to}\nSubject: ${email.sub
 
     const textBlock = response.content.find((block) => block.type === "text");
     if (!textBlock || textBlock.type !== "text") {
-      throw new Error("No text response from Claude");
+      throw new Error("No text response from the configured LLM");
     }
 
     try {

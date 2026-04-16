@@ -32,7 +32,10 @@ function ProviderStatusDot({ status }: { status: AgentTaskState | "ready" | "una
 }
 
 function ProviderRow({ provider }: { provider: AgentProviderConfig }) {
-  const { selectedAgentIds, setSelectedAgentIds, agentTasks, selectedEmailId } = useAppStore();
+  const selectedAgentIds = useAppStore((s) => s.selectedAgentIds);
+  const setSelectedAgentIds = useAppStore((s) => s.setSelectedAgentIds);
+  const agentTasks = useAppStore((s) => s.agentTasks);
+  const selectedEmailId = useAppStore((s) => s.selectedEmailId);
 
   const isSelected = selectedAgentIds.includes(provider.id);
 
@@ -139,13 +142,11 @@ function TaskHistoryRow({ entry }: { entry: AgentTaskHistoryEntry }) {
 }
 
 export function AgentsSidebar() {
-  const {
-    isAgentsSidebarOpen,
-    toggleAgentsSidebar,
-    availableProviders,
-    agentTaskHistory,
-    setShowSettings,
-  } = useAppStore();
+  const isAgentsSidebarOpen = useAppStore((s) => s.isAgentsSidebarOpen);
+  const toggleAgentsSidebar = useAppStore((s) => s.toggleAgentsSidebar);
+  const availableProviders = useAppStore((s) => s.availableProviders);
+  const agentTaskHistory = useAppStore((s) => s.agentTaskHistory);
+  const setShowSettings = useAppStore((s) => s.setShowSettings);
 
   if (!isAgentsSidebarOpen) return null;
 
