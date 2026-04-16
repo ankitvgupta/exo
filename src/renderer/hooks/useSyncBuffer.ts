@@ -130,6 +130,28 @@ function hasPending(): boolean {
   return pendingAdds.length > 0 || pendingRemoveIds.length > 0 || pendingUpdates.size > 0;
 }
 
+function applySparseUpdates(
+  emails: DashboardEmail[],
+  updates: ReadonlyMap<string, Partial<DashboardEmail>>,
+): DashboardEmail[] {
+  if (updates.size === 0) return emails;
+
+  let nextEmails: DashboardEmail[] | null = null;
+
+  for (let index = 0; index < emails.length; index += 1) {
+    const changes = updates.get(emails[index].id);
+    if (!changes) continue;
+
+    if (nextEmails === null) {
+      nextEmails = emails.slice();
+    }
+
+    nextEmails[index] = { ...emails[index], ...changes };
+  }
+
+  return nextEmails ?? emails;
+}
+
 function flush(): void {
   flushHandle = null;
 
@@ -168,10 +190,7 @@ function flush(): void {
 
     // 2. In-place updates (label changes, analysis, etc.)
     if (updates.size > 0) {
-      emails = emails.map((email) => {
-        const changes = updates.get(email.id);
-        return changes ? { ...email, ...changes } : email;
-      });
+      emails = applySparseUpdates(emails, updates);
     }
 
     // 3. Additions — deduplicate against current store AND pending removals
@@ -232,10 +251,7 @@ function flush(): void {
 
       // Apply in-place merges for re-emitted emails
       if (reEmitUpdates.size > 0) {
-        emails = emails.map((email) => {
-          const changes = reEmitUpdates.get(email.id);
-          return changes ? { ...email, ...changes } : email;
-        });
+        emails = applySparseUpdates(emails, reEmitUpdates);
       }
 
       if (brandNew.length > 0) {

@@ -6,7 +6,10 @@ type SuperhumanAccount = { email: string; snippetCount: number };
 type ImportResult = { imported: number; warnings: string[] };
 
 export function SnippetsEditor() {
-  const { snippets: allSnippets, setSnippets, currentAccountId, accounts } = useAppStore();
+  const allSnippets = useAppStore((s) => s.snippets);
+  const setSnippets = useAppStore((s) => s.setSnippets);
+  const currentAccountId = useAppStore((s) => s.currentAccountId);
+  const accounts = useAppStore((s) => s.accounts);
   const [editingSnippet, setEditingSnippet] = useState<Snippet | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [isLoading, setIsLoading] = useState(true);

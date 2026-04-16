@@ -103,26 +103,24 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
-  const {
-    accounts,
-    currentAccountId,
-    selectedEmailId,
-    selectedThreadId,
-    viewMode,
-    themePreference,
-    inboxDensity,
-    openSearch,
-    openCompose,
-    setShowSettings,
-    setViewMode,
-    setThemePreference,
-    setInboxDensity,
-    setCurrentAccountId,
-    setSelectedEmailId,
-    setSelectedThreadId,
-    setShowSnoozeMenu,
-    emails,
-  } = useAppStore();
+  const accounts = useAppStore((s) => s.accounts);
+  const currentAccountId = useAppStore((s) => s.currentAccountId);
+  const selectedEmailId = useAppStore((s) => s.selectedEmailId);
+  const selectedThreadId = useAppStore((s) => s.selectedThreadId);
+  const viewMode = useAppStore((s) => s.viewMode);
+  const themePreference = useAppStore((s) => s.themePreference);
+  const inboxDensity = useAppStore((s) => s.inboxDensity);
+  const openSearch = useAppStore((s) => s.openSearch);
+  const openCompose = useAppStore((s) => s.openCompose);
+  const setShowSettings = useAppStore((s) => s.setShowSettings);
+  const setViewMode = useAppStore((s) => s.setViewMode);
+  const setThemePreference = useAppStore((s) => s.setThemePreference);
+  const setInboxDensity = useAppStore((s) => s.setInboxDensity);
+  const setCurrentAccountId = useAppStore((s) => s.setCurrentAccountId);
+  const setSelectedEmailId = useAppStore((s) => s.setSelectedEmailId);
+  const setSelectedThreadId = useAppStore((s) => s.setSelectedThreadId);
+  const setShowSnoozeMenu = useAppStore((s) => s.setShowSnoozeMenu);
+  const emails = useAppStore((s) => s.emails);
 
   const { threads } = useThreadedEmails();
 
@@ -228,8 +226,13 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
         available: () => hasSelectedEmail,
         execute: () => {
           const state = useAppStore.getState();
-          if (state.selectedThreadId && state.currentAccountId) {
-            const threadEmails = state.emails.filter((e) => e.threadId === state.selectedThreadId);
+          const accountId =
+            state.emails.find((email) => email.id === state.selectedEmailId)?.accountId ??
+            state.currentAccountId;
+          if (state.selectedThreadId && accountId) {
+            const threadEmails = state.emails.filter(
+              (e) => e.threadId === state.selectedThreadId && e.accountId === accountId,
+            );
             state.removeEmailsAndAdvance(
               threadEmails.map((e) => e.id),
               null,
@@ -239,7 +242,7 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
               id: `archive-${state.selectedThreadId}-${Date.now()}`,
               type: "archive",
               threadCount: 1,
-              accountId: state.currentAccountId,
+              accountId,
               emails: [...threadEmails],
               scheduledAt: Date.now(),
               delayMs: 5000,
@@ -256,8 +259,13 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
         available: () => hasSelectedEmail,
         execute: () => {
           const state = useAppStore.getState();
-          if (state.selectedThreadId && state.currentAccountId) {
-            const threadEmails = state.emails.filter((e) => e.threadId === state.selectedThreadId);
+          const accountId =
+            state.emails.find((email) => email.id === state.selectedEmailId)?.accountId ??
+            state.currentAccountId;
+          if (state.selectedThreadId && accountId) {
+            const threadEmails = state.emails.filter(
+              (e) => e.threadId === state.selectedThreadId && e.accountId === accountId,
+            );
             state.removeEmailsAndAdvance(
               threadEmails.map((e) => e.id),
               null,
@@ -267,7 +275,7 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
               id: `trash-${state.selectedThreadId}-${Date.now()}`,
               type: "trash",
               threadCount: 1,
-              accountId: state.currentAccountId,
+              accountId,
               emails: [...threadEmails],
               scheduledAt: Date.now(),
               delayMs: 5000,
@@ -301,8 +309,13 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
         available: () => hasSelectedThread,
         execute: () => {
           const state = useAppStore.getState();
-          if (state.selectedThreadId && state.currentAccountId) {
-            const threadEmails = state.emails.filter((e) => e.threadId === state.selectedThreadId);
+          const accountId =
+            state.emails.find((email) => email.id === state.selectedEmailId)?.accountId ??
+            state.currentAccountId;
+          if (state.selectedThreadId && accountId) {
+            const threadEmails = state.emails.filter(
+              (e) => e.threadId === state.selectedThreadId && e.accountId === accountId,
+            );
             const latest = threadEmails.reduce(
               (a, b) => (new Date(a.date).getTime() >= new Date(b.date).getTime() ? a : b),
               threadEmails[0],
@@ -316,7 +329,7 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
                   id: `mark-unread-${state.selectedThreadId}-${Date.now()}`,
                   type: "mark-unread",
                   threadCount: 1,
-                  accountId: state.currentAccountId,
+                  accountId,
                   emails: [latest],
                   scheduledAt: Date.now(),
                   delayMs: 5000,
@@ -346,7 +359,10 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
         available: () => hasSelectedEmail,
         execute: () => {
           const state = useAppStore.getState();
-          if (state.selectedEmailId && state.currentAccountId) {
+          const accountId =
+            state.emails.find((email) => email.id === state.selectedEmailId)?.accountId ??
+            state.currentAccountId;
+          if (state.selectedEmailId && accountId) {
             const email = state.emails.find((e) => e.id === state.selectedEmailId);
             if (email) {
               const currentLabels = email.labelIds || [];
@@ -360,7 +376,7 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
                 id: `${isStarred ? "unstar" : "star"}-${email.threadId}-${Date.now()}`,
                 type: isStarred ? "unstar" : "star",
                 threadCount: 1,
-                accountId: state.currentAccountId,
+                accountId,
                 emails: [email],
                 scheduledAt: Date.now(),
                 delayMs: 5000,
@@ -390,6 +406,10 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
           const state = useAppStore.getState();
           if (state.currentAccountId) {
             window.api.sync.now(state.currentAccountId);
+          } else {
+            state.accounts.forEach((account) => {
+              window.api.sync.now(account.id).catch(console.error);
+            });
           }
         },
       },
@@ -580,6 +600,17 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
       },
 
       // --- Account switching ---
+      {
+        id: "switch-account-all",
+        label: "Switch to all accounts",
+        category: "Accounts",
+        icon: ICONS.user,
+        available: () => currentAccountId !== null,
+        execute: () => {
+          setCurrentAccountId(null);
+          window.api.settings.set({ selectedAccountId: null }).catch(console.error);
+        },
+      },
       ...accounts.map((account) => ({
         id: `switch-account-${account.id}`,
         label: `Switch to ${account.email}`,
@@ -588,6 +619,7 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
         available: () => account.id !== currentAccountId,
         execute: () => {
           setCurrentAccountId(account.id);
+          window.api.settings.set({ selectedAccountId: account.id }).catch(console.error);
           window.api.sync.getEmails(account.id).then((result: IpcResponse<DashboardEmail[]>) => {
             if (result.success && result.data) {
               const otherEmails = useAppStore

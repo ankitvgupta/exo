@@ -9,6 +9,7 @@ interface EmailRowProps {
   isChecked: boolean;
   isMultiSelectActive: boolean;
   density: InboxDensity;
+  accountLabel?: string;
   onClick: (e: React.MouseEvent) => void;
   onCheckboxChange: () => void;
   snoozeInfo?: SnoozedEmail;
@@ -120,6 +121,7 @@ export const EmailRow = memo(
     isChecked,
     isMultiSelectActive,
     density,
+    accountLabel,
     onClick,
     onCheckboxChange,
     snoozeInfo,
@@ -204,6 +206,17 @@ export const EmailRow = memo(
           >
             {senderName}
           </div>
+
+          {accountLabel && (
+            <span
+              className={`
+          ${ds.priorityBadge} rounded flex-shrink-0 uppercase font-medium
+          ${isSelected && !isChecked ? "bg-white/20 text-white" : "bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400"}
+        `}
+            >
+              {accountLabel}
+            </span>
+          )}
 
           {/* Priority label */}
           {priorityLabel && (
@@ -333,6 +346,7 @@ export const EmailRow = memo(
     prev.isSelected === next.isSelected &&
     prev.isChecked === next.isChecked &&
     prev.isMultiSelectActive === next.isMultiSelectActive &&
+    prev.accountLabel === next.accountLabel &&
     prev.density === next.density &&
     prev.snoozeInfo === next.snoozeInfo &&
     prev.returnTime === next.returnTime,

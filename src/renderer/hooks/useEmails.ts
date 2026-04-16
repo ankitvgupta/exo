@@ -3,13 +3,9 @@ import { useAppStore } from "../store";
 
 export function useEmails() {
   const _queryClient = useQueryClient();
-  const {
-    setEmails,
-    setLoading: _setLoading,
-    setError: _setError,
-    updateEmail,
-    currentAccountId,
-  } = useAppStore();
+  const setEmails = useAppStore((s) => s.setEmails);
+  const updateEmail = useAppStore((s) => s.updateEmail);
+  const currentAccountId = useAppStore((s) => s.currentAccountId);
 
   const fetchEmailsQuery = useQuery({
     queryKey: ["emails", currentAccountId],

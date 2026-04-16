@@ -235,7 +235,10 @@ type SuperhumanAccount = { email: string; splitCount: number };
 type ImportResult = { imported: number; warnings: string[] };
 
 export function SplitConfigEditor() {
-  const { splits: allSplits, setSplits, currentAccountId, accounts } = useAppStore();
+  const allSplits = useAppStore((s) => s.splits);
+  const setSplits = useAppStore((s) => s.setSplits);
+  const currentAccountId = useAppStore((s) => s.currentAccountId);
+  const accounts = useAppStore((s) => s.accounts);
   const [editingSplit, setEditingSplit] = useState<InboxSplit | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [isLoading, setIsLoading] = useState(true);

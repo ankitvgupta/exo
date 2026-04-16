@@ -61,14 +61,12 @@ function HintItem({ hint }: { hint: Hint }) {
 }
 
 export function KeyboardHints() {
-  const {
-    viewMode,
-    composeState,
-    isSearchOpen,
-    isCommandPaletteOpen,
-    activeSearchQuery,
-    selectedThreadIds,
-  } = useAppStore();
+  const viewMode = useAppStore((s) => s.viewMode);
+  const composeState = useAppStore((s) => s.composeState);
+  const isSearchOpen = useAppStore((s) => s.isSearchOpen);
+  const isCommandPaletteOpen = useAppStore((s) => s.isCommandPaletteOpen);
+  const activeSearchQuery = useAppStore((s) => s.activeSearchQuery);
+  const selectedThreadIds = useAppStore((s) => s.selectedThreadIds);
 
   // Don't show hints when search or command palette is open
   if (isSearchOpen || isCommandPaletteOpen) {
