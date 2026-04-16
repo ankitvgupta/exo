@@ -706,7 +706,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
 
       {/* Tabs */}
       <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
-        <div className="flex space-x-1 p-2">
+        <div className="flex space-x-1 p-2 overflow-x-auto whitespace-nowrap">
           <button
             onClick={() => setActiveTab("general")}
             data-active={activeTab === "general" ? "true" : undefined}
