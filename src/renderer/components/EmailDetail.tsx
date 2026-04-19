@@ -2241,7 +2241,9 @@ class EmailDetailErrorBoundary extends React.Component<
       return (
         <div className="flex-1 flex items-center justify-center bg-gray-50 dark:bg-gray-800/50">
           <div className="text-center">
-            <p className="text-gray-500 dark:text-gray-400 mb-2">Something went wrong displaying this email.</p>
+            <p className="text-gray-500 dark:text-gray-400 mb-2">
+              Something went wrong displaying this email.
+            </p>
             <button
               className="text-sm text-blue-500 hover:text-blue-600 dark:text-blue-400"
               onClick={() => this.setState({ hasError: false })}
@@ -2890,7 +2892,14 @@ function EmailDetailInner({ isFullView = false }: EmailDetailProps) {
         }
       }
     }
-  }, [isFullView, composeState, currentAccountId, closeCompose, setInlineReplyOpen, selectedThreadId]);
+  }, [
+    isFullView,
+    composeState,
+    currentAccountId,
+    closeCompose,
+    setInlineReplyOpen,
+    selectedThreadId,
+  ]);
 
   // Safety net: if we're in full view with no valid email and no compose open,
   // fall back to split view so the email list becomes visible. This catches edge
