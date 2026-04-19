@@ -64,6 +64,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
   const [stylePrompt, setStylePrompt] = useState("");
   const [isInferring, setIsInferring] = useState(false);
   const [inferError, setInferError] = useState<string | null>(null);
+  const [isSavingStyle, setIsSavingStyle] = useState(false);
   const [styleSaved, setStyleSaved] = useState(false);
   const [agentDrafterPrompt, setAgentDrafterPrompt] = useState("");
   const [isRerunningAll, setIsRerunningAll] = useState(false);
@@ -465,7 +466,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
   };
 
   const handleSaveStylePrompt = async () => {
-    setIsSaving(true);
+    setIsSavingStyle(true);
     setStyleSaved(false);
     try {
       const result = (await window.api.settings.setPrompts({
@@ -477,7 +478,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
         setTimeout(() => setStyleSaved(false), 2000);
       }
     } finally {
-      setIsSaving(false);
+      setIsSavingStyle(false);
     }
   };
 
@@ -2126,10 +2127,10 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
               <div className="flex items-center gap-3 mt-4">
                 <button
                   onClick={handleSaveStylePrompt}
-                  disabled={isSaving}
+                  disabled={isSavingStyle}
                   className="px-6 py-2 bg-blue-600 dark:bg-blue-500 text-white font-medium rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors disabled:opacity-50"
                 >
-                  {isSaving ? "Saving..." : "Save Style Prompt"}
+                  {isSavingStyle ? "Saving..." : "Save Style Prompt"}
                 </button>
                 {styleSaved && <p className="text-sm text-green-600 dark:text-green-400">Saved.</p>}
               </div>
