@@ -42,12 +42,12 @@ export async function syncDraftToGmail(
 ): Promise<void> {
   if (useFakeData) return;
 
-  const syncEnabled = getConfig().syncDraftsToGmail;
-
-  // If sync is disabled and there's no old draft to clean up, skip entirely.
-  if (!syncEnabled && !oldGmailDraftId) return;
-
   try {
+    const syncEnabled = getConfig().syncDraftsToGmail;
+
+    // If sync is disabled and there's no old draft to clean up, skip entirely.
+    if (!syncEnabled && !oldGmailDraftId) return;
+
     const email = getEmail(emailId);
     if (!email) {
       log.warn(`[GmailDraftSync] Email not found: ${emailId}`);
