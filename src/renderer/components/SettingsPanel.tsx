@@ -468,11 +468,14 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
     setIsSaving(true);
     setStyleSaved(false);
     try {
-      await window.api.settings.setPrompts({
+      const result = (await window.api.settings.setPrompts({
         stylePrompt: stylePrompt || undefined,
-      });
+      })) as { success: boolean };
       queryClient.invalidateQueries({ queryKey: ["prompts"] });
-      setStyleSaved(true);
+      if (result.success) {
+        setStyleSaved(true);
+        setTimeout(() => setStyleSaved(false), 2000);
+      }
     } finally {
       setIsSaving(false);
     }
