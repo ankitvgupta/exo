@@ -12,6 +12,7 @@ import {
   saveDraft,
 } from "../db";
 import { getClient } from "../ipc/gmail.ipc";
+import { getConfig } from "../ipc/settings.ipc";
 import { createLogger } from "./logger";
 
 const log = createLogger("gmail-draft-sync");
@@ -40,6 +41,7 @@ export async function syncDraftToGmail(
   forwardTo?: string[],
 ): Promise<void> {
   if (useFakeData) return;
+  if (!getConfig().syncDraftsToGmail) return;
 
   try {
     const email = getEmail(emailId);
@@ -163,6 +165,7 @@ export function saveDraftAndSync(
  */
 export async function deleteGmailDraftById(accountId: string, gmailDraftId: string): Promise<void> {
   if (useFakeData) return;
+  if (!getConfig().syncDraftsToGmail) return;
 
   try {
     const client = await getClient(accountId || "default");
