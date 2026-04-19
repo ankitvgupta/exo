@@ -2257,8 +2257,9 @@ class EmailDetailErrorBoundary extends React.Component<
 }
 
 export function EmailDetail({ isFullView = false }: EmailDetailProps) {
+  const selectedEmailId = useAppStore((s) => s.selectedEmailId);
   return (
-    <EmailDetailErrorBoundary>
+    <EmailDetailErrorBoundary key={selectedEmailId ?? "__none__"}>
       <EmailDetailInner isFullView={isFullView} />
     </EmailDetailErrorBoundary>
   );
