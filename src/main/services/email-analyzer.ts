@@ -139,7 +139,7 @@ Output: {"needs_reply": true, "reason": "Time-sensitive contract requiring sign-
 Example 13 - Action-required task (low priority):
 Email Subject: "Please update the team roster spreadsheet"
 Email Body: "Hi, could you add the two new hires to the shared roster spreadsheet by end of week? The link is in the pinned message in our Slack channel. Thanks!"
-Output: {"needs_reply": false, "reason": "Task to update an external document - no email reply needed but action required", "priority": "low"}
+Output: {"needs_reply": true, "reason": "Action required - update external document by end of week", "priority": "low"}
 
 Now analyze the following email:`;
 
