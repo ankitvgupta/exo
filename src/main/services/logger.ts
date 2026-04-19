@@ -116,8 +116,11 @@ function initLogger(): Logger {
   const logDir = getLogDir();
   try {
     mkdirSync(logDir, { recursive: true });
-  } catch {
-    /* ignore */
+  } catch (e) {
+    // Don't silently swallow — leave a breadcrumb so we can debug startup
+    // failures like the fd=-1 crash in issue #97.
+    // eslint-disable-next-line no-console
+    console.error("[logger] Failed to create log directory:", logDir, e);
   }
 
   cleanOldLogs(logDir);
@@ -126,8 +129,16 @@ function initLogger(): Logger {
   const logFile = join(logDir, `${today}.log`);
   const dev = isDev();
 
-  // pino.destination() returns SonicBoom at runtime but is typed as DestinationStream
+  // pino.destination() returns SonicBoom at runtime but is typed as DestinationStream.
+  // Attach an error handler immediately so that if the file descriptor fails to
+  // open (fd = -1), the error is swallowed rather than crashing the app with
+  // an unhandled "fd is out of range" RangeError (see GitHub issue #97).
   const fileDest = pino.destination({ dest: logFile, sync: false, mkdir: true }) as SonicBoom;
+  fileDest.on("error", (err) => {
+    // Best-effort: log to stderr so there's a breadcrumb, but never throw.
+    // eslint-disable-next-line no-console
+    console.error("[logger] SonicBoom file destination error:", err.message);
+  });
   _destinations = [fileDest];
 
   const streams: pino.StreamEntry[] = [
@@ -152,6 +163,10 @@ function initLogger(): Logger {
     } catch {
       // pino-pretty not available, fall back to raw JSON to stdout
       const stdoutDest = pino.destination({ dest: 1, sync: true }) as SonicBoom;
+      stdoutDest.on("error", (err) => {
+        // eslint-disable-next-line no-console
+        console.error("[logger] SonicBoom stdout destination error:", err.message);
+      });
       _destinations.push(stdoutDest);
       streams.push({
         level: "debug" as const,
