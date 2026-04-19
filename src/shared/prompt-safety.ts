@@ -3,7 +3,7 @@
  *
  * Attacker-controlled fields (from, to, subject, body) must be wrapped in
  * clearly-delimited tags so the model treats them as data, not instructions.
- * See: https://github.com/ankitvgupta/mail-app/issues/47
+ * See: https://github.com/ankitvgupta/exo/issues/47
  */
 
 export const UNTRUSTED_DATA_INSTRUCTION =

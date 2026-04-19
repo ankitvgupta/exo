@@ -1,13 +1,11 @@
 <div align="center">
 
-<img width="1200" alt="Exo" src="docs/images/readme-hero.png" />
-
 ### Exo: Claude Code for your Inbox
 
-[![GitHub stars](https://img.shields.io/github/stars/ankitvgupta/mail-app?style=flat&logo=github)](https://github.com/ankitvgupta/mail-app/stargazers)
-[![GitHub release](https://img.shields.io/github/v/release/ankitvgupta/mail-app?style=flat&logo=github)](https://github.com/ankitvgupta/mail-app/releases)
-[![License](https://img.shields.io/github/license/ankitvgupta/mail-app?style=flat)](LICENSE)
-[![Download DMG](https://img.shields.io/github/v/release/ankitvgupta/mail-app?label=Download%20.dmg&logo=apple&style=flat-square)](https://github.com/ankitvgupta/mail-app/releases/latest)
+[![GitHub stars](https://img.shields.io/github/stars/ankitvgupta/exo?style=flat&logo=github)](https://github.com/ankitvgupta/exo/stargazers)
+[![GitHub release](https://img.shields.io/github/v/release/ankitvgupta/exo?style=flat&logo=github)](https://github.com/ankitvgupta/exo/releases)
+[![License](https://img.shields.io/github/license/ankitvgupta/exo?style=flat)](LICENSE)
+[![Download DMG](https://img.shields.io/github/v/release/ankitvgupta/exo?label=Download%20.dmg&logo=apple&style=flat-square)](https://github.com/ankitvgupta/exo/releases/latest)
 
 <br />
 
@@ -16,17 +14,18 @@ Built with Electron, React, TypeScript, and Tailwind CSS.
 
 <br />
 
-[**Download for macOS**](https://github.com/ankitvgupta/mail-app/releases/latest) &nbsp;&bull;&nbsp; [Documentation](https://exo.email) &nbsp;&bull;&nbsp; [Changelog](https://github.com/ankitvgupta/mail-app/releases) 
+[**Download for macOS**](https://github.com/ankitvgupta/exo/releases/latest) &nbsp;&bull;&nbsp; [Documentation](https://exo.email) &nbsp;&bull;&nbsp; [Changelog](https://github.com/ankitvgupta/exo/releases)
 
 <br />
 
+<img width="1200" alt="Exo" src="docs/images/readme-hero.png" />
 
 </div>
 
 
 # Exo
 
-[![Download DMG](https://img.shields.io/github/v/release/ankitvgupta/mail-app?label=Download%20.dmg&logo=apple&style=flat-square)](https://github.com/ankitvgupta/mail-app/releases/latest)
+[![Download DMG](https://img.shields.io/github/v/release/ankitvgupta/exo?label=Download%20.dmg&logo=apple&style=flat-square)](https://github.com/ankitvgupta/exo/releases/latest)
 
 An open source, AI-native desktop email client. Built with Electron, React, TypeScript, and Tailwind CSS.
 

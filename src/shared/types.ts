@@ -135,7 +135,7 @@ If the email requires a decision or action that I must take personally (like rev
 // Output format suffix appended automatically — never shown to the user
 export const DRAFT_FORMAT_SUFFIX = `
 
-Output ONLY the email body text - no subject line, no "Dear X" if not needed, no signature (I have one set up). Just the reply content.
+Output ONLY the email body text - no subject line, no "Dear X" if not needed, no signature (I have one set up). Just the reply content. Do NOT include any signature like "--Sent by Exo" or "Sent from Exo" — the app appends its own signature automatically.
 
 FORMATTING: Write plain text paragraphs separated by blank lines. Do NOT use HTML tags of any kind (<p>, <br>, <div>, <b>, <i>, <ul>, <ol>, etc.). For bold, wrap text in double asterisks like **bold text**. For italic, wrap text in single asterisks like *italic text*. For bullet lists, use lines starting with "- ". For numbered lists, use "1. ", "2. ", etc. The email client converts plain text structure to rich formatting automatically.`;
 
