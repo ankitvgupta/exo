@@ -1494,9 +1494,23 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
   }
 
   /**
-   * Clear all state - call on logout or account switch
+   * Clear all state — call on logout or account switch.
+   * Resets seededFromDb so the next processAllPending() re-seeds processedDrafts
+   * from the DB (the new account's history).
    */
   clear(): void {
+    this.clearForRerun();
+    this.seededFromDb = false;
+  }
+
+  /**
+   * Clear in-memory state for a rerun of the pipeline, but keep seededFromDb
+   * as-is so the next processAllPending() does NOT re-seed from the DB.
+   * Used by "rerun all drafts" and prompt-change flows where the caller has
+   * already invalidated the relevant DB state (pending drafts + traces) and
+   * wants the pipeline to re-run without the seed re-blocking everything.
+   */
+  clearForRerun(): void {
     this.reset();
     this.queue = [];
     this.cachedInboxEmails = null;

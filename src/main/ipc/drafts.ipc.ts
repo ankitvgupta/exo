@@ -278,8 +278,10 @@ FORMATTING: Write plain text paragraphs separated by blank lines. Do NOT use HTM
           `[Drafts] Rerun all: cleared ${clearedCount} pending drafts, ${tracesCleared} agent traces`,
         );
 
-        // Reset prefetch tracking so emails can be re-queued
-        prefetchService.clear();
+        // Reset prefetch tracking so emails can be re-queued.
+        // Use clearForRerun() so the next processAllPending() does NOT re-seed
+        // processedDrafts from DB — the seed would re-block all the just-cleared drafts.
+        prefetchService.clearForRerun();
 
         // Re-trigger the full prefetch pipeline (fire-and-forget, but catch errors)
         prefetchService.processAllPending().catch((err) => {
