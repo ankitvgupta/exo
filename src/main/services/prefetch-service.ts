@@ -16,6 +16,7 @@ import {
 import { getConfig, getModelIdForFeature } from "../ipc/settings.ipc";
 import { getExtensionHost } from "../extensions";
 import { agentCoordinator } from "../agents/agent-coordinator";
+import { buildAutoDraftTaskId } from "../agents/task-id";
 import type { AgentContext } from "../agents/types";
 import { DEFAULT_AGENT_DRAFTER_PROMPT } from "../../shared/types";
 import type { Email, DashboardEmail } from "../../shared/types";
@@ -1054,7 +1055,10 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
    * so it can research context before drafting.
    */
   private async processAgentDraft(emailId: string): Promise<void> {
-    if (this.processedDrafts.has(emailId)) return;
+    // Force-queued items bypass the processedDrafts guard — the DB seed on startup
+    // could re-add a previously-completed email to processedDrafts during the window
+    // between forceQueueAgentDraft() clearing it and the task actually running.
+    if (this.processedDrafts.has(emailId) && !this.forceQueuedDrafts.has(emailId)) return;
 
     // Skip in test/demo mode — agent worker may not be available or we shouldn't make real API calls
     const isTestMode = process.env.EXO_TEST_MODE === "true";
@@ -1096,7 +1100,7 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
       `[Prefetch] Starting agent draft for email ${emailId} (priority=${email.analysis?.priority ?? "unknown"})`,
     );
 
-    const taskId = `auto-draft-${emailId}-${Date.now()}`;
+    const taskId = buildAutoDraftTaskId(emailId);
 
     try {
       const config = getConfig();
@@ -1474,7 +1478,7 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
       ? accounts.find((a) => a.id === email.accountId)
       : (accounts.find((a) => a.isPrimary) ?? accounts[0]);
 
-    const taskId = `auto-draft-${emailId}-${Date.now()}`;
+    const taskId = buildAutoDraftTaskId(emailId);
     const context: AgentContext = {
       accountId: account?.id || "",
       currentEmailId: emailId,

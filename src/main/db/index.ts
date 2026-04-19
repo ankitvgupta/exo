@@ -17,6 +17,7 @@ import type {
   SendAsAlias,
 } from "../../shared/types";
 import { createLogger } from "../services/logger";
+import { parseAutoDraftTaskId, AUTO_DRAFT_TASK_ID_LIKE_PATTERN } from "../agents/task-id";
 
 const log = createLogger("db");
 
@@ -4371,21 +4372,19 @@ export function listConversationMirrors(providerId?: string): ConversationMirror
 /**
  * Load email IDs that have had a successful auto-draft agent run,
  * derived from the agent_conversation_mirror table.
- * Task IDs follow the format: auto-draft-{emailId}-{timestamp}
  */
 export function loadCompletedAgentDraftEmailIds(): Set<string> {
   const db = getDatabase();
   const rows = db
     .prepare(
-      `SELECT DISTINCT local_task_id FROM agent_conversation_mirror
-       WHERE local_task_id LIKE 'auto-draft-%' AND status = 'completed'`,
+      `SELECT local_task_id FROM agent_conversation_mirror
+       WHERE local_task_id LIKE ? AND status = 'completed'`,
     )
-    .all() as Array<{ local_task_id: string }>;
+    .all(AUTO_DRAFT_TASK_ID_LIKE_PATTERN) as Array<{ local_task_id: string }>;
   const emailIds = new Set<string>();
   for (const row of rows) {
-    // Extract emailId from "auto-draft-{emailId}-{timestamp}"
-    const match = row.local_task_id.match(/^auto-draft-(.+)-\d+$/);
-    if (match) emailIds.add(match[1]);
+    const emailId = parseAutoDraftTaskId(row.local_task_id);
+    if (emailId) emailIds.add(emailId);
   }
   return emailIds;
 }
