@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { useAppStore } from "../store";
 import { useSignature } from "./useSignature";
 import type { ComposeAttachmentItem } from "../components/AttachmentList";
@@ -14,6 +14,11 @@ import type {
 function extractBareEmail(addr: string): string {
   const match = addr.match(/<([^>]+)>$/);
   return match ? match[1] : addr;
+}
+
+/** Format a SendAsAlias as "Display Name <email>" or just "email". */
+function formatAlias(alias: SendAsAlias): string {
+  return alias.displayName ? `${alias.displayName} <${alias.email}>` : alias.email;
 }
 
 /** Build a name map from an array of potentially formatted addresses. */
@@ -133,7 +138,8 @@ export function useComposeForm({
 
   // --- Send-as aliases ---
   const [sendAsAliases, setSendAsAliases] = useState<SendAsAlias[]>([]);
-  const [from, setFrom] = useState<string | undefined>(undefined);
+  // Tracks the user's explicit selection; undefined means "use derived default"
+  const [fromOverride, setFromOverride] = useState<string | undefined>(undefined);
 
   // Fetch aliases on mount
   useEffect(() => {
@@ -143,56 +149,49 @@ export function useComposeForm({
       .then((result) => {
         if (result.success && result.data.length > 0) {
           setSendAsAliases(result.data);
-
-          // Smart reply default: auto-select the alias that the original email was sent to.
-          // replyInfo.to/cc only has the REPLY addresses (original sender for plain reply),
-          // so we also check the original email's To/CC from the store — that's where
-          // the user's alias appears as a recipient.
-          if (replyInfo) {
-            const replyRecipients = [...(replyInfo.to || []), ...(replyInfo.cc || [])].map((addr) =>
-              extractBareEmail(addr).toLowerCase(),
-            );
-
-            // Also check the original email's recipients (covers plain reply)
-            const originalEmail = replyToEmailId
-              ? useAppStore.getState().emails.find((e) => e.id === replyToEmailId)
-              : undefined;
-            const originalRecipients = originalEmail
-              ? [
-                  ...(originalEmail.to || "").split(",").map((s) => s.trim()),
-                  ...(originalEmail.cc || "").split(",").map((s) => s.trim()),
-                ].map((addr) => extractBareEmail(addr).toLowerCase())
-              : [];
-
-            const allRecipients = [...replyRecipients, ...originalRecipients];
-            const matchingAlias = result.data.find((a) =>
-              allRecipients.includes(a.email.toLowerCase()),
-            );
-            if (matchingAlias) {
-              setFrom(
-                matchingAlias.displayName
-                  ? `${matchingAlias.displayName} <${matchingAlias.email}>`
-                  : matchingAlias.email,
-              );
-              return;
-            }
-          }
-
-          // Default to the default alias
-          const defaultAlias = result.data.find((a) => a.isDefault);
-          if (defaultAlias) {
-            setFrom(
-              defaultAlias.displayName
-                ? `${defaultAlias.displayName} <${defaultAlias.email}>`
-                : defaultAlias.email,
-            );
-          }
         }
       })
       .catch(() => {
         // Silently fail — compose still works without aliases
       });
   }, [accountId]);
+
+  // Derive the default "from" address from aliases without storing in state.
+  // Smart reply default: pick the alias that the original email was sent to.
+  const derivedFrom = useMemo(() => {
+    if (sendAsAliases.length === 0) return undefined;
+
+    if (replyInfo) {
+      const replyRecipients = [...(replyInfo.to || []), ...(replyInfo.cc || [])].map((addr) =>
+        extractBareEmail(addr).toLowerCase(),
+      );
+
+      const originalEmail = replyToEmailId
+        ? useAppStore.getState().emails.find((e) => e.id === replyToEmailId)
+        : undefined;
+      const originalRecipients = originalEmail
+        ? [
+            ...(originalEmail.to || "").split(",").map((s) => s.trim()),
+            ...(originalEmail.cc || "").split(",").map((s) => s.trim()),
+          ].map((addr) => extractBareEmail(addr).toLowerCase())
+        : [];
+
+      const allRecipients = [...replyRecipients, ...originalRecipients];
+      const matchingAlias = sendAsAliases.find((a) =>
+        allRecipients.includes(a.email.toLowerCase()),
+      );
+      if (matchingAlias) return formatAlias(matchingAlias);
+    }
+
+    const defaultAlias = sendAsAliases.find((a) => a.isDefault);
+    if (defaultAlias) return formatAlias(defaultAlias);
+
+    return formatAlias(sendAsAliases[0]);
+  }, [sendAsAliases, replyInfo, replyToEmailId]);
+
+  // Effective "from": user's explicit pick wins, otherwise use derived default
+  const from = fromOverride ?? derivedFrom;
+  const setFrom = setFromOverride;
 
   // --- Send state ---
   const [isSending, setIsSending] = useState(false);
