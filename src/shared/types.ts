@@ -722,6 +722,7 @@ export type IpcChannels = {
 
   // Style operations
   "style:get-context": { toAddress: string };
+  "style:infer": void;
 
   // Settings operations
   "settings:get": void;

@@ -1872,7 +1872,21 @@ type SentEmailRow = {
   body: string;
   date: string;
   is_reply: number; // 1 if subject starts with Re:
+  to_address?: string;
 };
+
+export function getRecentSentEmailsWithBody(limit: number = 100): SentEmailRow[] {
+  const db = getDatabase();
+  const stmt = db.prepare(`
+    SELECT id, subject, body_text, body, to_address, date,
+      CASE WHEN subject LIKE 'Re:%' OR subject LIKE 'RE:%' THEN 1 ELSE 0 END as is_reply
+    FROM emails
+    WHERE label_ids LIKE '%"SENT"%'
+    ORDER BY date DESC
+    LIMIT ?
+  `);
+  return stmt.all(limit) as SentEmailRow[];
+}
 
 export function getSentEmailsToRecipient(
   recipientEmail: string,
