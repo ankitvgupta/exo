@@ -141,8 +141,10 @@ export function useComposeForm({
   // Tracks the user's explicit selection; undefined means "use derived default"
   const [fromOverride, setFromOverride] = useState<string | undefined>(undefined);
 
-  // Fetch aliases on mount
+  // Fetch aliases on mount (and when account changes)
   useEffect(() => {
+    setFromOverride(undefined);
+
     if (typeof window.api.compose.getSendAsAliases !== "function") return;
 
     (window.api.compose.getSendAsAliases(accountId) as Promise<IpcResponse<SendAsAlias[]>>)
