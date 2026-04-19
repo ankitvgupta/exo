@@ -2217,7 +2217,57 @@ interface EmailDetailProps {
   isFullView?: boolean;
 }
 
+class EmailDetailErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean }
+> {
+  state = { hasError: false };
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error) {
+    console.error("[EmailDetail] Render crash caught by error boundary:", error.message);
+    // Clear selection state so the user can recover by clicking another email
+    useAppStore.setState({
+      isInlineReplyOpen: false,
+      inlineReplyToEmailId: null,
+    });
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex-1 flex items-center justify-center bg-gray-50 dark:bg-gray-800/50">
+          <div className="text-center">
+            <p className="text-gray-500 dark:text-gray-400 mb-2">
+              Something went wrong displaying this email.
+            </p>
+            <button
+              className="text-sm text-blue-500 hover:text-blue-600 dark:text-blue-400"
+              onClick={() => this.setState({ hasError: false })}
+            >
+              Try again
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export function EmailDetail({ isFullView = false }: EmailDetailProps) {
+  const selectedEmailId = useAppStore((s) => s.selectedEmailId);
+  return (
+    <EmailDetailErrorBoundary key={selectedEmailId ?? "__none__"}>
+      <EmailDetailInner isFullView={isFullView} />
+    </EmailDetailErrorBoundary>
+  );
+}
+
+function EmailDetailInner({ isFullView = false }: EmailDetailProps) {
   const {
     emails,
     selectedEmailId,
@@ -2298,6 +2348,17 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
       }
     };
   }, []);
+
+  // Guard: clear inline reply state when thread context is unavailable.
+  // Prevents infinite re-render loops (React error #185) when the app enters
+  // an inconsistent state with isInlineReplyOpen=true but no selected thread
+  // (e.g. during startup sync when selectedEmailId is set before selectedThreadId).
+  useEffect(() => {
+    if (isInlineReplyOpen && !selectedThreadId) {
+      setInlineReplyOpen(false);
+      setInlineReplyToEmailId(null);
+    }
+  }, [isInlineReplyOpen, selectedThreadId, setInlineReplyOpen, setInlineReplyToEmailId]);
 
   const storeEmail = emails.find((e) => e.id === selectedEmailId);
 
@@ -2657,6 +2718,9 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
   // the editor manually doesn't cause it to re-open).
   useEffect(() => {
     if (!draftEmail?.draft?.body || !replyTargetEmailId) return;
+    // Don't auto-open without a valid thread context — avoids render loops
+    // when selectedEmailId is set but selectedThreadId hasn't been set yet.
+    if (!selectedThreadId) return;
     // Don't re-open if already auto-opened for this thread
     if (autoOpenedThreadRef.current === draftEmail.threadId) return;
     // Don't re-open if the editor is already active for this thread
@@ -2680,6 +2744,7 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
     inlineReplyInfo,
     composeState?.isOpen,
     openCompose,
+    selectedThreadId,
   ]);
 
   // Scroll to the target email before the browser paints.
@@ -2731,7 +2796,13 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
   // send time — they don't affect the visible UI.
   const composeRequestIdRef = useRef(0);
   useEffect(() => {
-    if (isFullView && composeState?.isOpen && composeState.replyToEmailId && currentAccountId) {
+    if (
+      isFullView &&
+      composeState?.isOpen &&
+      composeState.replyToEmailId &&
+      currentAccountId &&
+      selectedThreadId
+    ) {
       const mode = composeState.mode;
       if (mode === "reply" || mode === "reply-all" || mode === "forward") {
         const requestId = ++composeRequestIdRef.current;
@@ -2821,7 +2892,14 @@ export function EmailDetail({ isFullView = false }: EmailDetailProps) {
         }
       }
     }
-  }, [isFullView, composeState, currentAccountId, closeCompose, setInlineReplyOpen]);
+  }, [
+    isFullView,
+    composeState,
+    currentAccountId,
+    closeCompose,
+    setInlineReplyOpen,
+    selectedThreadId,
+  ]);
 
   // Safety net: if we're in full view with no valid email and no compose open,
   // fall back to split view so the email list becomes visible. This catches edge
