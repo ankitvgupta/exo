@@ -43,6 +43,8 @@ OUTPUT FORMAT:
   "priority": "high" or "medium" or "low" (only include if needs_reply is true)
 }
 
+Anything that requires me to do external work (e.g. update a document or send an invite) should remain in at least "low" priority and not be skipped.
+
 SKIP REPLIES FOR:
 - Newsletters, marketing emails, promotions, and advertising
 - Automated notifications (GitHub, CI/CD, build status, receipts, shipping updates, alerts)
