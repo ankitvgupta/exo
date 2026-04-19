@@ -81,6 +81,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
 
   // General settings state
   const [enableSenderLookup, setEnableSenderLookup] = useState(true);
+  const [syncDraftsToGmail, setSyncDraftsToGmail] = useState(false);
   const [modelConfig, setModelConfig] = useState<ModelConfig>(DEFAULT_MODEL_CONFIG);
   const [isSavingGeneral, setIsSavingGeneral] = useState(false);
   const [isExportingLogs, setIsExportingLogs] = useState(false);
@@ -225,6 +226,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
   useEffect(() => {
     if (generalConfig) {
       setEnableSenderLookup(generalConfig.enableSenderLookup ?? true);
+      setSyncDraftsToGmail(generalConfig.syncDraftsToGmail ?? false);
       setModelConfig({ ...DEFAULT_MODEL_CONFIG, ...generalConfig.modelConfig });
       setGithubToken(generalConfig.githubToken ?? "");
       setAllowPrereleaseUpdates(generalConfig.allowPrereleaseUpdates ?? false);
@@ -380,6 +382,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
     try {
       await window.api.settings.set({
         enableSenderLookup,
+        syncDraftsToGmail,
         modelConfig,
         githubToken: githubToken || undefined,
         allowPrereleaseUpdates,
@@ -1369,6 +1372,34 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                     </ul>
                   </div>
                 )}
+              </div>
+
+              {/* Gmail Draft Sync Toggle */}
+              <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-600 mb-6">
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <h3 className="font-semibold text-gray-900 dark:text-gray-100">
+                      Sync Drafts to Gmail
+                    </h3>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                      Push AI-generated drafts to Gmail so they appear in other email clients.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setSyncDraftsToGmail(!syncDraftsToGmail)}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      syncDraftsToGmail
+                        ? "bg-blue-600 dark:bg-blue-500"
+                        : "bg-gray-200 dark:bg-gray-700"
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        syncDraftsToGmail ? "translate-x-6" : "translate-x-1"
+                      }`}
+                    />
+                  </button>
+                </div>
               </div>
 
               {/* Troubleshooting */}

@@ -56,6 +56,7 @@ function getStore(): Store<{ config: Config }> {
           analysisPrompt: DEFAULT_ANALYSIS_PROMPT,
           draftPrompt: DEFAULT_DRAFT_PROMPT,
           enableSenderLookup: true,
+          syncDraftsToGmail: false,
           theme: "system" as const,
           inboxDensity: "compact" as const,
           undoSendDelay: 5,
