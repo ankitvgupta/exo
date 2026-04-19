@@ -157,7 +157,7 @@ function initLogger(): Logger {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const pinoPretty = require("pino-pretty");
       const prettyStream = pinoPretty({ colorize: true });
-      prettyStream.on?.("error", (err: Error) => {
+      prettyStream.on("error", (err: Error) => {
         // eslint-disable-next-line no-console
         console.error("[logger] pino-pretty stream error:", err);
       });
