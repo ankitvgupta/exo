@@ -104,7 +104,7 @@ test.describe("Undo Send - Inline Reply", () => {
   });
 
   test("app loads with inbox emails", async () => {
-    await expect(page.locator("text=Exo")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Exo" })).toBeVisible();
     await expect(page.locator("text=Inbox").first()).toBeVisible();
     await expect(page.locator("button").filter({ hasText: "Garry Tan" }).first()).toBeVisible({
       timeout: 5000,
