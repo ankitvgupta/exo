@@ -144,11 +144,14 @@ export function useComposeForm({
   // Fetch aliases on mount (and when account changes)
   useEffect(() => {
     setFromOverride(undefined);
+    setSendAsAliases([]);
+    let cancelled = false;
 
     if (typeof window.api.compose.getSendAsAliases !== "function") return;
 
     (window.api.compose.getSendAsAliases(accountId) as Promise<IpcResponse<SendAsAlias[]>>)
       .then((result) => {
+        if (cancelled) return;
         if (result.success && result.data.length > 0) {
           setSendAsAliases(result.data);
         }
@@ -156,7 +159,15 @@ export function useComposeForm({
       .catch(() => {
         // Silently fail — compose still works without aliases
       });
+    return () => {
+      cancelled = true;
+    };
   }, [accountId]);
+
+  // Subscribe to the reply email reactively so derivedFrom updates if emails load async
+  const replyEmail = useAppStore((s) =>
+    replyToEmailId ? s.emails.find((e) => e.id === replyToEmailId) : undefined,
+  );
 
   // Derive the default "from" address from aliases without storing in state.
   // Smart reply default: pick the alias that the original email was sent to.
@@ -168,13 +179,10 @@ export function useComposeForm({
         extractBareEmail(addr).toLowerCase(),
       );
 
-      const originalEmail = replyToEmailId
-        ? useAppStore.getState().emails.find((e) => e.id === replyToEmailId)
-        : undefined;
-      const originalRecipients = originalEmail
+      const originalRecipients = replyEmail
         ? [
-            ...(originalEmail.to || "").split(",").map((s) => s.trim()),
-            ...(originalEmail.cc || "").split(",").map((s) => s.trim()),
+            ...(replyEmail.to || "").split(",").map((s) => s.trim()),
+            ...(replyEmail.cc || "").split(",").map((s) => s.trim()),
           ].map((addr) => extractBareEmail(addr).toLowerCase())
         : [];
 
@@ -189,7 +197,7 @@ export function useComposeForm({
     if (defaultAlias) return formatAlias(defaultAlias);
 
     return formatAlias(sendAsAliases[0]);
-  }, [sendAsAliases, replyInfo, replyToEmailId]);
+  }, [sendAsAliases, replyInfo, replyEmail]);
 
   // Effective "from": user's explicit pick wins, otherwise use derived default
   const from = fromOverride ?? derivedFrom;
