@@ -52,10 +52,11 @@ function countWords(text: string): number {
 }
 
 export function extractEmailSignals(bodyText: string): EmailSignals {
+  const cleaned = stripPlainTextSignature(bodyText);
   return {
-    greeting: detectGreeting(bodyText),
-    signoff: detectSignoff(bodyText),
-    wordCount: countWords(bodyText),
+    greeting: detectGreeting(cleaned),
+    signoff: detectSignoff(cleaned),
+    wordCount: countWords(cleaned),
   };
 }
 
@@ -154,9 +155,20 @@ export function computeCorrespondentProfile(
 // Context builder
 // ============================================
 
+/** Strip the standard email signature delimiter (-- ) and everything after it */
+function stripPlainTextSignature(text: string): string {
+  // Match "-- " on its own line (standard sig delimiter) or "—" dash variants
+  // Also strip "Sent by Exo" / "Sent from Exo" lines that may appear without delimiter
+  const sigIndex = text.search(/\n-- ?\n/);
+  if (sigIndex !== -1) return text.slice(0, sigIndex).trim();
+  // Fallback: strip "Sent by Exo" branding line if present without delimiter
+  return text.replace(/\n*Sent (?:by|from) Exo\s*$/i, "").trim();
+}
+
 function truncateBody(bodyText: string, maxWords: number = 300): string {
-  const words = bodyText.split(/\s+/);
-  if (words.length <= maxWords) return bodyText;
+  const cleaned = stripPlainTextSignature(bodyText);
+  const words = cleaned.split(/\s+/);
+  if (words.length <= maxWords) return cleaned;
   return words.slice(0, maxWords).join(" ") + "...";
 }
 
