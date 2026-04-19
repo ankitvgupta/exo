@@ -137,7 +137,7 @@ function initLogger(): Logger {
   fileDest.on("error", (err) => {
     // Best-effort: log to stderr so there's a breadcrumb, but never throw.
     // eslint-disable-next-line no-console
-    console.error("[logger] SonicBoom file destination error:", err.message);
+    console.error("[logger] SonicBoom file destination error:", err);
   });
   _destinations = [fileDest];
 
@@ -156,16 +156,21 @@ function initLogger(): Logger {
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const pinoPretty = require("pino-pretty");
+      const prettyStream = pinoPretty({ colorize: true });
+      prettyStream.on?.("error", (err: Error) => {
+        // eslint-disable-next-line no-console
+        console.error("[logger] pino-pretty stream error:", err);
+      });
       streams.push({
         level: "debug" as const,
-        stream: pinoPretty({ colorize: true }),
+        stream: prettyStream,
       });
     } catch {
       // pino-pretty not available, fall back to raw JSON to stdout
       const stdoutDest = pino.destination({ dest: 1, sync: true }) as SonicBoom;
       stdoutDest.on("error", (err) => {
         // eslint-disable-next-line no-console
-        console.error("[logger] SonicBoom stdout destination error:", err.message);
+        console.error("[logger] SonicBoom stdout destination error:", err);
       });
       _destinations.push(stdoutDest);
       streams.push({
