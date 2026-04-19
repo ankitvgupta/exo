@@ -371,9 +371,10 @@ Focus on:
 - How they handle different contexts (replies vs new emails, quick responses vs longer ones)
 - Any distinctive quirks or patterns
 
-Output a 3-5 sentence style description written as instructions to an AI drafting emails
+Output a 6-10 sentence style description written as instructions to an AI drafting emails
 on their behalf. Write in second person ("You write..."). Be specific and concrete —
-reference actual patterns you observed rather than generic descriptions.
+reference actual patterns you observed rather than generic descriptions. Cover how the
+style varies by context (quick replies vs longer emails, familiar vs unfamiliar recipients).
 
 Do NOT include example phrases or quoted text from the emails.`;
 

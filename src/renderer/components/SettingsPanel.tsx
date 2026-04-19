@@ -64,6 +64,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
   const [stylePrompt, setStylePrompt] = useState("");
   const [isInferring, setIsInferring] = useState(false);
   const [inferError, setInferError] = useState<string | null>(null);
+  const [styleSaved, setStyleSaved] = useState(false);
   const [agentDrafterPrompt, setAgentDrafterPrompt] = useState("");
   const [isRerunningAll, setIsRerunningAll] = useState(false);
   const [rerunResult, setRerunResult] = useState<string | null>(null);
@@ -465,11 +466,13 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
 
   const handleSaveStylePrompt = async () => {
     setIsSaving(true);
+    setStyleSaved(false);
     try {
       await window.api.settings.setPrompts({
         stylePrompt: stylePrompt || undefined,
       });
       queryClient.invalidateQueries({ queryKey: ["prompts"] });
+      setStyleSaved(true);
     } finally {
       setIsSaving(false);
     }
@@ -2117,13 +2120,16 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                 )}
               </div>
 
-              <button
-                onClick={handleSaveStylePrompt}
-                disabled={isSaving}
-                className="mt-4 px-6 py-2 bg-blue-600 dark:bg-blue-500 text-white font-medium rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors disabled:opacity-50"
-              >
-                {isSaving ? "Saving..." : "Save Style Prompt"}
-              </button>
+              <div className="flex items-center gap-3 mt-4">
+                <button
+                  onClick={handleSaveStylePrompt}
+                  disabled={isSaving}
+                  className="px-6 py-2 bg-blue-600 dark:bg-blue-500 text-white font-medium rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors disabled:opacity-50"
+                >
+                  {isSaving ? "Saving..." : "Save Style Prompt"}
+                </button>
+                {styleSaved && <p className="text-sm text-green-600 dark:text-green-400">Saved.</p>}
+              </div>
             </div>
           </div>
         )}
