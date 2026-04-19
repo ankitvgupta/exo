@@ -11,6 +11,7 @@ import {
   getAnalyzedArchiveThreadIds,
   getAccounts,
   updateDraftAgentTaskId,
+  loadCompletedAgentDraftEmailIds,
 } from "../db";
 import { getConfig, getModelIdForFeature } from "../ipc/settings.ipc";
 import { getExtensionHost } from "../extensions";
@@ -104,6 +105,7 @@ class PrefetchService {
   private processedAnalysis = new Set<string>();
   private processedSenderProfiles = new Set<string>();
   private processedDrafts = new Set<string>();
+  private seededFromDb = false;
   private processedExtensionEnrichments = new Set<string>();
   private processedArchiveReady = new Set<string>();
 
@@ -260,6 +262,17 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
     const _t0 = performance.now();
     log.info(`[PERF] processAllPending START`);
 
+    // Seed processedDrafts from persisted completions (agent_conversation_mirror)
+    // so we don't re-run agent drafts that already succeeded in a previous session.
+    // Only seed once (startup) — subsequent calls (e.g. rerun-all) should not re-seed.
+    if (!this.seededFromDb) {
+      const persistedCompletions = loadCompletedAgentDraftEmailIds();
+      for (const emailId of persistedCompletions) {
+        this.processedDrafts.add(emailId);
+      }
+      this.seededFromDb = true;
+    }
+
     const tConfig = performance.now();
     const config = getConfig();
     log.info(
@@ -370,7 +383,6 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
             e.analysis?.needsReply &&
             e.analysis?.priority !== "skip" &&
             allowedPriorities.includes(e.analysis?.priority || "low") &&
-            !e.draft &&
             !this.processedDrafts.has(e.id) &&
             !this.queue.some((t) => t.type === "agent-draft" && t.emailId === e.id) &&
             !this.agentDraftItems.has(e.id) &&

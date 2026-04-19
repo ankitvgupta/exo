@@ -4357,3 +4357,25 @@ export function listConversationMirrors(providerId?: string): ConversationMirror
     updatedAt: row.updatedAt as string,
   }));
 }
+
+/**
+ * Load email IDs that have had a successful auto-draft agent run,
+ * derived from the agent_conversation_mirror table.
+ * Task IDs follow the format: auto-draft-{emailId}-{timestamp}
+ */
+export function loadCompletedAgentDraftEmailIds(): Set<string> {
+  const db = getDatabase();
+  const rows = db
+    .prepare(
+      `SELECT DISTINCT local_task_id FROM agent_conversation_mirror
+       WHERE local_task_id LIKE 'auto-draft-%' AND status = 'completed'`,
+    )
+    .all() as Array<{ local_task_id: string }>;
+  const emailIds = new Set<string>();
+  for (const row of rows) {
+    // Extract emailId from "auto-draft-{emailId}-{timestamp}"
+    const match = row.local_task_id.match(/^auto-draft-(.+)-\d+$/);
+    if (match) emailIds.add(match[1]);
+  }
+  return emailIds;
+}
