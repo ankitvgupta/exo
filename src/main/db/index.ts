@@ -423,6 +423,16 @@ const NUMBERED_MIGRATIONS: Migration[] = [
       }
     },
   },
+  {
+    version: 3,
+    name: "index_agent_conversation_mirror_local_task_id",
+    up: (db) => {
+      db.exec(
+        `CREATE INDEX IF NOT EXISTS idx_agent_conversation_mirror_task_status
+         ON agent_conversation_mirror(local_task_id, status)`,
+      );
+    },
+  },
 ];
 
 function runNumberedMigrations(db: DatabaseInstance): void {
