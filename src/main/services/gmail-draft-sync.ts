@@ -165,7 +165,6 @@ export function saveDraftAndSync(
  */
 export async function deleteGmailDraftById(accountId: string, gmailDraftId: string): Promise<void> {
   if (useFakeData) return;
-  if (!getConfig().syncDraftsToGmail) return;
 
   try {
     const client = await getClient(accountId || "default");
