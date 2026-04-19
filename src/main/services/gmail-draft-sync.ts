@@ -41,7 +41,11 @@ export async function syncDraftToGmail(
   forwardTo?: string[],
 ): Promise<void> {
   if (useFakeData) return;
-  if (!getConfig().syncDraftsToGmail) return;
+
+  const syncEnabled = getConfig().syncDraftsToGmail;
+
+  // If sync is disabled and there's no old draft to clean up, skip entirely.
+  if (!syncEnabled && !oldGmailDraftId) return;
 
   try {
     const email = getEmail(emailId);
@@ -63,6 +67,10 @@ export async function syncDraftToGmail(
         // Draft may have been deleted externally — that's fine
       }
     }
+
+    // Stop here if sync is disabled — old draft was cleaned up above,
+    // but we don't create a new Gmail draft.
+    if (!syncEnabled) return;
 
     const isForward = composeMode === "forward";
 
