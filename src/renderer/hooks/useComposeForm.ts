@@ -194,6 +194,18 @@ export function useComposeForm({
       });
   }, [accountId]);
 
+  // When the From alias is resolved, strip it from CC so the user doesn't
+  // CC themselves on reply-all. Only removes the selected From — other aliases
+  // stay since they may be intentional recipients.
+  useEffect(() => {
+    if (!from) return;
+    const fromBare = extractBareEmail(from).toLowerCase();
+    setCc((prev) => {
+      const filtered = prev.filter((addr) => extractBareEmail(addr).toLowerCase() !== fromBare);
+      return filtered.length === prev.length ? prev : filtered;
+    });
+  }, [from]);
+
   // --- Send state ---
   const [isSending, setIsSending] = useState(false);
   const [isScheduling, setIsScheduling] = useState(false);
