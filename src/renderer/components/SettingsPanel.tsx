@@ -2442,7 +2442,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
         )}
 
         {activeTab === "agents" && (
-          <div className="space-y-6">
+          <div className="max-w-3xl mx-auto space-y-6">
             <div>
               <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">
                 Agent Settings
