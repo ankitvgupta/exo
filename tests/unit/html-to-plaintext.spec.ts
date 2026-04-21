@@ -1,49 +1,11 @@
 import { test, expect } from "@playwright/test";
+import { htmlToPlainText } from "../../src/main/util/html-to-text";
 
 /**
  * Unit tests for htmlToPlainText — the HTML-to-text converter used when
  * sending email bodies to AI agents. Preserves paragraph structure and
  * decodes numeric HTML entities so text is usable for LLM comprehension.
- *
- * Function is copied from src/main/db/index.ts because that file imports
- * Electron-only modules (same pattern as search.spec.ts).
  */
-
-function decodeHtmlEntities(text: string): string {
-  return text
-    .replace(/&nbsp;/gi, " ")
-    .replace(/&amp;/gi, "&")
-    .replace(/&lt;/gi, "<")
-    .replace(/&gt;/gi, ">")
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;/gi, "'")
-    .replace(/&#x([0-9a-f]+);/gi, (_, hex) => {
-      const cp = parseInt(hex, 16);
-      return cp <= 0x10ffff ? String.fromCodePoint(cp) : "\uFFFD";
-    })
-    .replace(/&#(\d+);/g, (_, dec) => {
-      const cp = parseInt(dec, 10);
-      return cp <= 0x10ffff ? String.fromCodePoint(cp) : "\uFFFD";
-    })
-    .replace(/&[#\w]+;/gi, " ");
-}
-
-function htmlToPlainText(html: string): string {
-  return decodeHtmlEntities(
-    html
-      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
-      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
-      .replace(/<br\s*\/?>/gi, "\n")
-      .replace(/<\/(?:p|div|h[1-6]|li|tr|blockquote)>/gi, "\n")
-      .replace(/<(?:hr)\s*\/?>/gi, "\n---\n")
-      .replace(/<[^>]+>/g, ""),
-  )
-    .replace(/[ \t]+/g, " ")
-    .replace(/\n /g, "\n")
-    .replace(/ \n/g, "\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-}
 
 test.describe("htmlToPlainText", () => {
   test.describe("tag stripping", () => {
