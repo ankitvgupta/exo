@@ -526,6 +526,18 @@ export class GmailClient {
   }
 
   /**
+   * List all labels for the authenticated user.
+   * Returns both system labels (INBOX, SENT, etc.) and user-created labels.
+   */
+  async listLabels(): Promise<{ id: string; name: string }[]> {
+    const gmail = this.gmail!;
+    const response = await gmail.users.labels.list({ userId: "me" });
+    return (response.data.labels || [])
+      .filter((l) => l.id && l.name)
+      .map((l) => ({ id: l.id!, name: l.name! }));
+  }
+
+  /**
    * Get the total number of messages with a given label.
    * Uses the labels.get endpoint which returns exact counts.
    */

@@ -22,6 +22,78 @@ import { createLogger } from "./logger";
 
 const log = createLogger("prefetch");
 
+// Cached label ID→name map per account, populated lazily from Gmail API.
+// Entries expire after LABEL_CACHE_TTL_MS so newly created labels are picked up.
+const LABEL_CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
+const labelNameCache = new Map<string, { map: Map<string, string>; ts: number }>();
+// In-flight fetch promises, keyed by accountId, to deduplicate concurrent calls
+const labelFetchInFlight = new Map<string, Promise<Map<string, string>>>();
+
+// System labels the analyzer doesn't need to see (already obvious from context)
+const HIDDEN_LABELS = new Set([
+  "INBOX",
+  "UNREAD",
+  "SENT",
+  "DRAFT",
+  "SPAM",
+  "TRASH",
+  "CATEGORY_PERSONAL",
+  "CATEGORY_SOCIAL",
+  "CATEGORY_UPDATES",
+  "CATEGORY_FORUMS",
+  "CATEGORY_PROMOTIONS",
+]);
+
+async function fetchLabelsForAccount(accountId: string): Promise<Map<string, string>> {
+  const { getClient } = await import("../ipc/gmail.ipc");
+  const client = await getClient(accountId);
+  const labels = await client.listLabels();
+  const map = new Map<string, string>();
+  for (const label of labels) {
+    map.set(label.id, label.name);
+  }
+  return map;
+}
+
+export async function resolveLabelNames(
+  labelIds: string[] | undefined,
+  accountId: string | undefined,
+): Promise<string[]> {
+  if (!labelIds?.length || !accountId) return [];
+
+  // Check cache freshness
+  const cached = labelNameCache.get(accountId);
+  if (!cached || Date.now() - cached.ts > LABEL_CACHE_TTL_MS) {
+    // Deduplicate concurrent fetches for the same account.
+    // Capture the promise reference before awaiting — the .finally() cleanup
+    // may delete it from the map before this line runs.
+    let inFlight = labelFetchInFlight.get(accountId);
+    if (!inFlight) {
+      inFlight = fetchLabelsForAccount(accountId)
+        .then((map) => {
+          labelNameCache.set(accountId, { map, ts: Date.now() });
+          return map;
+        })
+        .finally(() => labelFetchInFlight.delete(accountId));
+      labelFetchInFlight.set(accountId, inFlight);
+    }
+    try {
+      await inFlight;
+    } catch (err) {
+      log.warn({ err, accountId }, "Failed to fetch labels for account");
+      return [];
+    }
+  }
+
+  const entry = labelNameCache.get(accountId);
+  if (!entry) return [];
+
+  return labelIds
+    .filter((id) => !HIDDEN_LABELS.has(id))
+    .map((id) => entry.map.get(id) ?? id)
+    .filter((name) => !name.startsWith("Label_")); // drop unresolved IDs
+}
+
 // Lazy import to avoid circular dependency
 let notifyEmailAnalyzed: ((emailId: string) => void) | null = null;
 async function getNotifyFn(): Promise<(emailId: string) => void> {
@@ -750,7 +822,13 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
         : (accounts.find((a) => a.isPrimary) ?? accounts[0]);
       const userEmail = account?.email;
 
-      const result = await analyzer.analyze(emailForAnalysis, userEmail, email.accountId);
+      const labelNames = await resolveLabelNames(email.labelIds, email.accountId);
+      const result = await analyzer.analyze(
+        emailForAnalysis,
+        userEmail,
+        email.accountId,
+        labelNames,
+      );
       saveAnalysis(emailId, result.needs_reply, result.reason, result.priority);
       this.processedAnalysis.add(emailId);
       this.processedCounts.analysis++;
