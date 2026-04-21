@@ -62,6 +62,10 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
   const [isSaving, setIsSaving] = useState(false);
   const [saveResult, setSaveResult] = useState<string | null>(null);
   const [stylePrompt, setStylePrompt] = useState("");
+  const [isInferring, setIsInferring] = useState(false);
+  const [inferError, setInferError] = useState<string | null>(null);
+  const [isSavingStyle, setIsSavingStyle] = useState(false);
+  const [styleSaved, setStyleSaved] = useState(false);
   const [agentDrafterPrompt, setAgentDrafterPrompt] = useState("");
   const [isRerunningAll, setIsRerunningAll] = useState(false);
   const [rerunResult, setRerunResult] = useState<string | null>(null);
@@ -81,6 +85,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
 
   // General settings state
   const [enableSenderLookup, setEnableSenderLookup] = useState(true);
+  const [syncDraftsToGmail, setSyncDraftsToGmail] = useState(false);
   const [modelConfig, setModelConfig] = useState<ModelConfig>(DEFAULT_MODEL_CONFIG);
   const [isSavingGeneral, setIsSavingGeneral] = useState(false);
   const [isExportingLogs, setIsExportingLogs] = useState(false);
@@ -225,6 +230,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
   useEffect(() => {
     if (generalConfig) {
       setEnableSenderLookup(generalConfig.enableSenderLookup ?? true);
+      setSyncDraftsToGmail(generalConfig.syncDraftsToGmail ?? false);
       setModelConfig({ ...DEFAULT_MODEL_CONFIG, ...generalConfig.modelConfig });
       setGithubToken(generalConfig.githubToken ?? "");
       setAllowPrereleaseUpdates(generalConfig.allowPrereleaseUpdates ?? false);
@@ -380,6 +386,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
     try {
       await window.api.settings.set({
         enableSenderLookup,
+        syncDraftsToGmail,
         modelConfig,
         githubToken: githubToken || undefined,
         allowPrereleaseUpdates,
@@ -462,19 +469,45 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
   };
 
   const handleSaveStylePrompt = async () => {
-    setIsSaving(true);
+    setIsSavingStyle(true);
+    setStyleSaved(false);
     try {
-      await window.api.settings.setPrompts({
+      const result = (await window.api.settings.setPrompts({
         stylePrompt: stylePrompt || undefined,
-      });
+      })) as { success: boolean };
       queryClient.invalidateQueries({ queryKey: ["prompts"] });
+      if (result.success) {
+        setStyleSaved(true);
+        setTimeout(() => setStyleSaved(false), 2000);
+      }
     } finally {
-      setIsSaving(false);
+      setIsSavingStyle(false);
     }
   };
 
   const handleResetStylePrompt = () => {
     setStylePrompt(DEFAULT_STYLE_PROMPT);
+  };
+
+  const handleInferStyle = async () => {
+    setIsInferring(true);
+    setInferError(null);
+    try {
+      const result = (await window.api.style.infer()) as {
+        success: boolean;
+        data?: string;
+        error?: string;
+      };
+      if (result.success && result.data) {
+        setStylePrompt(result.data);
+      } else {
+        setInferError(result.error || "Failed to infer writing style");
+      }
+    } catch {
+      setInferError("Failed to infer writing style");
+    } finally {
+      setIsInferring(false);
+    }
   };
 
   const handleSaveEA = async () => {
@@ -1371,6 +1404,34 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                 )}
               </div>
 
+              {/* Gmail Draft Sync Toggle */}
+              <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-600 mb-6">
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <h3 className="font-semibold text-gray-900 dark:text-gray-100">
+                      Sync Drafts to Gmail
+                    </h3>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                      Push AI-generated drafts to Gmail so they appear in other email clients.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setSyncDraftsToGmail(!syncDraftsToGmail)}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      syncDraftsToGmail
+                        ? "bg-blue-600 dark:bg-blue-500"
+                        : "bg-gray-200 dark:bg-gray-700"
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        syncDraftsToGmail ? "translate-x-6" : "translate-x-1"
+                      }`}
+                    />
+                  </button>
+                </div>
+              </div>
+
               {/* Troubleshooting */}
               <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-600 mb-6">
                 <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-1">
@@ -2062,12 +2123,21 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                     Style Prompt
                   </label>
-                  <button
-                    onClick={handleResetStylePrompt}
-                    className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
-                  >
-                    Reset to default
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={handleInferStyle}
+                      disabled={isInferring}
+                      className="text-xs text-blue-600 dark:text-blue-400 hover:underline disabled:opacity-50"
+                    >
+                      {isInferring ? "Analyzing..." : "Learn My Style"}
+                    </button>
+                    <button
+                      onClick={handleResetStylePrompt}
+                      className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                    >
+                      Reset to default
+                    </button>
+                  </div>
                 </div>
                 <textarea
                   value={stylePrompt}
@@ -2080,15 +2150,21 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                   This prompt is prepended to your draft generation when style examples are
                   available. It tells the AI how to interpret the examples of your past emails.
                 </p>
+                {inferError && (
+                  <p className="text-xs text-red-600 dark:text-red-400 mt-1">{inferError}</p>
+                )}
               </div>
 
-              <button
-                onClick={handleSaveStylePrompt}
-                disabled={isSaving}
-                className="mt-4 px-6 py-2 bg-blue-600 dark:bg-blue-500 text-white font-medium rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors disabled:opacity-50"
-              >
-                {isSaving ? "Saving..." : "Save Style Prompt"}
-              </button>
+              <div className="flex items-center gap-3 mt-4">
+                <button
+                  onClick={handleSaveStylePrompt}
+                  disabled={isSavingStyle}
+                  className="px-6 py-2 bg-blue-600 dark:bg-blue-500 text-white font-medium rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors disabled:opacity-50"
+                >
+                  {isSavingStyle ? "Saving..." : "Save Style Prompt"}
+                </button>
+                {styleSaved && <p className="text-sm text-green-600 dark:text-green-400">Saved.</p>}
+              </div>
             </div>
           </div>
         )}
