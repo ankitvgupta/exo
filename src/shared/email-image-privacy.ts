@@ -81,6 +81,7 @@ export function replaceRemoteImageSources(html: string, useLightMode: boolean): 
         /(\bsrc\s*=\s*["'])https?:\/\/[^"']+(["'])/i,
         `$1${placeholderSrc}$2`,
       );
+      replaced = replaced.replace(/\s+\bsrcset\s*=\s*(["'])[^"']*\1/i, "");
 
       const missingAttrs: string[] = [];
       if (!/\balt\s*=/.test(replaced)) {

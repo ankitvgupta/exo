@@ -29,4 +29,15 @@ test.describe("replaceRemoteImageSources", () => {
 
     expect(output).toBe(input);
   });
+
+  test("removes remote srcset when replacing a remote image", () => {
+    const input =
+      '<img src="https://cdn.example.com/photo.jpg" srcset="https://cdn.example.com/photo@2x.jpg 2x" width="200">';
+    const output = replaceRemoteImageSources(input, true);
+
+    expect(output).not.toContain("https://cdn.example.com/photo.jpg");
+    expect(output).not.toContain("https://cdn.example.com/photo@2x.jpg");
+    expect(output).not.toContain("srcset=");
+    expect(output).toContain("data:image/svg+xml,");
+  });
 });
