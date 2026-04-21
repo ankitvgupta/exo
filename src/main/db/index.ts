@@ -928,7 +928,13 @@ export function hasEmailsForAccount(accountId: string): boolean {
 export function getInboxThreadIds(accountId: string): Set<string> {
   const db = getDatabase();
   const stmt = db.prepare(
-    `SELECT DISTINCT thread_id FROM emails WHERE account_id = ? AND (label_ids IS NULL OR label_ids LIKE '%"INBOX"%')`,
+    `SELECT DISTINCT thread_id
+     FROM emails
+     WHERE account_id = ?
+       AND (
+         label_ids IS NULL
+         OR EXISTS (SELECT 1 FROM json_each(label_ids) WHERE value = 'INBOX')
+       )`,
   );
   const rows = stmt.all(accountId) as { thread_id: string }[];
   return new Set(rows.map((r) => r.thread_id));
@@ -944,7 +950,11 @@ export function getVisibleInboxLabelStates(accountId: string, limit: number): Em
   const stmt = db.prepare(`
     SELECT id, label_ids as labelIds
     FROM emails
-    WHERE account_id = ? AND (label_ids IS NULL OR label_ids LIKE '%"INBOX"%')
+    WHERE account_id = ?
+      AND (
+        label_ids IS NULL
+        OR EXISTS (SELECT 1 FROM json_each(label_ids) WHERE value = 'INBOX')
+      )
     ORDER BY date DESC
     LIMIT ?
   `);

@@ -1008,12 +1008,13 @@ class EmailSyncService {
 
     // Fetch new emails
     if (changes.newMessageIds.length > 0) {
-      log.info(`[Sync] ${changes.newMessageIds.length} new emails for ${account.email}`);
+      const uniqueNewMessageIds = [...new Set(changes.newMessageIds)];
+      log.info(`[Sync] ${uniqueNewMessageIds.length} new emails for ${account.email}`);
 
       const newEmails: DashboardEmail[] = [];
       const removedByCurrentLabels: string[] = [];
 
-      for (const id of changes.newMessageIds) {
+      for (const id of uniqueNewMessageIds) {
         try {
           const email = await client.readEmail(id);
           if (email) {
