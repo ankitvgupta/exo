@@ -900,13 +900,7 @@ function ThreadMessage({
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   strokeWidth={1.5}
-                  d="M7 10h8a8 8 0 018 8v2M7 10l6 6m-6-6l6-6"
-                />
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={1.5}
-                  d="M3 14l4-4-4-4"
+                  d="M7 17l-5-5 5-5M12 17l-5-5 5-5M22 18v-2a4 4 0 00-4-4H7"
                 />
               </svg>
             </span>
