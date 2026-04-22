@@ -527,6 +527,48 @@ export function stripHtmlForSearch(html: string): string {
     .trim();
 }
 
+/** Decode HTML entities including numeric (&#NNN; / &#xHH;) for agent-facing text. */
+function decodeHtmlEntities(text: string): string {
+  return text
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex) => {
+      const cp = parseInt(hex, 16);
+      return cp <= 0x10ffff ? String.fromCodePoint(cp) : "\uFFFD";
+    })
+    .replace(/&#(\d+);/g, (_, dec) => {
+      const cp = parseInt(dec, 10);
+      return cp <= 0x10ffff ? String.fromCodePoint(cp) : "\uFFFD";
+    })
+    .replace(/&[#\w]+;/gi, " ");
+}
+
+/**
+ * Convert HTML to plain text for AI agent consumption.
+ * Preserves paragraph breaks and decodes all HTML entities (including numeric).
+ * Use this instead of stripHtmlForSearch when the text will be read by an LLM.
+ */
+export function htmlToPlainText(html: string): string {
+  return decodeHtmlEntities(
+    html
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "") // remove style blocks
+      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "") // remove script blocks
+      .replace(/<br\s*\/?>/gi, "\n") // <br> → newline
+      .replace(/<\/(?:p|div|h[1-6]|li|tr|blockquote)>/gi, "\n") // block-close → newline
+      .replace(/<(?:hr)\s*\/?>/gi, "\n---\n") // <hr> → separator
+      .replace(/<[^>]+>/g, ""), // strip remaining tags
+  )
+    .replace(/[ \t]+/g, " ") // collapse horizontal whitespace only
+    .replace(/\n /g, "\n") // trim leading space after newlines
+    .replace(/ \n/g, "\n") // trim trailing space before newlines
+    .replace(/\n{3,}/g, "\n\n") // collapse 3+ newlines to 2
+    .trim();
+}
+
 /**
  * Escape FTS5 special characters so user input doesn't cause syntax errors.
  * Wraps each non-operator token in double quotes to treat it as a literal phrase.
@@ -1872,7 +1914,21 @@ type SentEmailRow = {
   body: string;
   date: string;
   is_reply: number; // 1 if subject starts with Re:
+  to_address?: string;
 };
+
+export function getRecentSentEmailsWithBody(limit: number = 100): SentEmailRow[] {
+  const db = getDatabase();
+  const stmt = db.prepare(`
+    SELECT id, subject, body_text, body, to_address, date,
+      CASE WHEN subject LIKE 'Re:%' OR subject LIKE 'RE:%' THEN 1 ELSE 0 END as is_reply
+    FROM emails
+    WHERE label_ids LIKE '%"SENT"%'
+    ORDER BY date DESC
+    LIMIT ?
+  `);
+  return stmt.all(limit) as SentEmailRow[];
+}
 
 export function getSentEmailsToRecipient(
   recipientEmail: string,

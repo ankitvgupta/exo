@@ -2,6 +2,7 @@ import { z } from "zod";
 import { type ToolDefinition, ToolRiskLevel } from "./types";
 import type { DashboardEmail } from "../../../shared/types";
 import { draftBodyToHtml } from "../../../shared/draft-utils";
+import { htmlToPlainText } from "../../db";
 
 const readEmail: ToolDefinition<{ emailId: string }> = {
   name: "read_email",
@@ -13,11 +14,12 @@ const readEmail: ToolDefinition<{ emailId: string }> = {
     emailId: z.string().describe("The email ID to read"),
   }),
   async execute(input, ctx) {
-    const email = await ctx.db("getEmail", input.emailId);
+    const email = (await ctx.db("getEmail", input.emailId)) as DashboardEmail | null;
     if (!email) {
       throw new Error(`Email not found: ${input.emailId}`);
     }
-    return email;
+    // Return with plain text body — agents don't need HTML markup and it wastes tokens
+    return { ...email, body: email.body ? htmlToPlainText(email.body) : email.body };
   },
 };
 
@@ -102,8 +104,13 @@ const readThread: ToolDefinition<{ threadId: string; accountId?: string }> = {
     accountId: z.string().optional().describe("Account ID to filter by (optional)"),
   }),
   async execute(input, ctx) {
-    const emails = await ctx.db("getEmailsByThread", input.threadId, input.accountId);
-    return emails;
+    const emails = (await ctx.db(
+      "getEmailsByThread",
+      input.threadId,
+      input.accountId,
+    )) as DashboardEmail[];
+    // Return with plain text bodies — agents don't need HTML markup and it wastes tokens
+    return emails.map((e) => ({ ...e, body: e.body ? htmlToPlainText(e.body) : e.body }));
   },
 };
 
@@ -509,7 +516,7 @@ const searchGmail: ToolDefinition<{ accountId: string; query: string; maxResults
           from: email.from,
           to: email.to,
           date: email.date,
-          snippet: email.snippet || email.body?.slice(0, 200) || "",
+          snippet: email.snippet || (email.body ? htmlToPlainText(email.body).slice(0, 200) : ""),
         });
       }
     }
