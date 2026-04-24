@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { useAppStore } from "../store";
 import { useSignature } from "./useSignature";
-import { formatAlias } from "../components/FromSelector";
+import { formatAlias } from "../utils/alias-formatting";
 import type { ComposeAttachmentItem } from "../components/AttachmentList";
 import type {
   ReplyInfo,
@@ -138,11 +138,15 @@ export function useComposeForm({
 
   // Account display name acts as the fallback for aliases without their own
   // (common for Workspace primaries, where the name lives on the OAuth profile).
+  // Subscribed so the FromSelector dropdown labels stay current.
   const accountDisplayName = useAppStore(
     (state) => state.accounts.find((a) => a.id === accountId)?.displayName,
   );
 
-  // Fetch aliases on mount
+  // Fetch aliases on mount.
+  // accountDisplayName is intentionally NOT a dependency: re-running this
+  // effect would clobber a manual alias selection. We read the latest value
+  // via getState() inside the effect instead.
   useEffect(() => {
     if (typeof window.api.compose.getSendAsAliases !== "function") return;
 
@@ -150,6 +154,10 @@ export function useComposeForm({
       .then((result) => {
         if (result.success && result.data.length > 0) {
           setSendAsAliases(result.data);
+
+          const fallbackName = useAppStore
+            .getState()
+            .accounts.find((a) => a.id === accountId)?.displayName;
 
           // Smart reply default: auto-select the alias that the original email was sent to.
           // replyInfo.to/cc only has the REPLY addresses (original sender for plain reply),
@@ -176,7 +184,7 @@ export function useComposeForm({
               allRecipients.includes(a.email.toLowerCase()),
             );
             if (matchingAlias) {
-              setFrom(formatAlias(matchingAlias, accountDisplayName));
+              setFrom(formatAlias(matchingAlias, fallbackName));
               return;
             }
           }
@@ -184,14 +192,14 @@ export function useComposeForm({
           // Default to the default alias
           const defaultAlias = result.data.find((a) => a.isDefault);
           if (defaultAlias) {
-            setFrom(formatAlias(defaultAlias, accountDisplayName));
+            setFrom(formatAlias(defaultAlias, fallbackName));
           }
         }
       })
       .catch(() => {
         // Silently fail — compose still works without aliases
       });
-  }, [accountId, accountDisplayName]);
+  }, [accountId]);
 
   // --- Send state ---
   const [isSending, setIsSending] = useState(false);
