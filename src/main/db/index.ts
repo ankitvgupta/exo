@@ -17,6 +17,7 @@ import type {
   SendAsAlias,
 } from "../../shared/types";
 import { createLogger } from "../services/logger";
+import { parseAutoDraftTaskId, AUTO_DRAFT_TASK_ID_LIKE_PATTERN } from "../agents/task-id";
 
 const log = createLogger("db");
 
@@ -421,6 +422,26 @@ const NUMBERED_MIGRATIONS: Migration[] = [
           db.exec(`ALTER TABLE ${table} ADD COLUMN from_address TEXT`);
         }
       }
+    },
+  },
+  {
+    version: 3,
+    name: "index_agent_conversation_mirror_local_task_id",
+    up: (db) => {
+      // Guard: migrations run before SCHEMA (see initDatabase order), so on a
+      // fresh DB the table doesn't exist yet. CREATE INDEX IF NOT EXISTS only
+      // guards the index, not the table — skip here and let SCHEMA + the index
+      // in the schema file handle fresh DBs.
+      const tableExists = db
+        .prepare(
+          "SELECT name FROM sqlite_master WHERE type='table' AND name='agent_conversation_mirror'",
+        )
+        .get();
+      if (!tableExists) return;
+      db.exec(
+        `CREATE INDEX IF NOT EXISTS idx_agent_conversation_mirror_task_status
+         ON agent_conversation_mirror(local_task_id, status)`,
+      );
     },
   },
 ];
@@ -4370,4 +4391,24 @@ export function listConversationMirrors(providerId?: string): ConversationMirror
     createdAt: row.createdAt as string,
     updatedAt: row.updatedAt as string,
   }));
+}
+
+/**
+ * Load email IDs that have had a successful auto-draft agent run,
+ * derived from the agent_conversation_mirror table.
+ */
+export function loadCompletedAgentDraftEmailIds(): Set<string> {
+  const db = getDatabase();
+  const rows = db
+    .prepare(
+      `SELECT local_task_id FROM agent_conversation_mirror
+       WHERE local_task_id LIKE ? AND status = 'completed'`,
+    )
+    .all(AUTO_DRAFT_TASK_ID_LIKE_PATTERN) as Array<{ local_task_id: string }>;
+  const emailIds = new Set<string>();
+  for (const row of rows) {
+    const emailId = parseAutoDraftTaskId(row.local_task_id);
+    if (emailId) emailIds.add(emailId);
+  }
+  return emailIds;
 }

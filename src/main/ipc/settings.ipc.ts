@@ -510,8 +510,10 @@ export function registerSettingsIpc(): void {
           analysisChanged || draftChanged || archiveReadyChanged || agentDrafterChanged;
 
         if (anyChanged) {
-          // Full clear to reset all tracking sets, then re-process
-          prefetchService.clear();
+          // Clear tracking sets to re-process; use clearForRerun so the DB-seeded
+          // processedDrafts doesn't re-block the emails whose pending drafts/traces
+          // we just cleared above.
+          prefetchService.clearForRerun();
 
           // Notify renderer to refresh emails (stale analysis/draft data is gone)
           for (const win of BrowserWindow.getAllWindows()) {
