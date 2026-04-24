@@ -1,9 +1,15 @@
 import { useState, useRef, useEffect } from "react";
 import type { SendAsAlias } from "../../shared/types";
 
-/** Format an alias as "Display Name <email>" or just "email" */
-function formatAlias(alias: SendAsAlias): string {
-  return alias.displayName ? `${alias.displayName} <${alias.email}>` : alias.email;
+/**
+ * Format an alias as "Display Name <email>" or just "email".
+ * Falls back to `fallbackName` when the alias has no display name configured —
+ * common for Workspace primary aliases where the name is set via OAuth profile,
+ * not Gmail send-as settings.
+ */
+export function formatAlias(alias: SendAsAlias, fallbackName?: string): string {
+  const name = alias.displayName || fallbackName;
+  return name ? `${name} <${alias.email}>` : alias.email;
 }
 
 /** Extract bare email from a potentially formatted "Name <email>" address. */
@@ -16,6 +22,8 @@ interface FromSelectorProps {
   aliases: SendAsAlias[];
   selected: string | undefined;
   onChange: (formatted: string) => void;
+  /** Used as the display-name fallback when an alias has none of its own. */
+  fallbackDisplayName?: string;
 }
 
 /**
@@ -23,7 +31,12 @@ interface FromSelectorProps {
  * Only renders when the account has 2+ aliases.
  * Uses a custom popover instead of native <select> to avoid OS chrome.
  */
-export function FromSelector({ aliases, selected, onChange }: FromSelectorProps) {
+export function FromSelector({
+  aliases,
+  selected,
+  onChange,
+  fallbackDisplayName,
+}: FromSelectorProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -67,7 +80,7 @@ export function FromSelector({ aliases, selected, onChange }: FromSelectorProps)
               key={alias.email}
               type="button"
               onClick={() => {
-                onChange(formatAlias(alias));
+                onChange(formatAlias(alias, fallbackDisplayName));
                 setOpen(false);
               }}
               className={`w-full text-left px-3 py-1.5 text-sm truncate transition-colors ${
@@ -76,7 +89,7 @@ export function FromSelector({ aliases, selected, onChange }: FromSelectorProps)
                   : "text-gray-900 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700/50"
               }`}
             >
-              {alias.displayName ? `${alias.displayName} <${alias.email}>` : alias.email}
+              {formatAlias(alias, fallbackDisplayName)}
             </button>
           ))}
         </div>

@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { useAppStore } from "../store";
 import { useSignature } from "./useSignature";
+import { formatAlias } from "../components/FromSelector";
 import type { ComposeAttachmentItem } from "../components/AttachmentList";
 import type {
   ReplyInfo,
@@ -135,6 +136,12 @@ export function useComposeForm({
   const [sendAsAliases, setSendAsAliases] = useState<SendAsAlias[]>([]);
   const [from, setFrom] = useState<string | undefined>(undefined);
 
+  // Account display name acts as the fallback for aliases without their own
+  // (common for Workspace primaries, where the name lives on the OAuth profile).
+  const accountDisplayName = useAppStore(
+    (state) => state.accounts.find((a) => a.id === accountId)?.displayName,
+  );
+
   // Fetch aliases on mount
   useEffect(() => {
     if (typeof window.api.compose.getSendAsAliases !== "function") return;
@@ -169,11 +176,7 @@ export function useComposeForm({
               allRecipients.includes(a.email.toLowerCase()),
             );
             if (matchingAlias) {
-              setFrom(
-                matchingAlias.displayName
-                  ? `${matchingAlias.displayName} <${matchingAlias.email}>`
-                  : matchingAlias.email,
-              );
+              setFrom(formatAlias(matchingAlias, accountDisplayName));
               return;
             }
           }
@@ -181,18 +184,14 @@ export function useComposeForm({
           // Default to the default alias
           const defaultAlias = result.data.find((a) => a.isDefault);
           if (defaultAlias) {
-            setFrom(
-              defaultAlias.displayName
-                ? `${defaultAlias.displayName} <${defaultAlias.email}>`
-                : defaultAlias.email,
-            );
+            setFrom(formatAlias(defaultAlias, accountDisplayName));
           }
         }
       })
       .catch(() => {
         // Silently fail — compose still works without aliases
       });
-  }, [accountId]);
+  }, [accountId, accountDisplayName]);
 
   // --- Send state ---
   const [isSending, setIsSending] = useState(false);
@@ -492,6 +491,7 @@ export function useComposeForm({
     sendAsAliases,
     from,
     setFrom,
+    accountDisplayName,
 
     // Content state
     subject,
