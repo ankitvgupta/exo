@@ -409,6 +409,7 @@ export const ConfigSchema = z.object({
     })
     .optional(),
   configVersion: z.number().optional(),
+  llmBackend: z.enum(["anthropic", "claude-sdk"]).default("anthropic"),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;

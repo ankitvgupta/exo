@@ -116,6 +116,9 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
   const [eaSaved, setEaSaved] = useState(false);
   const [eaError, setEaError] = useState<string | null>(null);
 
+  // LLM backend toggle
+  const [llmBackend, setLlmBackend] = useState<"anthropic" | "claude-sdk">("anthropic");
+
   // Agent authentication state
   const [anthropicApiKey, setAnthropicApiKey] = useState("");
   const [isSavingApiKey, setIsSavingApiKey] = useState(false);
@@ -235,6 +238,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
       setGithubToken(generalConfig.githubToken ?? "");
       setAllowPrereleaseUpdates(generalConfig.allowPrereleaseUpdates ?? false);
       setAnthropicApiKey(generalConfig.anthropicApiKey ?? "");
+      setLlmBackend(generalConfig.llmBackend ?? "anthropic");
       const browser = generalConfig.agentBrowser;
       if (browser) {
         setBrowserEnabled(browser.enabled);
@@ -2534,35 +2538,62 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                 Authentication
               </h4>
 
-              {/* Anthropic API Key */}
+              {/* LLM Backend */}
               <div className="mb-6">
                 <h5 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Anthropic API Key
+                  LLM Backend
                 </h5>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
-                  Required for email analysis, draft generation, and sender lookup.
+                  Choose how to connect to Claude. &quot;Claude Code SDK&quot; uses your Claude Max
+                  subscription (flat-rate). &quot;Anthropic API&quot; uses pay-per-token billing
+                  with an API key.
                 </p>
-                <div className="flex gap-2">
-                  <input
-                    type="password"
-                    value={anthropicApiKey}
-                    onChange={(e) => setAnthropicApiKey(e.target.value)}
-                    placeholder="sk-ant-..."
-                    className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-400"
-                  />
-                  <button
-                    onClick={handleSaveApiKey}
-                    disabled={isSavingApiKey}
-                    className={`px-4 py-2 text-white text-sm font-medium rounded-lg disabled:opacity-50 transition-colors ${
-                      apiKeySaved
-                        ? "bg-green-600 dark:bg-green-500"
-                        : "bg-blue-600 dark:bg-blue-500 hover:bg-blue-700 dark:hover:bg-blue-600"
-                    }`}
-                  >
-                    {isSavingApiKey ? "Saving..." : apiKeySaved ? "Saved" : "Save"}
-                  </button>
-                </div>
+                <select
+                  value={llmBackend}
+                  onChange={async (e) => {
+                    const value = e.target.value;
+                    if (value !== "anthropic" && value !== "claude-sdk") return;
+                    setLlmBackend(value);
+                    await window.api.settings.set({ llmBackend: value });
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                >
+                  <option value="anthropic">Anthropic API (pay-per-token)</option>
+                  <option value="claude-sdk">Claude Code SDK (subscription)</option>
+                </select>
               </div>
+
+              {/* Anthropic API Key — only shown when using Anthropic API backend */}
+              {llmBackend === "anthropic" && (
+                <div className="mb-6">
+                  <h5 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Anthropic API Key
+                  </h5>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                    Required for email analysis, draft generation, and sender lookup.
+                  </p>
+                  <div className="flex gap-2">
+                    <input
+                      type="password"
+                      value={anthropicApiKey}
+                      onChange={(e) => setAnthropicApiKey(e.target.value)}
+                      placeholder="sk-ant-..."
+                      className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-400"
+                    />
+                    <button
+                      onClick={handleSaveApiKey}
+                      disabled={isSavingApiKey}
+                      className={`px-4 py-2 text-white text-sm font-medium rounded-lg disabled:opacity-50 transition-colors ${
+                        apiKeySaved
+                          ? "bg-green-600 dark:bg-green-500"
+                          : "bg-blue-600 dark:bg-blue-500 hover:bg-blue-700 dark:hover:bg-blue-600"
+                      }`}
+                    >
+                      {isSavingApiKey ? "Saving..." : apiKeySaved ? "Saved" : "Save"}
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Claude Account (OAuth) — only shown when claude CLI is available */}
               {claudeCliAvailable && (

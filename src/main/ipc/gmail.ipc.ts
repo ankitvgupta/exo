@@ -2,6 +2,7 @@ import { ipcMain } from "electron";
 import { GmailClient } from "../services/gmail-client";
 import { saveEmail, getEmailIds, getInboxEmails, getEmail, saveAccount, getAccounts } from "../db";
 import { getConfig } from "./settings.ipc";
+import { getLlmBackend } from "../services/anthropic-service";
 import type { IpcResponse, DashboardEmail } from "../../shared/types";
 import { DEMO_INBOX_EMAILS, DEMO_EXPECTED_ANALYSIS } from "../demo/fake-inbox";
 import { createLogger } from "../services/logger";
@@ -70,7 +71,10 @@ export function registerGmailIpc(): void {
 
       try {
         const client = new GmailClient();
-        const hasAnthropicKey = !!(process.env.ANTHROPIC_API_KEY || getConfig().anthropicApiKey);
+        // Claude SDK backend doesn't need an API key — the subscription handles auth
+        const hasAnthropicKey =
+          getLlmBackend() === "claude-sdk" ||
+          !!(process.env.ANTHROPIC_API_KEY || getConfig().anthropicApiKey);
         return {
           success: true,
           data: {

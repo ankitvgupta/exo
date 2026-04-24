@@ -18,7 +18,12 @@ import {
 } from "../../shared/types";
 import { resetAnalyzer } from "./analysis.ipc";
 import { resetArchiveReadyAnalyzer } from "./archive-ready.ipc";
-import { resetClient, getUsageStats, getCallHistory } from "../services/anthropic-service";
+import {
+  resetClient,
+  getUsageStats,
+  getCallHistory,
+  setLlmBackendFromConfig,
+} from "../services/anthropic-service";
 import { prefetchService } from "../services/prefetch-service";
 import { agentCoordinator } from "../agents/agent-coordinator";
 import {
@@ -71,6 +76,7 @@ function getStore(): Store<{ config: Config }> {
           },
           keyboardBindings: "superhuman" as const,
           configVersion: 1,
+          llmBackend: "anthropic" as const,
         },
       },
     });
@@ -273,6 +279,11 @@ export function registerSettingsIpc(): void {
         });
       }
 
+      // Propagate LLM backend change
+      if ("llmBackend" in config && newConfig.llmBackend) {
+        setLlmBackendFromConfig(newConfig.llmBackend);
+      }
+
       // Append any new extra PATH directories so they take effect without restart
       if ("extraPathDirs" in config) {
         const pathEntries = new Set((process.env.PATH || "").split(":"));
@@ -284,9 +295,9 @@ export function registerSettingsIpc(): void {
         }
       }
 
-      // Reset cached analyzer/service instances when model config or API key changes,
+      // Reset cached analyzer/service instances when model config, API key, or backend changes,
       // since they hold Anthropic client instances that capture the key at construction.
-      if ("modelConfig" in config || "anthropicApiKey" in config) {
+      if ("modelConfig" in config || "anthropicApiKey" in config || "llmBackend" in config) {
         resetClient();
         resetAnalyzer();
         resetArchiveReadyAnalyzer();

@@ -15,6 +15,7 @@ import type {
 } from "@anthropic-ai/sdk/resources/messages";
 import { createLogger } from "./logger";
 import { randomUUID } from "crypto";
+import { createMessageViaSdk } from "./claude-sdk-service";
 
 const log = createLogger("anthropic");
 
@@ -84,6 +85,28 @@ interface CreateOptions {
   accountId?: string;
   /** Timeout in milliseconds (default: none) */
   timeoutMs?: number;
+}
+
+// LLM backend toggle — env var takes precedence, then persisted config
+export type LlmBackend = "anthropic" | "claude-sdk";
+
+let _configBackend: LlmBackend | null = null;
+
+/**
+ * Set the LLM backend from persisted config (called during app init).
+ */
+export function setLlmBackendFromConfig(backend: LlmBackend): void {
+  _configBackend = backend;
+}
+
+/**
+ * Get the active LLM backend.
+ * Priority: LLM_BACKEND env var > persisted config > default ("anthropic").
+ */
+export function getLlmBackend(): LlmBackend {
+  const envVal = process.env.LLM_BACKEND;
+  if (envVal === "anthropic" || envVal === "claude-sdk") return envVal;
+  return _configBackend ?? "anthropic";
 }
 
 // Anthropic client — singleton for production, replaceable for testing
@@ -273,11 +296,17 @@ function getRetryCategory(error: unknown): string | null {
 
 /**
  * Create a message using Claude API with retry and cost tracking.
+ * When LLM_BACKEND=claude-sdk, delegates to the Claude Agent SDK adapter.
  */
 export async function createMessage(
   params: MessageCreateParamsNonStreaming,
   options: CreateOptions,
 ): Promise<Message> {
+  // Delegate to Claude Agent SDK if configured
+  if (getLlmBackend() === "claude-sdk") {
+    return createMessageViaClaudeSdk(params, options);
+  }
+
   const { caller, emailId, accountId, timeoutMs } = options;
   const model = params.model;
   const startTime = Date.now();
@@ -451,4 +480,47 @@ export function getCallHistory(limit: number = 50): LlmCallRecord[] {
   return _db
     .prepare("SELECT * FROM llm_calls ORDER BY created_at DESC LIMIT ?")
     .all(limit) as LlmCallRecord[];
+}
+
+/**
+ * Bridge: delegate createMessage to the Claude Agent SDK adapter,
+ * then record cost in the same llm_calls table.
+ */
+async function createMessageViaClaudeSdk(
+  params: MessageCreateParamsNonStreaming,
+  options: CreateOptions,
+): Promise<Message> {
+  const { caller, emailId, accountId, timeoutMs } = options;
+  const model = params.model;
+  const startTime = Date.now();
+
+  try {
+    const { message, durationMs, inputTokens, outputTokens } = await createMessageViaSdk(params, {
+      caller,
+      emailId,
+      accountId,
+      timeoutMs,
+    });
+
+    // Record to llm_calls for unified cost tracking
+    recordCall(
+      model,
+      caller,
+      emailId || null,
+      accountId || null,
+      inputTokens,
+      outputTokens,
+      0, // cache_read — not applicable for SDK
+      0, // cache_create — not applicable for SDK
+      durationMs,
+      true,
+      null,
+    );
+
+    return message;
+  } catch (error) {
+    const errMsg = error instanceof Error ? error.message : String(error);
+    recordCall(model, caller, emailId || null, accountId || null, 0, 0, 0, 0, Date.now() - startTime, false, errMsg);
+    throw error;
+  }
 }
