@@ -56,6 +56,7 @@ function getStore(): Store<{ config: Config }> {
           analysisPrompt: DEFAULT_ANALYSIS_PROMPT,
           draftPrompt: DEFAULT_DRAFT_PROMPT,
           enableSenderLookup: true,
+          syncDraftsToGmail: false,
           theme: "system" as const,
           inboxDensity: "compact" as const,
           undoSendDelay: 5,
@@ -509,8 +510,10 @@ export function registerSettingsIpc(): void {
           analysisChanged || draftChanged || archiveReadyChanged || agentDrafterChanged;
 
         if (anyChanged) {
-          // Full clear to reset all tracking sets, then re-process
-          prefetchService.clear();
+          // Clear tracking sets to re-process; use clearForRerun so the DB-seeded
+          // processedDrafts doesn't re-block the emails whose pending drafts/traces
+          // we just cleared above.
+          prefetchService.clearForRerun();
 
           // Notify renderer to refresh emails (stale analysis/draft data is gone)
           for (const win of BrowserWindow.getAllWindows()) {
@@ -571,6 +574,27 @@ export function registerSettingsIpc(): void {
       }
     },
   );
+
+  // Infer writing style from sent emails using Claude Opus
+  ipcMain.handle("style:infer", async (): Promise<IpcResponse<string>> => {
+    try {
+      const { inferStyleFromSentEmails } = await import("../services/style-profiler");
+      const { getEmailSyncService } = await import("./sync.ipc");
+      // Use any available gmail client for fallback (style is cross-account)
+      const syncService = getEmailSyncService();
+      const { getAccounts: getDbAccounts } = await import("../db");
+      const accounts = getDbAccounts();
+      const firstAccountId = accounts.length > 0 ? accounts[0].id : undefined;
+      const gmailClient = firstAccountId ? syncService.getClientForAccount(firstAccountId) : null;
+      const result = await inferStyleFromSentEmails(gmailClient, firstAccountId);
+      return { success: true, data: result };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
+  });
 
   // Get EA config
   ipcMain.handle("settings:get-ea", async (): Promise<IpcResponse<EAConfig>> => {

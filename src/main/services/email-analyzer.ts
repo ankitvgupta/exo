@@ -43,10 +43,12 @@ OUTPUT FORMAT:
   "priority": "high" or "medium" or "low" (only include if needs_reply is true)
 }
 
+Anything that requires the user to do external work (e.g. update a document or send an invite) should remain in at least "low" priority and not be skipped.
+
 SKIP REPLIES FOR:
 - Newsletters, marketing emails, promotions, and advertising
 - Automated notifications (GitHub, CI/CD, build status, receipts, shipping updates, alerts)
-- Calendar invites and event notifications (handled by calendar app)
+- Received calendar invites and event notifications (handled by calendar app) — but if the email asks the user to create/send an invite, that's action-required
 - CC'd emails where the user is not the primary recipient
 - FYI-only messages with no question or action required
 - Transactional emails (order confirmations, password resets, subscription confirmations)
@@ -133,6 +135,11 @@ Example 12 - Request for decision (high priority):
 Email Subject: "Need your sign-off on vendor contract"
 Email Body: "Hi, Legal has approved the contract with Acme Corp. We need your signature by EOD today to lock in the current pricing (they're raising rates next month). I've attached the final version with all the negotiated terms. The key changes from our discussion: 2-year term with option to extend, net-30 payment terms, and the custom SLA we requested. Please review and let me know if you have any concerns."
 Output: {"needs_reply": true, "reason": "Time-sensitive contract requiring sign-off with deadline today", "priority": "high"}
+
+Example 13 - Action-required task (low priority):
+Email Subject: "Please update the team roster spreadsheet"
+Email Body: "Hi, could you add the two new hires to the shared roster spreadsheet by end of week? The link is in the pinned message in our Slack channel. Thanks!"
+Output: {"needs_reply": true, "reason": "Action required - update external document by end of week", "priority": "low"}
 
 Now analyze the following email:`;
 
