@@ -399,7 +399,7 @@ export async function filterAgainstPromotedMemories(
     return observations;
   }
 
-  // Skip API call in demo/test mode — return all observations unfiltered
+  // Skip API call in test/demo mode — return all observations unfiltered
   if (process.env.EXO_TEST_MODE === "true" || process.env.EXO_DEMO_MODE === "true") {
     return observations;
   }
@@ -497,7 +497,7 @@ export async function consolidateMemoryScopes(
     return { action: "save", deletedIds: [], createdGlobal: null, coveringMemoryId: null };
   }
 
-  // Skip API call in demo/test mode — treat all candidates as new
+  // Skip API call in test/demo mode — treat all candidates as new
   if (process.env.EXO_TEST_MODE === "true" || process.env.EXO_DEMO_MODE === "true") {
     return { action: "save", deletedIds: [], createdGlobal: null, coveringMemoryId: null };
   }
@@ -660,12 +660,14 @@ export async function learnFromDraftEdit(params: {
   accountId: string;
   sentBodyHtml: string;
   sentBodyText?: string;
+  /** Pre-read draft snapshot — use when the draft row may be deleted before this runs. */
+  draftSnapshot?: { draftBody: string; fromAddress: string; subject: string } | null;
 }): Promise<DraftEditLearnResult | null> {
   const { threadId, accountId, sentBodyHtml } = params;
   log.info(`[DraftEditLearner] Called for thread ${threadId}`);
 
-  // 1. Find the original AI draft for this thread
-  const draftInfo = getThreadDraftBody(threadId, accountId);
+  // 1. Find the original AI draft for this thread (use snapshot if provided)
+  const draftInfo = params.draftSnapshot ?? getThreadDraftBody(threadId, accountId);
   if (!draftInfo) {
     log.info(`[DraftEditLearner] No AI draft found for thread ${threadId} — skipping`);
     return null;

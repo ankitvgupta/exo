@@ -3648,13 +3648,24 @@ function EmailDetailInner({ isFullView = false }: EmailDetailProps) {
           <AnalysisPrioritySection
             email={latestReceivedEmail}
             onAnalysisUpdated={(newNeedsReply, newPriority) => {
-              updateEmail(latestReceivedEmail.id, {
+              const updates: Partial<DashboardEmail> = {
                 analysis: {
                   ...latestReceivedEmail.analysis!,
                   needsReply: newNeedsReply,
                   priority: (newPriority as "high" | "medium" | "low" | "skip" | null) ?? undefined,
                 },
-              });
+              };
+              updateEmail(latestReceivedEmail.id, updates);
+              // When reclassified as skip, clear drafts from ALL thread emails in UI state
+              // (main process deletes all thread drafts automatically via saveAnalysis).
+              // The draft may be on a different email than latestReceivedEmail.
+              if (newPriority === "skip" || newPriority === null) {
+                for (const email of threadEmails) {
+                  if (email.draft) {
+                    updateEmail(email.id, { draft: undefined });
+                  }
+                }
+              }
             }}
           />
         )}

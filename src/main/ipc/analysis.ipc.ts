@@ -9,6 +9,7 @@ import {
   learnFromPriorityOverrideInferred,
 } from "../services/analysis-edit-learner";
 import { stripQuotedContent } from "../services/strip-quoted-content";
+import { deleteGmailDraftById } from "../services/gmail-draft-sync";
 import { createLogger } from "../services/logger";
 
 const log = createLogger("analysis-ipc");
@@ -110,8 +111,20 @@ export function registerAnalysisIpc(): void {
 
         const result = await analyzerInstance.analyze(emailForAnalysis, userEmail, email.accountId);
 
-        // Save analysis to database
-        saveAnalysis(emailId, result.needs_reply, result.reason, result.priority);
+        // Save analysis to database (also cleans up thread drafts if reclassified as skip)
+        const draftCleanup = saveAnalysis(
+          emailId,
+          result.needs_reply,
+          result.reason,
+          result.priority,
+        );
+        if (draftCleanup) {
+          for (const cleanup of draftCleanup) {
+            if (cleanup.gmailDraftId && cleanup.accountId) {
+              deleteGmailDraftById(cleanup.accountId, cleanup.gmailDraftId).catch(() => {});
+            }
+          }
+        }
 
         // Return updated email with analysis
         const updatedEmail = getEmail(emailId);
@@ -188,7 +201,19 @@ export function registerAnalysisIpc(): void {
               userEmail,
               email.accountId,
             );
-            saveAnalysis(emailId, result.needs_reply, result.reason, result.priority);
+            const batchCleanup = saveAnalysis(
+              emailId,
+              result.needs_reply,
+              result.reason,
+              result.priority,
+            );
+            if (batchCleanup) {
+              for (const cleanup of batchCleanup) {
+                if (cleanup.gmailDraftId && cleanup.accountId) {
+                  deleteGmailDraftById(cleanup.accountId, cleanup.gmailDraftId).catch(() => {});
+                }
+              }
+            }
 
             const updatedEmail = getEmail(emailId);
             if (updatedEmail) {
@@ -239,17 +264,44 @@ export function registerAnalysisIpc(): void {
         const originalNeedsReply = originalAnalysis?.needsReply ?? false;
         const originalPriority = originalAnalysis?.priority ?? null;
 
-        // Update the analysis in DB
-        saveAnalysis(
+        // Normalize: the UI represents "skip" as priority=null + needsReply=false,
+        // but saveAnalysis checks for the literal string "skip" to trigger draft cleanup.
+        const normalizedPriority =
+          newPriority === null && !newNeedsReply ? "skip" : (newPriority ?? undefined);
+
+        // Update the analysis in DB (also deletes local draft + trace if reclassified as skip)
+        const draftCleanup = saveAnalysis(
           emailId,
           newNeedsReply,
           originalAnalysis?.reason ?? "User override",
-          newPriority ?? undefined,
+          normalizedPriority,
         );
 
         log.info(
           `[Analysis] Priority overridden for ${emailId}: ${originalPriority ?? "skip"} → ${newPriority ?? "skip"}`,
         );
+
+        // If reclassified as skip and thread had drafts, clean up Gmail drafts and cancel agents
+        if (draftCleanup) {
+          log.info(
+            `[Analysis] Cleaning up ${draftCleanup.length} thread draft(s) for ${emailId} after skip reclassification`,
+          );
+          const { agentCoordinator } = await import("../agents/agent-coordinator");
+          for (const cleanup of draftCleanup) {
+            if (cleanup.gmailDraftId && cleanup.accountId) {
+              deleteGmailDraftById(cleanup.accountId, cleanup.gmailDraftId).catch(() => {});
+            }
+            if (cleanup.agentTaskId) {
+              agentCoordinator.cancel(cleanup.agentTaskId);
+            }
+          }
+          // Cancel any in-flight auto-draft agent
+          const { prefetchService } = await import("../services/prefetch-service");
+          const activeTaskId = prefetchService.getActiveAgentTaskId(emailId);
+          if (activeTaskId) {
+            agentCoordinator.cancel(activeTaskId);
+          }
+        }
 
         // Learn from the override in the background (don't block the UI)
         const accountId = email.accountId ?? "default";

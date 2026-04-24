@@ -1468,18 +1468,94 @@ function rowToDashboardEmail(row: Record<string, unknown>): DashboardEmail {
 }
 
 // Analysis operations
+export interface DraftCleanupInfo {
+  gmailDraftId: string | null;
+  agentTaskId: string | null;
+  accountId: string | null;
+}
+
+/**
+ * Save analysis for an email. When the priority is "skip" and the email had
+ * a draft, the local draft and its agent trace are deleted automatically.
+ * Returns cleanup info so the caller can cancel in-flight agents and delete
+ * the Gmail draft (which requires async network calls outside the DB layer).
+ */
 export function saveAnalysis(
   emailId: string,
   needsReply: boolean,
   reason: string,
   priority?: string,
-): void {
+): DraftCleanupInfo[] | null {
   const db = getDatabase();
-  const stmt = db.prepare(`
-    INSERT OR REPLACE INTO analyses (email_id, needs_reply, reason, priority, analyzed_at)
-    VALUES (?, ?, ?, ?, ?)
-  `);
-  stmt.run(emailId, needsReply ? 1 : 0, reason, priority || null, Date.now());
+  const effectivePriority = priority || null;
+
+  // When reclassifying as "skip", clean up drafts for the ENTIRE thread, not just
+  // this email. The UI shows priority at the thread level, and the draft might be
+  // on a different email than the one being reclassified (e.g., draft is on email A
+  // but email B arrives and gets classified as skip).
+  const cleanupInfos: DraftCleanupInfo[] = [];
+  if (effectivePriority === "skip") {
+    // Look up thread_id and account_id for this email
+    const emailRow = db
+      .prepare(`SELECT thread_id, account_id FROM emails WHERE id = ?`)
+      .get(emailId) as { thread_id: string; account_id: string } | undefined;
+
+    if (emailRow) {
+      // Find all drafts in this thread
+      const draftRows = db
+        .prepare(
+          `SELECT d.email_id, d.gmail_draft_id, d.agent_task_id
+           FROM drafts d JOIN emails e ON d.email_id = e.id
+           WHERE e.thread_id = ? AND e.account_id = ?`,
+        )
+        .all(emailRow.thread_id, emailRow.account_id) as Array<{
+        email_id: string;
+        gmail_draft_id: string | null;
+        agent_task_id: string | null;
+      }>;
+
+      for (const row of draftRows) {
+        cleanupInfos.push({
+          gmailDraftId: row.gmail_draft_id,
+          agentTaskId: row.agent_task_id,
+          accountId: emailRow.account_id,
+        });
+      }
+    }
+  }
+
+  // Wrap all DB writes in a transaction so draft deletion + analysis save are atomic
+  const doWrites = db.transaction(() => {
+    for (const info of cleanupInfos) {
+      if (info.agentTaskId) {
+        db.prepare(`DELETE FROM agent_conversation_mirror WHERE local_task_id = ?`).run(
+          info.agentTaskId,
+        );
+      }
+    }
+    if (cleanupInfos.length > 0) {
+      // Look up the thread again inside the transaction for the DELETE
+      const emailRow = db
+        .prepare(`SELECT thread_id, account_id FROM emails WHERE id = ?`)
+        .get(emailId) as { thread_id: string; account_id: string } | undefined;
+      if (emailRow) {
+        db.prepare(
+          `DELETE FROM drafts WHERE email_id IN (
+             SELECT d.email_id FROM drafts d JOIN emails e ON d.email_id = e.id
+             WHERE e.thread_id = ? AND e.account_id = ?
+           )`,
+        ).run(emailRow.thread_id, emailRow.account_id);
+      }
+    }
+
+    db.prepare(
+      `INSERT OR REPLACE INTO analyses (email_id, needs_reply, reason, priority, analyzed_at)
+       VALUES (?, ?, ?, ?, ?)`,
+    ).run(emailId, needsReply ? 1 : 0, reason, effectivePriority, Date.now());
+  });
+  doWrites();
+
+  return cleanupInfos.length > 0 ? cleanupInfos : null;
 }
 
 // Draft operations
@@ -1569,6 +1645,52 @@ export function updateDraftAgentTaskId(emailId: string, agentTaskId: string): vo
 export function deleteDraft(emailId: string): void {
   const db = getDatabase();
   db.prepare("DELETE FROM drafts WHERE email_id = ?").run(emailId);
+}
+
+/**
+ * Delete all drafts for a thread. Removes local draft rows and agent traces.
+ * Returns cleanup info for each deleted draft so callers can handle Gmail
+ * draft deletion and agent cancellation (async operations outside the DB layer).
+ */
+export function deleteThreadDrafts(threadId: string, accountId: string): DraftCleanupInfo[] {
+  const db = getDatabase();
+  const rows = db
+    .prepare(
+      `SELECT d.email_id, d.gmail_draft_id, d.agent_task_id
+       FROM drafts d JOIN emails e ON d.email_id = e.id
+       WHERE e.thread_id = ? AND e.account_id = ?`,
+    )
+    .all(threadId, accountId) as Array<{
+    email_id: string;
+    gmail_draft_id: string | null;
+    agent_task_id: string | null;
+  }>;
+
+  if (rows.length === 0) return [];
+
+  const cleanupInfos: DraftCleanupInfo[] = [];
+  for (const row of rows) {
+    cleanupInfos.push({
+      gmailDraftId: row.gmail_draft_id,
+      agentTaskId: row.agent_task_id,
+      accountId,
+    });
+  }
+
+  // Batch all deletes in a transaction for atomicity
+  const doDeletes = db.transaction(() => {
+    for (const row of rows) {
+      if (row.agent_task_id) {
+        db.prepare(`DELETE FROM agent_conversation_mirror WHERE local_task_id = ?`).run(
+          row.agent_task_id,
+        );
+      }
+      db.prepare("DELETE FROM drafts WHERE email_id = ?").run(row.email_id);
+    }
+  });
+  doDeletes();
+
+  return cleanupInfos;
 }
 
 /** Get the RFC 5322 Message-ID header for an email (used for reply threading). */

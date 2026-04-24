@@ -747,7 +747,7 @@ export function registerSettingsIpc(): void {
       const isDemoMode = process.env.EXO_DEMO_MODE === "true";
 
       if (isTestMode || isDemoMode) {
-        // Return mock data in demo mode
+        // Return mock data in test/demo mode
         const mockProfile: SenderProfile = {
           email: emailAddr,
           name: from.split("<")[0].trim() || "Demo Sender",

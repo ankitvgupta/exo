@@ -1221,6 +1221,14 @@ export function registerSyncIpc(): void {
         );
       }
 
+      // NOTE: Draft cleanup is intentionally NOT done here. Archiving can race
+      // with undo-send (the user sends, then immediately archives within the undo
+      // window). If we delete drafts now, the user can't undo the send. Instead:
+      // - compose:send cleans up drafts when the send actually fires
+      // - saveAnalysis cleans up drafts when emails are reclassified as "skip"
+      // - Orphaned drafts for archived threads are harmless (invisible in inbox)
+      //   and get cleaned up by the 30-day data retention sweep.
+
       if (useFakeData) {
         return { success: true, data: undefined };
       }
@@ -1264,17 +1272,6 @@ export function registerSyncIpc(): void {
               const prev = previousLabelsMap.get(email.id) || [];
               updateEmailLabelIds(email.id, prev);
               failedIds.push(email.id);
-            }
-          }
-        }
-
-        // Clean up agent traces for archived thread emails
-        for (const email of threadEmails) {
-          if (email.draft?.agentTaskId) {
-            try {
-              deleteAgentTrace(email.draft.agentTaskId);
-            } catch {
-              /* non-critical */
             }
           }
         }

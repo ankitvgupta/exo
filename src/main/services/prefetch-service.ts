@@ -18,6 +18,7 @@ import { agentCoordinator } from "../agents/agent-coordinator";
 import type { AgentContext } from "../agents/types";
 import { DEFAULT_AGENT_DRAFTER_PROMPT } from "../../shared/types";
 import type { Email, DashboardEmail } from "../../shared/types";
+import { deleteGmailDraftById } from "./gmail-draft-sync";
 import { createLogger } from "./logger";
 
 const log = createLogger("prefetch");
@@ -751,9 +752,39 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
       const userEmail = account?.email;
 
       const result = await analyzer.analyze(emailForAnalysis, userEmail, email.accountId);
-      saveAnalysis(emailId, result.needs_reply, result.reason, result.priority);
+      const draftCleanup = saveAnalysis(
+        emailId,
+        result.needs_reply,
+        result.reason,
+        result.priority,
+      );
       this.processedAnalysis.add(emailId);
       this.processedCounts.analysis++;
+
+      // If reclassified as "skip" and thread had drafts, clean up Gmail drafts and cancel agents
+      if (draftCleanup) {
+        log.info(
+          `[Prefetch] Email ${emailId} reclassified as skip — deleted ${draftCleanup.length} thread draft(s)`,
+        );
+        for (const cleanup of draftCleanup) {
+          if (cleanup.gmailDraftId && cleanup.accountId) {
+            deleteGmailDraftById(cleanup.accountId, cleanup.gmailDraftId).catch(() => {});
+          }
+          if (cleanup.agentTaskId) {
+            agentCoordinator.cancel(cleanup.agentTaskId);
+          }
+        }
+        // Cancel any in-flight agent draft for this email
+        const activeTaskId = this.activeAgentTaskIds.get(emailId);
+        if (activeTaskId) {
+          agentCoordinator.cancel(activeTaskId);
+        }
+        this.processedDrafts.delete(emailId);
+        // Also clear thread-level dedup so new emails in the thread can get drafts
+        if (email.threadId) {
+          this.processedDraftThreads.delete(email.threadId);
+        }
+      }
 
       log.info(
         `[Prefetch] Analyzed ${emailId}: ${result.priority} priority, needs_reply=${result.needs_reply}`,
