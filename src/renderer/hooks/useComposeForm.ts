@@ -283,11 +283,18 @@ export function useComposeForm({
   }, []);
 
   // --- @mention → add to Cc ---
-  const handleMentionAddToCc = useCallback((email: string) => {
+  const handleMentionAddToCc = useCallback((email: string, name?: string) => {
     setCc((prev) => {
       if (prev.some((e) => e.toLowerCase() === email.toLowerCase())) return prev;
       return [...prev, email];
     });
+    if (name) {
+      setNameMap((prev) => {
+        const key = email.toLowerCase();
+        if (prev.get(key) === name) return prev;
+        return new Map(prev).set(key, name);
+      });
+    }
     setShowCcBcc(true);
   }, []);
 
