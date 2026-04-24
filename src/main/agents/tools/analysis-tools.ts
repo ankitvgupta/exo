@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { type ToolDefinition, ToolRiskLevel } from "./types";
 import type { DashboardEmail } from "../../../shared/types";
-import { htmlToPlainText } from "../../db";
+import { htmlToPlainText } from "../../util/html-to-text";
 
 const analyzeEmail: ToolDefinition<{ emailId: string }> = {
   name: "analyze_email",

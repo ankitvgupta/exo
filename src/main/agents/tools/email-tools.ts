@@ -2,7 +2,7 @@ import { z } from "zod";
 import { type ToolDefinition, ToolRiskLevel } from "./types";
 import type { DashboardEmail } from "../../../shared/types";
 import { draftBodyToHtml } from "../../../shared/draft-utils";
-import { htmlToPlainText } from "../../db";
+import { htmlToPlainText } from "../../util/html-to-text";
 
 const readEmail: ToolDefinition<{ emailId: string }> = {
   name: "read_email",
