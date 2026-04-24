@@ -2,11 +2,15 @@ import type { SendAsAlias } from "../../shared/types";
 
 /**
  * Format an alias as "Display Name <email>" or just "email".
- * Falls back to `fallbackName` when the alias has no display name configured —
- * common for Workspace primary aliases where the name is set via OAuth profile,
- * not Gmail send-as settings.
+ *
+ * Falls back to `fallbackName` (the account's OAuth display name) only for the
+ * primary/default alias. That's where the name lives on the OAuth profile
+ * rather than in Gmail's send-as settings, which is common for Workspace
+ * accounts. Secondary aliases without a display name are left bare on
+ * purpose — they may be shared mailboxes (support@, team@) where the account
+ * holder's personal name would be wrong.
  */
 export function formatAlias(alias: SendAsAlias, fallbackName?: string): string {
-  const name = alias.displayName || fallbackName;
+  const name = alias.displayName || (alias.isDefault ? fallbackName : undefined);
   return name ? `${name} <${alias.email}>` : alias.email;
 }
