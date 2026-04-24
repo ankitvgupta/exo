@@ -428,6 +428,16 @@ const NUMBERED_MIGRATIONS: Migration[] = [
     version: 3,
     name: "index_agent_conversation_mirror_local_task_id",
     up: (db) => {
+      // Guard: migrations run before SCHEMA (see initDatabase order), so on a
+      // fresh DB the table doesn't exist yet. CREATE INDEX IF NOT EXISTS only
+      // guards the index, not the table — skip here and let SCHEMA + the index
+      // in the schema file handle fresh DBs.
+      const tableExists = db
+        .prepare(
+          "SELECT name FROM sqlite_master WHERE type='table' AND name='agent_conversation_mirror'",
+        )
+        .get();
+      if (!tableExists) return;
       db.exec(
         `CREATE INDEX IF NOT EXISTS idx_agent_conversation_mirror_task_status
          ON agent_conversation_mirror(local_task_id, status)`,
