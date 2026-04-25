@@ -11,10 +11,12 @@ import {
   getAnalyzedArchiveThreadIds,
   getAccounts,
   updateDraftAgentTaskId,
+  loadCompletedAgentDraftEmailIds,
 } from "../db";
 import { getConfig, getModelIdForFeature } from "../ipc/settings.ipc";
 import { getExtensionHost } from "../extensions";
 import { agentCoordinator } from "../agents/agent-coordinator";
+import { buildAutoDraftTaskId } from "../agents/task-id";
 import type { AgentContext } from "../agents/types";
 import { DEFAULT_AGENT_DRAFTER_PROMPT } from "../../shared/types";
 import type { Email, DashboardEmail } from "../../shared/types";
@@ -104,6 +106,7 @@ class PrefetchService {
   private processedAnalysis = new Set<string>();
   private processedSenderProfiles = new Set<string>();
   private processedDrafts = new Set<string>();
+  private seededFromDb = false;
   private processedExtensionEnrichments = new Set<string>();
   private processedArchiveReady = new Set<string>();
 
@@ -260,6 +263,17 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
     const _t0 = performance.now();
     log.info(`[PERF] processAllPending START`);
 
+    // Seed processedDrafts from persisted completions (agent_conversation_mirror)
+    // so we don't re-run agent drafts that already succeeded in a previous session.
+    // Only seed once (startup) — subsequent calls (e.g. rerun-all) should not re-seed.
+    if (!this.seededFromDb) {
+      const persistedCompletions = loadCompletedAgentDraftEmailIds();
+      for (const emailId of persistedCompletions) {
+        this.processedDrafts.add(emailId);
+      }
+      this.seededFromDb = true;
+    }
+
     const tConfig = performance.now();
     const config = getConfig();
     log.info(
@@ -370,7 +384,6 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
             e.analysis?.needsReply &&
             e.analysis?.priority !== "skip" &&
             allowedPriorities.includes(e.analysis?.priority || "low") &&
-            !e.draft &&
             !this.processedDrafts.has(e.id) &&
             !this.queue.some((t) => t.type === "agent-draft" && t.emailId === e.id) &&
             !this.agentDraftItems.has(e.id) &&
@@ -1042,7 +1055,10 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
    * so it can research context before drafting.
    */
   private async processAgentDraft(emailId: string): Promise<void> {
-    if (this.processedDrafts.has(emailId)) return;
+    // Force-queued items bypass the processedDrafts guard — the DB seed on startup
+    // could re-add a previously-completed email to processedDrafts during the window
+    // between forceQueueAgentDraft() clearing it and the task actually running.
+    if (this.processedDrafts.has(emailId) && !this.forceQueuedDrafts.has(emailId)) return;
 
     // Skip in test/demo mode — agent worker may not be available or we shouldn't make real API calls
     const isTestMode = process.env.EXO_TEST_MODE === "true";
@@ -1084,7 +1100,7 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
       `[Prefetch] Starting agent draft for email ${emailId} (priority=${email.analysis?.priority ?? "unknown"})`,
     );
 
-    const taskId = `auto-draft-${emailId}-${Date.now()}`;
+    const taskId = buildAutoDraftTaskId(emailId);
 
     try {
       const config = getConfig();
@@ -1462,7 +1478,7 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
       ? accounts.find((a) => a.id === email.accountId)
       : (accounts.find((a) => a.isPrimary) ?? accounts[0]);
 
-    const taskId = `auto-draft-${emailId}-${Date.now()}`;
+    const taskId = buildAutoDraftTaskId(emailId);
     const context: AgentContext = {
       accountId: account?.id || "",
       currentEmailId: emailId,
@@ -1478,9 +1494,23 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
   }
 
   /**
-   * Clear all state - call on logout or account switch
+   * Clear all state — call on logout or account switch.
+   * Resets seededFromDb so the next processAllPending() re-seeds processedDrafts
+   * from the DB (the new account's history).
    */
   clear(): void {
+    this.clearForRerun();
+    this.seededFromDb = false;
+  }
+
+  /**
+   * Clear in-memory state for a rerun of the pipeline, but keep seededFromDb
+   * as-is so the next processAllPending() does NOT re-seed from the DB.
+   * Used by "rerun all drafts" and prompt-change flows where the caller has
+   * already invalidated the relevant DB state (pending drafts + traces) and
+   * wants the pipeline to re-run without the seed re-blocking everything.
+   */
+  clearForRerun(): void {
     this.reset();
     this.queue = [];
     this.cachedInboxEmails = null;

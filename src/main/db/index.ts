@@ -17,6 +17,7 @@ import type {
   SendAsAlias,
 } from "../../shared/types";
 import { createLogger } from "../services/logger";
+import { parseAutoDraftTaskId, AUTO_DRAFT_TASK_ID_LIKE_PATTERN } from "../agents/task-id";
 
 const log = createLogger("db");
 
@@ -423,6 +424,26 @@ const NUMBERED_MIGRATIONS: Migration[] = [
       }
     },
   },
+  {
+    version: 3,
+    name: "index_agent_conversation_mirror_local_task_id",
+    up: (db) => {
+      // Guard: migrations run before SCHEMA (see initDatabase order), so on a
+      // fresh DB the table doesn't exist yet. CREATE INDEX IF NOT EXISTS only
+      // guards the index, not the table — skip here and let SCHEMA + the index
+      // in the schema file handle fresh DBs.
+      const tableExists = db
+        .prepare(
+          "SELECT name FROM sqlite_master WHERE type='table' AND name='agent_conversation_mirror'",
+        )
+        .get();
+      if (!tableExists) return;
+      db.exec(
+        `CREATE INDEX IF NOT EXISTS idx_agent_conversation_mirror_task_status
+         ON agent_conversation_mirror(local_task_id, status)`,
+      );
+    },
+  },
 ];
 
 function runNumberedMigrations(db: DatabaseInstance): void {
@@ -524,48 +545,6 @@ export function stripHtmlForSearch(html: string): string {
     .replace(/&#39;/gi, "'")
     .replace(/&[#\w]+;/gi, " ") // remaining entities
     .replace(/\s+/g, " ")
-    .trim();
-}
-
-/** Decode HTML entities including numeric (&#NNN; / &#xHH;) for agent-facing text. */
-function decodeHtmlEntities(text: string): string {
-  return text
-    .replace(/&nbsp;/gi, " ")
-    .replace(/&amp;/gi, "&")
-    .replace(/&lt;/gi, "<")
-    .replace(/&gt;/gi, ">")
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;/gi, "'")
-    .replace(/&#x([0-9a-f]+);/gi, (_, hex) => {
-      const cp = parseInt(hex, 16);
-      return cp <= 0x10ffff ? String.fromCodePoint(cp) : "\uFFFD";
-    })
-    .replace(/&#(\d+);/g, (_, dec) => {
-      const cp = parseInt(dec, 10);
-      return cp <= 0x10ffff ? String.fromCodePoint(cp) : "\uFFFD";
-    })
-    .replace(/&[#\w]+;/gi, " ");
-}
-
-/**
- * Convert HTML to plain text for AI agent consumption.
- * Preserves paragraph breaks and decodes all HTML entities (including numeric).
- * Use this instead of stripHtmlForSearch when the text will be read by an LLM.
- */
-export function htmlToPlainText(html: string): string {
-  return decodeHtmlEntities(
-    html
-      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "") // remove style blocks
-      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "") // remove script blocks
-      .replace(/<br\s*\/?>/gi, "\n") // <br> → newline
-      .replace(/<\/(?:p|div|h[1-6]|li|tr|blockquote)>/gi, "\n") // block-close → newline
-      .replace(/<(?:hr)\s*\/?>/gi, "\n---\n") // <hr> → separator
-      .replace(/<[^>]+>/g, ""), // strip remaining tags
-  )
-    .replace(/[ \t]+/g, " ") // collapse horizontal whitespace only
-    .replace(/\n /g, "\n") // trim leading space after newlines
-    .replace(/ \n/g, "\n") // trim trailing space before newlines
-    .replace(/\n{3,}/g, "\n\n") // collapse 3+ newlines to 2
     .trim();
 }
 
@@ -4412,4 +4391,24 @@ export function listConversationMirrors(providerId?: string): ConversationMirror
     createdAt: row.createdAt as string,
     updatedAt: row.updatedAt as string,
   }));
+}
+
+/**
+ * Load email IDs that have had a successful auto-draft agent run,
+ * derived from the agent_conversation_mirror table.
+ */
+export function loadCompletedAgentDraftEmailIds(): Set<string> {
+  const db = getDatabase();
+  const rows = db
+    .prepare(
+      `SELECT local_task_id FROM agent_conversation_mirror
+       WHERE local_task_id LIKE ? AND status = 'completed'`,
+    )
+    .all(AUTO_DRAFT_TASK_ID_LIKE_PATTERN) as Array<{ local_task_id: string }>;
+  const emailIds = new Set<string>();
+  for (const row of rows) {
+    const emailId = parseAutoDraftTaskId(row.local_task_id);
+    if (emailId) emailIds.add(emailId);
+  }
+  return emailIds;
 }

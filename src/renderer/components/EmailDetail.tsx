@@ -1177,8 +1177,8 @@ function InlineReply({
 
   // When @mention adds to Cc, also reveal address fields
   const handleMentionAddToCc = useCallback(
-    (email: string) => {
-      form.handleMentionAddToCc(email);
+    (email: string, name?: string) => {
+      form.handleMentionAddToCc(email, name);
       setShowAddressFields(true);
     },
     [form.handleMentionAddToCc],
