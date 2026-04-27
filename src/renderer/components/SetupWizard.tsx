@@ -171,13 +171,18 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
 
         const result = (await window.api.settings.set({
           ollamaCloud: { apiKey: ollamaApiKey.trim(), defaultModel: "minimax-m2.7:cloud" },
+          // Sender lookup uses Anthropic's web_search tool (Anthropic-only). Pin its
+          // provider to anthropic so it stays consistent if the user later adds an
+          // Anthropic key, and disable the feature for now since Ollama-only users
+          // would otherwise hit a silent Anthropic-client construction failure.
+          enableSenderLookup: false,
           featureProviders: {
             analysis: "ollama-cloud",
             drafts: "ollama-cloud",
             refinement: "ollama-cloud",
             calendaring: "ollama-cloud",
             archiveReady: "ollama-cloud",
-            senderLookup: "ollama-cloud",
+            senderLookup: "anthropic",
             agentDrafter: "ollama-cloud",
             agentChat: "ollama-cloud",
           },

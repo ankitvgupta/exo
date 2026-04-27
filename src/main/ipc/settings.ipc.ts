@@ -210,10 +210,14 @@ export function registerSettingsIpc(): void {
           authToken: apiKey,
           timeout: 10_000,
         });
-        // Use a minimal messages.create call to validate the key
+        // Validate by making a real messages.create call. minimax-m2.7:cloud is a
+        // thinking model — it emits a `thinking` block before any `text`, so
+        // max_tokens needs to be high enough that Ollama doesn't reject the
+        // request (and the user's key gets a fair test). 4096 mirrors the floor
+        // adjustParamsForOllama uses for runtime calls.
         await client.messages.create({
           model: "minimax-m2.7:cloud",
-          max_tokens: 1,
+          max_tokens: 4096,
           messages: [{ role: "user", content: "hi" }],
         });
         return { success: true, data: undefined };
