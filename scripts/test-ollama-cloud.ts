@@ -121,9 +121,11 @@ async function main(): Promise<void> {
   console.log(`Base URL: ${OLLAMA_BASE_URL}`);
   console.log(`Model: ${DEFAULT_MODEL}`);
 
+  // Ollama Cloud expects `Authorization: Bearer <key>` (not `X-Api-Key`).
+  // authToken sends Bearer; apiKey sends X-Api-Key.
   const client = new Anthropic({
     baseURL: OLLAMA_BASE_URL,
-    apiKey: apiKey,
+    authToken: apiKey,
   });
 
   let failures = 0;

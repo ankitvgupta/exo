@@ -187,6 +187,57 @@ test.describe("Ollama Cloud routing", () => {
     }
   });
 
+  test("createMessage with provider=ollama-cloud raises max_tokens to support thinking models", async () => {
+    // Models like minimax-m2.7:cloud emit `thinking` blocks before `text`. With low
+    // max_tokens (e.g., 256 from email-analyzer), thinking exhausts the budget and no
+    // text is produced. We raise to a safe floor so text still comes through.
+    const ollamaMock = createMockClient();
+    _setOllamaClientForTesting(ollamaMock.client);
+
+    await createMessage(
+      {
+        model: "minimax-m2.7:cloud",
+        max_tokens: 256, // realistic low value from email-analyzer
+        messages: [{ role: "user" as const, content: "Test" }],
+      },
+      { caller: "test-raise-tokens", provider: "ollama-cloud" },
+    );
+
+    expect(ollamaMock.calls[0].params.max_tokens).toBeGreaterThanOrEqual(4096);
+  });
+
+  test("createMessage with provider=ollama-cloud preserves max_tokens when already high", async () => {
+    const ollamaMock = createMockClient();
+    _setOllamaClientForTesting(ollamaMock.client);
+
+    await createMessage(
+      {
+        model: "minimax-m2.7:cloud",
+        max_tokens: 8192,
+        messages: [{ role: "user" as const, content: "Test" }],
+      },
+      { caller: "test-keep-tokens", provider: "ollama-cloud" },
+    );
+
+    expect(ollamaMock.calls[0].params.max_tokens).toBe(8192);
+  });
+
+  test("createMessage with provider=anthropic does NOT raise max_tokens", async () => {
+    const anthropicMock = createMockClient();
+    _setClientForTesting(anthropicMock.client);
+
+    await createMessage(
+      {
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 256,
+        messages: [{ role: "user" as const, content: "Test" }],
+      },
+      { caller: "test-anthropic-tokens", provider: "anthropic" },
+    );
+
+    expect(anthropicMock.calls[0].params.max_tokens).toBe(256);
+  });
+
   test("createMessage with provider=anthropic preserves cache_control in system messages", async () => {
     const anthropicMock = createMockClient();
     _setClientForTesting(anthropicMock.client);

@@ -326,23 +326,37 @@ function getRetryCategory(error: unknown): string | null {
 }
 
 /**
- * Strip cache_control from system message blocks.
- * Ollama's Anthropic-compatible endpoint doesn't support prompt caching.
+ * Adjust params for Ollama Cloud:
+ * - Strip cache_control from system message blocks (Ollama doesn't support prompt caching).
+ * - Raise max_tokens to a high floor. Ollama models like minimax-m2.7:cloud emit
+ *   long `thinking` blocks before their `text` block; with the small max_tokens our
+ *   features set for Anthropic (e.g. 256 for analysis), the thinking budget consumes
+ *   everything and the text block is never produced. Cost is $0 on Ollama (subscription),
+ *   so raising the ceiling is free.
  */
-function stripCacheControl(
+const OLLAMA_MIN_MAX_TOKENS = 4096;
+
+function adjustParamsForOllama(
   params: MessageCreateParamsNonStreaming,
 ): MessageCreateParamsNonStreaming {
-  if (!params.system || !Array.isArray(params.system)) return params;
+  let next = params;
 
-  const system = params.system.map((block) => {
-    if (typeof block === "object" && "cache_control" in block) {
-      const { cache_control: _, ...rest } = block;
-      return rest;
-    }
-    return block;
-  });
+  if (next.system && Array.isArray(next.system)) {
+    const system = next.system.map((block) => {
+      if (typeof block === "object" && "cache_control" in block) {
+        const { cache_control: _, ...rest } = block;
+        return rest;
+      }
+      return block;
+    });
+    next = { ...next, system } as MessageCreateParamsNonStreaming;
+  }
 
-  return { ...params, system } as MessageCreateParamsNonStreaming;
+  if (typeof next.max_tokens === "number" && next.max_tokens < OLLAMA_MIN_MAX_TOKENS) {
+    next = { ...next, max_tokens: OLLAMA_MIN_MAX_TOKENS };
+  }
+
+  return next;
 }
 
 /**
@@ -358,7 +372,7 @@ export async function createMessage(
   const startTime = Date.now();
 
   // Strip cache_control for Ollama (unsupported)
-  const effectiveParams = isOllama ? stripCacheControl(params) : params;
+  const effectiveParams = isOllama ? adjustParamsForOllama(params) : params;
 
   const client = getClientForProvider(provider);
   let lastError: unknown = null;
