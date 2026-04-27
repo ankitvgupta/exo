@@ -337,10 +337,15 @@ function getRetryCategory(error: unknown): string | null {
  */
 const OLLAMA_MIN_MAX_TOKENS = 4096;
 
-function stripCacheControlFromBlock<T extends Record<string, unknown>>(block: T): T {
-  if (typeof block !== "object" || block === null || !("cache_control" in block)) return block;
-  const { cache_control: _, ...rest } = block;
-  return rest as T;
+// Strip cache_control from a single block. The SDK union types (TextBlockParam,
+// ContentBlockParam) don't have a string index signature, so we narrow via `unknown`
+// rather than casting to Record<string, unknown>.
+function stripCacheControlFromBlock<T>(block: T): T {
+  if (typeof block !== "object" || block === null) return block;
+  const obj = block as unknown as Record<string, unknown>;
+  if (!("cache_control" in obj)) return block;
+  const { cache_control: _, ...rest } = obj;
+  return rest as unknown as T;
 }
 
 function adjustParamsForOllama(
@@ -349,10 +354,8 @@ function adjustParamsForOllama(
   let next = params;
 
   if (next.system && Array.isArray(next.system)) {
-    const system = next.system.map((block) =>
-      typeof block === "object" ? stripCacheControlFromBlock(block) : block,
-    );
-    next = { ...next, system } as MessageCreateParamsNonStreaming;
+    const system = next.system.map((block) => stripCacheControlFromBlock(block));
+    next = { ...next, system };
   }
 
   // cache_control can also appear on individual user/assistant message content blocks
@@ -360,16 +363,12 @@ function adjustParamsForOllama(
   if (Array.isArray(next.messages)) {
     const messages = next.messages.map((msg) => {
       if (Array.isArray(msg.content)) {
-        const content = msg.content.map((block) =>
-          typeof block === "object" && block !== null
-            ? stripCacheControlFromBlock(block as Record<string, unknown>)
-            : block,
-        );
-        return { ...msg, content } as typeof msg;
+        const content = msg.content.map((block) => stripCacheControlFromBlock(block));
+        return { ...msg, content };
       }
       return msg;
     });
-    next = { ...next, messages } as MessageCreateParamsNonStreaming;
+    next = { ...next, messages };
   }
 
   if (typeof next.max_tokens === "number" && next.max_tokens < OLLAMA_MIN_MAX_TOKENS) {

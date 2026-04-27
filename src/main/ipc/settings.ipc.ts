@@ -255,15 +255,24 @@ export function registerSettingsIpc(): void {
       // { apiKey, defaultModel } while the General tab writes { featureModels }.
       // With a shallow merge, whichever caller wrote second would overwrite the other
       // (Devin caught this: SettingsPanel reads stale react-query data and stomps the key).
-      const mergedOllama =
-        "ollamaCloud" in config
-          ? { ...(currentConfig.ollamaCloud ?? {}), ...(config.ollamaCloud ?? {}) }
-          : currentConfig.ollamaCloud;
-      const newConfig: Config = {
-        ...currentConfig,
-        ...config,
-        ...("ollamaCloud" in config ? { ollamaCloud: mergedOllama } : {}),
-      };
+      let newConfig: Config = { ...currentConfig, ...config };
+      if ("ollamaCloud" in config) {
+        const incoming = config.ollamaCloud;
+        const existing = currentConfig.ollamaCloud;
+        if (incoming === undefined) {
+          // Caller wants to clear it
+          newConfig = { ...newConfig, ollamaCloud: undefined };
+        } else {
+          newConfig = {
+            ...newConfig,
+            ollamaCloud: {
+              apiKey: incoming.apiKey ?? existing?.apiKey ?? "",
+              defaultModel: incoming.defaultModel ?? existing?.defaultModel ?? "minimax-m2.7:cloud",
+              featureModels: incoming.featureModels ?? existing?.featureModels,
+            },
+          };
+        }
+      }
       getStore().set("config", newConfig);
 
       // If githubToken changed, propagate to auto-updater immediately
