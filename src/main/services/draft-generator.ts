@@ -99,7 +99,11 @@ ${profile.summary}
 
     // Check for scheduling if EA is enabled
     if (eaConfig?.enabled && eaConfig.email) {
-      const calAgent = new CalendaringAgent(this.calendaringModel, undefined, this.calendaringProvider);
+      const calAgent = new CalendaringAgent(
+        this.calendaringModel,
+        undefined,
+        this.calendaringProvider,
+      );
       calendaringResult = await calAgent.analyze(email);
 
       if (calendaringResult.hasSchedulingContext && calendaringResult.action === "defer_to_ea") {

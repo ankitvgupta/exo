@@ -45,7 +45,10 @@ export function ExtensionsTab() {
   const [ollamaCloudEnabled, setOllamaCloudEnabled] = useState(false);
   const [ollamaCloudApiKey, setOllamaCloudApiKey] = useState("");
   const [ollamaCloudModel, setOllamaCloudModel] = useState("minimax-m2.7:cloud");
-  const [ollamaCloudTestResult, setOllamaCloudTestResult] = useState<{ success: boolean; error?: string } | null>(null);
+  const [ollamaCloudTestResult, setOllamaCloudTestResult] = useState<{
+    success: boolean;
+    error?: string;
+  } | null>(null);
   const [ollamaCloudTesting, setOllamaCloudTesting] = useState(false);
 
   // OpenClaw agent provider settings
@@ -541,9 +544,7 @@ export function ExtensionsTab() {
       <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600 p-6">
         <div className="flex items-center justify-between mb-3">
           <div>
-            <h4 className="text-base font-medium text-gray-900 dark:text-gray-100">
-              Ollama Cloud
-            </h4>
+            <h4 className="text-base font-medium text-gray-900 dark:text-gray-100">Ollama Cloud</h4>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
               Use Ollama Cloud models as an alternative AI provider for email analysis and drafting.
             </p>

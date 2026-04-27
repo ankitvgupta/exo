@@ -29,7 +29,9 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
 
   // API key input
   const [apiKey, setApiKey] = useState("");
-  const [selectedProvider, setSelectedProvider] = useState<"anthropic" | "ollama-cloud">("anthropic");
+  const [selectedProvider, setSelectedProvider] = useState<"anthropic" | "ollama-cloud">(
+    "anthropic",
+  );
   const [ollamaApiKey, setOllamaApiKey] = useState("");
 
   // Extension auth state
@@ -408,20 +410,20 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                 AI Provider
               </h2>
               <p className="text-gray-600 dark:text-gray-400 mb-6">
-                Exo uses AI to analyze your emails, generate drafts, and look up sender
-                information. Choose a provider and enter your API key.
+                Exo uses AI to analyze your emails, generate drafts, and look up sender information.
+                Choose a provider and enter your API key.
               </p>
 
               <div className="flex gap-2 mb-4">
                 <button
-                  className={`px-4 py-2 text-sm rounded-lg ${selectedProvider === 'anthropic' ? 'bg-blue-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'}`}
-                  onClick={() => setSelectedProvider('anthropic')}
+                  className={`px-4 py-2 text-sm rounded-lg ${selectedProvider === "anthropic" ? "bg-blue-600 text-white" : "bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300"}`}
+                  onClick={() => setSelectedProvider("anthropic")}
                 >
                   Anthropic
                 </button>
                 <button
-                  className={`px-4 py-2 text-sm rounded-lg ${selectedProvider === 'ollama-cloud' ? 'bg-blue-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'}`}
-                  onClick={() => setSelectedProvider('ollama-cloud')}
+                  className={`px-4 py-2 text-sm rounded-lg ${selectedProvider === "ollama-cloud" ? "bg-blue-600 text-white" : "bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300"}`}
+                  onClick={() => setSelectedProvider("ollama-cloud")}
                 >
                   Ollama Cloud
                 </button>
@@ -507,7 +509,10 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
 
               <button
                 onClick={handleSaveApiKey}
-                disabled={isLoading || (selectedProvider === "anthropic" ? !apiKey.trim() : !ollamaApiKey.trim())}
+                disabled={
+                  isLoading ||
+                  (selectedProvider === "anthropic" ? !apiKey.trim() : !ollamaApiKey.trim())
+                }
                 className="w-full py-3 bg-blue-600 dark:bg-blue-500 text-white font-medium rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors disabled:opacity-50"
               >
                 {isLoading ? "Saving..." : "Continue"}

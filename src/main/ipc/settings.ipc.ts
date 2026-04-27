@@ -19,7 +19,12 @@ import {
 } from "../../shared/types";
 import { resetAnalyzer } from "./analysis.ipc";
 import { resetArchiveReadyAnalyzer } from "./archive-ready.ipc";
-import { resetClient, setOllamaConfig, getUsageStats, getCallHistory } from "../services/llm-service";
+import {
+  resetClient,
+  setOllamaConfig,
+  getUsageStats,
+  getCallHistory,
+} from "../services/llm-service";
 import { prefetchService } from "../services/prefetch-service";
 import { agentCoordinator } from "../agents/agent-coordinator";
 import {
@@ -133,9 +138,10 @@ export function getModelIdForFeature(feature: keyof ModelConfig): string {
 }
 
 /** Resolve provider + model for a feature, supporting Ollama Cloud routing. */
-export function getFeatureModelConfig(
-  feature: keyof ModelConfig,
-): { provider: LlmProvider; model: string } {
+export function getFeatureModelConfig(feature: keyof ModelConfig): {
+  provider: LlmProvider;
+  model: string;
+} {
   const config = getConfig();
   const provider = (config.featureProviders?.[feature] ?? "anthropic") as LlmProvider;
   if (provider === "ollama-cloud") {
@@ -244,7 +250,20 @@ export function registerSettingsIpc(): void {
   ipcMain.handle("settings:set", async (_, config: Partial<Config>): Promise<IpcResponse<void>> => {
     try {
       const currentConfig = getConfig();
-      const newConfig = { ...currentConfig, ...config };
+      // Shallow-merge most fields. Deep-merge ollamaCloud so partial updates from
+      // different UIs don't clobber each other — ExtensionsTab writes
+      // { apiKey, defaultModel } while the General tab writes { featureModels }.
+      // With a shallow merge, whichever caller wrote second would overwrite the other
+      // (Devin caught this: SettingsPanel reads stale react-query data and stomps the key).
+      const mergedOllama =
+        "ollamaCloud" in config
+          ? { ...(currentConfig.ollamaCloud ?? {}), ...(config.ollamaCloud ?? {}) }
+          : currentConfig.ollamaCloud;
+      const newConfig: Config = {
+        ...currentConfig,
+        ...config,
+        ...("ollamaCloud" in config ? { ollamaCloud: mergedOllama } : {}),
+      };
       getStore().set("config", newConfig);
 
       // If githubToken changed, propagate to auto-updater immediately
@@ -316,16 +335,29 @@ export function registerSettingsIpc(): void {
         });
       }
 
-      // Propagate Ollama Cloud config to agent providers and LLM service.
+      // Propagate Ollama Cloud config to LLM service whenever the apiKey/defaultModel
+      // changes (used by non-agent createMessage routing).
       if ("ollamaCloud" in config) {
         const oc = newConfig.ollamaCloud;
         setOllamaConfig(oc?.apiKey ?? "");
+      }
+
+      // Propagate Ollama Cloud config to the agent framework when EITHER ollamaCloud
+      // or featureProviders changes. The agent subprocess routes to Ollama only when
+      // featureProviders.agentChat === "ollama-cloud" — having a key alone isn't enough,
+      // since the user may explicitly want agent on Anthropic while routing other
+      // features (analysis, drafts, etc.) to Ollama.
+      if ("ollamaCloud" in config || "featureProviders" in config) {
+        const merged = newConfig;
+        const oc = merged.ollamaCloud;
+        const agentChatProvider = merged.featureProviders?.agentChat ?? "anthropic";
+        const enableForAgent = !!oc?.apiKey && agentChatProvider === "ollama-cloud";
         agentCoordinator.updateConfig({
-          ollamaCloud: oc?.apiKey
+          ollamaCloud: enableForAgent
             ? {
                 enabled: true,
-                apiKey: oc.apiKey,
-                model: oc.defaultModel ?? "minimax-m2.7:cloud",
+                apiKey: oc!.apiKey,
+                model: oc!.featureModels?.agentChat ?? oc!.defaultModel ?? "minimax-m2.7:cloud",
               }
             : undefined,
         });
@@ -352,9 +384,15 @@ export function registerSettingsIpc(): void {
         }
       }
 
-      // Reset cached analyzer/service instances when model config or API key changes,
-      // since they hold Anthropic client instances that capture the key at construction.
-      if ("modelConfig" in config || "anthropicApiKey" in config) {
+      // Reset cached analyzer/service instances when model config, API keys, provider
+      // routing, or Ollama config changes. These services capture { provider, model } at
+      // construction time, so any of these changes can leave them holding stale values.
+      if (
+        "modelConfig" in config ||
+        "anthropicApiKey" in config ||
+        "ollamaCloud" in config ||
+        "featureProviders" in config
+      ) {
         resetClient();
         resetAnalyzer();
         resetArchiveReadyAnalyzer();

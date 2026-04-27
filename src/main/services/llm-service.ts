@@ -327,7 +327,8 @@ function getRetryCategory(error: unknown): string | null {
 
 /**
  * Adjust params for Ollama Cloud:
- * - Strip cache_control from system message blocks (Ollama doesn't support prompt caching).
+ * - Strip cache_control from system blocks AND from individual message content blocks
+ *   (Ollama doesn't support prompt caching anywhere).
  * - Raise max_tokens to a high floor. Ollama models like minimax-m2.7:cloud emit
  *   long `thinking` blocks before their `text` block; with the small max_tokens our
  *   features set for Anthropic (e.g. 256 for analysis), the thinking budget consumes
@@ -336,20 +337,39 @@ function getRetryCategory(error: unknown): string | null {
  */
 const OLLAMA_MIN_MAX_TOKENS = 4096;
 
+function stripCacheControlFromBlock<T extends Record<string, unknown>>(block: T): T {
+  if (typeof block !== "object" || block === null || !("cache_control" in block)) return block;
+  const { cache_control: _, ...rest } = block;
+  return rest as T;
+}
+
 function adjustParamsForOllama(
   params: MessageCreateParamsNonStreaming,
 ): MessageCreateParamsNonStreaming {
   let next = params;
 
   if (next.system && Array.isArray(next.system)) {
-    const system = next.system.map((block) => {
-      if (typeof block === "object" && "cache_control" in block) {
-        const { cache_control: _, ...rest } = block;
-        return rest;
-      }
-      return block;
-    });
+    const system = next.system.map((block) =>
+      typeof block === "object" ? stripCacheControlFromBlock(block) : block,
+    );
     next = { ...next, system } as MessageCreateParamsNonStreaming;
+  }
+
+  // cache_control can also appear on individual user/assistant message content blocks
+  // for multi-turn prompt caching. Strip those too — Ollama would reject them.
+  if (Array.isArray(next.messages)) {
+    const messages = next.messages.map((msg) => {
+      if (Array.isArray(msg.content)) {
+        const content = msg.content.map((block) =>
+          typeof block === "object" && block !== null
+            ? stripCacheControlFromBlock(block as Record<string, unknown>)
+            : block,
+        );
+        return { ...msg, content } as typeof msg;
+      }
+      return msg;
+    });
+    next = { ...next, messages } as MessageCreateParamsNonStreaming;
   }
 
   if (typeof next.max_tokens === "number" && next.max_tokens < OLLAMA_MIN_MAX_TOKENS) {

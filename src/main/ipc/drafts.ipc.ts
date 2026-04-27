@@ -146,7 +146,12 @@ FORMATTING: Write plain text paragraphs separated by blank lines. Do NOT use HTM
               },
             ],
           },
-          { caller: "drafts-refine", emailId, accountId: email.accountId, provider: refinementConfig.provider },
+          {
+            caller: "drafts-refine",
+            emailId,
+            accountId: email.accountId,
+            provider: refinementConfig.provider,
+          },
         );
 
         const textBlock = response.content.find((block) => block.type === "text");

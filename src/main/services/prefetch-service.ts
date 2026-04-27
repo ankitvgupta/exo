@@ -170,7 +170,11 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
     if (!this.archiveReadyAnalyzer) {
       const config = getConfig();
       const { model, provider } = getFeatureModelConfig("archiveReady");
-      this.archiveReadyAnalyzer = new ArchiveReadyAnalyzer(model, config.archiveReadyPrompt, provider);
+      this.archiveReadyAnalyzer = new ArchiveReadyAnalyzer(
+        model,
+        config.archiveReadyPrompt,
+        provider,
+      );
     }
     return this.archiveReadyAnalyzer;
   }

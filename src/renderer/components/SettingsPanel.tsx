@@ -1187,60 +1187,63 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                   ].map(({ key, label, description }) => {
                     const provider = featureProviders[key] ?? "anthropic";
                     return (
-                    <div
-                      key={key}
-                      className="flex items-center justify-between py-2 border-b border-gray-100 dark:border-gray-700 last:border-0"
-                    >
-                      <div className="flex-1 min-w-0 mr-4">
-                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                          {label}
-                        </p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">{description}</p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <select
-                          value={provider}
-                          onChange={(e) => {
-                            const p = e.target.value;
-                            if ((LLM_PROVIDERS as readonly string[]).includes(p)) {
-                              setFeatureProviders((prev) => ({ ...prev, [key]: p as LlmProvider }));
-                            }
-                          }}
-                          className="px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-500 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        >
-                          <option value="anthropic">Anthropic</option>
-                          <option value="ollama-cloud">Ollama Cloud</option>
-                        </select>
-                        {provider === "anthropic" ? (
+                      <div
+                        key={key}
+                        className="flex items-center justify-between py-2 border-b border-gray-100 dark:border-gray-700 last:border-0"
+                      >
+                        <div className="flex-1 min-w-0 mr-4">
+                          <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                            {label}
+                          </p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">{description}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
                           <select
-                            value={modelConfig[key]}
+                            value={provider}
                             onChange={(e) => {
-                              const tier = e.target.value;
-                              if ((MODEL_TIERS as readonly string[]).includes(tier)) {
-                                setModelConfig((prev) => ({ ...prev, [key]: tier as ModelTier }));
+                              const p = e.target.value;
+                              if ((LLM_PROVIDERS as readonly string[]).includes(p)) {
+                                setFeatureProviders((prev) => ({
+                                  ...prev,
+                                  [key]: p as LlmProvider,
+                                }));
                               }
                             }}
-                            className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-500 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            className="px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-500 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                           >
-                            {MODEL_TIERS.map((tier) => (
-                              <option key={tier} value={tier}>
-                                {MODEL_TIER_LABELS[tier]}
-                              </option>
-                            ))}
+                            <option value="anthropic">Anthropic</option>
+                            <option value="ollama-cloud">Ollama Cloud</option>
                           </select>
-                        ) : (
-                          <input
-                            type="text"
-                            value={ollamaModels[key] ?? "minimax-m2.7:cloud"}
-                            onChange={(e) =>
-                              setOllamaModels((prev) => ({ ...prev, [key]: e.target.value }))
-                            }
-                            placeholder="minimax-m2.7:cloud"
-                            className="w-48 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-500 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          />
-                        )}
+                          {provider === "anthropic" ? (
+                            <select
+                              value={modelConfig[key]}
+                              onChange={(e) => {
+                                const tier = e.target.value;
+                                if ((MODEL_TIERS as readonly string[]).includes(tier)) {
+                                  setModelConfig((prev) => ({ ...prev, [key]: tier as ModelTier }));
+                                }
+                              }}
+                              className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-500 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            >
+                              {MODEL_TIERS.map((tier) => (
+                                <option key={tier} value={tier}>
+                                  {MODEL_TIER_LABELS[tier]}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <input
+                              type="text"
+                              value={ollamaModels[key] ?? "minimax-m2.7:cloud"}
+                              onChange={(e) =>
+                                setOllamaModels((prev) => ({ ...prev, [key]: e.target.value }))
+                              }
+                              placeholder="minimax-m2.7:cloud"
+                              className="w-48 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-500 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            />
+                          )}
+                        </div>
                       </div>
-                    </div>
                     );
                   })}
                 </div>
