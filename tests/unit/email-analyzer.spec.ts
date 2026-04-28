@@ -13,7 +13,7 @@ import {
   resetAnthropicMock,
   getCapturedRequests,
 } from "../mocks/anthropic-api-mock";
-import { _setClientForTesting } from "../../src/main/services/anthropic-service";
+import { _setClientForTesting } from "../../src/main/services/llm-service";
 import type { Email } from "../../src/shared/types";
 import { ANALYSIS_JSON_FORMAT } from "../../src/shared/types";
 

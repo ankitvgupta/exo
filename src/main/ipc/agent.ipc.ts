@@ -2,7 +2,7 @@ import { ipcMain } from "electron";
 import { execFile, execFileSync } from "child_process";
 import { agentCoordinator } from "../agents/agent-coordinator";
 import { authenticateProvider } from "../agents/private-providers-main";
-import { getModelIdForFeature } from "./settings.ipc";
+import { getFeatureModelConfig } from "./settings.ipc";
 import { getAgentTrace } from "../db";
 import type { AgentContext } from "../agents/types";
 import type { ScopedAgentEvent } from "../agents/types";
@@ -45,8 +45,9 @@ export function registerAgentIpc(): void {
       },
     ): Promise<IpcResponse<{ taskId: string }>> => {
       try {
-        // Interactive agent tasks use the agentChat model (defaults to opus)
-        const modelOverride = getModelIdForFeature("agentChat");
+        // Interactive agent tasks use the agentChat model (defaults to opus).
+        // When routed to Ollama Cloud, the model comes from ollamaCloud config.
+        const { model: modelOverride } = getFeatureModelConfig("agentChat");
         await agentCoordinator.runAgent(taskId, providerIds, prompt, context, modelOverride);
         return { success: true, data: { taskId } };
       } catch (error) {

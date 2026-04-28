@@ -1,10 +1,11 @@
-import { createMessage } from "./anthropic-service";
+import { createMessage } from "./llm-service";
 import {
   AnalysisResultSchema,
   ANALYSIS_JSON_FORMAT,
   DEFAULT_ANALYSIS_PROMPT,
   type AnalysisResult,
   type Email,
+  type LlmProvider,
 } from "../../shared/types";
 import { stripQuotedContent } from "./strip-quoted-content";
 import { stripJsonFences } from "../../shared/strip-json-fences";
@@ -146,11 +147,13 @@ Now analyze the following email:`;
 export class EmailAnalyzer {
   private model: string;
   private customPrompt: string | null;
+  private provider?: LlmProvider;
 
-  constructor(model: string = "claude-sonnet-4-20250514", prompt?: string) {
+  constructor(model: string = "claude-sonnet-4-20250514", prompt?: string, provider?: LlmProvider) {
     this.model = model;
     // Only use custom prompt if it differs from default
     this.customPrompt = prompt && prompt !== DEFAULT_ANALYSIS_PROMPT ? prompt : null;
+    this.provider = provider;
   }
 
   async analyze(email: Email, userEmail?: string, accountId?: string): Promise<AnalysisResult> {
@@ -195,7 +198,7 @@ ${userIdentityLine}${wrapUntrustedEmail(`From: ${email.from}\nTo: ${email.to}\nS
           },
         ],
       },
-      { caller: "email-analyzer", emailId: email.id, accountId },
+      { caller: "email-analyzer", emailId: email.id, accountId, provider: this.provider },
     );
 
     // Log cache performance

@@ -389,8 +389,8 @@ ipcMain.handle("default-mail-app:get-pending", () => {
 // Initialize database on startup
 const _db = initDatabase();
 
-// Wire up AnthropicService cost tracking
-import { setAnthropicServiceDb } from "./services/anthropic-service";
+// Wire up LLM service cost tracking
+import { setAnthropicServiceDb, setOllamaConfig } from "./services/llm-service";
 setAnthropicServiceDb(_db);
 
 // If no ANTHROPIC_API_KEY in env (e.g. packaged app with no .env), read from stored config
@@ -399,6 +399,10 @@ setAnthropicServiceDb(_db);
   const config = getConfig();
   if (!process.env.ANTHROPIC_API_KEY && config.anthropicApiKey) {
     process.env.ANTHROPIC_API_KEY = config.anthropicApiKey;
+  }
+  // Initialize Ollama Cloud client if configured
+  if (config.ollamaCloud?.apiKey) {
+    setOllamaConfig(config.ollamaCloud.apiKey);
   }
 }
 

@@ -358,6 +358,32 @@ export function resolveModelId(tier: ModelTier): string {
   return MODEL_TIER_IDS[tier];
 }
 
+// LLM Provider types — supports routing features to different backends
+export const LLM_PROVIDERS = ["anthropic", "ollama-cloud"] as const;
+export const LlmProviderSchema = z.enum(["anthropic", "ollama-cloud"]);
+export type LlmProvider = z.infer<typeof LlmProviderSchema>;
+
+/**
+ * Default Ollama Cloud model when none is configured.
+ *
+ * deepseek-v4-pro:cloud is DeepSeek's latest pro-tier release and follows
+ * system-prompt instructions / tool definitions reliably. Earlier choices
+ * (minimax-m2.7:cloud) ignored explicit accountId hints and called list_emails
+ * with hallucinated values instead of using read_email on the email already
+ * in context. Switched after live testing on a real inbox.
+ *
+ * Note: pro models may occasionally return overloaded_error during peak
+ * traffic — llm-service.ts retry logic catches this via Anthropic.APIError
+ * status 529 (rate_limit category) and backs off automatically.
+ */
+export const DEFAULT_OLLAMA_MODEL = "deepseek-v4-pro:cloud";
+
+export const OllamaCloudConfigSchema = z.object({
+  apiKey: z.string().default(""),
+  defaultModel: z.string().default(DEFAULT_OLLAMA_MODEL),
+  featureModels: z.record(z.string(), z.string()).optional(),
+});
+
 // Config schema
 export const ConfigSchema = z.object({
   maxEmails: z.number().default(50),
@@ -408,10 +434,36 @@ export const ConfigSchema = z.object({
       gatewayToken: z.string().default(""),
     })
     .optional(),
+  ollamaCloud: OllamaCloudConfigSchema.optional(),
+  featureProviders: z.record(z.string(), LlmProviderSchema).optional(),
   configVersion: z.number().optional(),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;
+
+/**
+ * Resolve the Ollama Cloud config the agent framework should use, or `undefined`
+ * if Ollama isn't configured for the agent. Two independent conditions must hold:
+ *  1. The user has actually configured an Ollama API key.
+ *  2. featureProviders.agentChat === "ollama-cloud" (per-feature opt-in — having
+ *     a key alone isn't enough, the user may want agent on Anthropic while routing
+ *     other features to Ollama).
+ *
+ * Both `agent-coordinator.spawnWorker` (initial config at boot) and
+ * `settings:set` (config changes at runtime) call this so the rules stay in sync.
+ */
+export function resolveAgentOllamaConfig(
+  cfg: Pick<Config, "ollamaCloud" | "featureProviders">,
+): { enabled: true; apiKey: string; model: string } | undefined {
+  const oc = cfg.ollamaCloud;
+  const agentChatProvider = cfg.featureProviders?.agentChat ?? "anthropic";
+  if (!oc?.apiKey || agentChatProvider !== "ollama-cloud") return undefined;
+  return {
+    enabled: true,
+    apiKey: oc.apiKey,
+    model: oc.featureModels?.agentChat ?? oc.defaultModel ?? DEFAULT_OLLAMA_MODEL,
+  };
+}
 
 // Dashboard-specific types
 

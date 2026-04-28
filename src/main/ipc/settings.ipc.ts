@@ -7,6 +7,7 @@ import {
   type ThemePreference,
   type ModelConfig,
   type ModelTier,
+  type LlmProvider,
   DEFAULT_ANALYSIS_PROMPT,
   DEFAULT_DRAFT_PROMPT,
   DEFAULT_ARCHIVE_READY_PROMPT,
@@ -15,10 +16,17 @@ import {
   DEFAULT_MODEL_CONFIG,
   MODEL_TIER_IDS,
   resolveModelId,
+  resolveAgentOllamaConfig,
+  DEFAULT_OLLAMA_MODEL,
 } from "../../shared/types";
 import { resetAnalyzer } from "./analysis.ipc";
 import { resetArchiveReadyAnalyzer } from "./archive-ready.ipc";
-import { resetClient, getUsageStats, getCallHistory } from "../services/anthropic-service";
+import {
+  resetClient,
+  setOllamaConfig,
+  getUsageStats,
+  getCallHistory,
+} from "../services/llm-service";
 import { prefetchService } from "../services/prefetch-service";
 import { agentCoordinator } from "../agents/agent-coordinator";
 import {
@@ -131,6 +139,24 @@ export function getModelIdForFeature(feature: keyof ModelConfig): string {
   return resolveModelId(mc[feature]);
 }
 
+/** Resolve provider + model for a feature, supporting Ollama Cloud routing. */
+export function getFeatureModelConfig(feature: keyof ModelConfig): {
+  provider: LlmProvider;
+  model: string;
+} {
+  const config = getConfig();
+  const provider = (config.featureProviders?.[feature] ?? "anthropic") as LlmProvider;
+  if (provider === "ollama-cloud") {
+    const model =
+      config.ollamaCloud?.featureModels?.[feature] ??
+      config.ollamaCloud?.defaultModel ??
+      DEFAULT_OLLAMA_MODEL;
+    return { provider, model };
+  }
+  const mc = getModelConfig();
+  return { provider: "anthropic", model: resolveModelId(mc[feature]) };
+}
+
 export function registerSettingsIpc(): void {
   // Validate an Anthropic API key with a minimal API call
   ipcMain.handle(
@@ -175,6 +201,45 @@ export function registerSettingsIpc(): void {
     },
   );
 
+  // Validate an Ollama Cloud API key by listing models
+  ipcMain.handle(
+    "settings:validate-ollama-key",
+    async (_, { apiKey }: { apiKey: string }): Promise<IpcResponse<void>> => {
+      try {
+        const Anthropic = (await import("@anthropic-ai/sdk")).default;
+        const client = new Anthropic({
+          baseURL: "https://ollama.com",
+          authToken: apiKey,
+          timeout: 10_000,
+        });
+        // Validate by making a real messages.create call. minimax-m2.7:cloud is a
+        // thinking model — it emits a `thinking` block before any `text`, so
+        // max_tokens needs to be high enough that Ollama doesn't reject the
+        // request (and the user's key gets a fair test). 4096 mirrors the floor
+        // adjustParamsForOllama uses for runtime calls.
+        await client.messages.create({
+          model: "minimax-m2.7:cloud",
+          max_tokens: 4096,
+          messages: [{ role: "user", content: "hi" }],
+        });
+        return { success: true, data: undefined };
+      } catch (error) {
+        const Anthropic = (await import("@anthropic-ai/sdk")).default;
+        if (error instanceof Anthropic.AuthenticationError) {
+          return { success: false, error: "Invalid API key. Please check and try again." };
+        }
+        if (
+          error instanceof Anthropic.RateLimitError ||
+          error instanceof Anthropic.PermissionDeniedError
+        ) {
+          return { success: true, data: undefined };
+        }
+        const msg = error instanceof Error ? error.message : "Unknown error";
+        return { success: false, error: `Ollama Cloud validation failed: ${msg}` };
+      }
+    },
+  );
+
   // Get current config
   ipcMain.handle("settings:get", async (): Promise<IpcResponse<Config>> => {
     try {
@@ -191,7 +256,29 @@ export function registerSettingsIpc(): void {
   ipcMain.handle("settings:set", async (_, config: Partial<Config>): Promise<IpcResponse<void>> => {
     try {
       const currentConfig = getConfig();
-      const newConfig = { ...currentConfig, ...config };
+      // Shallow-merge most fields. Deep-merge ollamaCloud so partial updates from
+      // different UIs don't clobber each other — ExtensionsTab writes
+      // { apiKey, defaultModel } while the General tab writes { featureModels }.
+      // With a shallow merge, whichever caller wrote second would overwrite the other
+      // (Devin caught this: SettingsPanel reads stale react-query data and stomps the key).
+      let newConfig: Config = { ...currentConfig, ...config };
+      if ("ollamaCloud" in config) {
+        const incoming = config.ollamaCloud;
+        const existing = currentConfig.ollamaCloud;
+        if (incoming === undefined) {
+          // Caller wants to clear it
+          newConfig = { ...newConfig, ollamaCloud: undefined };
+        } else {
+          newConfig = {
+            ...newConfig,
+            ollamaCloud: {
+              apiKey: incoming.apiKey ?? existing?.apiKey ?? "",
+              defaultModel: incoming.defaultModel ?? existing?.defaultModel ?? DEFAULT_OLLAMA_MODEL,
+              featureModels: incoming.featureModels ?? existing?.featureModels,
+            },
+          };
+        }
+      }
       getStore().set("config", newConfig);
 
       // If githubToken changed, propagate to auto-updater immediately
@@ -263,6 +350,22 @@ export function registerSettingsIpc(): void {
         });
       }
 
+      // Propagate Ollama Cloud config to LLM service whenever the apiKey/defaultModel
+      // changes (used by non-agent createMessage routing).
+      if ("ollamaCloud" in config) {
+        const oc = newConfig.ollamaCloud;
+        setOllamaConfig(oc?.apiKey ?? "");
+      }
+
+      // Propagate Ollama Cloud config to the agent framework when EITHER ollamaCloud
+      // or featureProviders changes. resolveAgentOllamaConfig encapsulates the rule
+      // (must have an apiKey AND agentChat must be explicitly routed to ollama-cloud).
+      if ("ollamaCloud" in config || "featureProviders" in config) {
+        agentCoordinator.updateConfig({
+          ollamaCloud: resolveAgentOllamaConfig(newConfig),
+        });
+      }
+
       // Propagate model config changes to the agent worker.
       // Only agentDrafter needs propagation here — it's the worker's default model for
       // auto-draft tasks that don't pass a per-task override. The agentChat model is
@@ -284,9 +387,15 @@ export function registerSettingsIpc(): void {
         }
       }
 
-      // Reset cached analyzer/service instances when model config or API key changes,
-      // since they hold Anthropic client instances that capture the key at construction.
-      if ("modelConfig" in config || "anthropicApiKey" in config) {
+      // Reset cached analyzer/service instances when model config, API keys, provider
+      // routing, or Ollama config changes. These services capture { provider, model } at
+      // construction time, so any of these changes can leave them holding stale values.
+      if (
+        "modelConfig" in config ||
+        "anthropicApiKey" in config ||
+        "ollamaCloud" in config ||
+        "featureProviders" in config
+      ) {
         resetClient();
         resetAnalyzer();
         resetArchiveReadyAnalyzer();

@@ -218,6 +218,8 @@ const api = {
       ipcRenderer.invoke("settings:set", config),
     validateApiKey: (apiKey: string): Promise<unknown> =>
       ipcRenderer.invoke("settings:validate-api-key", { apiKey }),
+    validateOllamaKey: (apiKey: string): Promise<unknown> =>
+      ipcRenderer.invoke("settings:validate-ollama-key", { apiKey }),
     getPrompts: (): Promise<unknown> => ipcRenderer.invoke("settings:get-prompts"),
     setPrompts: (prompts: {
       analysisPrompt?: string;

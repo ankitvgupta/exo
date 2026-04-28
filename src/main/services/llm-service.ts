@@ -1,5 +1,8 @@
 /**
- * AnthropicService — Central wrapper for all Claude API calls.
+ * LLM Service — Central wrapper for all LLM API calls.
+ *
+ * Supports multiple providers via the Anthropic SDK (both Anthropic's API
+ * and Ollama Cloud's Anthropic-compatible endpoint).
  *
  * Three responsibilities:
  * 1. WRAP — Thin wrapper around anthropic.messages.create()
@@ -13,10 +16,11 @@ import type {
   MessageCreateParamsNonStreaming,
   Message,
 } from "@anthropic-ai/sdk/resources/messages";
+import type { LlmProvider } from "../../shared/types";
 import { createLogger } from "./logger";
 import { randomUUID } from "crypto";
 
-const log = createLogger("anthropic");
+const log = createLogger("llm");
 
 // Approximate pricing per million tokens. Last updated: 2026-03-29.
 // These are approximate and will drift as Anthropic updates pricing.
@@ -75,7 +79,7 @@ export interface UsageStats {
   byCaller: Array<{ caller: string; costCents: number; calls: number }>;
 }
 
-interface CreateOptions {
+export interface CreateOptions {
   /** Which service is making this call, for cost attribution */
   caller: string;
   /** Optional email ID for tracing */
@@ -84,9 +88,11 @@ interface CreateOptions {
   accountId?: string;
   /** Timeout in milliseconds (default: none) */
   timeoutMs?: number;
+  /** LLM provider to use. Defaults to "anthropic". */
+  provider?: LlmProvider;
 }
 
-// Anthropic client — singleton for production, replaceable for testing
+// --- Anthropic client (api.anthropic.com) ---
 let _anthropicClient: Anthropic | null = null;
 let _defaultClient: Anthropic | null = null;
 
@@ -110,6 +116,53 @@ export function getClient(): Anthropic {
   if (_anthropicClient) return _anthropicClient;
   if (!_defaultClient) _defaultClient = new Anthropic();
   return _defaultClient;
+}
+
+// --- Ollama Cloud client (ollama.com, Anthropic-compatible endpoint) ---
+let _ollamaClient: Anthropic | null = null;
+let _ollamaApiKey: string | null = null;
+
+/**
+ * Configure the Ollama Cloud client. Call when the API key changes.
+ */
+export function setOllamaConfig(apiKey: string): void {
+  _ollamaApiKey = apiKey || null;
+  _ollamaClient = null; // Force re-creation on next use
+}
+
+/**
+ * Reset the Ollama client, forcing re-creation on next call.
+ */
+export function resetOllamaClient(): void {
+  _ollamaClient = null;
+}
+
+/**
+ * Replace the Ollama client for testing. Pass null to reset.
+ */
+export function _setOllamaClientForTesting(client: unknown): void {
+  _ollamaClient = client as Anthropic;
+}
+
+function getOllamaClient(): Anthropic {
+  // In test mode, allow the injected mock client even without an API key
+  if (_ollamaClient) return _ollamaClient;
+  if (!_ollamaApiKey) {
+    throw new Error(
+      "Ollama Cloud API key not configured. Add your key in Settings → Extensions → Ollama Cloud.",
+    );
+  }
+  _ollamaClient = new Anthropic({
+    baseURL: "https://ollama.com",
+    authToken: _ollamaApiKey,
+  });
+  return _ollamaClient;
+}
+
+/** Get the appropriate client for a provider. */
+function getClientForProvider(provider: LlmProvider | undefined): Anthropic {
+  if (provider === "ollama-cloud") return getOllamaClient();
+  return getClient();
 }
 
 // Database handle — set via setDatabase() during app init
@@ -148,7 +201,8 @@ export function setAnthropicServiceDb(db: DatabaseInstance): void {
       cost_cents REAL NOT NULL,
       duration_ms INTEGER NOT NULL,
       success INTEGER NOT NULL DEFAULT 1,
-      error_message TEXT
+      error_message TEXT,
+      provider TEXT DEFAULT 'anthropic'
     );
     CREATE INDEX IF NOT EXISTS idx_llm_calls_created ON llm_calls(created_at);
     CREATE INDEX IF NOT EXISTS idx_llm_calls_caller ON llm_calls(caller);
@@ -156,8 +210,8 @@ export function setAnthropicServiceDb(db: DatabaseInstance): void {
   _insertStmt = db.prepare(`
     INSERT INTO llm_calls (id, model, caller, email_id, account_id,
       input_tokens, output_tokens, cache_read_tokens, cache_create_tokens,
-      cost_cents, duration_ms, success, error_message)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      cost_cents, duration_ms, success, error_message, provider)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 }
 
@@ -190,19 +244,18 @@ function recordCall(
   durationMs: number,
   success: boolean,
   errorMessage: string | null,
+  provider?: LlmProvider,
 ): void {
   if (!_insertStmt) {
-    log.warn("AnthropicService: database not initialized, skipping call recording");
+    log.warn("LLM service: database not initialized, skipping call recording");
     return;
   }
 
-  const costCents = calculateCostCents(
-    model,
-    inputTokens,
-    outputTokens,
-    cacheReadTokens,
-    cacheCreateTokens,
-  );
+  // Ollama Cloud is subscription-based — no per-token cost
+  const costCents =
+    provider === "ollama-cloud"
+      ? 0
+      : calculateCostCents(model, inputTokens, outputTokens, cacheReadTokens, cacheCreateTokens);
 
   try {
     _insertStmt.run(
@@ -219,6 +272,7 @@ function recordCall(
       durationMs,
       success ? 1 : 0,
       errorMessage,
+      provider ?? "anthropic",
     );
   } catch (err) {
     // Recording failure must never break the LLM call
@@ -272,17 +326,74 @@ function getRetryCategory(error: unknown): string | null {
 }
 
 /**
- * Create a message using Claude API with retry and cost tracking.
+ * Adjust params for Ollama Cloud:
+ * - Strip cache_control from system blocks AND from individual message content blocks
+ *   (Ollama doesn't support prompt caching anywhere).
+ * - Raise max_tokens to a high floor. Ollama models like minimax-m2.7:cloud emit
+ *   long `thinking` blocks before their `text` block; with the small max_tokens our
+ *   features set for Anthropic (e.g. 256 for analysis), the thinking budget consumes
+ *   everything and the text block is never produced. Cost is $0 on Ollama (subscription),
+ *   so raising the ceiling is free.
+ */
+const OLLAMA_MIN_MAX_TOKENS = 4096;
+
+// Strip cache_control from a single block. The SDK union types (TextBlockParam,
+// ContentBlockParam) don't have a string index signature, so we narrow via `unknown`
+// rather than casting to Record<string, unknown>.
+function stripCacheControlFromBlock<T>(block: T): T {
+  if (typeof block !== "object" || block === null) return block;
+  const obj = block as unknown as Record<string, unknown>;
+  if (!("cache_control" in obj)) return block;
+  const { cache_control: _, ...rest } = obj;
+  return rest as unknown as T;
+}
+
+function adjustParamsForOllama(
+  params: MessageCreateParamsNonStreaming,
+): MessageCreateParamsNonStreaming {
+  let next = params;
+
+  if (next.system && Array.isArray(next.system)) {
+    const system = next.system.map((block) => stripCacheControlFromBlock(block));
+    next = { ...next, system };
+  }
+
+  // cache_control can also appear on individual user/assistant message content blocks
+  // for multi-turn prompt caching. Strip those too — Ollama would reject them.
+  if (Array.isArray(next.messages)) {
+    const messages = next.messages.map((msg) => {
+      if (Array.isArray(msg.content)) {
+        const content = msg.content.map((block) => stripCacheControlFromBlock(block));
+        return { ...msg, content };
+      }
+      return msg;
+    });
+    next = { ...next, messages };
+  }
+
+  if (typeof next.max_tokens === "number" && next.max_tokens < OLLAMA_MIN_MAX_TOKENS) {
+    next = { ...next, max_tokens: OLLAMA_MIN_MAX_TOKENS };
+  }
+
+  return next;
+}
+
+/**
+ * Create a message using the configured LLM provider with retry and cost tracking.
  */
 export async function createMessage(
   params: MessageCreateParamsNonStreaming,
   options: CreateOptions,
 ): Promise<Message> {
-  const { caller, emailId, accountId, timeoutMs } = options;
+  const { caller, emailId, accountId, timeoutMs, provider } = options;
+  const isOllama = provider === "ollama-cloud";
   const model = params.model;
   const startTime = Date.now();
 
-  const client = getClient();
+  // Strip cache_control for Ollama (unsupported)
+  const effectiveParams = isOllama ? adjustParamsForOllama(params) : params;
+
+  const client = getClientForProvider(provider);
   let lastError: unknown = null;
   let totalAttempts = 0;
 
@@ -301,7 +412,7 @@ export async function createMessage(
     }
 
     try {
-      const response = await client.messages.create(params, {
+      const response = await client.messages.create(effectiveParams, {
         signal: abortController?.signal,
       });
 
@@ -324,6 +435,7 @@ export async function createMessage(
         Date.now() - startTime,
         true,
         null,
+        provider,
       );
 
       if (totalAttempts > 1) {
@@ -384,6 +496,7 @@ export async function createMessage(
     Date.now() - startTime,
     false,
     errMsg,
+    provider,
   );
 
   throw lastError;

@@ -1,6 +1,6 @@
 import { ipcMain } from "electron";
 import { randomUUID } from "crypto";
-import { createMessage } from "../services/anthropic-service";
+import { createMessage } from "../services/llm-service";
 import {
   saveMemory,
   getMemory,
@@ -186,9 +186,11 @@ export function registerMemoryIpc(): void {
         };
       }
       try {
+        // Simple JSON classification — always haiku, independent of user model config.
+        // No provider override needed: this is a cheap utility call that always uses Anthropic.
         const response = await createMessage(
           {
-            model: "claude-haiku-4-5-20251001", // simple JSON classification — always haiku, independent of user model config
+            model: "claude-haiku-4-5-20251001",
             max_tokens: 256,
             messages: [
               {

@@ -10,7 +10,7 @@ import {
   getRecentSentEmailsWithBody,
 } from "../db";
 import type { GmailClient } from "./gmail-client";
-import { createMessage } from "./anthropic-service";
+import { createMessage } from "./llm-service";
 import { stripQuotedContent } from "./strip-quoted-content";
 import { createLogger } from "./logger";
 

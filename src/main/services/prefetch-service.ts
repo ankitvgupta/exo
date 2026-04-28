@@ -13,7 +13,7 @@ import {
   updateDraftAgentTaskId,
   loadCompletedAgentDraftEmailIds,
 } from "../db";
-import { getConfig, getModelIdForFeature } from "../ipc/settings.ipc";
+import { getConfig, getFeatureModelConfig } from "../ipc/settings.ipc";
 import { getExtensionHost } from "../extensions";
 import { agentCoordinator } from "../agents/agent-coordinator";
 import { buildAutoDraftTaskId } from "../agents/task-id";
@@ -160,7 +160,8 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
   private getAnalyzer(): EmailAnalyzer {
     if (!this.analyzer) {
       const config = getConfig();
-      this.analyzer = new EmailAnalyzer(getModelIdForFeature("analysis"), config.analysisPrompt);
+      const { model, provider } = getFeatureModelConfig("analysis");
+      this.analyzer = new EmailAnalyzer(model, config.analysisPrompt, provider);
     }
     return this.analyzer;
   }
@@ -168,9 +169,11 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
   private getArchiveReadyAnalyzer(): ArchiveReadyAnalyzer {
     if (!this.archiveReadyAnalyzer) {
       const config = getConfig();
+      const { model, provider } = getFeatureModelConfig("archiveReady");
       this.archiveReadyAnalyzer = new ArchiveReadyAnalyzer(
-        getModelIdForFeature("archiveReady"),
+        model,
         config.archiveReadyPrompt,
+        provider,
       );
     }
     return this.archiveReadyAnalyzer;

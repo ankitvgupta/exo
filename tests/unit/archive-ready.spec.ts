@@ -18,7 +18,7 @@ import {
   resetAnthropicMock,
   getCapturedRequests,
 } from "../mocks/anthropic-api-mock";
-import { _setClientForTesting } from "../../src/main/services/anthropic-service";
+import { _setClientForTesting } from "../../src/main/services/llm-service";
 import { ArchiveReadyAnalyzer } from "../../src/main/services/archive-ready-analyzer";
 import { ARCHIVE_READY_JSON_FORMAT, DEFAULT_ARCHIVE_READY_PROMPT } from "../../src/shared/types";
 import type { DashboardEmail } from "../../src/shared/types";
