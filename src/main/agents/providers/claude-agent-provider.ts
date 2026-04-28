@@ -364,14 +364,29 @@ export class ClaudeAgentProvider implements AgentProvider {
       env.ANTHROPIC_BASE_URL = "https://ollama.com";
       env.ANTHROPIC_AUTH_TOKEN = ollama.apiKey;
       delete env.ANTHROPIC_API_KEY;
+      // Claude Code's model validator rejects unknown model IDs (e.g. minimax-m2.7:cloud)
+      // unless they're remapped via these env vars. This mirrors what
+      // `ollama launch claude --model X` sets when bridging Claude Code to Ollama.
+      env.ANTHROPIC_DEFAULT_HAIKU_MODEL = ollama.model;
+      env.ANTHROPIC_DEFAULT_SONNET_MODEL = ollama.model;
+      env.ANTHROPIC_DEFAULT_OPUS_MODEL = ollama.model;
+      env.CLAUDE_CODE_SUBAGENT_MODEL = ollama.model;
     } else if (this.frameworkConfig.anthropicApiKey) {
       env.ANTHROPIC_API_KEY = this.frameworkConfig.anthropicApiKey;
       delete env.ANTHROPIC_BASE_URL;
       delete env.ANTHROPIC_AUTH_TOKEN;
+      delete env.ANTHROPIC_DEFAULT_HAIKU_MODEL;
+      delete env.ANTHROPIC_DEFAULT_SONNET_MODEL;
+      delete env.ANTHROPIC_DEFAULT_OPUS_MODEL;
+      delete env.CLAUDE_CODE_SUBAGENT_MODEL;
     } else {
       delete env.ANTHROPIC_API_KEY;
       delete env.ANTHROPIC_BASE_URL;
       delete env.ANTHROPIC_AUTH_TOKEN;
+      delete env.ANTHROPIC_DEFAULT_HAIKU_MODEL;
+      delete env.ANTHROPIC_DEFAULT_SONNET_MODEL;
+      delete env.ANTHROPIC_DEFAULT_OPUS_MODEL;
+      delete env.CLAUDE_CODE_SUBAGENT_MODEL;
     }
 
     // Prevent cli.js from detecting a "nested session" if CLAUDECODE leaks into

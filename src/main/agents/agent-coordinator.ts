@@ -241,9 +241,21 @@ export class AgentCoordinator {
     const appConfig = getConfig();
     const apiKey = appConfig.anthropicApiKey || process.env.ANTHROPIC_API_KEY || undefined;
     const browser = appConfig.agentBrowser;
+    // Mirror the propagation logic in settings.ipc.ts: enable Ollama for the agent
+    // only when featureProviders.agentChat is explicitly set to "ollama-cloud".
+    const oc = appConfig.ollamaCloud;
+    const agentChatProvider = appConfig.featureProviders?.agentChat ?? "anthropic";
+    const enableOllamaForAgent = !!oc?.apiKey && agentChatProvider === "ollama-cloud";
     const baseConfig: AgentFrameworkConfig = {
       model: getModelIdForFeature("agentDrafter"),
       anthropicApiKey: apiKey,
+      ollamaCloud: enableOllamaForAgent
+        ? {
+            enabled: true,
+            apiKey: oc!.apiKey,
+            model: oc!.featureModels?.agentChat ?? oc!.defaultModel ?? "minimax-m2.7:cloud",
+          }
+        : undefined,
       browserConfig: browser
         ? {
             enabled: browser.enabled,
