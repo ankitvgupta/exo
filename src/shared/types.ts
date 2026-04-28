@@ -363,8 +363,16 @@ export const LLM_PROVIDERS = ["anthropic", "ollama-cloud"] as const;
 export const LlmProviderSchema = z.enum(["anthropic", "ollama-cloud"]);
 export type LlmProvider = z.infer<typeof LlmProviderSchema>;
 
-/** Default Ollama Cloud model when none is configured. */
-export const DEFAULT_OLLAMA_MODEL = "minimax-m2.7:cloud";
+/**
+ * Default Ollama Cloud model when none is configured.
+ *
+ * qwen3-coder:480b-cloud is chosen as the default because it follows system
+ * prompt instructions reliably and uses tools correctly. minimax-m2.7:cloud
+ * was the original choice but, in testing, ignored explicit accountId hints
+ * and inlined email context, calling list_emails with hallucinated values
+ * instead of using read_email on the email already in context.
+ */
+export const DEFAULT_OLLAMA_MODEL = "qwen3-coder:480b-cloud";
 
 export const OllamaCloudConfigSchema = z.object({
   apiKey: z.string().default(""),

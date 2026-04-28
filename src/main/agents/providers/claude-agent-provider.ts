@@ -366,9 +366,12 @@ export class ClaudeAgentProvider implements AgentProvider {
     // Strip every var we set in buildChildEnv for LLM routing.
     delete env.ANTHROPIC_BASE_URL;
     delete env.ANTHROPIC_AUTH_TOKEN;
+    delete env.ANTHROPIC_MODEL;
+    delete env.ANTHROPIC_CUSTOM_MODEL;
     delete env.ANTHROPIC_DEFAULT_HAIKU_MODEL;
     delete env.ANTHROPIC_DEFAULT_SONNET_MODEL;
     delete env.ANTHROPIC_DEFAULT_OPUS_MODEL;
+    delete env.ANTHROPIC_SMALL_FAST_MODEL;
     delete env.CLAUDE_CODE_SUBAGENT_MODEL;
     // Pass through the user's Anthropic key (if any) so MCP servers that genuinely
     // use Anthropic still work. This matches the pre-Ollama behavior.
@@ -392,35 +395,41 @@ export class ClaudeAgentProvider implements AgentProvider {
       if (value !== undefined) env[key] = value;
     }
 
+    // Every model env var Claude Code's CLI consults — discovered by grepping
+    // node_modules/@anthropic-ai/claude-agent-sdk/cli.js for `ANTHROPIC_[A-Z_]*MODEL`
+    // and `CLAUDE_CODE_[A-Z_]*MODEL`. If we miss any of these, Claude Code falls
+    // back to a hardcoded Anthropic model name (e.g. "claude-sonnet-4-5-20250929")
+    // for that subtask, which 404s when the request hits ollama.com.
+    const MODEL_ENV_VARS = [
+      "ANTHROPIC_MODEL",
+      "ANTHROPIC_CUSTOM_MODEL",
+      "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+      "ANTHROPIC_DEFAULT_SONNET_MODEL",
+      "ANTHROPIC_DEFAULT_OPUS_MODEL",
+      "ANTHROPIC_SMALL_FAST_MODEL", // used for title gen, compaction, etc.
+      "CLAUDE_CODE_SUBAGENT_MODEL",
+    ];
+
     const ollama = this.frameworkConfig.ollamaCloud;
     if (ollama?.enabled && ollama.apiKey) {
       // Point Claude Agent SDK at Ollama Cloud's Anthropic-compatible endpoint
       env.ANTHROPIC_BASE_URL = "https://ollama.com";
       env.ANTHROPIC_AUTH_TOKEN = ollama.apiKey;
       delete env.ANTHROPIC_API_KEY;
-      // Claude Code's model validator rejects unknown model IDs (e.g. minimax-m2.7:cloud)
-      // unless they're remapped via these env vars. This mirrors what
-      // `ollama launch claude --model X` sets when bridging Claude Code to Ollama.
-      env.ANTHROPIC_DEFAULT_HAIKU_MODEL = ollama.model;
-      env.ANTHROPIC_DEFAULT_SONNET_MODEL = ollama.model;
-      env.ANTHROPIC_DEFAULT_OPUS_MODEL = ollama.model;
-      env.CLAUDE_CODE_SUBAGENT_MODEL = ollama.model;
+      // Remap every model env var Claude Code might consult. Without this,
+      // Claude Code subtasks (title gen, compaction, sub-agents) silently fall
+      // back to hardcoded Anthropic model names which 404 on Ollama Cloud.
+      for (const k of MODEL_ENV_VARS) env[k] = ollama.model;
     } else if (this.frameworkConfig.anthropicApiKey) {
       env.ANTHROPIC_API_KEY = this.frameworkConfig.anthropicApiKey;
       delete env.ANTHROPIC_BASE_URL;
       delete env.ANTHROPIC_AUTH_TOKEN;
-      delete env.ANTHROPIC_DEFAULT_HAIKU_MODEL;
-      delete env.ANTHROPIC_DEFAULT_SONNET_MODEL;
-      delete env.ANTHROPIC_DEFAULT_OPUS_MODEL;
-      delete env.CLAUDE_CODE_SUBAGENT_MODEL;
+      for (const k of MODEL_ENV_VARS) delete env[k];
     } else {
       delete env.ANTHROPIC_API_KEY;
       delete env.ANTHROPIC_BASE_URL;
       delete env.ANTHROPIC_AUTH_TOKEN;
-      delete env.ANTHROPIC_DEFAULT_HAIKU_MODEL;
-      delete env.ANTHROPIC_DEFAULT_SONNET_MODEL;
-      delete env.ANTHROPIC_DEFAULT_OPUS_MODEL;
-      delete env.CLAUDE_CODE_SUBAGENT_MODEL;
+      for (const k of MODEL_ENV_VARS) delete env[k];
     }
 
     // Prevent cli.js from detecting a "nested session" if CLAUDECODE leaks into
@@ -525,6 +534,8 @@ function buildSystemPrompt(
     "",
     `Current account: ${context.userEmail}${context.userName ? ` (${context.userName})` : ""}`,
     `Account ID: ${context.accountId}`,
+    "",
+    `IMPORTANT: When any tool requires an accountId parameter, ALWAYS use exactly "${context.accountId}". Do NOT use "primary", "default", or any other placeholder — use the literal account ID above. Tools will return zero results if you pass the wrong accountId.`,
   ];
 
   if (context.currentEmailId) {
@@ -542,9 +553,39 @@ function buildSystemPrompt(
   }
 
   if (context.currentDraftId || context.currentEmailId || context.currentThreadId) {
+    // When the renderer has already provided the email metadata in context,
+    // inline it directly so simple questions ("what is this about?") can be
+    // answered without a tool call. Weaker models (minimax-m2.7:cloud, etc.)
+    // sometimes ignore "Use read_email to read the email content" and fall back
+    // to list_emails or hallucinated accountIds. Inlining the body avoids that
+    // failure mode entirely. Tool calls are still needed for thread context,
+    // historical lookups, replies, etc.
+    if (
+      context.currentEmailId &&
+      (context.emailSubject || context.emailFrom || context.emailBody)
+    ) {
+      parts.push("");
+      parts.push("## Currently viewing email");
+      if (context.emailSubject) parts.push(`Subject: ${context.emailSubject}`);
+      if (context.emailFrom) parts.push(`From: ${context.emailFrom}`);
+      if (context.emailTo) parts.push(`To: ${context.emailTo}`);
+      if (context.emailBody) {
+        // Trim very long bodies so we don't blow the context budget; tools can
+        // still fetch the full body via read_email if needed.
+        const body =
+          context.emailBody.length > 4000
+            ? context.emailBody.slice(0, 4000) +
+              "\n[…body truncated; call read_email for full content]"
+            : context.emailBody;
+        parts.push("");
+        parts.push("Body:");
+        parts.push(body);
+      }
+    }
+
     parts.push("");
     parts.push(
-      "The user is asking about the email or draft they are currently viewing. Before responding, use the appropriate tool to read the content so you understand the full context of their request:",
+      "If the user asks about the email/draft above and the inlined content answers it, respond directly without calling tools. Otherwise, use the appropriate tool to fetch what you need:",
     );
     if (context.currentDraftId) {
       parts.push("- Use read_draft to read the draft content");
@@ -553,10 +594,14 @@ function buildSystemPrompt(
       );
     }
     if (context.currentEmailId) {
-      parts.push("- Use read_email to read the email content");
+      parts.push(
+        `- Use read_email with emailId="${context.currentEmailId}" to read the FULL email content (including HTML)`,
+      );
     }
     if (context.currentThreadId) {
-      parts.push("- Use read_thread to read the full thread for conversation context");
+      parts.push(
+        `- Use read_thread with threadId="${context.currentThreadId}" to read the full thread for conversation context`,
+      );
     }
   }
 

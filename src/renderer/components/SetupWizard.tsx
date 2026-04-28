@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import type { IpcResponse } from "../../shared/types";
+import { type IpcResponse, DEFAULT_OLLAMA_MODEL } from "../../shared/types";
 import { reconfigurePostHog } from "../services/posthog";
 
 interface SetupWizardProps {
@@ -170,7 +170,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
         }
 
         const result = (await window.api.settings.set({
-          ollamaCloud: { apiKey: ollamaApiKey.trim(), defaultModel: "minimax-m2.7:cloud" },
+          ollamaCloud: { apiKey: ollamaApiKey.trim(), defaultModel: DEFAULT_OLLAMA_MODEL },
           // Sender lookup uses Anthropic's web_search tool (Anthropic-only). Pin its
           // provider to anthropic so it stays consistent if the user later adds an
           // Anthropic key, and disable the feature for now since Ollama-only users

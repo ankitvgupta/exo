@@ -4,6 +4,7 @@ import type {
   ExtensionManifest,
   SettingDefinition,
 } from "../../shared/extension-types";
+import { DEFAULT_OLLAMA_MODEL } from "../../shared/types";
 import { loadExtensionRenderer } from "../extensions/installed-extensions";
 // useStore not needed — OpenClaw config uses window.api.settings directly
 
@@ -44,7 +45,7 @@ export function ExtensionsTab() {
   // Ollama Cloud settings
   const [ollamaCloudEnabled, setOllamaCloudEnabled] = useState(false);
   const [ollamaCloudApiKey, setOllamaCloudApiKey] = useState("");
-  const [ollamaCloudModel, setOllamaCloudModel] = useState("minimax-m2.7:cloud");
+  const [ollamaCloudModel, setOllamaCloudModel] = useState(DEFAULT_OLLAMA_MODEL);
   const [ollamaCloudTestResult, setOllamaCloudTestResult] = useState<{
     success: boolean;
     error?: string;
@@ -213,7 +214,7 @@ export function ExtensionsTab() {
       if (oc2) {
         setOllamaCloudEnabled(!!oc2.apiKey);
         setOllamaCloudApiKey((oc2.apiKey as string) || "");
-        setOllamaCloudModel((oc2.defaultModel as string) || "minimax-m2.7:cloud");
+        setOllamaCloudModel((oc2.defaultModel as string) || DEFAULT_OLLAMA_MODEL);
       }
       const oc = config.openclaw as Record<string, unknown> | undefined;
       if (oc) {
@@ -590,7 +591,7 @@ export function ExtensionsTab() {
               <input
                 type="text"
                 className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400"
-                placeholder="minimax-m2.7:cloud"
+                placeholder={DEFAULT_OLLAMA_MODEL}
                 value={ollamaCloudModel}
                 onChange={(e) => setOllamaCloudModel(e.target.value)}
               />

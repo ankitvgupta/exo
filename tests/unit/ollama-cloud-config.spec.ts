@@ -77,7 +77,7 @@ test.describe("Ollama Cloud config schemas", () => {
     const result = OllamaCloudConfigSchema.parse({});
 
     expect(result.apiKey).toBe("");
-    expect(result.defaultModel).toBe("minimax-m2.7:cloud");
+    expect(result.defaultModel).toBe(DEFAULT_OLLAMA_MODEL);
     expect(result.featureModels).toBeUndefined();
   });
 

@@ -20,6 +20,7 @@ import {
   type CliToolConfig,
   LLM_PROVIDERS,
   type LlmProvider,
+  DEFAULT_OLLAMA_MODEL,
 } from "../../shared/types";
 import { useAppStore, type Account, type SettingsTab } from "../store";
 import { reconfigurePostHog, trackEvent } from "../services/posthog";
@@ -1234,11 +1235,11 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                           ) : (
                             <input
                               type="text"
-                              value={ollamaModels[key] ?? "minimax-m2.7:cloud"}
+                              value={ollamaModels[key] ?? DEFAULT_OLLAMA_MODEL}
                               onChange={(e) =>
                                 setOllamaModels((prev) => ({ ...prev, [key]: e.target.value }))
                               }
-                              placeholder="minimax-m2.7:cloud"
+                              placeholder={DEFAULT_OLLAMA_MODEL}
                               className="w-48 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-500 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                             />
                           )}
