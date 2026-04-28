@@ -16,6 +16,8 @@ import {
   DEFAULT_MODEL_CONFIG,
   MODEL_TIER_IDS,
   resolveModelId,
+  resolveAgentOllamaConfig,
+  DEFAULT_OLLAMA_MODEL,
 } from "../../shared/types";
 import { resetAnalyzer } from "./analysis.ipc";
 import { resetArchiveReadyAnalyzer } from "./archive-ready.ipc";
@@ -148,7 +150,7 @@ export function getFeatureModelConfig(feature: keyof ModelConfig): {
     const model =
       config.ollamaCloud?.featureModels?.[feature] ??
       config.ollamaCloud?.defaultModel ??
-      "minimax-m2.7:cloud";
+      DEFAULT_OLLAMA_MODEL;
     return { provider, model };
   }
   const mc = getModelConfig();
@@ -271,7 +273,7 @@ export function registerSettingsIpc(): void {
             ...newConfig,
             ollamaCloud: {
               apiKey: incoming.apiKey ?? existing?.apiKey ?? "",
-              defaultModel: incoming.defaultModel ?? existing?.defaultModel ?? "minimax-m2.7:cloud",
+              defaultModel: incoming.defaultModel ?? existing?.defaultModel ?? DEFAULT_OLLAMA_MODEL,
               featureModels: incoming.featureModels ?? existing?.featureModels,
             },
           };
@@ -356,23 +358,11 @@ export function registerSettingsIpc(): void {
       }
 
       // Propagate Ollama Cloud config to the agent framework when EITHER ollamaCloud
-      // or featureProviders changes. The agent subprocess routes to Ollama only when
-      // featureProviders.agentChat === "ollama-cloud" — having a key alone isn't enough,
-      // since the user may explicitly want agent on Anthropic while routing other
-      // features (analysis, drafts, etc.) to Ollama.
+      // or featureProviders changes. resolveAgentOllamaConfig encapsulates the rule
+      // (must have an apiKey AND agentChat must be explicitly routed to ollama-cloud).
       if ("ollamaCloud" in config || "featureProviders" in config) {
-        const merged = newConfig;
-        const oc = merged.ollamaCloud;
-        const agentChatProvider = merged.featureProviders?.agentChat ?? "anthropic";
-        const enableForAgent = !!oc?.apiKey && agentChatProvider === "ollama-cloud";
         agentCoordinator.updateConfig({
-          ollamaCloud: enableForAgent
-            ? {
-                enabled: true,
-                apiKey: oc!.apiKey,
-                model: oc!.featureModels?.agentChat ?? oc!.defaultModel ?? "minimax-m2.7:cloud",
-              }
-            : undefined,
+          ollamaCloud: resolveAgentOllamaConfig(newConfig),
         });
       }
 

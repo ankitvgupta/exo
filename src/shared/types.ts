@@ -363,9 +363,12 @@ export const LLM_PROVIDERS = ["anthropic", "ollama-cloud"] as const;
 export const LlmProviderSchema = z.enum(["anthropic", "ollama-cloud"]);
 export type LlmProvider = z.infer<typeof LlmProviderSchema>;
 
+/** Default Ollama Cloud model when none is configured. */
+export const DEFAULT_OLLAMA_MODEL = "minimax-m2.7:cloud";
+
 export const OllamaCloudConfigSchema = z.object({
   apiKey: z.string().default(""),
-  defaultModel: z.string().default("minimax-m2.7:cloud"),
+  defaultModel: z.string().default(DEFAULT_OLLAMA_MODEL),
   featureModels: z.record(z.string(), z.string()).optional(),
 });
 
@@ -425,6 +428,30 @@ export const ConfigSchema = z.object({
 });
 
 export type Config = z.infer<typeof ConfigSchema>;
+
+/**
+ * Resolve the Ollama Cloud config the agent framework should use, or `undefined`
+ * if Ollama isn't configured for the agent. Two independent conditions must hold:
+ *  1. The user has actually configured an Ollama API key.
+ *  2. featureProviders.agentChat === "ollama-cloud" (per-feature opt-in — having
+ *     a key alone isn't enough, the user may want agent on Anthropic while routing
+ *     other features to Ollama).
+ *
+ * Both `agent-coordinator.spawnWorker` (initial config at boot) and
+ * `settings:set` (config changes at runtime) call this so the rules stay in sync.
+ */
+export function resolveAgentOllamaConfig(
+  cfg: Pick<Config, "ollamaCloud" | "featureProviders">,
+): { enabled: true; apiKey: string; model: string } | undefined {
+  const oc = cfg.ollamaCloud;
+  const agentChatProvider = cfg.featureProviders?.agentChat ?? "anthropic";
+  if (!oc?.apiKey || agentChatProvider !== "ollama-cloud") return undefined;
+  return {
+    enabled: true,
+    apiKey: oc.apiKey,
+    model: oc.featureModels?.agentChat ?? oc.defaultModel ?? DEFAULT_OLLAMA_MODEL,
+  };
+}
 
 // Dashboard-specific types
 

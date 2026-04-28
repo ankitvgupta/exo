@@ -8,6 +8,8 @@ import {
   ConfigSchema,
   LlmProviderSchema,
   OllamaCloudConfigSchema,
+  resolveAgentOllamaConfig,
+  DEFAULT_OLLAMA_MODEL,
 } from "../../src/shared/types";
 
 test.describe("Ollama Cloud config schemas", () => {
@@ -107,5 +109,83 @@ test.describe("Ollama Cloud config schemas", () => {
     };
 
     expect(() => ConfigSchema.parse(raw)).toThrow();
+  });
+});
+
+test.describe("resolveAgentOllamaConfig", () => {
+  test("returns undefined when no Ollama API key configured", () => {
+    const result = resolveAgentOllamaConfig({
+      ollamaCloud: undefined,
+      featureProviders: { agentChat: "ollama-cloud" },
+    });
+    expect(result).toBeUndefined();
+  });
+
+  test("returns undefined when ollamaCloud has empty apiKey (silent misconfiguration guard)", () => {
+    // Deep-merge in settings:set can produce { apiKey: "" } if the user clears the
+    // key while featureProviders still says ollama-cloud. We must NOT route to Ollama
+    // with an empty token, since that would fail with a confusing auth error rather
+    // than gracefully falling back to the default.
+    const result = resolveAgentOllamaConfig({
+      ollamaCloud: { apiKey: "", defaultModel: DEFAULT_OLLAMA_MODEL },
+      featureProviders: { agentChat: "ollama-cloud" },
+    });
+    expect(result).toBeUndefined();
+  });
+
+  test("returns undefined when agentChat feature is set to anthropic", () => {
+    // User has a valid Ollama key, but routes the agent to Anthropic — possibly
+    // because they want only some features (analysis, drafts) on Ollama.
+    const result = resolveAgentOllamaConfig({
+      ollamaCloud: { apiKey: "secret-123", defaultModel: DEFAULT_OLLAMA_MODEL },
+      featureProviders: { agentChat: "anthropic", analysis: "ollama-cloud" },
+    });
+    expect(result).toBeUndefined();
+  });
+
+  test("returns undefined when featureProviders is missing entirely (defaults to anthropic)", () => {
+    // User entered an Ollama key in Extensions tab but never picked per-feature
+    // routing in the General tab. Must not silently use Ollama.
+    const result = resolveAgentOllamaConfig({
+      ollamaCloud: { apiKey: "secret-123", defaultModel: DEFAULT_OLLAMA_MODEL },
+      featureProviders: undefined,
+    });
+    expect(result).toBeUndefined();
+  });
+
+  test("enables Ollama when key is set AND agentChat is routed there", () => {
+    const result = resolveAgentOllamaConfig({
+      ollamaCloud: { apiKey: "secret-123", defaultModel: DEFAULT_OLLAMA_MODEL },
+      featureProviders: { agentChat: "ollama-cloud" },
+    });
+    expect(result).toEqual({
+      enabled: true,
+      apiKey: "secret-123",
+      model: DEFAULT_OLLAMA_MODEL,
+    });
+  });
+
+  test("uses per-feature agentChat model override when set", () => {
+    const result = resolveAgentOllamaConfig({
+      ollamaCloud: {
+        apiKey: "secret-123",
+        defaultModel: DEFAULT_OLLAMA_MODEL,
+        featureModels: { agentChat: "qwen3:8b" },
+      },
+      featureProviders: { agentChat: "ollama-cloud" },
+    });
+    expect(result?.model).toBe("qwen3:8b");
+  });
+
+  test("falls back to defaultModel when agentChat featureModel not set", () => {
+    const result = resolveAgentOllamaConfig({
+      ollamaCloud: {
+        apiKey: "secret-123",
+        defaultModel: "custom-default-model",
+        featureModels: { analysis: "qwen3:8b" }, // wrong feature, should not match
+      },
+      featureProviders: { agentChat: "ollama-cloud" },
+    });
+    expect(result?.model).toBe("custom-default-model");
   });
 });
