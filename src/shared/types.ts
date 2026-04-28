@@ -366,13 +366,17 @@ export type LlmProvider = z.infer<typeof LlmProviderSchema>;
 /**
  * Default Ollama Cloud model when none is configured.
  *
- * qwen3-coder:480b-cloud is chosen as the default because it follows system
- * prompt instructions reliably and uses tools correctly. minimax-m2.7:cloud
- * was the original choice but, in testing, ignored explicit accountId hints
- * and inlined email context, calling list_emails with hallucinated values
- * instead of using read_email on the email already in context.
+ * deepseek-v4-pro:cloud is DeepSeek's latest pro-tier release and follows
+ * system-prompt instructions / tool definitions reliably. Earlier choices
+ * (minimax-m2.7:cloud) ignored explicit accountId hints and called list_emails
+ * with hallucinated values instead of using read_email on the email already
+ * in context. Switched after live testing on a real inbox.
+ *
+ * Note: pro models may occasionally return overloaded_error during peak
+ * traffic — llm-service.ts retry logic catches this via Anthropic.APIError
+ * status 529 (rate_limit category) and backs off automatically.
  */
-export const DEFAULT_OLLAMA_MODEL = "qwen3-coder:480b-cloud";
+export const DEFAULT_OLLAMA_MODEL = "deepseek-v4-pro:cloud";
 
 export const OllamaCloudConfigSchema = z.object({
   apiKey: z.string().default(""),
