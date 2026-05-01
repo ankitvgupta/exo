@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+import type { AnthropicClient } from "../lib/anthropic-client";
 import { AnalysisResultSchema, ANALYSIS_JSON_FORMAT, DEFAULT_ANALYSIS_PROMPT, type AnalysisResult, type Email } from "../../shared/types";
 import { stripQuotedContent } from "./strip-quoted-content";
 import { stripJsonFences } from "../../shared/strip-json-fences";
@@ -126,12 +126,12 @@ Output: {"needs_reply": true, "reason": "Time-sensitive contract requiring sign-
 Now analyze the following email:`;
 
 export class EmailAnalyzer {
-  private anthropic: Anthropic;
+  private anthropic: AnthropicClient;
   private model: string;
   private customPrompt: string | null;
 
-  constructor(model: string = "claude-sonnet-4-20250514", prompt?: string) {
-    this.anthropic = new Anthropic();
+  constructor(client: AnthropicClient, model: string = "claude-sonnet-4-20250514", prompt?: string) {
+    this.anthropic = client;
     this.model = model;
     // Only use custom prompt if it differs from default
     this.customPrompt = prompt && prompt !== DEFAULT_ANALYSIS_PROMPT ? prompt : null;

@@ -10,7 +10,9 @@
  * Key invariant: draft memories never enter the prompt. Only promoted memories do.
  */
 import { randomUUID } from "crypto";
-import Anthropic from "@anthropic-ai/sdk";
+import type { AnthropicClient } from "../lib/anthropic-client";
+import { createAnthropicClientFromConfig } from "../lib/anthropic-client";
+import { getConfig, getModelIdForFeature } from "../ipc/settings.ipc";
 import { getThreadDraftBody, getDraftMemories, saveDraftMemory, incrementDraftMemoryVote, deleteDraftMemory, evictOldestDraftMemories, saveMemory, getMemories, deleteMemory, getDatabase } from "../db";
 import { parseJsonArray, normalizeScope } from "./memory-learner-utils";
 import type { Memory, MemoryScope, MemorySource, MemoryType, DraftMemory } from "../../shared/types";
@@ -93,9 +95,9 @@ async function analyzeDraftEdit(params: {
 }): Promise<DraftEditObservation[] | null> {
   const { originalDraft, sentBody, senderEmail, senderDomain, subject } = params;
 
-  const anthropic = new Anthropic();
+  const anthropic = createAnthropicClientFromConfig(getConfig());
   const stream = anthropic.messages.stream({
-    model: "claude-opus-4-20250514",
+    model: getModelIdForFeature("agentChat"),
     max_tokens: 16000,
     thinking: {
       type: "enabled",
@@ -246,9 +248,9 @@ async function matchDraftMemories(
   observations: DraftEditObservation[],
   draftMemories: DraftMemory[],
 ): Promise<Array<{ observationIndex: number; matchedDraftMemoryId: string | null }>> {
-  const anthropic = new Anthropic();
+  const anthropic = createAnthropicClientFromConfig(getConfig());
   const response = await anthropic.messages.create({
-    model: "claude-sonnet-4-5-20250929",
+    model: getModelIdForFeature("drafts"),
     max_tokens: 1024,
     messages: [{
       role: "user",
@@ -314,9 +316,9 @@ export async function filterAgainstPromotedMemories(
     return observations;
   }
 
-  const anthropic = new Anthropic();
+  const anthropic = createAnthropicClientFromConfig(getConfig());
   const response = await anthropic.messages.create({
-    model: "claude-sonnet-4-5-20250929",
+    model: getModelIdForFeature("drafts"),
     max_tokens: 1024,
     messages: [{
       role: "user",
@@ -401,9 +403,9 @@ export async function consolidateMemoryScopes(
     return { action: "save", deletedIds: [], createdGlobal: null, coveringMemoryId: null };
   }
 
-  const anthropic = new Anthropic();
+  const anthropic = createAnthropicClientFromConfig(getConfig());
   const response = await anthropic.messages.create({
-    model: "claude-sonnet-4-5-20250929",
+    model: getModelIdForFeature("drafts"),
     max_tokens: 1024,
     messages: [{
       role: "user",

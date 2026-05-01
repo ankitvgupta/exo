@@ -11,6 +11,7 @@ import {
   updateEmailLabelIds,
 } from "../db";
 import { getConfig, getModelIdForFeature } from "./settings.ipc";
+import { createAnthropicClientFromConfig } from "../lib/anthropic-client";
 import { getEmailSyncService } from "./sync.ipc";
 import type { IpcResponse, DashboardEmail } from "../../shared/types";
 
@@ -23,7 +24,7 @@ let analyzer: ArchiveReadyAnalyzer | null = null;
 function getAnalyzer(): ArchiveReadyAnalyzer {
   if (!analyzer) {
     const config = getConfig();
-    analyzer = new ArchiveReadyAnalyzer(getModelIdForFeature("archiveReady"), config.archiveReadyPrompt);
+    analyzer = new ArchiveReadyAnalyzer(createAnthropicClientFromConfig(config), getModelIdForFeature("archiveReady"), config.archiveReadyPrompt);
   }
   return analyzer;
 }

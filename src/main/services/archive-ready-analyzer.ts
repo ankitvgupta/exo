@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+import type { AnthropicClient } from "../lib/anthropic-client";
 import { stripJsonFences } from "../../shared/strip-json-fences";
 import {
   ARCHIVE_READY_JSON_FORMAT,
@@ -10,12 +10,12 @@ import {
 import { stripQuotedContent } from "./strip-quoted-content";
 
 export class ArchiveReadyAnalyzer {
-  private anthropic: Anthropic;
+  private anthropic: AnthropicClient;
   private model: string;
   private customPrompt: string | null;
 
-  constructor(model: string = "claude-sonnet-4-20250514", prompt?: string) {
-    this.anthropic = new Anthropic();
+  constructor(client: AnthropicClient, model: string = "claude-sonnet-4-20250514", prompt?: string) {
+    this.anthropic = client;
     this.model = model;
     this.customPrompt = prompt && prompt !== DEFAULT_ARCHIVE_READY_PROMPT ? prompt : null;
   }

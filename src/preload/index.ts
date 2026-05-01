@@ -192,6 +192,8 @@ const api = {
       ipcRenderer.invoke("settings:validate-github-token", token),
     testOpenclawConnection: (): Promise<{ success: boolean; error?: string }> =>
       ipcRenderer.invoke("settings:test-openclaw-connection") as Promise<{ success: boolean; error?: string }>,
+    validateBedrockCredentials: (params: { region: string; accessKeyId?: string; secretAccessKey?: string; sessionToken?: string }): Promise<unknown> =>
+      ipcRenderer.invoke("settings:validate-bedrock-credentials", params),
   },
 
   // Memory operations (persistent AI preferences)

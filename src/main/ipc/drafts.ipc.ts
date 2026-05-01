@@ -1,7 +1,5 @@
 import { ipcMain } from "electron";
-import Anthropic from "@anthropic-ai/sdk";
-import { DraftGenerator } from "../services/draft-generator";
-import { generateDraftForEmail } from "../services/draft-pipeline";
+import { createAnthropicClientFromConfig } from "../lib/anthropic-client";
 import { getEmail, deleteDraft, deleteAgentTrace, clearInboxPendingDraftsAndTraces, getInboxPendingDraftsWithGmail, updateDraftAgentTaskId } from "../db";
 import { saveDraftAndSync, deleteGmailDraftById, deleteGmailDraftsBatch } from "../services/gmail-draft-sync";
 import { getConfig, getModelIdForFeature } from "./settings.ipc";
@@ -77,7 +75,7 @@ export function registerDraftsIpc(): void {
         }
 
         const config = getConfig();
-        const anthropic = new Anthropic();
+        const anthropic = createAnthropicClientFromConfig(config);
 
         // Include relevant memories so refinement doesn't contradict saved preferences
         const senderMatch = email.from.match(/<([^>]+)>/) ?? email.from.match(/([^\s<]+@[^\s>]+)/);

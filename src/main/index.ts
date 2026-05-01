@@ -279,7 +279,7 @@ ipcMain.handle("default-mail-app:get-pending", () => {
 initDatabase();
 
 // If no ANTHROPIC_API_KEY in env (e.g. packaged app with no .env), read from stored config
-// so that services using `new Anthropic()` pick it up automatically.
+// so that the Anthropic SDK picks it up automatically when the anthropic provider is used.
 {
   const config = getConfig();
   if (!process.env.ANTHROPIC_API_KEY && config.anthropicApiKey) {

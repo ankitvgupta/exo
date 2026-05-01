@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+import type { AnthropicClient } from "../lib/anthropic-client";
 import { stripJsonFences } from "../../shared/strip-json-fences";
 import {
   DEFAULT_CALENDARING_PROMPT,
@@ -9,12 +9,12 @@ import {
 } from "../../shared/types";
 
 export class CalendaringAgent {
-  private anthropic: Anthropic;
+  private anthropic: AnthropicClient;
   private model: string;
   private prompt: string;
 
-  constructor(model: string = "claude-sonnet-4-20250514", prompt?: string) {
-    this.anthropic = new Anthropic();
+  constructor(client: AnthropicClient, model: string = "claude-sonnet-4-20250514", prompt?: string) {
+    this.anthropic = client;
     this.model = model;
     this.prompt = prompt || DEFAULT_CALENDARING_PROMPT;
   }

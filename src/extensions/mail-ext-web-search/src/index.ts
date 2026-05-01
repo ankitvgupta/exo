@@ -1,5 +1,6 @@
 import type { ExtensionContext, ExtensionAPI, ExtensionModule } from "../../../shared/extension-types";
-import { getModelIdForFeature } from "../../../main/ipc/settings.ipc";
+import { getModelIdForFeature, getConfig } from "../../../main/ipc/settings.ipc";
+import { createAnthropicClientFromConfig } from "../../../main/lib/anthropic-client";
 import { createWebSearchProvider } from "./web-search-provider";
 
 /**
@@ -13,7 +14,11 @@ const extension: ExtensionModule = {
     // Register the enrichment provider.
     // Model resolver is injected here (entry point) rather than deep in the provider,
     // keeping the provider decoupled from Electron main-process internals.
-    const provider = createWebSearchProvider(context, () => getModelIdForFeature("senderLookup"));
+    const provider = createWebSearchProvider(
+      context,
+      () => getModelIdForFeature("senderLookup"),
+      () => createAnthropicClientFromConfig(getConfig()),
+    );
     api.registerEnrichmentProvider(provider);
 
     context.logger.info("Web-search extension activated");

@@ -16,7 +16,8 @@
  * Analysis memories are injected into the analysis prompt (not the draft prompt).
  */
 import { randomUUID } from "crypto";
-import Anthropic from "@anthropic-ai/sdk";
+import { createAnthropicClientFromConfig } from "../lib/anthropic-client";
+import { getConfig, getModelIdForFeature } from "../ipc/settings.ipc";
 import {
   getDraftMemories,
   saveDraftMemory,
@@ -264,11 +265,11 @@ async function analyzeOverride(override: AnalysisOverride): Promise<AnalysisObse
     return null;
   }
 
-  const anthropic = new Anthropic();
+  const anthropic = createAnthropicClientFromConfig(getConfig());
   const overrideDesc = formatOverrideDescription(override);
 
   const response = await anthropic.messages.create({
-    model: "claude-sonnet-4-20250514",
+    model: getModelIdForFeature("analysis"),
     max_tokens: 2048,
     messages: [{
       role: "user",
@@ -349,9 +350,9 @@ async function matchAnalysisDraftMemories(
     return observations.map((_, i) => ({ observationIndex: i, matchedDraftMemoryId: null }));
   }
 
-  const anthropic = new Anthropic();
+  const anthropic = createAnthropicClientFromConfig(getConfig());
   const response = await anthropic.messages.create({
-    model: "claude-sonnet-4-5-20250929",
+    model: getModelIdForFeature("drafts"),
     max_tokens: 1024,
     messages: [{
       role: "user",
@@ -400,9 +401,9 @@ async function classifyScope(
     return { scope: "person", scopeValue: senderEmail.toLowerCase() };
   }
 
-  const anthropic = new Anthropic();
+  const anthropic = createAnthropicClientFromConfig(getConfig());
   const response = await anthropic.messages.create({
-    model: "claude-haiku-4-5-20251001",
+    model: getModelIdForFeature("senderLookup"),
     max_tokens: 256,
     messages: [{
       role: "user",

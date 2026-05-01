@@ -2,6 +2,7 @@ import { ipcMain, BrowserWindow } from "electron";
 import { EmailAnalyzer } from "../services/email-analyzer";
 import { getEmail, saveAnalysis, getAllEmails, getInboxEmails, getAccounts } from "../db";
 import { getConfig, getModelIdForFeature } from "./settings.ipc";
+import { createAnthropicClientFromConfig } from "../lib/anthropic-client";
 import type { IpcResponse, DashboardEmail, Email } from "../../shared/types";
 import { DEMO_INBOX_EMAILS, DEMO_EXPECTED_ANALYSIS } from "../demo/fake-inbox";
 import { learnFromPriorityOverrideWithReason, learnFromPriorityOverrideInferred } from "../services/analysis-edit-learner";
@@ -31,7 +32,7 @@ let analyzer: EmailAnalyzer | null = null;
 function getAnalyzer(): EmailAnalyzer {
   if (!analyzer) {
     const config = getConfig();
-    analyzer = new EmailAnalyzer(getModelIdForFeature("analysis"), config.analysisPrompt);
+    analyzer = new EmailAnalyzer(createAnthropicClientFromConfig(config), getModelIdForFeature("analysis"), config.analysisPrompt);
   }
   return analyzer;
 }

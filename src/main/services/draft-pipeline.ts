@@ -8,6 +8,7 @@
 import { getEmail, saveAnalysis } from "../db";
 import { saveDraftAndSync } from "./gmail-draft-sync";
 import { getConfig, getModelIdForFeature } from "../ipc/settings.ipc";
+import { createAnthropicClientFromConfig } from "../lib/anthropic-client";
 import { getEmailSyncService } from "../ipc/sync.ipc";
 import { buildStyleContext } from "./style-profiler";
 import { buildMemoryContext } from "./memory-context";
@@ -87,7 +88,7 @@ async function buildDraftPipeline(
     snippet: email.snippet,
   };
 
-  const generator = new DraftGenerator(getModelIdForFeature("drafts"), prompt, getModelIdForFeature("calendaring"));
+  const generator = new DraftGenerator(createAnthropicClientFromConfig(config), getModelIdForFeature("drafts"), prompt, getModelIdForFeature("calendaring"));
 
   return { email, emailForDraft, config, prompt, generator, emailAccountId };
 }
@@ -120,7 +121,7 @@ export async function generateDraftForEmail(
 
   // Auto-analyze if not already done (e.g. freshly synced email)
   if (!email.analysis) {
-    const analyzer = new EmailAnalyzer(getModelIdForFeature("analysis"), config.analysisPrompt ?? undefined);
+    const analyzer = new EmailAnalyzer(createAnthropicClientFromConfig(config), getModelIdForFeature("analysis"), config.analysisPrompt ?? undefined);
     const analysisResult = await analyzer.analyze(emailForDraft);
     saveAnalysis(emailId, analysisResult.needs_reply, analysisResult.reason, analysisResult.priority);
     email.analysis = {
@@ -135,7 +136,7 @@ export async function generateDraftForEmail(
   let { generator } = pipeline;
   if (instructions) {
     const fullPrompt = `${pipeline.prompt}\n\nADDITIONAL INSTRUCTIONS:\n${instructions}`;
-    generator = new DraftGenerator(getModelIdForFeature("drafts"), fullPrompt, getModelIdForFeature("calendaring"));
+    generator = new DraftGenerator(createAnthropicClientFromConfig(config), getModelIdForFeature("drafts"), fullPrompt, getModelIdForFeature("calendaring"));
   }
 
   const analysis: AnalysisResult = {

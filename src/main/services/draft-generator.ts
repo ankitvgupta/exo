@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+import type { AnthropicClient } from "../lib/anthropic-client";
 import type { GmailClient } from "./gmail-client";
 import { CalendaringAgent } from "./calendaring-agent";
 import { getEnrichmentBySender } from "../extensions/enrichment-store";
@@ -33,13 +33,13 @@ function extractReplyAllCc(email: { from: string; to: string; cc?: string }, use
 }
 
 export class DraftGenerator {
-  private anthropic: Anthropic;
+  private anthropic: AnthropicClient;
   private model: string;
   private calendaringModel: string;
   private prompt: string;
 
-  constructor(model: string = "claude-sonnet-4-20250514", prompt: string = DEFAULT_DRAFT_PROMPT, calendaringModel?: string) {
-    this.anthropic = new Anthropic();
+  constructor(client: AnthropicClient, model: string = "claude-sonnet-4-20250514", prompt: string = DEFAULT_DRAFT_PROMPT, calendaringModel?: string) {
+    this.anthropic = client;
     this.model = model;
     this.calendaringModel = calendaringModel ?? model;
     // Always append format suffix so the user can't accidentally remove it
@@ -81,7 +81,7 @@ ${profile.summary}
 
     // Check for scheduling if EA is enabled
     if (eaConfig?.enabled && eaConfig.email) {
-      const calAgent = new CalendaringAgent(this.calendaringModel);
+      const calAgent = new CalendaringAgent(this.anthropic, this.calendaringModel);
       calendaringResult = await calAgent.analyze(email);
 
       if (

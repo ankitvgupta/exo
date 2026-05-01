@@ -356,6 +356,21 @@ export function resolveModelId(tier: ModelTier): string {
   return MODEL_TIER_IDS[tier];
 }
 
+// Bedrock uses a different model ID format with the "anthropic." prefix and version suffix
+export const BEDROCK_MODEL_TIER_IDS: Record<ModelTier, string> = {
+  haiku: "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+  sonnet: "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+  opus: "us.anthropic.claude-opus-4-6-v1:0",
+};
+
+export const BedrockConfigSchema = z.object({
+  region: z.string().default("us-east-1"),
+  accessKeyId: z.string().optional(),
+  secretAccessKey: z.string().optional(),
+  sessionToken: z.string().optional(),
+});
+export type BedrockConfig = z.infer<typeof BedrockConfigSchema>;
+
 // Config schema
 export const ConfigSchema = z.object({
   maxEmails: z.number().default(50),
@@ -364,7 +379,9 @@ export const ConfigSchema = z.object({
   model: z.string().default("claude-sonnet-4-20250514"),
   modelConfig: ModelConfigSchema.optional(),
   dryRun: z.boolean().default(false),
+  apiProvider: z.enum(["anthropic", "bedrock"]).default("anthropic"),
   anthropicApiKey: z.string().optional(),
+  bedrock: BedrockConfigSchema.optional(),
   analysisPrompt: z.string().default(DEFAULT_ANALYSIS_PROMPT),
   draftPrompt: z.string().default(DEFAULT_DRAFT_PROMPT),
   ea: EAConfigSchema.optional(),

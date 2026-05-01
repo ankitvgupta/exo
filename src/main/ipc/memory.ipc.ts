@@ -1,6 +1,7 @@
 import { ipcMain } from "electron";
 import { randomUUID } from "crypto";
-import Anthropic from "@anthropic-ai/sdk";
+import { createAnthropicClientFromConfig } from "../lib/anthropic-client";
+import { getConfig, getModelIdForFeature } from "./settings.ipc";
 import {
   saveMemory,
   getMemory,
@@ -146,9 +147,9 @@ export function registerMemoryIpc(): void {
         };
       }
       try {
-        const anthropic = new Anthropic();
+        const anthropic = createAnthropicClientFromConfig(getConfig());
         const response = await anthropic.messages.create({
-          model: "claude-haiku-4-5-20251001", // simple JSON classification — always haiku, independent of user model config
+          model: getModelIdForFeature("senderLookup"), // simple JSON classification — haiku tier
           max_tokens: 256,
           messages: [{
             role: "user",

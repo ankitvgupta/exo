@@ -14,6 +14,7 @@ import {
   DEFAULT_AGENT_DRAFTER_PROMPT,
   DEFAULT_MODEL_CONFIG,
   MODEL_TIER_IDS,
+  BEDROCK_MODEL_TIER_IDS,
   resolveModelId,
 } from "../../shared/types";
 import { resetAnalyzer } from "./analysis.ipc";
@@ -110,10 +111,15 @@ export function getModelConfig(): ModelConfig {
   return { ...DEFAULT_MODEL_CONFIG, ...config.modelConfig };
 }
 
-/** Resolve the concrete model ID for a given feature. */
+/** Resolve the concrete model ID for a given feature, using the configured API provider's ID format. */
 export function getModelIdForFeature(feature: keyof ModelConfig): string {
-  const mc = getModelConfig();
-  return resolveModelId(mc[feature]);
+  const config = getConfig();
+  const mc = { ...DEFAULT_MODEL_CONFIG, ...config.modelConfig };
+  const tier: ModelTier = mc[feature];
+  if (config.apiProvider === "bedrock") {
+    return BEDROCK_MODEL_TIER_IDS[tier];
+  }
+  return resolveModelId(tier);
 }
 
 export function registerSettingsIpc(): void {
@@ -152,6 +158,46 @@ export function registerSettingsIpc(): void {
         }
         const msg = error instanceof Error ? error.message : "Unknown error";
         return { success: false, error: `API key validation failed: ${msg}` };
+      }
+    }
+  );
+
+  // Validate AWS Bedrock credentials with a minimal API call
+  ipcMain.handle(
+    "settings:validate-bedrock-credentials",
+    async (_, { region, accessKeyId, secretAccessKey, sessionToken }: {
+      region: string;
+      accessKeyId?: string;
+      secretAccessKey?: string;
+      sessionToken?: string;
+    }): Promise<IpcResponse<void>> => {
+      try {
+        const AnthropicBedrock = (await import("@anthropic-ai/bedrock-sdk")).default;
+        const { BEDROCK_MODEL_TIER_IDS: bedrockIds } = await import("../../shared/types");
+        const client = new AnthropicBedrock({
+          awsRegion: region || "us-east-1",
+          awsAccessKey: accessKeyId,
+          awsSecretKey: secretAccessKey,
+          awsSessionToken: sessionToken,
+        });
+        await client.messages.create({
+          model: bedrockIds.haiku,
+          max_tokens: 1,
+          messages: [{ role: "user", content: "hi" }],
+        });
+        return { success: true, data: undefined };
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : "Unknown error";
+        if (msg.includes("credentials") || msg.includes("auth") || msg.includes("403") || msg.includes("UnrecognizedClient")) {
+          return { success: false, error: "Invalid AWS credentials. Please check your access key ID and secret access key." };
+        }
+        if (msg.includes("Could not load credentials")) {
+          return { success: false, error: "No AWS credentials found. Please enter your access key ID and secret access key." };
+        }
+        if (msg.includes("ResourceNotFoundException") || msg.includes("model") || msg.includes("ModelNotFound")) {
+          return { success: false, error: "Model not available in this region. Check that Claude models are enabled in your AWS Bedrock console." };
+        }
+        return { success: false, error: `Bedrock validation failed: ${msg}` };
       }
     }
   );
@@ -254,9 +300,9 @@ export function registerSettingsIpc(): void {
           });
         }
 
-        // Reset cached analyzer/service instances when model config or API key changes,
-        // since they hold Anthropic client instances that capture the key at construction.
-        if ("modelConfig" in config || "anthropicApiKey" in config) {
+        // Reset cached analyzer/service instances when model config, API key, or provider changes,
+        // since they hold Anthropic client instances that capture the credentials at construction.
+        if ("modelConfig" in config || "anthropicApiKey" in config || "apiProvider" in config || "bedrock" in config) {
           resetAnalyzer();
           resetArchiveReadyAnalyzer();
           prefetchService.reset();

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import DOMPurify from "dompurify";
-import { DEFAULT_ANALYSIS_PROMPT, DEFAULT_DRAFT_PROMPT, DEFAULT_ARCHIVE_READY_PROMPT, DEFAULT_STYLE_PROMPT, DEFAULT_AGENT_DRAFTER_PROMPT, DEFAULT_MODEL_CONFIG, MODEL_TIERS, MODEL_TIER_LABELS, type EAConfig, type Config, type InboxDensity, type Signature, type McpServerConfig, type ModelConfig, type ModelTier, type CliToolConfig } from "../../shared/types";
+import { DEFAULT_ANALYSIS_PROMPT, DEFAULT_DRAFT_PROMPT, DEFAULT_ARCHIVE_READY_PROMPT, DEFAULT_STYLE_PROMPT, DEFAULT_AGENT_DRAFTER_PROMPT, DEFAULT_MODEL_CONFIG, MODEL_TIERS, MODEL_TIER_LABELS, BEDROCK_MODEL_TIER_IDS, type EAConfig, type Config, type InboxDensity, type Signature, type McpServerConfig, type ModelConfig, type ModelTier, type CliToolConfig } from "../../shared/types";
 import { useAppStore, type Account, type PrefetchProgress, type SettingsTab } from "../store";
 import { reconfigurePostHog, trackEvent } from "../services/posthog";
 import { SplitConfigEditor } from "./SplitConfigEditor";
@@ -71,6 +71,17 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
   const [anthropicApiKey, setAnthropicApiKey] = useState("");
   const [isSavingApiKey, setIsSavingApiKey] = useState(false);
   const [apiKeySaved, setApiKeySaved] = useState(false);
+
+  // Bedrock provider state
+  const [apiProvider, setApiProvider] = useState<"anthropic" | "bedrock">("anthropic");
+  const [bedrockRegion, setBedrockRegion] = useState("us-east-1");
+  const [bedrockAccessKeyId, setBedrockAccessKeyId] = useState("");
+  const [bedrockSecretAccessKey, setBedrockSecretAccessKey] = useState("");
+  const [bedrockSessionToken, setBedrockSessionToken] = useState("");
+  const [isSavingBedrock, setIsSavingBedrock] = useState(false);
+  const [bedrockSaved, setBedrockSaved] = useState(false);
+  const [bedrockError, setBedrockError] = useState<string | null>(null);
+
   const [claudeCliAvailable, setClaudeCliAvailable] = useState(false);
   const [claudeAuthStatus, setClaudeAuthStatus] = useState<"checking" | "authenticated" | "not_authenticated">("checking");
   const [claudeAuthEmail, setClaudeAuthEmail] = useState<string | undefined>();
@@ -176,6 +187,11 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
       setGithubToken(generalConfig.githubToken ?? "");
       setAllowPrereleaseUpdates(generalConfig.allowPrereleaseUpdates ?? false);
       setAnthropicApiKey(generalConfig.anthropicApiKey ?? "");
+      setApiProvider(generalConfig.apiProvider ?? "anthropic");
+      setBedrockRegion(generalConfig.bedrock?.region ?? "us-east-1");
+      setBedrockAccessKeyId(generalConfig.bedrock?.accessKeyId ?? "");
+      setBedrockSecretAccessKey(generalConfig.bedrock?.secretAccessKey ?? "");
+      setBedrockSessionToken(generalConfig.bedrock?.sessionToken ?? "");
       const browser = generalConfig.agentBrowser;
       if (browser) {
         setBrowserEnabled(browser.enabled);
@@ -472,6 +488,49 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
     } finally {
       setIsSavingApiKey(false);
     }
+  };
+
+  const handleSaveBedrock = async (validate: boolean) => {
+    setIsSavingBedrock(true);
+    setBedrockSaved(false);
+    setBedrockError(null);
+    try {
+      if (validate) {
+        const result = await window.api.settings.validateBedrockCredentials({
+          region: bedrockRegion,
+          accessKeyId: bedrockAccessKeyId || undefined,
+          secretAccessKey: bedrockSecretAccessKey || undefined,
+          sessionToken: bedrockSessionToken || undefined,
+        }) as { success: boolean; error?: string };
+        if (!result.success) {
+          setBedrockError(result.error ?? "Validation failed");
+          return;
+        }
+      }
+      await window.api.settings.set({
+        apiProvider: "bedrock",
+        bedrock: {
+          region: bedrockRegion || "us-east-1",
+          accessKeyId: bedrockAccessKeyId || undefined,
+          secretAccessKey: bedrockSecretAccessKey || undefined,
+          sessionToken: bedrockSessionToken || undefined,
+        },
+      });
+      setApiProvider("bedrock");
+      queryClient.invalidateQueries({ queryKey: ["general-config"] });
+      setBedrockSaved(true);
+      setTimeout(() => setBedrockSaved(false), 3000);
+    } catch (err) {
+      setBedrockError(err instanceof Error ? err.message : "Failed to save");
+    } finally {
+      setIsSavingBedrock(false);
+    }
+  };
+
+  const handleSwitchToAnthropic = async () => {
+    await window.api.settings.set({ apiProvider: "anthropic" });
+    setApiProvider("anthropic");
+    queryClient.invalidateQueries({ queryKey: ["general-config"] });
   };
 
   const handleClaudeLogin = async () => {
@@ -2010,7 +2069,42 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                 Authentication
               </h4>
 
-              {/* Anthropic API Key */}
+              {/* API Provider selector */}
+              <div className="mb-6">
+                <h5 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  API Provider
+                </h5>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setApiProvider("anthropic")}
+                    className={`flex-1 py-2 px-3 text-sm font-medium rounded-lg border transition-colors ${
+                      apiProvider === "anthropic"
+                        ? "border-blue-500 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
+                        : "border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:border-gray-400 dark:hover:border-gray-500"
+                    }`}
+                  >
+                    Anthropic API
+                  </button>
+                  <button
+                    onClick={() => setApiProvider("bedrock")}
+                    className={`flex-1 py-2 px-3 text-sm font-medium rounded-lg border transition-colors ${
+                      apiProvider === "bedrock"
+                        ? "border-blue-500 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
+                        : "border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:border-gray-400 dark:hover:border-gray-500"
+                    }`}
+                  >
+                    AWS Bedrock
+                  </button>
+                </div>
+                {apiProvider !== (generalConfig?.apiProvider ?? "anthropic") && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
+                    You've switched providers. Save your credentials below to apply.
+                  </p>
+                )}
+              </div>
+
+              {/* Anthropic API Key — shown when Anthropic provider is selected */}
+              {apiProvider === "anthropic" && (
               <div className="mb-6">
                 <h5 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Anthropic API Key
@@ -2039,6 +2133,97 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                   </button>
                 </div>
               </div>
+              )}
+
+              {/* AWS Bedrock — shown when Bedrock provider is selected */}
+              {apiProvider === "bedrock" && (
+              <div className="mb-6 space-y-3">
+                <div>
+                  <h5 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    AWS Bedrock
+                  </h5>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                    Use your AWS Bedrock account to access Claude. Credentials are stored locally and never sent to Anthropic.
+                    Model IDs used: haiku → <code className="font-mono">{BEDROCK_MODEL_TIER_IDS.haiku}</code>, sonnet → <code className="font-mono">{BEDROCK_MODEL_TIER_IDS.sonnet}</code>.
+                    Verify these are available in your region via the AWS Bedrock console.
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">AWS Region</label>
+                  <input
+                    type="text"
+                    value={bedrockRegion}
+                    onChange={(e) => setBedrockRegion(e.target.value)}
+                    placeholder="us-east-1"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Access Key ID</label>
+                  <input
+                    type="password"
+                    value={bedrockAccessKeyId}
+                    onChange={(e) => setBedrockAccessKeyId(e.target.value)}
+                    placeholder="AKIA..."
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Secret Access Key</label>
+                  <input
+                    type="password"
+                    value={bedrockSecretAccessKey}
+                    onChange={(e) => setBedrockSecretAccessKey(e.target.value)}
+                    placeholder="Secret access key"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Session Token <span className="text-gray-400">(optional, for temporary credentials)</span></label>
+                  <input
+                    type="password"
+                    value={bedrockSessionToken}
+                    onChange={(e) => setBedrockSessionToken(e.target.value)}
+                    placeholder="Session token"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400"
+                  />
+                </div>
+                {bedrockError && (
+                  <p className="text-xs text-red-600 dark:text-red-400">{bedrockError}</p>
+                )}
+                <div className="flex gap-2 pt-1">
+                  <button
+                    onClick={() => handleSaveBedrock(true)}
+                    disabled={isSavingBedrock}
+                    className={`px-4 py-2 text-white text-sm font-medium rounded-lg disabled:opacity-50 transition-colors ${
+                      bedrockSaved
+                        ? "bg-green-600 dark:bg-green-500"
+                        : "bg-blue-600 dark:bg-blue-500 hover:bg-blue-700 dark:hover:bg-blue-600"
+                    }`}
+                  >
+                    {isSavingBedrock ? "Validating..." : bedrockSaved ? "Saved" : "Validate & Save"}
+                  </button>
+                  <button
+                    onClick={() => handleSaveBedrock(false)}
+                    disabled={isSavingBedrock}
+                    className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 transition-colors"
+                  >
+                    Save without validating
+                  </button>
+                  {generalConfig?.apiProvider === "bedrock" && (
+                    <button
+                      onClick={handleSwitchToAnthropic}
+                      className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                    >
+                      Switch to Anthropic
+                    </button>
+                  )}
+                </div>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Note: The AI agent feature requires a direct Anthropic API key and is not available via Bedrock.
+                </p>
+              </div>
+              )}
 
               {/* Claude Account (OAuth) — only shown when claude CLI is available */}
               {claudeCliAvailable && (
