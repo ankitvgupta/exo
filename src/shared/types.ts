@@ -356,12 +356,24 @@ export function resolveModelId(tier: ModelTier): string {
   return MODEL_TIER_IDS[tier];
 }
 
-// Bedrock uses a different model ID format with the "anthropic." prefix and version suffix
-export const BEDROCK_MODEL_TIER_IDS: Record<ModelTier, string> = {
-  haiku: "us.anthropic.claude-haiku-4-5-20251001-v1:0",
-  sonnet: "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
-  opus: "us.anthropic.claude-opus-4-6-v1:0",
+// Bedrock cross-region inference profile IDs without the region prefix.
+// The full ID is `{prefix}.{base}` where prefix is "us", "eu", or "ap" depending on region.
+const BEDROCK_BASE_MODEL_IDS: Record<ModelTier, string> = {
+  haiku: "anthropic.claude-haiku-4-5-20251001-v1:0",
+  sonnet: "anthropic.claude-sonnet-4-5-20250929-v1:0",
+  opus: "anthropic.claude-opus-4-6-v1:0",
 };
+
+function bedrockRegionPrefix(region: string): string {
+  if (region.startsWith("eu-")) return "eu";
+  if (region.startsWith("ap-")) return "ap";
+  return "us";
+}
+
+/** Resolve a Bedrock cross-region inference profile ID for a tier and AWS region. */
+export function resolveBedrockModelId(tier: ModelTier, region: string): string {
+  return `${bedrockRegionPrefix(region)}.${BEDROCK_BASE_MODEL_IDS[tier]}`;
+}
 
 export const BedrockConfigSchema = z.object({
   region: z.string().default("us-east-1"),

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import DOMPurify from "dompurify";
-import { DEFAULT_ANALYSIS_PROMPT, DEFAULT_DRAFT_PROMPT, DEFAULT_ARCHIVE_READY_PROMPT, DEFAULT_STYLE_PROMPT, DEFAULT_AGENT_DRAFTER_PROMPT, DEFAULT_MODEL_CONFIG, MODEL_TIERS, MODEL_TIER_LABELS, BEDROCK_MODEL_TIER_IDS, type EAConfig, type Config, type InboxDensity, type Signature, type McpServerConfig, type ModelConfig, type ModelTier, type CliToolConfig } from "../../shared/types";
+import { DEFAULT_ANALYSIS_PROMPT, DEFAULT_DRAFT_PROMPT, DEFAULT_ARCHIVE_READY_PROMPT, DEFAULT_STYLE_PROMPT, DEFAULT_AGENT_DRAFTER_PROMPT, DEFAULT_MODEL_CONFIG, MODEL_TIERS, MODEL_TIER_LABELS, resolveBedrockModelId, type EAConfig, type Config, type InboxDensity, type Signature, type McpServerConfig, type ModelConfig, type ModelTier, type CliToolConfig } from "../../shared/types";
 import { useAppStore, type Account, type PrefetchProgress, type SettingsTab } from "../store";
 import { reconfigurePostHog, trackEvent } from "../services/posthog";
 import { SplitConfigEditor } from "./SplitConfigEditor";
@@ -2144,7 +2144,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                   </h5>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
                     Use your AWS Bedrock account to access Claude. Credentials are stored locally and never sent to Anthropic.
-                    Model IDs used: haiku → <code className="font-mono">{BEDROCK_MODEL_TIER_IDS.haiku}</code>, sonnet → <code className="font-mono">{BEDROCK_MODEL_TIER_IDS.sonnet}</code>.
+                    Model IDs used: haiku → <code className="font-mono">{resolveBedrockModelId("haiku", bedrockRegion || "us-east-1")}</code>, sonnet → <code className="font-mono">{resolveBedrockModelId("sonnet", bedrockRegion || "us-east-1")}</code>.
                     Verify these are available in your region via the AWS Bedrock console.
                   </p>
                 </div>

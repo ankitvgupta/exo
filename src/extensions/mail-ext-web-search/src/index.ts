@@ -18,6 +18,7 @@ const extension: ExtensionModule = {
       context,
       () => getModelIdForFeature("senderLookup"),
       () => createAnthropicClientFromConfig(getConfig()),
+      () => getConfig().apiProvider === "bedrock",
     );
     api.registerEnrichmentProvider(provider);
 

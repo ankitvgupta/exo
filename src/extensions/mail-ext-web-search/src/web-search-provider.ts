@@ -187,6 +187,7 @@ export function createWebSearchProvider(
   context: ExtensionContext,
   getModelId: () => string,
   getClient: () => AnthropicClient,
+  isBedrockActive: () => boolean,
 ): EnrichmentProvider {
 
   return {
@@ -195,7 +196,8 @@ export function createWebSearchProvider(
     priority: 100,
 
     canEnrich(email: DashboardEmail): boolean {
-      // Skip if the email is from a reminder service with no thread context
+      // web_search_20250305 is an Anthropic-only first-party tool; Bedrock does not support it
+      if (isBedrockActive()) return false;
       return !isReminderService(email.from);
     },
 

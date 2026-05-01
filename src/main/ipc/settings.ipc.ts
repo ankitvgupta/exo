@@ -14,8 +14,8 @@ import {
   DEFAULT_AGENT_DRAFTER_PROMPT,
   DEFAULT_MODEL_CONFIG,
   MODEL_TIER_IDS,
-  BEDROCK_MODEL_TIER_IDS,
   resolveModelId,
+  resolveBedrockModelId,
 } from "../../shared/types";
 import { resetAnalyzer } from "./analysis.ipc";
 import { resetArchiveReadyAnalyzer } from "./archive-ready.ipc";
@@ -117,7 +117,7 @@ export function getModelIdForFeature(feature: keyof ModelConfig): string {
   const mc = { ...DEFAULT_MODEL_CONFIG, ...config.modelConfig };
   const tier: ModelTier = mc[feature];
   if (config.apiProvider === "bedrock") {
-    return BEDROCK_MODEL_TIER_IDS[tier];
+    return resolveBedrockModelId(tier, config.bedrock?.region ?? "us-east-1");
   }
   return resolveModelId(tier);
 }
@@ -173,29 +173,38 @@ export function registerSettingsIpc(): void {
     }): Promise<IpcResponse<void>> => {
       try {
         const AnthropicBedrock = (await import("@anthropic-ai/bedrock-sdk")).default;
-        const { BEDROCK_MODEL_TIER_IDS: bedrockIds } = await import("../../shared/types");
+        const { resolveBedrockModelId: resolveBedrock } = await import("../../shared/types");
+        const effectiveRegion = region || "us-east-1";
         const client = new AnthropicBedrock({
-          awsRegion: region || "us-east-1",
+          awsRegion: effectiveRegion,
           awsAccessKey: accessKeyId,
           awsSecretKey: secretAccessKey,
           awsSessionToken: sessionToken,
         });
         await client.messages.create({
-          model: bedrockIds.haiku,
+          model: resolveBedrock("haiku", effectiveRegion),
           max_tokens: 1,
           messages: [{ role: "user", content: "hi" }],
         });
         return { success: true, data: undefined };
       } catch (error) {
-        const msg = error instanceof Error ? error.message : "Unknown error";
-        if (msg.includes("credentials") || msg.includes("auth") || msg.includes("403") || msg.includes("UnrecognizedClient")) {
+        // Use HTTP status code when available (stable); fall back to message for pre-HTTP errors
+        const status = (error != null && typeof error === "object" && "status" in error)
+          ? (error as { status: number }).status
+          : undefined;
+        if (status === 401 || status === 403) {
           return { success: false, error: "Invalid AWS credentials. Please check your access key ID and secret access key." };
         }
-        if (msg.includes("Could not load credentials")) {
+        if (status === 404) {
+          return { success: false, error: "Model not available in this region. Check that Claude models are enabled in your AWS Bedrock console." };
+        }
+        // Pre-HTTP credential resolution failures (no status code)
+        const msg = error instanceof Error ? error.message : "Unknown error";
+        if (msg.includes("Could not load credentials") || msg.includes("resolve credentials")) {
           return { success: false, error: "No AWS credentials found. Please enter your access key ID and secret access key." };
         }
-        if (msg.includes("ResourceNotFoundException") || msg.includes("model") || msg.includes("ModelNotFound")) {
-          return { success: false, error: "Model not available in this region. Check that Claude models are enabled in your AWS Bedrock console." };
+        if (status !== undefined) {
+          return { success: false, error: `Bedrock API error (HTTP ${status}): ${msg}` };
         }
         return { success: false, error: `Bedrock validation failed: ${msg}` };
       }
