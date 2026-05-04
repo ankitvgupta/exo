@@ -29,6 +29,37 @@ import { createLogger } from "../../services/logger";
 const log = createLogger("claude-agent");
 
 /**
+ * Every env var Claude Code's CLI consults for model selection — discovered
+ * by grepping node_modules/@anthropic-ai/claude-agent-sdk/cli.js for
+ * `ANTHROPIC_[A-Z_]*MODEL` and `CLAUDE_CODE_[A-Z_]*MODEL`. If we miss any,
+ * Claude Code falls back to a hardcoded Anthropic model name (e.g.
+ * `claude-sonnet-4-5-20250929`) for that subtask, which 404s when the
+ * request hits ollama.com. Shared between buildChildEnv (sets these) and
+ * buildMcpStdioEnv (strips these) so a new var added to one stays in
+ * lockstep with the other.
+ */
+const MODEL_ENV_VARS = [
+  "ANTHROPIC_MODEL",
+  "ANTHROPIC_CUSTOM_MODEL",
+  "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+  "ANTHROPIC_DEFAULT_SONNET_MODEL",
+  "ANTHROPIC_DEFAULT_OPUS_MODEL",
+  "ANTHROPIC_SMALL_FAST_MODEL", // used for title gen, compaction, etc.
+  "CLAUDE_CODE_SUBAGENT_MODEL",
+] as const;
+
+/**
+ * Every var buildChildEnv sets for LLM routing. Used by buildMcpStdioEnv to
+ * strip them all from MCP child processes (preventing credential leakage
+ * and accidental redirection of MCP-server-internal Anthropic calls).
+ */
+const LLM_ROUTING_ENV_VARS = [
+  "ANTHROPIC_BASE_URL",
+  "ANTHROPIC_AUTH_TOKEN",
+  ...MODEL_ENV_VARS,
+] as const;
+
+/**
  * Claude Agent Provider - Uses the Claude Agent SDK to run an agent that
  * can call tools defined by the mail client. Tools are registered as an
  * in-process MCP server using the SDK's `createSdkMcpServer`.
@@ -363,16 +394,8 @@ export class ClaudeAgentProvider implements AgentProvider {
     for (const [key, value] of Object.entries(process.env)) {
       if (value !== undefined) env[key] = value;
     }
-    // Strip every var we set in buildChildEnv for LLM routing.
-    delete env.ANTHROPIC_BASE_URL;
-    delete env.ANTHROPIC_AUTH_TOKEN;
-    delete env.ANTHROPIC_MODEL;
-    delete env.ANTHROPIC_CUSTOM_MODEL;
-    delete env.ANTHROPIC_DEFAULT_HAIKU_MODEL;
-    delete env.ANTHROPIC_DEFAULT_SONNET_MODEL;
-    delete env.ANTHROPIC_DEFAULT_OPUS_MODEL;
-    delete env.ANTHROPIC_SMALL_FAST_MODEL;
-    delete env.CLAUDE_CODE_SUBAGENT_MODEL;
+    // Strip every var buildChildEnv sets for LLM routing.
+    for (const k of LLM_ROUTING_ENV_VARS) delete env[k];
     // Pass through the user's Anthropic key (if any) so MCP servers that genuinely
     // use Anthropic still work. This matches the pre-Ollama behavior.
     if (this.frameworkConfig.anthropicApiKey) {
@@ -394,21 +417,6 @@ export class ClaudeAgentProvider implements AgentProvider {
     for (const [key, value] of Object.entries(process.env)) {
       if (value !== undefined) env[key] = value;
     }
-
-    // Every model env var Claude Code's CLI consults — discovered by grepping
-    // node_modules/@anthropic-ai/claude-agent-sdk/cli.js for `ANTHROPIC_[A-Z_]*MODEL`
-    // and `CLAUDE_CODE_[A-Z_]*MODEL`. If we miss any of these, Claude Code falls
-    // back to a hardcoded Anthropic model name (e.g. "claude-sonnet-4-5-20250929")
-    // for that subtask, which 404s when the request hits ollama.com.
-    const MODEL_ENV_VARS = [
-      "ANTHROPIC_MODEL",
-      "ANTHROPIC_CUSTOM_MODEL",
-      "ANTHROPIC_DEFAULT_HAIKU_MODEL",
-      "ANTHROPIC_DEFAULT_SONNET_MODEL",
-      "ANTHROPIC_DEFAULT_OPUS_MODEL",
-      "ANTHROPIC_SMALL_FAST_MODEL", // used for title gen, compaction, etc.
-      "CLAUDE_CODE_SUBAGENT_MODEL",
-    ];
 
     const ollama = this.frameworkConfig.ollamaCloud;
     if (ollama?.enabled && ollama.apiKey) {
