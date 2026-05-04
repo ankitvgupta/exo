@@ -425,9 +425,8 @@ Respond with ONLY a JSON array: [{"observationIndex": 0, "matchedDraftMemoryId":
   // Find the first text block — Ollama-routed thinking models emit a
   // `thinking` block before the `text` block, so content[0] would be the
   // wrong type and we'd silently parse "" → degraded match results.
-  const text =
-    response.content.find((b): b is { type: "text"; text: string } => b.type === "text")?.text ??
-    "";
+  const textBlock = response.content.find((b) => b.type === "text");
+  const text = textBlock?.type === "text" ? textBlock.text : "";
   const parsed = parseJsonArray<{
     observationIndex: number;
     matchedDraftMemoryId: string | null;
@@ -495,9 +494,8 @@ For global: scopeValue = null`,
   // Find the first text block — Ollama-routed thinking models emit a
   // `thinking` block before the `text` block, so content[0] would be the
   // wrong type and we'd silently parse "" → degraded match results.
-  const text =
-    response.content.find((b): b is { type: "text"; text: string } => b.type === "text")?.text ??
-    "";
+  const textBlock = response.content.find((b) => b.type === "text");
+  const text = textBlock?.type === "text" ? textBlock.text : "";
   try {
     const jsonStart = text.indexOf("{");
     const jsonEnd = text.lastIndexOf("}");
