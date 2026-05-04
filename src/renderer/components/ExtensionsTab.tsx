@@ -570,7 +570,10 @@ export function ExtensionsTab() {
                   const existing = current.data?.featureProviders ?? {};
                   const reset: Record<string, "anthropic" | "ollama-cloud"> = {};
                   for (const [feature, provider] of Object.entries(existing)) {
-                    reset[feature] = provider === "ollama-cloud" ? "anthropic" : (provider as "anthropic" | "ollama-cloud");
+                    reset[feature] =
+                      provider === "ollama-cloud"
+                        ? "anthropic"
+                        : (provider as "anthropic" | "ollama-cloud");
                   }
                   await window.api.settings.set({
                     ollamaCloud: { apiKey: "", defaultModel: ollamaCloudModel },
