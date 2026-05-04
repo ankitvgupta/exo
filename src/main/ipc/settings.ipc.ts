@@ -66,8 +66,8 @@ function getStore(): Store<{ config: Config }> {
             priorities: ["high", "medium", "low"],
           },
           posthog: {
-            enabled: false,
-            sessionReplay: false,
+            enabled: true,
+            sessionReplay: true,
           },
           keyboardBindings: "superhuman" as const,
           configVersion: 1,
