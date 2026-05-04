@@ -152,9 +152,15 @@ function getOllamaClient(): Anthropic {
       "Ollama Cloud API key not configured. Add your key in Settings → Extensions → Ollama Cloud.",
     );
   }
+  // apiKey: null is intentional — the Anthropic SDK constructor falls back
+  // to process.env.ANTHROPIC_API_KEY when apiKey is undefined. For users with
+  // both keys configured, that env var is set, so omitting apiKey here would
+  // silently leak the Anthropic key to ollama.com (the SDK sends X-Api-Key
+  // alongside our Bearer authToken). Explicitly clearing it stops that.
   _ollamaClient = new Anthropic({
     baseURL: "https://ollama.com",
     authToken: _ollamaApiKey,
+    apiKey: null,
   });
   return _ollamaClient;
 }

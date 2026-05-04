@@ -1216,7 +1216,13 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                             className="px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-500 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                           >
                             <option value="anthropic">Anthropic</option>
-                            <option value="ollama-cloud">Ollama Cloud</option>
+                            {/* senderLookup hardcodes Anthropic's web_search_20250305
+                                tool — there's no Ollama equivalent. Hide the option
+                                rather than letting users save a route that can't be
+                                honored at call time. */}
+                            {key !== "senderLookup" && (
+                              <option value="ollama-cloud">Ollama Cloud</option>
+                            )}
                           </select>
                           {provider === "anthropic" ? (
                             <select

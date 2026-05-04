@@ -210,6 +210,10 @@ export function registerSettingsIpc(): void {
         const client = new Anthropic({
           baseURL: "https://ollama.com",
           authToken: apiKey,
+          // apiKey: null prevents the SDK from leaking process.env.ANTHROPIC_API_KEY
+          // to ollama.com (the SDK reads it as a default fallback for X-Api-Key
+          // alongside our Bearer authToken — credential leak for users with both keys).
+          apiKey: null,
           timeout: 10_000,
         });
         // Validate by making a real messages.create call. The default Ollama
@@ -377,7 +381,11 @@ export function registerSettingsIpc(): void {
       if ("modelConfig" in config || "featureProviders" in config || "ollamaCloud" in config) {
         const ollamaConfig = resolveAgentOllamaConfig(newConfig);
         agentCoordinator.updateConfig({
-          model: ollamaConfig?.model ?? getFeatureModelConfig("agentDrafter").model,
+          // When ollamaConfig is undefined the worker is on Anthropic — must use
+          // an Anthropic model name (getModelIdForFeature, which ignores
+          // featureProviders) rather than getFeatureModelConfig which could
+          // return an Ollama model name if agentDrafter is solo-set to ollama.
+          model: ollamaConfig?.model ?? getModelIdForFeature("agentDrafter"),
         });
       }
 

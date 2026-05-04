@@ -9,7 +9,7 @@ import type {
   WorkerMessage,
 } from "./types";
 import { getEmailSyncService } from "../ipc/sync.ipc";
-import { getConfig, getFeatureModelConfig } from "../ipc/settings.ipc";
+import { getConfig, getFeatureModelConfig, getModelIdForFeature } from "../ipc/settings.ipc";
 import { resolveAgentOllamaConfig } from "../../shared/types";
 import * as db from "../db";
 import { buildStyleContext } from "../services/style-profiler";
@@ -252,7 +252,11 @@ export class AgentCoordinator {
     // query() and the env-var remap reference the same Ollama model name.
     const ollamaConfig = resolveAgentOllamaConfig(appConfig);
     const baseConfig: AgentFrameworkConfig = {
-      model: ollamaConfig?.model ?? getFeatureModelConfig("agentDrafter").model,
+      // When the resolver says the worker stays on Anthropic, force an Anthropic
+      // model name — even if featureProviders.agentDrafter is "ollama-cloud" alone,
+      // because getFeatureModelConfig would then return an Ollama model name and
+      // the worker (pointed at Anthropic) would 400 with invalid_model.
+      model: ollamaConfig?.model ?? getModelIdForFeature("agentDrafter"),
       anthropicApiKey: apiKey,
       ollamaCloud: ollamaConfig,
       browserConfig: browser
@@ -540,7 +544,11 @@ export class AgentCoordinator {
     const appConfig = getConfig();
     const ollamaConfig = resolveAgentOllamaConfig(appConfig);
     const config: AgentFrameworkConfig = {
-      model: ollamaConfig?.model ?? getFeatureModelConfig("agentDrafter").model,
+      // When the resolver says the worker stays on Anthropic, force an Anthropic
+      // model name — even if featureProviders.agentDrafter is "ollama-cloud" alone,
+      // because getFeatureModelConfig would then return an Ollama model name and
+      // the worker (pointed at Anthropic) would 400 with invalid_model.
+      model: ollamaConfig?.model ?? getModelIdForFeature("agentDrafter"),
       anthropicApiKey: appConfig.anthropicApiKey || process.env.ANTHROPIC_API_KEY || undefined,
       ollamaCloud: ollamaConfig,
     };
