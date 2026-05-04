@@ -286,14 +286,19 @@ export class AgentCoordinator {
       this.workerReady = this.workerReady.then(() => {
         for (const [providerId, providerPath] of this.installedProviders) {
           log.info(`[AgentCoordinator] Re-loading installed provider on respawn: ${providerId}`);
+          // Include ollamaCloud + provider-aware model so re-loaded providers
+          // pick up the same Ollama routing as the freshly-spawned worker.
+          const respawnConfig = getConfig();
+          const respawnOllama = resolveAgentOllamaConfig(respawnConfig);
           this.sendToWorker({
             type: "load_provider",
             providerId,
             providerPath,
             config: {
-              model: getFeatureModelConfig("agentDrafter").model,
+              model: respawnOllama?.model ?? getFeatureModelConfig("agentDrafter").model,
               anthropicApiKey:
-                getConfig().anthropicApiKey || process.env.ANTHROPIC_API_KEY || undefined,
+                respawnConfig.anthropicApiKey || process.env.ANTHROPIC_API_KEY || undefined,
+              ollamaCloud: respawnOllama,
             },
           });
         }
@@ -527,11 +532,17 @@ export class AgentCoordinator {
     }
     this.installedProviders.set(providerId, providerPath);
 
-    // Send config_update first so worker has latest config
+    // Send config_update first so worker has latest config.
+    // Include ollamaCloud + provider-aware model so a runtime-loaded provider
+    // sees the same Ollama routing as a fresh worker spawn would (otherwise a
+    // newly-loaded provider would silently use Anthropic regardless of user
+    // config until the next worker respawn).
     const appConfig = getConfig();
+    const ollamaConfig = resolveAgentOllamaConfig(appConfig);
     const config: AgentFrameworkConfig = {
-      model: getFeatureModelConfig("agentDrafter").model,
+      model: ollamaConfig?.model ?? getFeatureModelConfig("agentDrafter").model,
       anthropicApiKey: appConfig.anthropicApiKey || process.env.ANTHROPIC_API_KEY || undefined,
+      ollamaCloud: ollamaConfig,
     };
     this.sendToWorker({ type: "config_update", config });
 

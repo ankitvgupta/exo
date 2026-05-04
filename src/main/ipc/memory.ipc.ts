@@ -21,7 +21,24 @@ import type {
   MemorySource,
 } from "../../shared/types";
 import { consolidateMemoryScopes } from "../services/draft-edit-learner";
+import { getConfig } from "./settings.ipc";
 import { createLogger } from "../services/logger";
+
+/**
+ * Whether Anthropic credentials are available. memory:classify uses Haiku
+ * which is Anthropic-only — no Ollama equivalent — so for users with only
+ * an Ollama Cloud key we short-circuit to a sensible default scope rather
+ * than constructing the Anthropic client without a key (which would throw
+ * before our retry logic gets a chance to handle it).
+ */
+function hasAnthropicCredentials(): boolean {
+  if (process.env.ANTHROPIC_API_KEY) return true;
+  try {
+    return !!getConfig().anthropicApiKey;
+  } catch {
+    return false;
+  }
+}
 
 const log = createLogger("memory-ipc");
 
@@ -180,6 +197,16 @@ export function registerMemoryIpc(): void {
     ): Promise<IpcResponse<{ scope: MemoryScope; scopeValue: string | null; content: string }>> => {
       // In demo/test mode, skip API call and default to person scope
       if (process.env.EXO_TEST_MODE === "true" || process.env.EXO_DEMO_MODE === "true") {
+        return {
+          success: true,
+          data: { scope: "person", scopeValue: senderEmail, content },
+        };
+      }
+      // Ollama-only users have no Anthropic key — fall back to "person" scope
+      // rather than constructing an Anthropic client that will throw. The catch
+      // below would also handle this, but the explicit guard avoids noisy logs
+      // and makes the intent (graceful degradation) obvious.
+      if (!hasAnthropicCredentials()) {
         return {
           success: true,
           data: { scope: "person", scopeValue: senderEmail, content },
