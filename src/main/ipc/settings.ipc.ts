@@ -370,9 +370,14 @@ export function registerSettingsIpc(): void {
       // Only agentDrafter needs propagation here — it's the worker's default model for
       // auto-draft tasks that don't pass a per-task override. The agentChat model is
       // resolved fresh per-invocation in agent.ipc.ts via getModelIdForFeature("agentChat").
-      if ("modelConfig" in config) {
+      // When Ollama is the agent destination (both agent features opted in via
+      // resolveAgentOllamaConfig), use the Ollama model rather than the per-feature
+      // Anthropic-tier resolver, otherwise the env-var-remapped destination and the
+      // model param in query() can disagree (Anthropic model name → ollama.com → 404).
+      if ("modelConfig" in config || "featureProviders" in config || "ollamaCloud" in config) {
+        const ollamaConfig = resolveAgentOllamaConfig(newConfig);
         agentCoordinator.updateConfig({
-          model: getModelIdForFeature("agentDrafter"),
+          model: ollamaConfig?.model ?? getFeatureModelConfig("agentDrafter").model,
         });
       }
 

@@ -185,6 +185,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
             senderLookup: "anthropic",
             agentDrafter: "ollama-cloud",
             agentChat: "ollama-cloud",
+            styleInference: "ollama-cloud",
           },
         })) as IpcResponse<void>;
         if (result.success) {

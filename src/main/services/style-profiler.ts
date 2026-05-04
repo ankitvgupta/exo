@@ -449,11 +449,12 @@ export async function inferStyleFromSentEmails(
     })
     .join("\n\n");
 
-  // Route through the analysis feature's configured provider so Ollama-only
-  // users don't crash. Style inference is essentially analysis of sent mail —
-  // reusing the analysis provider config is the closest existing feature
-  // (no need to add a new featureProviders key for this single caller).
-  const { provider, model } = getFeatureModelConfig("analysis");
+  // Route through styleInference's configured provider/model. Default tier
+  // is opus (preserving the previous Anthropic behavior — this task benefits
+  // from a more capable model and runs rarely). Ollama-only users get whatever
+  // they configured for styleInference, falling back to their default Ollama
+  // model — no crash on missing Anthropic key.
+  const { provider, model } = getFeatureModelConfig("styleInference");
   const response = await createMessage(
     {
       model,

@@ -346,10 +346,12 @@ export function registerExtensionsIpc(): void {
         // Trigger config update to worker so provider picks up new settings
         const { agentCoordinator } = await import("../agents/agent-coordinator");
         const { populatePrivateProviderConfig } = await import("../agents/private-providers-main");
-        const { getConfig, getModelIdForFeature } = await import("./settings.ipc");
+        const { getConfig, getFeatureModelConfig } = await import("./settings.ipc");
         const appConfig = getConfig();
+        // Use provider-aware resolver so an Ollama-routed agentDrafter doesn't
+        // get overwritten with an Anthropic model name here.
         const baseConfig = {
-          model: getModelIdForFeature("agentDrafter"),
+          model: getFeatureModelConfig("agentDrafter").model,
           anthropicApiKey: appConfig.anthropicApiKey || process.env.ANTHROPIC_API_KEY || undefined,
         };
         const enrichedConfig = await populatePrivateProviderConfig(baseConfig);

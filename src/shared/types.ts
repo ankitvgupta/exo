@@ -338,6 +338,10 @@ export const ModelConfigSchema = z.object({
   senderLookup: ModelTierSchema.default("haiku"),
   agentDrafter: ModelTierSchema.default("sonnet"),
   agentChat: ModelTierSchema.default("opus"),
+  // styleInference defaults to opus because the task (analyzing 100 sent
+  // emails to extract a writing style) benefits from a more capable model
+  // and runs rarely (once per recipient profile build, then cached).
+  styleInference: ModelTierSchema.default("opus"),
 });
 
 export type ModelConfig = z.infer<typeof ModelConfigSchema>;
@@ -351,6 +355,7 @@ export const DEFAULT_MODEL_CONFIG: ModelConfig = {
   senderLookup: "haiku",
   agentDrafter: "sonnet",
   agentChat: "opus",
+  styleInference: "opus",
 };
 
 /** Resolve a model tier to its concrete model ID string. */
@@ -456,12 +461,25 @@ export function resolveAgentOllamaConfig(
   cfg: Pick<Config, "ollamaCloud" | "featureProviders">,
 ): { enabled: true; apiKey: string; model: string } | undefined {
   const oc = cfg.ollamaCloud;
+  // The agent worker is a single shared subprocess pointed at one URL via env
+  // vars at spawn time. Both agentChat (sidebar chat) and agentDrafter (auto-
+  // draft background tasks) flow through it. We can't satisfy two different
+  // destinations simultaneously, so require BOTH features to opt into Ollama
+  // before routing the worker there. Mismatched configs default to Anthropic
+  // — better than silently sending Claude model names to ollama.com (404) or
+  // Ollama model names to api.anthropic.com (invalid_model).
   const agentChatProvider = cfg.featureProviders?.agentChat ?? "anthropic";
-  if (!oc?.apiKey || agentChatProvider !== "ollama-cloud") return undefined;
+  const agentDrafterProvider = cfg.featureProviders?.agentDrafter ?? "anthropic";
+  const bothOllama =
+    agentChatProvider === "ollama-cloud" && agentDrafterProvider === "ollama-cloud";
+  if (!oc?.apiKey || !bothOllama) return undefined;
   return {
     enabled: true,
     apiKey: oc.apiKey,
-    model: oc.featureModels?.agentChat ?? oc.defaultModel ?? DEFAULT_OLLAMA_MODEL,
+    // Use agentDrafter's per-feature model since the coordinator's `model` field
+    // is also derived from agentDrafter — keeps the env-var remap and the
+    // explicit query() model param in sync.
+    model: oc.featureModels?.agentDrafter ?? oc.defaultModel ?? DEFAULT_OLLAMA_MODEL,
   };
 }
 

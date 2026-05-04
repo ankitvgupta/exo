@@ -153,10 +153,10 @@ test.describe("resolveAgentOllamaConfig", () => {
     expect(result).toBeUndefined();
   });
 
-  test("enables Ollama when key is set AND agentChat is routed there", () => {
+  test("enables Ollama when key is set AND BOTH agent features are routed there", () => {
     const result = resolveAgentOllamaConfig({
       ollamaCloud: { apiKey: "secret-123", defaultModel: DEFAULT_OLLAMA_MODEL },
-      featureProviders: { agentChat: "ollama-cloud" },
+      featureProviders: { agentChat: "ollama-cloud", agentDrafter: "ollama-cloud" },
     });
     expect(result).toEqual({
       enabled: true,
@@ -165,26 +165,44 @@ test.describe("resolveAgentOllamaConfig", () => {
     });
   });
 
-  test("uses per-feature agentChat model override when set", () => {
+  test("returns undefined when only agentChat is ollama-cloud (agentDrafter still anthropic)", () => {
+    // Worker is shared between chat and drafter — sending mismatched configs to one
+    // subprocess pointed at one URL produces 404s, so this case must not enable Ollama.
+    const result = resolveAgentOllamaConfig({
+      ollamaCloud: { apiKey: "secret-123", defaultModel: DEFAULT_OLLAMA_MODEL },
+      featureProviders: { agentChat: "ollama-cloud" },
+    });
+    expect(result).toBeUndefined();
+  });
+
+  test("returns undefined when only agentDrafter is ollama-cloud (agentChat still anthropic)", () => {
+    const result = resolveAgentOllamaConfig({
+      ollamaCloud: { apiKey: "secret-123", defaultModel: DEFAULT_OLLAMA_MODEL },
+      featureProviders: { agentDrafter: "ollama-cloud" },
+    });
+    expect(result).toBeUndefined();
+  });
+
+  test("uses per-feature agentDrafter model override when set", () => {
     const result = resolveAgentOllamaConfig({
       ollamaCloud: {
         apiKey: "secret-123",
         defaultModel: DEFAULT_OLLAMA_MODEL,
-        featureModels: { agentChat: "qwen3:8b" },
+        featureModels: { agentDrafter: "qwen3:8b" },
       },
-      featureProviders: { agentChat: "ollama-cloud" },
+      featureProviders: { agentChat: "ollama-cloud", agentDrafter: "ollama-cloud" },
     });
     expect(result?.model).toBe("qwen3:8b");
   });
 
-  test("falls back to defaultModel when agentChat featureModel not set", () => {
+  test("falls back to defaultModel when agentDrafter featureModel not set", () => {
     const result = resolveAgentOllamaConfig({
       ollamaCloud: {
         apiKey: "secret-123",
         defaultModel: "custom-default-model",
         featureModels: { analysis: "qwen3:8b" }, // wrong feature, should not match
       },
-      featureProviders: { agentChat: "ollama-cloud" },
+      featureProviders: { agentChat: "ollama-cloud", agentDrafter: "ollama-cloud" },
     });
     expect(result?.model).toBe("custom-default-model");
   });

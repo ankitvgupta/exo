@@ -399,10 +399,13 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
         syncDraftsToGmail,
         modelConfig,
         featureProviders,
-        ollamaCloud: {
-          ...generalConfig?.ollamaCloud,
-          featureModels: ollamaModels,
-        },
+        // Only send featureModels here — apiKey and defaultModel are owned by the
+        // ExtensionsTab. Spreading the cached ollamaCloud here can carry a stale
+        // empty apiKey from before the user saved one in ExtensionsTab; the backend
+        // deep-merge uses `incoming.apiKey ?? existing` so an empty string would
+        // overwrite the freshly-saved key. By omitting apiKey/defaultModel, the
+        // deep-merge falls through to the existing values for those fields.
+        ollamaCloud: { featureModels: ollamaModels },
         githubToken: githubToken || undefined,
         allowPrereleaseUpdates,
       });

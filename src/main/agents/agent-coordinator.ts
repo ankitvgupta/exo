@@ -246,11 +246,15 @@ export class AgentCoordinator {
     // getModelIdForFeature() always returns an Anthropic-tier ID, which 404s when
     // the agent is routed to Ollama Cloud (the env-var remap sets the URL but
     // query()'s explicit `model` param overrides the env vars).
-    const agentFeature = getFeatureModelConfig("agentDrafter");
+    // When Ollama is enabled (both agent features opted in via
+    // resolveAgentOllamaConfig), use that resolver's model rather than
+    // agentDrafter's per-feature model — guarantees the model passed to
+    // query() and the env-var remap reference the same Ollama model name.
+    const ollamaConfig = resolveAgentOllamaConfig(appConfig);
     const baseConfig: AgentFrameworkConfig = {
-      model: agentFeature.model,
+      model: ollamaConfig?.model ?? getFeatureModelConfig("agentDrafter").model,
       anthropicApiKey: apiKey,
-      ollamaCloud: resolveAgentOllamaConfig(appConfig),
+      ollamaCloud: ollamaConfig,
       browserConfig: browser
         ? {
             enabled: browser.enabled,
