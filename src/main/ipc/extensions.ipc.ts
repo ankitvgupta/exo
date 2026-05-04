@@ -346,13 +346,20 @@ export function registerExtensionsIpc(): void {
         // Trigger config update to worker so provider picks up new settings
         const { agentCoordinator } = await import("../agents/agent-coordinator");
         const { populatePrivateProviderConfig } = await import("../agents/private-providers-main");
-        const { getConfig, getFeatureModelConfig } = await import("./settings.ipc");
+        const { getConfig, getModelIdForFeature } = await import("./settings.ipc");
+        const { resolveAgentOllamaConfig } = await import("../../shared/types");
         const appConfig = getConfig();
-        // Use provider-aware resolver so an Ollama-routed agentDrafter doesn't
-        // get overwritten with an Anthropic model name here.
+        // Match the worker's actual destination — when resolveAgentOllamaConfig
+        // returns a config (both agent features opted into Ollama), use its
+        // Ollama model. Otherwise force an Anthropic model name (the
+        // featureProviders map could solo-set agentDrafter to ollama, but
+        // the worker stays on Anthropic in that case and would 400 with
+        // invalid_model if we sent the Ollama name).
+        const ollamaConfig = resolveAgentOllamaConfig(appConfig);
         const baseConfig = {
-          model: getFeatureModelConfig("agentDrafter").model,
+          model: ollamaConfig?.model ?? getModelIdForFeature("agentDrafter"),
           anthropicApiKey: appConfig.anthropicApiKey || process.env.ANTHROPIC_API_KEY || undefined,
+          ollamaCloud: ollamaConfig,
         };
         const enrichedConfig = await populatePrivateProviderConfig(baseConfig);
         agentCoordinator.updateConfig(enrichedConfig);
