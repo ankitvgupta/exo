@@ -559,8 +559,22 @@ export function ExtensionsTab() {
                 const val = e.target.checked;
                 setOllamaCloudEnabled(val);
                 if (!val) {
+                  // Disabling Ollama: clear the key AND flip every feature
+                  // pinned to ollama-cloud back to anthropic. Otherwise the
+                  // featureProviders map still says ollama-cloud and every
+                  // call throws "Ollama Cloud not configured".
+                  const current = (await window.api.settings.get()) as {
+                    success: boolean;
+                    data?: { featureProviders?: Record<string, string> };
+                  };
+                  const existing = current.data?.featureProviders ?? {};
+                  const reset: Record<string, "anthropic" | "ollama-cloud"> = {};
+                  for (const [feature, provider] of Object.entries(existing)) {
+                    reset[feature] = provider === "ollama-cloud" ? "anthropic" : (provider as "anthropic" | "ollama-cloud");
+                  }
                   await window.api.settings.set({
                     ollamaCloud: { apiKey: "", defaultModel: ollamaCloudModel },
+                    featureProviders: reset,
                   });
                 }
               }}

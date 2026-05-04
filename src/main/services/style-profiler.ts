@@ -11,6 +11,7 @@ import {
 } from "../db";
 import type { GmailClient } from "./gmail-client";
 import { createMessage } from "./llm-service";
+import { getFeatureModelConfig } from "../ipc/settings.ipc";
 import { stripQuotedContent } from "./strip-quoted-content";
 import { createLogger } from "./logger";
 
@@ -448,9 +449,14 @@ export async function inferStyleFromSentEmails(
     })
     .join("\n\n");
 
+  // Route through the analysis feature's configured provider so Ollama-only
+  // users don't crash. Style inference is essentially analysis of sent mail —
+  // reusing the analysis provider config is the closest existing feature
+  // (no need to add a new featureProviders key for this single caller).
+  const { provider, model } = getFeatureModelConfig("analysis");
   const response = await createMessage(
     {
-      model: "claude-opus-4-20250514",
+      model,
       max_tokens: 1024,
       system: [{ type: "text", text: STYLE_INFERENCE_PROMPT }],
       messages: [
@@ -460,7 +466,7 @@ export async function inferStyleFromSentEmails(
         },
       ],
     },
-    { caller: "style-inference" },
+    { caller: "style-inference", provider },
   );
 
   const textBlock = response.content.find((block) => block.type === "text");

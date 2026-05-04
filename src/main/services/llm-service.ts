@@ -289,7 +289,7 @@ export function recordStreamingCall(
   caller: string,
   usage: Record<string, number>,
   durationMs: number,
-  options?: { emailId?: string; accountId?: string },
+  options?: { emailId?: string; accountId?: string; provider?: LlmProvider },
 ): void {
   const inputTokens = usage.input_tokens || 0;
   const outputTokens = usage.output_tokens || 0;
@@ -307,6 +307,7 @@ export function recordStreamingCall(
     durationMs,
     true,
     null,
+    options?.provider,
   );
 }
 
