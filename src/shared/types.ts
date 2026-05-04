@@ -396,10 +396,10 @@ export const ConfigSchema = z.object({
   extraPathDirs: z.array(z.string()).optional(),
   posthog: z
     .object({
-      enabled: z.boolean().default(true),
-      sessionReplay: z.boolean().default(true),
+      enabled: z.boolean(),
+      sessionReplay: z.boolean(),
     })
-    .optional(),
+    .default({ enabled: true, sessionReplay: true }),
   keyboardBindings: z.enum(["superhuman", "gmail"]).default("superhuman"),
   openclaw: z
     .object({
