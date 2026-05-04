@@ -534,8 +534,6 @@ function buildSystemPrompt(
     "",
     `Current account: ${context.userEmail}${context.userName ? ` (${context.userName})` : ""}`,
     `Account ID: ${context.accountId}`,
-    "",
-    `IMPORTANT: When any tool requires an accountId parameter, ALWAYS use exactly "${context.accountId}". Do NOT use "primary", "default", or any other placeholder — use the literal account ID above. Tools will return zero results if you pass the wrong accountId.`,
   ];
 
   if (context.currentEmailId) {
@@ -553,39 +551,9 @@ function buildSystemPrompt(
   }
 
   if (context.currentDraftId || context.currentEmailId || context.currentThreadId) {
-    // When the renderer has already provided the email metadata in context,
-    // inline it directly so simple questions ("what is this about?") can be
-    // answered without a tool call. Weaker models (minimax-m2.7:cloud, etc.)
-    // sometimes ignore "Use read_email to read the email content" and fall back
-    // to list_emails or hallucinated accountIds. Inlining the body avoids that
-    // failure mode entirely. Tool calls are still needed for thread context,
-    // historical lookups, replies, etc.
-    if (
-      context.currentEmailId &&
-      (context.emailSubject || context.emailFrom || context.emailBody)
-    ) {
-      parts.push("");
-      parts.push("## Currently viewing email");
-      if (context.emailSubject) parts.push(`Subject: ${context.emailSubject}`);
-      if (context.emailFrom) parts.push(`From: ${context.emailFrom}`);
-      if (context.emailTo) parts.push(`To: ${context.emailTo}`);
-      if (context.emailBody) {
-        // Trim very long bodies so we don't blow the context budget; tools can
-        // still fetch the full body via read_email if needed.
-        const body =
-          context.emailBody.length > 4000
-            ? context.emailBody.slice(0, 4000) +
-              "\n[…body truncated; call read_email for full content]"
-            : context.emailBody;
-        parts.push("");
-        parts.push("Body:");
-        parts.push(body);
-      }
-    }
-
     parts.push("");
     parts.push(
-      "If the user asks about the email/draft above and the inlined content answers it, respond directly without calling tools. Otherwise, use the appropriate tool to fetch what you need:",
+      "The user is asking about the email or draft they are currently viewing. Before responding, use the appropriate tool to read the content so you understand the full context of their request:",
     );
     if (context.currentDraftId) {
       parts.push("- Use read_draft to read the draft content");
@@ -594,14 +562,10 @@ function buildSystemPrompt(
       );
     }
     if (context.currentEmailId) {
-      parts.push(
-        `- Use read_email with emailId="${context.currentEmailId}" to read the FULL email content (including HTML)`,
-      );
+      parts.push("- Use read_email to read the email content");
     }
     if (context.currentThreadId) {
-      parts.push(
-        `- Use read_thread with threadId="${context.currentThreadId}" to read the full thread for conversation context`,
-      );
+      parts.push("- Use read_thread to read the full thread for conversation context");
     }
   }
 

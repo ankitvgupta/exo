@@ -9,7 +9,7 @@ import type {
   WorkerMessage,
 } from "./types";
 import { getEmailSyncService } from "../ipc/sync.ipc";
-import { getConfig, getModelIdForFeature, getFeatureModelConfig } from "../ipc/settings.ipc";
+import { getConfig, getFeatureModelConfig } from "../ipc/settings.ipc";
 import { resolveAgentOllamaConfig } from "../../shared/types";
 import * as db from "../db";
 import { buildStyleContext } from "../services/style-profiler";
@@ -242,8 +242,13 @@ export class AgentCoordinator {
     const appConfig = getConfig();
     const apiKey = appConfig.anthropicApiKey || process.env.ANTHROPIC_API_KEY || undefined;
     const browser = appConfig.agentBrowser;
+    // Use provider-aware resolver so the model name matches the destination URL.
+    // getModelIdForFeature() always returns an Anthropic-tier ID, which 404s when
+    // the agent is routed to Ollama Cloud (the env-var remap sets the URL but
+    // query()'s explicit `model` param overrides the env vars).
+    const agentFeature = getFeatureModelConfig("agentDrafter");
     const baseConfig: AgentFrameworkConfig = {
-      model: getModelIdForFeature("agentDrafter"),
+      model: agentFeature.model,
       anthropicApiKey: apiKey,
       ollamaCloud: resolveAgentOllamaConfig(appConfig),
       browserConfig: browser
@@ -282,7 +287,7 @@ export class AgentCoordinator {
             providerId,
             providerPath,
             config: {
-              model: getModelIdForFeature("agentDrafter"),
+              model: getFeatureModelConfig("agentDrafter").model,
               anthropicApiKey:
                 getConfig().anthropicApiKey || process.env.ANTHROPIC_API_KEY || undefined,
             },
@@ -521,7 +526,7 @@ export class AgentCoordinator {
     // Send config_update first so worker has latest config
     const appConfig = getConfig();
     const config: AgentFrameworkConfig = {
-      model: getModelIdForFeature("agentDrafter"),
+      model: getFeatureModelConfig("agentDrafter").model,
       anthropicApiKey: appConfig.anthropicApiKey || process.env.ANTHROPIC_API_KEY || undefined,
     };
     this.sendToWorker({ type: "config_update", config });

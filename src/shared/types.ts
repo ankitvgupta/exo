@@ -366,17 +366,17 @@ export type LlmProvider = z.infer<typeof LlmProviderSchema>;
 /**
  * Default Ollama Cloud model when none is configured.
  *
- * deepseek-v4-pro:cloud is DeepSeek's latest pro-tier release and follows
- * system-prompt instructions / tool definitions reliably. Earlier choices
- * (minimax-m2.7:cloud) ignored explicit accountId hints and called list_emails
- * with hallucinated values instead of using read_email on the email already
- * in context. Switched after live testing on a real inbox.
+ * kimi-k2.6:cloud is Moonshot's latest. Chosen over deepseek-v4-pro:cloud
+ * because deepseek's compat-layer thinking depth is capped at default-level
+ * (no way to invoke "max" through Ollama's Anthropic-compat endpoint —
+ * filed upstream at ollama/ollama#15952), which made the agent feel
+ * underpowered. kimi-k2.6 doesn't need a thinking knob to perform well.
  *
- * Note: pro models may occasionally return overloaded_error during peak
+ * Note: cloud models may occasionally return overloaded_error during peak
  * traffic — llm-service.ts retry logic catches this via Anthropic.APIError
  * status 529 (rate_limit category) and backs off automatically.
  */
-export const DEFAULT_OLLAMA_MODEL = "deepseek-v4-pro:cloud";
+export const DEFAULT_OLLAMA_MODEL = "kimi-k2.6:cloud";
 
 export const OllamaCloudConfigSchema = z.object({
   apiKey: z.string().default(""),
