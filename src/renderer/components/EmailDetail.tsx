@@ -1460,7 +1460,7 @@ function InlineReply({
     ) {
       window.api.emails
         .archiveThread(replyInfo.threadId, accountId)
-        .catch((err) => console.error("[Send & Archive] archive failed", err));
+        .catch((err: unknown) => console.error("[Send & Archive] archive failed", err));
     }
   }, [form, composeMode, replyToEmailId, replyInfo, isForward, onSend, accountId]);
 
