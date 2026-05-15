@@ -56,6 +56,11 @@ function UndoSendToastItem({ item }: { item: UndoSendItem }) {
       sentRef.current = false;
       return;
     }
+    if (item.archiveThreadId && item.sendOptions.accountId) {
+      window.api.emails
+        .archiveThread(item.archiveThreadId, item.sendOptions.accountId)
+        .catch((err) => console.error("[Send & Archive] archive failed", err));
+    }
     cancelHandlers.delete(item.id);
     removeUndoSend(item.id);
   }, [item, removeUndoSend]);

@@ -1376,7 +1376,10 @@ function InlineReply({
   // Send with optimistic update support
   const handleSend = useCallback(async () => {
     const sendOptions = form.buildSendOptions();
-    const { undoSendDelaySeconds, addUndoSend } = useAppStore.getState();
+    const { undoSendDelaySeconds, addUndoSend, sendAndArchive } = useAppStore.getState();
+    // Archive only applies to replies — not forwards or new compose
+    const shouldArchive =
+      sendAndArchive && !isForward && (composeMode === "reply" || composeMode === "reply-all");
 
     if (!form.canSend || form.isSending) return;
 
@@ -1388,6 +1391,7 @@ function InlineReply({
         recipients: form.to.join(", "),
         scheduledAt: Date.now(),
         delayMs: undoSendDelaySeconds * 1000,
+        archiveThreadId: shouldArchive ? replyInfo.threadId : undefined,
         composeContext: {
           mode: composeMode,
           replyToEmailId,
@@ -1444,8 +1448,13 @@ function InlineReply({
               }))
             : undefined,
       });
+      if (shouldArchive && replyInfo.threadId) {
+        window.api.emails
+          .archiveThread(replyInfo.threadId, accountId)
+          .catch((err) => console.error("[Send & Archive] archive failed", err));
+      }
     }
-  }, [form, composeMode, replyToEmailId, replyInfo, isForward, onSend]);
+  }, [form, composeMode, replyToEmailId, replyInfo, isForward, onSend, accountId]);
 
   const handleScheduleSend = useCallback(
     async (scheduledAt: number) => {
