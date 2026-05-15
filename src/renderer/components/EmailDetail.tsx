@@ -1448,11 +1448,19 @@ function InlineReply({
               }))
             : undefined,
       });
-      if (shouldArchive && replyInfo.threadId) {
-        window.api.emails
-          .archiveThread(replyInfo.threadId, accountId)
-          .catch((err) => console.error("[Send & Archive] archive failed", err));
-      }
+    }
+    // Archive on any successful send (including offline-queued where data may be
+    // absent), matching UndoSendToast's behavior. Skipped on failure.
+    if (
+      shouldArchive &&
+      replyInfo.threadId &&
+      response &&
+      response !== "undo-queued" &&
+      response.success
+    ) {
+      window.api.emails
+        .archiveThread(replyInfo.threadId, accountId)
+        .catch((err) => console.error("[Send & Archive] archive failed", err));
     }
   }, [form, composeMode, replyToEmailId, replyInfo, isForward, onSend, accountId]);
 
