@@ -1379,7 +1379,7 @@ function InlineReply({
     const { undoSendDelaySeconds, addUndoSend, sendAndArchive } = useAppStore.getState();
     // Archive only applies to replies — not forwards or new compose
     const shouldArchive =
-      sendAndArchive && !isForward && (composeMode === "reply" || composeMode === "reply-all");
+      sendAndArchive && (composeMode === "reply" || composeMode === "reply-all");
 
     if (!form.canSend || form.isSending) return;
 

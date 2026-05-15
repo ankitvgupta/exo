@@ -56,7 +56,7 @@ function UndoSendToastItem({ item }: { item: UndoSendItem }) {
       sentRef.current = false;
       return;
     }
-    if (item.archiveThreadId && item.sendOptions.accountId) {
+    if (item.archiveThreadId) {
       window.api.emails
         .archiveThread(item.archiveThreadId, item.sendOptions.accountId)
         .catch((err) => console.error("[Send & Archive] archive failed", err));
