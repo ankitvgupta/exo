@@ -39,7 +39,10 @@
     "format": "prettier --write 'src/**/*.{ts,tsx}'",
     "format:check": "prettier --check 'src/**/*.{ts,tsx}'",
     "eval": "npx tsx tests/evals/runner.ts",
-    "eval:features": "npx tsx tests/evals/feature-evals.ts"
+    "eval:features": "npx tsx tests/evals/feature-evals.ts",
+    "agentic-verify": "node scripts/agentic-verify.mjs",
+    "agentic-explore": "node scripts/agentic-verify.mjs --mode=explore",
+    "pre-pr": "node scripts/pre-pr.mjs"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.37",
