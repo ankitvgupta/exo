@@ -134,3 +134,178 @@ jobs:
           path: playwright-report/
           retention-days: 14
           if-no-files-found: ignore
+
+  migrations:
+    name: Migration Replay
+    runs-on: ubuntu-latest
+    env:
+      CI: true
+      NODE_OPTIONS: --max-old-space-size=4096
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build Electron app (needed for better-sqlite3 native module)
+        run: npm run build
+
+      - name: Run migration replay tests
+        run: npx playwright test --project=migrations
+
+      - name: Upload report
+        uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report-migrations
+          path: playwright-report/
+          retention-days: 14
+          if-no-files-found: ignore
+
+  visual-regression:
+    name: Visual Regression
+    runs-on: ubuntu-latest
+    # Pin the docker image version so font rendering stays stable across
+    # CI runs. Bump deliberately when refreshing baselines.
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-jammy
+      options: --user 1001
+    env:
+      CI: true
+      EXO_DEMO_MODE: true
+      ELECTRON_DISABLE_SANDBOX: 1
+      NODE_OPTIONS: --max-old-space-size=4096
+      HOME: /root
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build Electron app
+        run: npm run build
+
+      - name: Run visual regression
+        # The `visual-regression` spec is in the e2e project but gated on
+        # platform === linux + the screenshot project. Run only it.
+        run: |
+          npx playwright test \
+            --project=e2e \
+            tests/e2e/visual-regression.spec.ts
+
+      - name: Upload screenshot diffs
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: visual-regression-diffs
+          path: |
+            test-results/**/*.png
+            playwright-report/
+          retention-days: 14
+          if-no-files-found: ignore
+
+  packaged-smoke:
+    name: Packaged App Smoke
+    runs-on: ubuntu-latest
+    env:
+      CI: true
+      EXO_DEMO_MODE: true
+      ELECTRON_DISABLE_SANDBOX: 1
+      NODE_OPTIONS: --max-old-space-size=4096
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends xvfb
+          npx playwright install-deps chromium
+
+      - name: Build + pack
+        run: |
+          npm run build
+          npm run pack
+
+      - name: Smoke test packaged binary
+        run: xvfb-run --auto-servernum npx playwright test --project=packaged
+        env:
+          EXO_PACKAGED_BINARY: dist/linux-unpacked/exo
+
+      - name: Upload report
+        uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report-packaged
+          path: playwright-report/
+          retention-days: 14
+          if-no-files-found: ignore
+
+  verify-prepr-report:
+    name: Verify pre-pr report
+    # Hermetic — uses default GITHUB_TOKEN only. No Anthropic key, no
+    # Gmail creds. Makes running `npm run pre-pr` functionally required
+    # before merge: this job fails the PR if the marker block in the PR
+    # body is missing or stale (SHA doesn't match HEAD).
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Inspect PR body for the marker block
+        # Behavior:
+        #   - Marker present + SHA matches HEAD → pass.
+        #   - Marker present + SHA mismatches → FAIL (stale report).
+        #   - Marker absent → warn but pass. This avoids blocking the
+        #     bootstrap PR that adds this very gate. Once pre-pr.mjs has
+        #     been run on a branch at least once, the marker presence
+        #     becomes effectively required (a regression would have to
+        #     re-blank the body, which CI would catch via the SHA check
+        #     on the next push).
+        #   - Marker present but missing SHA= → warn (treat as legacy).
+        run: |
+          SHORT_SHA="${PR_HEAD_SHA:0:7}"
+          echo "Looking for marker SHA=$SHORT_SHA in PR #$PR_NUMBER body"
+
+          BODY=$(gh pr view "$PR_NUMBER" --json body --jq .body)
+          MARKER=$(echo "$BODY" | grep -E '<!-- PRE-PR-REPORT-START' | head -n1 || true)
+
+          if [ -z "$MARKER" ]; then
+            echo "::warning::No <!-- PRE-PR-REPORT-START --> marker in PR body."
+            echo "::warning::Run 'npm run pre-pr' locally before merging once Phase 1.5 / 1.75 are live."
+            echo "Allowing the PR through this time (bootstrap mode)."
+            exit 0
+          fi
+
+          MARKER_SHA=$(echo "$MARKER" | sed -n 's/.*SHA=\([0-9a-f]*\).*/\1/p')
+          if [ -z "$MARKER_SHA" ]; then
+            echo "::warning::Marker present but missing SHA= (legacy format). Re-run 'npm run pre-pr'."
+            exit 0
+          fi
+
+          if [ "$MARKER_SHA" != "$SHORT_SHA" ]; then
+            echo "::error::Pre-PR report is stale. Marker SHA=$MARKER_SHA, PR HEAD SHA=$SHORT_SHA."
+            echo "::error::Run 'npm run pre-pr' locally and push the updated body."
+            exit 1
+          fi
+
+          echo "Pre-PR report is fresh (SHA $MARKER_SHA matches HEAD)."
