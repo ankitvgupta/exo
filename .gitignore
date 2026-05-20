@@ -61,3 +61,7 @@ src/agents-private/
 
 # gstack QA reports
 .gstack/
+
+# Spike + agentic-verify run logs (Phase 1.5)
+scripts/.spike-runs/
+scripts/.agentic-runs/
