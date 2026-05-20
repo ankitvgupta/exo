@@ -372,6 +372,7 @@ CREATE INDEX IF NOT EXISTS idx_memories_scope ON memories(scope, scope_value);
 CREATE INDEX IF NOT EXISTS idx_emails_message_id ON emails(message_id);
 CREATE INDEX IF NOT EXISTS idx_emails_in_reply_to ON emails(in_reply_to);
 CREATE INDEX IF NOT EXISTS idx_send_as_account ON send_as_aliases(account_id);
+CREATE INDEX IF NOT EXISTS idx_agent_conversation_mirror_task_status ON agent_conversation_mirror(local_task_id, status);
 `;
 
 // FTS5 full-text search schema (separate because SQLite can't IF NOT EXISTS for virtual tables)

@@ -7,8 +7,11 @@ import {
   getCorrespondentProfile,
   saveCorrespondentProfile,
   getSentEmailCountToRecipient,
+  getRecentSentEmailsWithBody,
 } from "../db";
 import type { GmailClient } from "./gmail-client";
+import { createMessage } from "./anthropic-service";
+import { stripQuotedContent } from "./strip-quoted-content";
 import { createLogger } from "./logger";
 
 const log = createLogger("style-profiler");
@@ -193,6 +196,7 @@ type SentEmailRow = {
   body: string;
   date: string;
   is_reply: number;
+  to_address?: string;
 };
 
 /**
@@ -227,6 +231,7 @@ async function fetchAndCacheSentEmails(
       body: email.body,
       date: email.date,
       is_reply: email.subject.toLowerCase().startsWith("re:") ? 1 : 0,
+      to_address: email.to,
     });
   }
 
@@ -358,4 +363,110 @@ export async function buildStyleContext(
   });
 
   return context;
+}
+
+// ============================================
+// Style inference via metaprompting
+// ============================================
+
+const STYLE_INFERENCE_PROMPT = `You are analyzing a user's email writing style. Below are their most recent sent emails.
+Study these emails carefully and produce a concise style guide that captures how this person writes.
+
+Focus on:
+- Tone and formality level (casual, professional, mixed)
+- Greeting patterns (do they say "Hi", "Hey", nothing?)
+- Sign-off patterns (do they use "Best", "Thanks", just their name, nothing?)
+- Sentence structure (short and punchy? long and detailed? mixed?)
+- Vocabulary level (simple, technical, colloquial)
+- Use of punctuation (exclamation marks, ellipses, em dashes)
+- Capitalization habits (proper case, all lowercase, etc.)
+- How they handle different contexts (replies vs new emails, quick responses vs longer ones)
+- Any distinctive quirks or patterns
+
+Output a 6-10 sentence style description written as instructions to an AI drafting emails
+on their behalf. Write in second person ("You write..."). Be specific and concrete —
+reference actual patterns you observed rather than generic descriptions. Cover how the
+style varies by context (quick replies vs longer emails, familiar vs unfamiliar recipients).
+
+Do NOT include example phrases or quoted text from the emails.`;
+
+/**
+ * Analyze the user's last 100 sent emails across all accounts and infer
+ * their writing style using Claude Opus. Returns a style description that
+ * can be used as the stylePrompt.
+ */
+export async function inferStyleFromSentEmails(
+  gmailClient?: GmailClient | null,
+  gmailAccountId?: string,
+): Promise<string> {
+  // Fetch recent sent emails from local DB (all accounts)
+  let emails = getRecentSentEmailsWithBody(100);
+
+  // Gmail fallback if we have very few local sent emails
+  if (emails.length < 20 && gmailClient) {
+    log.info(`[StyleInference] Only ${emails.length} local sent emails, fetching from Gmail`);
+    try {
+      const gmailRows = await fetchAndCacheSentEmails(
+        gmailClient,
+        "from:me in:sent",
+        gmailAccountId ?? "default",
+        100,
+      );
+      // Merge, dedup by ID
+      const seenIds = new Set(emails.map((e) => e.id));
+      for (const row of gmailRows) {
+        if (!seenIds.has(row.id)) {
+          emails.push(row);
+          seenIds.add(row.id);
+        }
+      }
+      // Re-sort by date DESC and limit
+      emails = emails
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+        .slice(0, 100);
+    } catch (err) {
+      log.warn({ err }, "[StyleInference] Gmail fallback failed");
+    }
+  }
+
+  if (emails.length === 0) {
+    throw new Error("No sent emails found to analyze writing style");
+  }
+
+  log.info(`[StyleInference] Analyzing ${emails.length} sent emails with Opus`);
+
+  // Build the email samples for the prompt
+  const emailSamples = emails
+    .map((e) => {
+      // Use pre-extracted plain text when available, otherwise strip HTML first
+      const plainText = e.body_text ?? stripHtmlForSearch(e.body);
+      // Strip quoted/forwarded content so we only analyze the user's own writing
+      const text = stripQuotedContent(plainText);
+      const truncated = truncateBody(text, 300);
+      const type = e.is_reply ? "reply" : "new";
+      return `---\nTo: ${e.to_address ?? "unknown"}\nSubject: ${e.subject}\nDate: ${e.date}\nType: ${type}\n\n${truncated}\n---`;
+    })
+    .join("\n\n");
+
+  const response = await createMessage(
+    {
+      model: "claude-opus-4-20250514",
+      max_tokens: 1024,
+      system: [{ type: "text", text: STYLE_INFERENCE_PROMPT }],
+      messages: [
+        {
+          role: "user",
+          content: `Here are my ${emails.length} most recent sent emails. Analyze my writing style:\n\n${emailSamples}`,
+        },
+      ],
+    },
+    { caller: "style-inference" },
+  );
+
+  const textBlock = response.content.find((block) => block.type === "text");
+  if (!textBlock || textBlock.type !== "text") {
+    throw new Error("No text response from style inference");
+  }
+
+  return textBlock.text.trim();
 }

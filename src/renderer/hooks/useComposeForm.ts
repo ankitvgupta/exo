@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
 import { useAppStore } from "../store";
 import { useSignature } from "./useSignature";
+import { formatAlias } from "../utils/alias-formatting";
 import type { ComposeAttachmentItem } from "../components/AttachmentList";
 import type {
   ReplyInfo,
@@ -14,11 +15,6 @@ import type {
 function extractBareEmail(addr: string): string {
   const match = addr.match(/<([^>]+)>$/);
   return match ? match[1] : addr;
-}
-
-/** Format a SendAsAlias as "Display Name <email>" or just "email". */
-function formatAlias(alias: SendAsAlias): string {
-  return alias.displayName ? `${alias.displayName} <${alias.email}>` : alias.email;
 }
 
 /** Build a name map from an array of potentially formatted addresses. */
@@ -141,6 +137,13 @@ export function useComposeForm({
   // Tracks the user's explicit selection; undefined means "use derived default"
   const [fromOverride, setFromOverride] = useState<string | undefined>(undefined);
 
+  // Account display name acts as the fallback for aliases without their own
+  // (common for Workspace primaries, where the name lives on the OAuth profile).
+  // Subscribed so derivedFrom and FromSelector dropdown labels stay current.
+  const accountDisplayName = useAppStore(
+    (state) => state.accounts.find((a) => a.id === accountId)?.displayName,
+  );
+
   // Fetch aliases on mount (and when account changes)
   useEffect(() => {
     setFromOverride(undefined);
@@ -190,14 +193,14 @@ export function useComposeForm({
       const matchingAlias = sendAsAliases.find((a) =>
         allRecipients.includes(a.email.toLowerCase()),
       );
-      if (matchingAlias) return formatAlias(matchingAlias);
+      if (matchingAlias) return formatAlias(matchingAlias, accountDisplayName);
     }
 
     const defaultAlias = sendAsAliases.find((a) => a.isDefault);
-    if (defaultAlias) return formatAlias(defaultAlias);
+    if (defaultAlias) return formatAlias(defaultAlias, accountDisplayName);
 
-    return formatAlias(sendAsAliases[0]);
-  }, [sendAsAliases, replyInfo, replyEmail]);
+    return formatAlias(sendAsAliases[0], accountDisplayName);
+  }, [sendAsAliases, replyInfo, replyEmail, accountDisplayName]);
 
   // Effective "from": user's explicit pick wins, otherwise use derived default
   const from = fromOverride ?? derivedFrom;
@@ -292,11 +295,19 @@ export function useComposeForm({
   }, []);
 
   // --- @mention → add to Cc ---
-  const handleMentionAddToCc = useCallback((email: string) => {
+  const handleMentionAddToCc = useCallback((email: string, name?: string) => {
     setCc((prev) => {
       if (prev.some((e) => e.toLowerCase() === email.toLowerCase())) return prev;
       return [...prev, email];
     });
+    const trimmedName = name?.trim();
+    if (trimmedName) {
+      setNameMap((prev) => {
+        const key = email.toLowerCase();
+        if (prev.get(key) === trimmedName) return prev;
+        return new Map(prev).set(key, trimmedName);
+      });
+    }
     setShowCcBcc(true);
   }, []);
 
@@ -493,6 +504,7 @@ export function useComposeForm({
     sendAsAliases,
     from,
     setFrom,
+    accountDisplayName,
 
     // Content state
     subject,

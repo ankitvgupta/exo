@@ -36,7 +36,7 @@ interface ComposeEditorProps {
   className?: string;
   autoFocus?: boolean;
   /** Called when a contact is selected via @mention or +mention in the body */
-  onAddToCc?: (email: string) => void;
+  onAddToCc?: (email: string, name?: string) => void;
   /** Recipient email for snippet variable resolution */
   recipientEmail?: string;
 }
@@ -692,7 +692,7 @@ export function ComposeEditor({
     currentAccountRecord?.displayName || currentAccountRecord?.email?.split("@")[0];
 
   // Ref keeps the latest onAddToCc without recreating extensions
-  const onAddToCcRef = useRef<((email: string) => void) | null>(onAddToCc ?? null);
+  const onAddToCcRef = useRef<((email: string, name?: string) => void) | null>(onAddToCc ?? null);
   useEffect(() => {
     onAddToCcRef.current = onAddToCc ?? null;
   }, [onAddToCc]);

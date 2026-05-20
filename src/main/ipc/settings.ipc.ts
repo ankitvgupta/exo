@@ -56,6 +56,7 @@ function getStore(): Store<{ config: Config }> {
           analysisPrompt: DEFAULT_ANALYSIS_PROMPT,
           draftPrompt: DEFAULT_DRAFT_PROMPT,
           enableSenderLookup: true,
+          syncDraftsToGmail: false,
           theme: "system" as const,
           inboxDensity: "compact" as const,
           undoSendDelay: 5,
@@ -64,12 +65,11 @@ function getStore(): Store<{ config: Config }> {
             enabled: true,
             priorities: ["high", "medium", "low"],
           },
-          posthog: {
-            enabled: false,
-            sessionReplay: false,
-          },
+          // posthog intentionally omitted from defaults — getConfig() applies
+          // a version-aware default so pre-existing installs (configVersion < 2)
+          // are not silently opted in to analytics + session replay.
           keyboardBindings: "superhuman" as const,
-          configVersion: 1,
+          configVersion: 2,
         },
       },
     });
@@ -93,6 +93,24 @@ export function getConfig(): Config {
       config.autoDraft.priorities.push("low");
     }
     config.configVersion = 1;
+    getStore().set("config", config);
+  }
+
+  // v2 migration: set posthog defaults explicitly so we can distinguish a brand-new
+  // install (where we opt in to analytics + session replay) from a pre-existing
+  // install with no persisted posthog choice (where we opt out, to avoid silently
+  // enabling session replay on upgrade for users who never saw the wizard step).
+  if ((config.configVersion ?? 0) < 2) {
+    if (!config.posthog) {
+      config.posthog = { enabled: false, sessionReplay: false };
+    }
+    config.configVersion = 2;
+    getStore().set("config", config);
+  } else if (!config.posthog) {
+    // Fresh install at configVersion >= 2 with no persisted posthog (e.g., user
+    // hasn't completed the wizard yet) — opt in by default. Wizard will overwrite
+    // with the user's actual choice.
+    config.posthog = { enabled: true, sessionReplay: true };
     getStore().set("config", config);
   }
 
@@ -509,8 +527,10 @@ export function registerSettingsIpc(): void {
           analysisChanged || draftChanged || archiveReadyChanged || agentDrafterChanged;
 
         if (anyChanged) {
-          // Full clear to reset all tracking sets, then re-process
-          prefetchService.clear();
+          // Clear tracking sets to re-process; use clearForRerun so the DB-seeded
+          // processedDrafts doesn't re-block the emails whose pending drafts/traces
+          // we just cleared above.
+          prefetchService.clearForRerun();
 
           // Notify renderer to refresh emails (stale analysis/draft data is gone)
           for (const win of BrowserWindow.getAllWindows()) {
@@ -571,6 +591,27 @@ export function registerSettingsIpc(): void {
       }
     },
   );
+
+  // Infer writing style from sent emails using Claude Opus
+  ipcMain.handle("style:infer", async (): Promise<IpcResponse<string>> => {
+    try {
+      const { inferStyleFromSentEmails } = await import("../services/style-profiler");
+      const { getEmailSyncService } = await import("./sync.ipc");
+      // Use any available gmail client for fallback (style is cross-account)
+      const syncService = getEmailSyncService();
+      const { getAccounts: getDbAccounts } = await import("../db");
+      const accounts = getDbAccounts();
+      const firstAccountId = accounts.length > 0 ? accounts[0].id : undefined;
+      const gmailClient = firstAccountId ? syncService.getClientForAccount(firstAccountId) : null;
+      const result = await inferStyleFromSentEmails(gmailClient, firstAccountId);
+      return { success: true, data: result };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
+  });
 
   // Get EA config
   ipcMain.handle("settings:get-ea", async (): Promise<IpcResponse<EAConfig>> => {

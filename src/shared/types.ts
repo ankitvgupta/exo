@@ -375,6 +375,7 @@ export const ConfigSchema = z.object({
   autoDraft: AutoDraftConfigSchema.optional(),
   agentDrafterPrompt: z.string().optional(),
   enableSenderLookup: z.boolean().default(true),
+  syncDraftsToGmail: z.boolean().default(false),
   theme: z.enum(["light", "dark", "system"]).default("system"),
   inboxDensity: z.enum(["default", "compact"]).default("compact"),
   undoSendDelay: z.number().min(0).max(30).default(5), // seconds; 0 = disabled
@@ -393,10 +394,14 @@ export const ConfigSchema = z.object({
   mcpServers: z.record(z.string(), McpServerConfigSchema).optional(),
   cliTools: z.array(CliToolConfigSchema).optional(),
   extraPathDirs: z.array(z.string()).optional(),
+  // Defaults intentionally not declared here: ConfigSchema is only used for
+  // type inference + validation. Runtime defaults are applied in getConfig()
+  // because they depend on configVersion (legacy installs opt out, fresh
+  // installs opt in).
   posthog: z
     .object({
-      enabled: z.boolean().default(false),
-      sessionReplay: z.boolean().default(false),
+      enabled: z.boolean(),
+      sessionReplay: z.boolean(),
     })
     .optional(),
   keyboardBindings: z.enum(["superhuman", "gmail"]).default("superhuman"),
@@ -721,6 +726,7 @@ export type IpcChannels = {
 
   // Style operations
   "style:get-context": { toAddress: string };
+  "style:infer": void;
 
   // Settings operations
   "settings:get": void;

@@ -191,6 +191,7 @@ const api = {
   style: {
     getContext: (toAddress: string): Promise<unknown> =>
       ipcRenderer.invoke("style:get-context", { toAddress }),
+    infer: (): Promise<unknown> => ipcRenderer.invoke("style:infer"),
   },
 
   // Contact suggestions (for email autocomplete)
