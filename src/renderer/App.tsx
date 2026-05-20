@@ -725,12 +725,12 @@ export default function App() {
             setSendAndArchive(result.data.sendAndArchive);
           }
           // Initialize PostHog analytics — API key is baked in at build time,
-          // user can only toggle enabled/sessionReplay in settings
+          // user can only toggle enabled/sessionReplay in settings.
+          // getConfig() guarantees posthog is set (legacy installs → off,
+          // fresh installs → on), so the `?? false` is just a defensive fallback.
           const phConfig = result.data.posthog;
           const apiKey = import.meta.env.VITE_POSTHOG_API_KEY;
           const host = import.meta.env.VITE_POSTHOG_HOST || "https://us.i.posthog.com";
-          // Default to disabled for existing users upgrading (no persisted config).
-          // New users opt in during onboarding (SetupWizard defaults to enabled).
           const enabled = phConfig?.enabled ?? false;
           if (apiKey) {
             initPostHog({

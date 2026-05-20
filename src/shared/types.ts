@@ -395,10 +395,14 @@ export const ConfigSchema = z.object({
   mcpServers: z.record(z.string(), McpServerConfigSchema).optional(),
   cliTools: z.array(CliToolConfigSchema).optional(),
   extraPathDirs: z.array(z.string()).optional(),
+  // Defaults intentionally not declared here: ConfigSchema is only used for
+  // type inference + validation. Runtime defaults are applied in getConfig()
+  // because they depend on configVersion (legacy installs opt out, fresh
+  // installs opt in).
   posthog: z
     .object({
-      enabled: z.boolean().default(false),
-      sessionReplay: z.boolean().default(false),
+      enabled: z.boolean(),
+      sessionReplay: z.boolean(),
     })
     .optional(),
   keyboardBindings: z.enum(["superhuman", "gmail"]).default("superhuman"),

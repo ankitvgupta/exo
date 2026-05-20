@@ -1680,6 +1680,7 @@ function InlineReply({
                   aliases={form.sendAsAliases}
                   selected={form.from}
                   onChange={form.setFrom}
+                  fallbackDisplayName={form.accountDisplayName}
                 />
               </div>
             )}
@@ -2166,6 +2167,7 @@ function NewEmailCompose({
                 aliases={form.sendAsAliases}
                 selected={form.from}
                 onChange={form.setFrom}
+                fallbackDisplayName={form.accountDisplayName}
               />
             </>
           )}
