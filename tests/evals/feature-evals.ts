@@ -25,6 +25,30 @@ import { join } from "path";
 import { judge, type JudgeResult } from "./scoring/llm-judge";
 import { runDraftGeneratorFixture } from "./features/draft-generator";
 
+// .env.local loader — feature-evals needs ANTHROPIC_API_KEY at runtime.
+// Claude Code scrubs the env from subprocesses so .env.local is the
+// canonical source. No new deps.
+function loadEnvFile(path: string): void {
+  if (!existsSync(path)) return;
+  for (const line of readFileSync(path, "utf8").split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const eq = trimmed.indexOf("=");
+    if (eq < 0) continue;
+    const key = trimmed.slice(0, eq).trim();
+    let value = trimmed.slice(eq + 1).trim();
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+    if (!(key in process.env)) process.env[key] = value;
+  }
+}
+
+loadEnvFile(join(import.meta.dirname, "..", "..", ".env.local"));
+
 // ============================================================
 // Feature registry
 // ============================================================

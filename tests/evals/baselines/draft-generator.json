@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "feature": "draft-generator",
+  "generatedAt": "2026-05-20T06:12:13.218Z",
+  "scores": {
+    "dg-1-direct-question": {
+      "score": 4,
+      "reason": "Commits to the Tuesday deadline but completely ignores the section 3 / staffing focus the sender called out, which is a notable gap per the rubric."
+    },
+    "dg-2-scheduling": {
+      "score": 3,
+      "reason": "Fails to pick one specific slot (just echoes both options back), doesn't confirm the 30-minute duration, and doesn't mention the integration work context — essentially a vague 'sounds good, send me a time' response that defeats the purpose."
+    },
+    "dg-3-decline": {
+      "score": 2,
+      "reason": "The draft commits positively on the user's behalf ('i'd probably be up for it') without knowing their availability, asks about time of day for a fixed event (wrong framing), and doesn't decline — violating the core rubric requirement for a low-priority ask that should politely decline."
+    }
+  }
+}
