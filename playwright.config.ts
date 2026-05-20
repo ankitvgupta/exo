@@ -89,6 +89,16 @@ export default defineConfig({
       workers: 1,
     },
     {
+      name: "soak",
+      testDir: "./tests/soak",
+      testMatch: /.*\.spec\.ts/,
+      // Layer 12 — long-running soak test. Default duration 60min, but
+      // dev can override via EXO_SOAK_DURATION_MS for shorter sanity
+      // runs. Runs on `main` only (too slow for every PR).
+      fullyParallel: false,
+      workers: 1,
+    },
+    {
       name: "real-gmail-full-sync",
       testDir: "./tests/real-gmail",
       testMatch: /.*\.full-sync\.spec\.ts/,
