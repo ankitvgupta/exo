@@ -133,12 +133,13 @@ export function getActiveLogPath(): string | null {
 // users always have *some* log file to attach to bug reports.
 function resolveWritableLogDir(): string {
   const primary = getLogDir();
+  const probe = join(primary, ".write-probe");
   try {
     mkdirSync(primary, { recursive: true });
-    const probe = join(primary, ".write-probe");
+    // Writability is determined by writeFileSync — once it succeeds the dir is
+    // good. Probe cleanup happens in the finally block so a failing unlink
+    // (e.g. EPERM) does not trigger a false-positive fallback.
     writeFileSync(probe, "");
-    unlinkSync(probe);
-    return primary;
   } catch (primaryErr) {
     const fallback = join(tmpdir(), "exo-logs");
     // eslint-disable-next-line no-console
@@ -154,7 +155,16 @@ function resolveWritableLogDir(): string {
       console.error(`[logger] Fallback log dir also failed (${fallback}):`, fallbackErr);
     }
     return fallback;
+  } finally {
+    // Best-effort probe cleanup. If unlink fails the orphaned empty file is
+    // harmless — cleanOldLogs only touches *.log entries.
+    try {
+      unlinkSync(probe);
+    } catch {
+      /* best effort */
+    }
   }
+  return primary;
 }
 
 function initLogger(): Logger {
