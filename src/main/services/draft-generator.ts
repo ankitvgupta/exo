@@ -22,12 +22,12 @@ const log = createLogger("draft-generator");
 // lookup is actually invoked would crash with
 // `'electron' does not provide an export named 'BrowserWindow'`.
 // Mirrors the pattern in email-analyzer.ts.
-let _getEnrichmentBySender:
-  | typeof import("../extensions/enrichment-store").getEnrichmentBySender
-  | null = null;
+import type * as EnrichmentStoreModule from "../extensions/enrichment-store";
+type GetEnrichmentBySenderFn = typeof EnrichmentStoreModule.getEnrichmentBySender;
+let _getEnrichmentBySender: GetEnrichmentBySenderFn | null = null;
 async function getEnrichmentBySenderLazy(
-  ...args: Parameters<typeof import("../extensions/enrichment-store").getEnrichmentBySender>
-): Promise<ReturnType<typeof import("../extensions/enrichment-store").getEnrichmentBySender>> {
+  ...args: Parameters<GetEnrichmentBySenderFn>
+): Promise<ReturnType<GetEnrichmentBySenderFn>> {
   if (!_getEnrichmentBySender) {
     const mod = await import("../extensions/enrichment-store");
     _getEnrichmentBySender = mod.getEnrichmentBySender;
