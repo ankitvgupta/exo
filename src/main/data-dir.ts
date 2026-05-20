@@ -20,8 +20,9 @@
  * if they want isolation, but the default path is safe (separate from
  * .dev-data/, so production-mode dev runs aren't affected).
  */
-import { join } from "path";
+import { join, dirname } from "path";
 import { tmpdir } from "os";
+import { existsSync } from "fs";
 import { createRequire } from "module";
 
 const requireFromHere = createRequire(import.meta.url);
@@ -56,11 +57,31 @@ function tryLoadElectronToolkit(): { is: { dev: boolean } } | null {
   }
 }
 
+/**
+ * Walk up from `start` until we find a directory containing
+ * `package.json` (or run out of parents). Returns null if not found.
+ *
+ * Anchoring `.dev-data/` to the project root makes the path stable
+ * across launch methods: `npm run dev` gives app.getAppPath()=project,
+ * but Playwright's `_electron.launch({ args: [out/main/index.js] })`
+ * gives app.getAppPath()=out/main. Both should resolve to the same
+ * `.dev-data/`.
+ */
+function findProjectRoot(start: string): string | null {
+  let cur = start;
+  for (let i = 0; i < 8; i++) {
+    if (existsSync(join(cur, "package.json"))) return cur;
+    const parent = dirname(cur);
+    if (parent === cur) break;
+    cur = parent;
+  }
+  return null;
+}
+
 export function getDataDir(): string {
   const electron = tryLoadElectron();
   if (!electron) {
     // Non-Electron caller (eval runner, unit test under tsx, etc.).
-    // Use a stable scratch path so the caller can clean up if needed.
     return process.env.EXO_NON_ELECTRON_DATA_DIR ?? join(tmpdir(), "exo-non-electron-data");
   }
 
@@ -70,7 +91,9 @@ export function getDataDir(): string {
   if (!isDev) return electron.app.getPath("userData");
 
   if (!_devDataDir) {
-    _devDataDir = join(electron.app.getAppPath(), ".dev-data");
+    const appPath = electron.app.getAppPath();
+    const projectRoot = findProjectRoot(appPath) ?? appPath;
+    _devDataDir = join(projectRoot, ".dev-data");
   }
   return _devDataDir;
 }

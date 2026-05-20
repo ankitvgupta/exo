@@ -47,7 +47,11 @@ test.describe("Real-Gmail Layer 9a — cached .dev-data", () => {
     console.log(`[real-gmail 9a] runId=${runId}`);
 
     // Launch the real (non-demo) dev build pointing at the test account.
-    // .dev-data/ should already hold OAuth tokens from previous dev runs.
+    // .dev-data/ should already hold OAuth tokens from a prior
+    // `scripts/setup-dev-data.mjs` run. The data-dir module walks up from
+    // app.getAppPath() to find the project root, so .dev-data/ is found
+    // even though Playwright passes out/main/index.js (which makes
+    // app.getAppPath() return out/main, not the project root).
     app = await electron.launch({
       args: [path.join(__dirname, "..", "..", "out", "main", "index.js")],
       env: {
@@ -57,7 +61,8 @@ test.describe("Real-Gmail Layer 9a — cached .dev-data", () => {
         // account. EXO_DEMO_MODE intentionally unset.
         EXO_DEMO_MODE: "",
         // Disable PrefetchService background analysis during the test
-        // run so the test isn't entangled with AI calls.
+        // run so the test isn't entangled with AI calls (Layer 8 evals
+        // cover AI behavior separately).
         EXO_DISABLE_PREFETCH: "true",
       },
       timeout: 30_000,
