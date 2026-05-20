@@ -1,0 +1,23 @@
+{
+  "id": "dg-1-direct-question",
+  "description": "A direct question with a specific deadline — draft should answer or commit to a time, not deflect.",
+  "input": {
+    "email": {
+      "id": "dg-1-msg",
+      "thread_id": "dg-1-thread",
+      "from": "Alice Chen <alice.chen@acme.test>",
+      "to": "you@example.test",
+      "subject": "Can you review the Q3 plan by Tuesday?",
+      "snippet": "Could you take a pass at the Q3 plan doc before Tuesday's exec sync?",
+      "body": "Hey,\n\nCould you take a pass at the Q3 plan doc before Tuesday's exec sync? I'm specifically looking for feedback on the staffing assumptions in section 3.\n\nDoc: https://example.test/q3-plan\n\nThanks!\nAlice",
+      "date": "2026-05-18T15:00:00Z",
+      "label_ids": ["INBOX", "UNREAD"]
+    },
+    "analysis": {
+      "needs_reply": true,
+      "priority": "high",
+      "reason": "Direct request with a Tuesday deadline"
+    }
+  },
+  "rubric": "A good draft for this email:\n- Acknowledges the request and the Tuesday deadline (either commits, declines, or proposes an alternative)\n- Specifically addresses the section 3 / staffing focus the sender called out, OR explicitly says they will\n- Is concise (under ~100 words for the body) — not a long-winded essay\n- Has a natural tone, not robotic or over-formal for what looks like a peer interaction\n- Does NOT defer scheduling to an assistant (no EA in this fixture's config)\n- Does NOT invent details (e.g. doesn't claim to have already read the doc)\n\nBad outputs:\n- Vague non-committal hedging without acknowledging the deadline\n- Ignoring the section 3 focus entirely\n- Adding random salutations / sign-offs that read AI-generated"
+}

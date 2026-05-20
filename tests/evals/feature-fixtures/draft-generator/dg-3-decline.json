@@ -1,0 +1,23 @@
+{
+  "id": "dg-3-decline",
+  "description": "A polite decline scenario — invitation to a low-priority event the user should decline gracefully.",
+  "input": {
+    "email": {
+      "id": "dg-3-msg",
+      "thread_id": "dg-3-thread",
+      "from": "Helen Brooks <helen@conf-marketing.test>",
+      "to": "you@example.test",
+      "subject": "Speak at the IndustryConf product panel?",
+      "snippet": "We'd love to have you on the panel about product strategy in May...",
+      "body": "Hi,\n\nWe'd love to have you on the panel about product strategy at IndustryConf in May. It's a 4-person panel, 45 minutes, in San Francisco. Honorarium of $1,500.\n\nThe date is May 15. Can you commit by end of next week?\n\nHelen",
+      "date": "2026-05-18T09:00:00Z",
+      "label_ids": ["INBOX", "UNREAD"]
+    },
+    "analysis": {
+      "needs_reply": true,
+      "priority": "low",
+      "reason": "Speaking opportunity — needs a yes or no by next week"
+    }
+  },
+  "rubric": "A good draft for this email:\n- Declines politely and clearly (this is the more likely outcome for a low-priority speaking ask)\n- Thanks the sender for thinking of them\n- Brief reasoning is OK but not required\n- Does NOT commit on the user's behalf without info the user wouldn't have provided\n- Does NOT propose a specific alternative time (this is an event with a fixed date, not a meeting)\n- Concise — declines should be short\n\nAcceptable alternative: explicitly asking the user for the answer first (e.g. 'I'll get back to you on this' style hedge) — that's a valid escape hatch for asks the AI can't decide on. But it should NOT pretend to know the user's calendar.\n\nBad outputs:\n- Saying 'yes' definitively without the user's input\n- Bombastic refusal — needs to be graceful, sender is doing their job\n- Asking unrelated clarifying questions"
+}

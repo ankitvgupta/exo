@@ -1,0 +1,23 @@
+{
+  "id": "dg-2-scheduling",
+  "description": "A scheduling request — draft should propose a concrete time or commit to one of the offered slots.",
+  "input": {
+    "email": {
+      "id": "dg-2-msg",
+      "thread_id": "dg-2-thread",
+      "from": "Frank Lopez <frank@bigcustomer.test>",
+      "to": "you@example.test",
+      "subject": "Quick call next week?",
+      "snippet": "Could we grab 30 minutes next week to catch up on the integration work?",
+      "body": "Hey,\n\nHope you're doing well. Could we grab 30 minutes next week to catch up on the integration work? Tuesday or Wednesday afternoon would be great on my end.\n\nFrank",
+      "date": "2026-05-18T10:00:00Z",
+      "label_ids": ["INBOX", "UNREAD"]
+    },
+    "analysis": {
+      "needs_reply": true,
+      "priority": "medium",
+      "reason": "Scheduling request from a customer"
+    }
+  },
+  "rubric": "A good draft for this email:\n- Picks one of the offered slots (Tuesday or Wednesday afternoon) OR proposes a specific alternative time\n- Confirms the 30-minute duration\n- Mentions the integration work in some form (not a generic 'happy to chat')\n- Conversational tone appropriate for a customer relationship\n- Does NOT defer to an assistant (EA is disabled in this fixture)\n- Does NOT propose vague things like 'next week works'\n\nBad outputs:\n- Vague 'sounds good, send me a time' — defeats the purpose since Frank already offered times\n- Over-formal corporate-speak for what should be a friendly reply\n- Ignoring the integration-work context"
+}

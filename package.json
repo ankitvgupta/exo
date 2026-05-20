@@ -38,7 +38,8 @@
     "lint:fix": "eslint src/ --fix",
     "format": "prettier --write 'src/**/*.{ts,tsx}'",
     "format:check": "prettier --check 'src/**/*.{ts,tsx}'",
-    "eval": "npx tsx tests/evals/runner.ts"
+    "eval": "npx tsx tests/evals/runner.ts",
+    "eval:features": "npx tsx tests/evals/feature-evals.ts"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.37",
