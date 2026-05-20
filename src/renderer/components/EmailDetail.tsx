@@ -2229,16 +2229,22 @@ class EmailDetailErrorBoundary extends React.Component<
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     console.error("[EmailDetail] Render crash caught by error boundary:", error.message);
-    const { selectedEmailId, selectedThreadId, currentAccountId, currentSplitId } =
-      useAppStore.getState();
-    captureException(error, {
-      component: "EmailDetailErrorBoundary",
-      componentStack: errorInfo.componentStack,
-      selectedEmailId,
-      selectedThreadId,
-      currentAccountId,
-      currentSplitId,
-    });
+    // Never let exception-reporting throw out of the error handler itself —
+    // React doesn't gracefully handle escapes from componentDidCatch.
+    try {
+      const { selectedEmailId, selectedThreadId, currentAccountId, currentSplitId } =
+        useAppStore.getState();
+      captureException(error, {
+        component: "EmailDetailErrorBoundary",
+        componentStack: errorInfo.componentStack,
+        selectedEmailId,
+        selectedThreadId,
+        currentAccountId,
+        currentSplitId,
+      });
+    } catch (reportErr) {
+      console.error("[EmailDetail] Failed to report error to PostHog:", reportErr);
+    }
     // Clear selection state so the user can recover by clicking another email
     useAppStore.setState({
       isInlineReplyOpen: false,
