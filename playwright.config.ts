@@ -53,5 +53,15 @@ export default defineConfig({
       fullyParallel: false,
       workers: 1,
     },
+    {
+      name: "migrations",
+      testDir: "./tests/migrations",
+      testMatch: /.*\.spec\.ts/,
+      // DB migration replay + schema symmetry checks. Single worker because
+      // each test sets up its own in-memory DB — no shared state, but no
+      // benefit to parallelism either.
+      fullyParallel: false,
+      workers: 1,
+    },
   ],
 });
