@@ -24,6 +24,7 @@ import { readFileSync, readdirSync, writeFileSync, existsSync, mkdirSync } from 
 import { join } from "path";
 import { judge, type JudgeResult } from "./scoring/llm-judge";
 import { runDraftGeneratorFixture } from "./features/draft-generator";
+import { runCalendaringFixture } from "./features/calendaring-agent";
 
 // .env.local loader — feature-evals needs ANTHROPIC_API_KEY at runtime.
 // Claude Code scrubs the env from subprocesses so .env.local is the
@@ -65,6 +66,7 @@ type FeatureRunner = (fixtureInput: unknown, fixtureId: string) => Promise<strin
 
 const FEATURES: Record<string, FeatureRunner> = {
   "draft-generator": runDraftGeneratorFixture,
+  "calendaring-agent": runCalendaringFixture,
 };
 
 /**
@@ -74,7 +76,6 @@ const FEATURES: Record<string, FeatureRunner> = {
  * list into FEATURES.
  */
 const TODO_FEATURES = [
-  "calendaring-agent",
   "sender-lookup",
   "style-profiler",
   "archive-ready-analyzer",

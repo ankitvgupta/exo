@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "feature": "calendaring-agent",
+  "generatedAt": "2026-05-20T06:14:31.734Z",
+  "scores": {
+    "ca-1-explicit-scheduling": {
+      "score": 9,
+      "reason": "Correctly identifies hasSchedulingContext as true and captures the 30-minute duration, but doesn't explicitly mention Tuesday/Wednesday afternoon as the specific proposed times."
+    },
+    "ca-2-not-scheduling": {
+      "score": 10,
+      "reason": "Correctly identifies no scheduling context, recognizing EOD as a deadline rather than a meeting request"
+    },
+    "ca-3-ambiguous-time": {
+      "score": 10,
+      "reason": "Correctly identifies hasSchedulingContext as true, notes the vague 'sometime' with no specific time offered, and reasoning is coherent and consistent with all other fields."
+    }
+  }
+}
