@@ -1277,15 +1277,28 @@ function InlineReply({
   // regenerating via the right pane). When the draft's createdAt changes, push the new
   // content into the editor. Without this, the agent updates the DB + Gmail but the
   // inline reply keeps showing the previous body. Mirrors the watcher in ComposeNewEmail.
+  //
+  // A ref tracks the last-seen createdAt so we never accidentally fire on a
+  // mount-time undefined→defined transition (e.g. watchedDraftEmailId resolves
+  // after mount). Refs also keep the latest form callbacks reachable without
+  // declaring every form method in the deps array; we intentionally only react
+  // to createdAt changes (the signal that an external save happened).
   const externalDraft = useAppStore((s) =>
     watchedDraftEmailId ? s.emails.find((e) => e.id === watchedDraftEmailId)?.draft : undefined,
   );
   const externalDraftCreatedAt = externalDraft?.createdAt;
-  const [lastSeenDraftCreatedAt, setLastSeenDraftCreatedAt] = useState(externalDraftCreatedAt);
+  const lastSeenDraftCreatedAtRef = useRef(externalDraftCreatedAt);
   useEffect(() => {
     if (!externalDraft?.body) return;
-    if (externalDraftCreatedAt === lastSeenDraftCreatedAt) return;
-    setLastSeenDraftCreatedAt(externalDraftCreatedAt);
+    if (externalDraftCreatedAt === lastSeenDraftCreatedAtRef.current) return;
+    // First sight of a draft (lastSeen undefined): if the editor already shows this
+    // body — initialized via restoredDraft on mount — just record createdAt and skip
+    // the push so we don't clobber any in-progress edits with the same content.
+    if (lastSeenDraftCreatedAtRef.current === undefined && form.bodyText === externalDraft.body) {
+      lastSeenDraftCreatedAtRef.current = externalDraftCreatedAt;
+      return;
+    }
+    lastSeenDraftCreatedAtRef.current = externalDraftCreatedAt;
     const newHtml = draftBodyToHtml(externalDraft.body);
     setEditorInitialContent(newHtml);
     form.handleEditorChange(newHtml, externalDraft.body);
@@ -1299,6 +1312,9 @@ function InlineReply({
     if (externalDraft.bcc && JSON.stringify(externalDraft.bcc) !== JSON.stringify(form.bcc)) {
       form.setBcc(externalDraft.bcc);
     }
+    // Deps intentionally limited to createdAt — the signal that an external save
+    // happened. Other values (form, onContentChange, externalDraft) are read from
+    // the latest render closure when the effect fires.
   }, [externalDraftCreatedAt]);
 
   const handleRefine = useCallback(async () => {
