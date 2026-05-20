@@ -89,6 +89,17 @@ export default defineConfig({
       workers: 1,
     },
     {
+      name: "agentic",
+      testDir: "./tests/agentic",
+      testMatch: /.*\.spec\.ts/,
+      // Tests for the agentic-verify driver helpers + self-tests.
+      // Pure-logic tests run without Electron; driver-behavior tests
+      // (if/when added) launch a subprocess. Single worker — these
+      // touch shared port 9222 when they do launch.
+      fullyParallel: false,
+      workers: 1,
+    },
+    {
       name: "soak",
       testDir: "./tests/soak",
       testMatch: /.*\.spec\.ts/,

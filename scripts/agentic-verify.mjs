@@ -31,6 +31,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execSync } from "node:child_process";
 import { query } from "@anthropic-ai/claude-agent-sdk";
+import { extractFinalJson, summarizeToolCalls, renderReportMd } from "./lib/agentic-helpers.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(__dirname, "..");
@@ -223,24 +224,6 @@ function killElectron(electron) {
 }
 
 // ============================================================
-// Parse final JSON from agent output
-// ============================================================
-
-function extractFinalJson(text) {
-  // Find the LAST JSON object in the text. Agents sometimes prefix with prose.
-  const matches = text.match(/\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/g) ?? [];
-  for (let i = matches.length - 1; i >= 0; i--) {
-    try {
-      const parsed = JSON.parse(matches[i]);
-      if (parsed && typeof parsed === "object" && "verdict" in parsed) return parsed;
-    } catch {
-      // try previous
-    }
-  }
-  return null;
-}
-
-// ============================================================
 // Main
 // ============================================================
 
@@ -405,44 +388,6 @@ async function main() {
     console.error(`\nFATAL — see ${LOG_PATH}`);
     process.exit(1);
   }
-}
-
-function summarizeToolCalls(calls) {
-  const counts = new Map();
-  for (const c of calls) counts.set(c.name, (counts.get(c.name) ?? 0) + 1);
-  return [...counts.entries()].map(([name, n]) => `${name}×${n}`).join(", ");
-}
-
-function renderReportMd(report) {
-  const lines = [];
-  lines.push(`# Agentic verification — ${report.mode}`);
-  lines.push("");
-  lines.push(`- **SHA**: \`${report.sha}\``);
-  lines.push(`- **Verdict**: ${report.verdict}`);
-  lines.push(`- **Anomalies**: ${report.anomalies.length}`);
-  lines.push(`- **Actions**: ${report.actions} (${report.tool_calls_summary ?? "—"})`);
-  if (report.cost_usd !== null && report.cost_usd !== undefined) {
-    lines.push(`- **Cost**: $${report.cost_usd.toFixed(4)}`);
-  }
-  if (report.turns !== null && report.turns !== undefined) {
-    lines.push(`- **Turns**: ${report.turns}`);
-  }
-  lines.push("");
-  lines.push("## Summary");
-  lines.push("");
-  lines.push(report.summary || "(no summary)");
-  lines.push("");
-  if (report.anomalies.length > 0) {
-    lines.push("## Anomalies");
-    lines.push("");
-    for (const a of report.anomalies) {
-      const sev = a.severity ? `[${a.severity}] ` : "";
-      lines.push(`- **${sev}${a.type ?? "unknown"}** — ${a.description ?? "(no description)"}`);
-      if (a.repro) lines.push(`  - Repro: ${a.repro}`);
-    }
-    lines.push("");
-  }
-  return lines.join("\n");
 }
 
 main();
