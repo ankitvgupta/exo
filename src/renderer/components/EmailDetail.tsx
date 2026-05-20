@@ -33,7 +33,7 @@ import { THREAD_NAV_EVENT } from "../hooks/useKeyboardShortcuts";
 import type { ComposeFormState } from "../hooks/useComposeForm";
 import { ComposeToolbar } from "./ComposeToolbar";
 import { FromSelector } from "./FromSelector";
-import { trackEvent } from "../services/posthog";
+import { trackEvent, captureException } from "../services/posthog";
 import { draftBodyToHtml } from "../../shared/draft-utils";
 import { AnalysisPrioritySection } from "./AnalysisPrioritySection";
 
@@ -2227,8 +2227,18 @@ class EmailDetailErrorBoundary extends React.Component<
     return { hasError: true };
   }
 
-  componentDidCatch(error: Error) {
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     console.error("[EmailDetail] Render crash caught by error boundary:", error.message);
+    const { selectedEmailId, selectedThreadId, currentAccountId, currentSplitId } =
+      useAppStore.getState();
+    captureException(error, {
+      component: "EmailDetailErrorBoundary",
+      componentStack: errorInfo.componentStack,
+      selectedEmailId,
+      selectedThreadId,
+      currentAccountId,
+      currentSplitId,
+    });
     // Clear selection state so the user can recover by clicking another email
     useAppStore.setState({
       isInlineReplyOpen: false,
