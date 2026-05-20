@@ -1458,8 +1458,19 @@ function InlineReply({
       response !== "undo-queued" &&
       response.success
     ) {
+      // Optimistically remove the thread from the local store. The IPC handler
+      // only broadcasts sync:emails-removed in the online-success path, so we
+      // can't rely on it for demo mode, offline mode, or the queued path.
+      const threadId = replyInfo.threadId;
+      const state = useAppStore.getState();
+      const threadEmailIds = state.emails
+        .filter((e) => e.threadId === threadId && e.accountId === accountId)
+        .map((e) => e.id);
+      if (threadEmailIds.length > 0) {
+        state.removeEmails(threadEmailIds);
+      }
       window.api.emails
-        .archiveThread(replyInfo.threadId, accountId)
+        .archiveThread(threadId, accountId)
         .catch((err: unknown) => console.error("[Send & Archive] archive failed", err));
     }
   }, [form, composeMode, replyToEmailId, replyInfo, isForward, onSend, accountId]);
