@@ -63,5 +63,41 @@ export default defineConfig({
       fullyParallel: false,
       workers: 1,
     },
+    {
+      name: "packaged",
+      testDir: "./tests/packaged",
+      testMatch: /.*\.spec\.ts/,
+      // Smoke tests against the packaged .app binary. Requires the
+      // EXO_PACKAGED_BINARY env var to point at the executable.
+      // Run via: npm run pack && EXO_PACKAGED_BINARY=... npx playwright test --project=packaged
+      // Single worker — Electron app instance is expensive to spin up,
+      // and these are smoke tests not parallel-load tests.
+      fullyParallel: false,
+      workers: 1,
+    },
+    {
+      name: "real-gmail",
+      testDir: "./tests/real-gmail",
+      testMatch: /.*\.spec\.ts/,
+      // Layer 9 — real-Gmail integration tests against exoemailtest@gmail.com.
+      // LOCAL ONLY. Gated by EXO_REAL_GMAIL_TEST=true so accidental
+      // invocations skip cleanly. Refresh-token-only auth from .env.local.
+      // Excludes full-sync (the real-gmail-full-sync project below is the
+      // explicit opt-in path for those slower tests).
+      testIgnore: /.*\.full-sync\.spec\.ts/,
+      fullyParallel: false,
+      workers: 1,
+    },
+    {
+      name: "real-gmail-full-sync",
+      testDir: "./tests/real-gmail",
+      testMatch: /.*\.full-sync\.spec\.ts/,
+      // Layer 9b — full-sync mode: wipes local state, OAuths from
+      // scratch, full sync from empty inbox. Slow (~4min), opt-in.
+      // EXO_DISABLE_PREFETCH=true is set in the test helper so the
+      // sync pipeline isn't entangled with PrefetchService LLM calls.
+      fullyParallel: false,
+      workers: 1,
+    },
   ],
 });
