@@ -1085,6 +1085,7 @@ function InlineReply({
   onBccChange,
   restoredDraft,
   draftEmailId,
+  watchedDraftEmailId,
   onDiscardDraft,
   nameMap: externalNameMap,
 }: {
@@ -1102,6 +1103,10 @@ function InlineReply({
   restoredDraft?: RestoredDraft | null;
   /** Email ID that owns the AI-generated draft (for refine/revert). */
   draftEmailId?: string;
+  /** Email ID to watch in the store for externally-saved drafts (e.g. agent regenerate).
+   *  Unlike draftEmailId, this is set even when the draft has status="edited" so that
+   *  the agent's update overrides the user's edits. */
+  watchedDraftEmailId?: string;
   /** Callback to discard the AI draft entirely. */
   onDiscardDraft?: () => void;
   /** Map of lowercase email → display name for rendering name chips */
@@ -1267,6 +1272,34 @@ function InlineReply({
   // is used to push new content into the editor, separate from bodyHtml which tracks
   // the latest editor value)
   const [editorInitialContent, setEditorInitialContent] = useState(restoredDraft?.bodyHtml || "");
+
+  // Watch the store for externally-saved drafts on the watched email (e.g. the agent
+  // regenerating via the right pane). When the draft's createdAt changes, push the new
+  // content into the editor. Without this, the agent updates the DB + Gmail but the
+  // inline reply keeps showing the previous body. Mirrors the watcher in ComposeNewEmail.
+  const externalDraft = useAppStore((s) =>
+    watchedDraftEmailId ? s.emails.find((e) => e.id === watchedDraftEmailId)?.draft : undefined,
+  );
+  const externalDraftCreatedAt = externalDraft?.createdAt;
+  const [lastSeenDraftCreatedAt, setLastSeenDraftCreatedAt] = useState(externalDraftCreatedAt);
+  useEffect(() => {
+    if (!externalDraft?.body) return;
+    if (externalDraftCreatedAt === lastSeenDraftCreatedAt) return;
+    setLastSeenDraftCreatedAt(externalDraftCreatedAt);
+    const newHtml = draftBodyToHtml(externalDraft.body);
+    setEditorInitialContent(newHtml);
+    form.handleEditorChange(newHtml, externalDraft.body);
+    onContentChange?.({ bodyHtml: newHtml, bodyText: externalDraft.body });
+    if (externalDraft.to && JSON.stringify(externalDraft.to) !== JSON.stringify(form.to)) {
+      form.setTo(externalDraft.to);
+    }
+    if (externalDraft.cc && JSON.stringify(externalDraft.cc) !== JSON.stringify(form.cc)) {
+      form.setCc(externalDraft.cc);
+    }
+    if (externalDraft.bcc && JSON.stringify(externalDraft.bcc) !== JSON.stringify(form.bcc)) {
+      form.setBcc(externalDraft.bcc);
+    }
+  }, [externalDraftCreatedAt]);
 
   const handleRefine = useCallback(async () => {
     if (!refineCritique.trim() || !draftEmailId || isRefining) return;
@@ -3634,6 +3667,7 @@ function EmailDetailInner({ isFullView = false }: EmailDetailProps) {
                         ? draftEmail.id
                         : undefined
                     }
+                    watchedDraftEmailId={draftEmail?.id}
                     onDiscardDraft={handleDiscardDraft}
                     nameMap={nameMap}
                   />
