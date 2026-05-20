@@ -25,6 +25,7 @@ import { join } from "path";
 import { judge, type JudgeResult } from "./scoring/llm-judge";
 import { runDraftGeneratorFixture } from "./features/draft-generator";
 import { runCalendaringFixture } from "./features/calendaring-agent";
+import { runArchiveReadyFixture } from "./features/archive-ready-analyzer";
 
 // .env.local loader — feature-evals needs ANTHROPIC_API_KEY at runtime.
 // Claude Code scrubs the env from subprocesses so .env.local is the
@@ -67,6 +68,7 @@ type FeatureRunner = (fixtureInput: unknown, fixtureId: string) => Promise<strin
 const FEATURES: Record<string, FeatureRunner> = {
   "draft-generator": runDraftGeneratorFixture,
   "calendaring-agent": runCalendaringFixture,
+  "archive-ready-analyzer": runArchiveReadyFixture,
 };
 
 /**
@@ -78,7 +80,6 @@ const FEATURES: Record<string, FeatureRunner> = {
 const TODO_FEATURES = [
   "sender-lookup",
   "style-profiler",
-  "archive-ready-analyzer",
   "analysis-edit-learner",
   "draft-edit-learner",
 ];
