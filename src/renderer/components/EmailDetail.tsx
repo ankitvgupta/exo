@@ -33,7 +33,7 @@ import { THREAD_NAV_EVENT } from "../hooks/useKeyboardShortcuts";
 import type { ComposeFormState } from "../hooks/useComposeForm";
 import { ComposeToolbar } from "./ComposeToolbar";
 import { FromSelector } from "./FromSelector";
-import { trackEvent } from "../services/posthog";
+import { trackEvent, captureException } from "../services/posthog";
 import { draftBodyToHtml } from "../../shared/draft-utils";
 import { AnalysisPrioritySection } from "./AnalysisPrioritySection";
 
@@ -1663,6 +1663,7 @@ function InlineReply({
                   aliases={form.sendAsAliases}
                   selected={form.from}
                   onChange={form.setFrom}
+                  fallbackDisplayName={form.accountDisplayName}
                 />
               </div>
             )}
@@ -2149,6 +2150,7 @@ function NewEmailCompose({
                 aliases={form.sendAsAliases}
                 selected={form.from}
                 onChange={form.setFrom}
+                fallbackDisplayName={form.accountDisplayName}
               />
             </>
           )}
@@ -2227,8 +2229,24 @@ class EmailDetailErrorBoundary extends React.Component<
     return { hasError: true };
   }
 
-  componentDidCatch(error: Error) {
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     console.error("[EmailDetail] Render crash caught by error boundary:", error.message);
+    // Never let exception-reporting throw out of the error handler itself —
+    // React doesn't gracefully handle escapes from componentDidCatch.
+    try {
+      const { selectedEmailId, selectedThreadId, currentAccountId, currentSplitId } =
+        useAppStore.getState();
+      captureException(error, {
+        component: "EmailDetailErrorBoundary",
+        componentStack: errorInfo.componentStack,
+        selectedEmailId,
+        selectedThreadId,
+        currentAccountId,
+        currentSplitId,
+      });
+    } catch (reportErr) {
+      console.error("[EmailDetail] Failed to report error to PostHog:", reportErr);
+    }
     // Clear selection state so the user can recover by clicking another email
     useAppStore.setState({
       isInlineReplyOpen: false,
