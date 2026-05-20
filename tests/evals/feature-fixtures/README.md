@@ -7,16 +7,21 @@ graded by the LLM judge against its rubric.
 
 ```
 feature-fixtures/
-├── draft-generator/        # IMPLEMENTED — 3 starter fixtures
+├── draft-generator/         # IMPLEMENTED — 3 fixtures, baseline 4/3/2
 │   ├── dg-1-direct-question.json
 │   ├── dg-2-scheduling.json
 │   └── dg-3-decline.json
-├── calendaring-agent/      # TODO
-├── sender-lookup/          # TODO
-├── style-profiler/         # TODO
-├── archive-ready-analyzer/ # TODO
-├── analysis-edit-learner/  # TODO
-└── draft-edit-learner/     # TODO
+├── calendaring-agent/       # IMPLEMENTED — 3 fixtures, baseline 9/10/10
+│   ├── ca-1-explicit-scheduling.json
+│   ├── ca-2-not-scheduling.json
+│   └── ca-3-ambiguous-time.json
+├── archive-ready-analyzer/  # IMPLEMENTED — 2 fixtures, baseline 10/10
+│   ├── ar-1-resolved-thread.json
+│   └── ar-2-open-question.json
+├── sender-lookup/           # TODO (lives in mail-ext-web-search extension)
+├── style-profiler/          # TODO (interface needs GmailClient mock)
+├── analysis-edit-learner/   # TODO (interface takes user-edit deltas)
+└── draft-edit-learner/      # TODO (interface takes user-edit deltas)
 ```
 
 Baselines live at `tests/evals/baselines/<feature>.json` and are created
@@ -48,25 +53,25 @@ feature's output — never the rubric inputs or expected score.
    once to capture the initial baseline.
 5. Remove the feature from `TODO_FEATURES` in `feature-evals.ts`.
 
-## Known limitation: Electron-imports in service modules
+## Running
 
-The existing analyzer runner (`tests/evals/runner.ts`) works with plain
-`tsx` because `email-analyzer.ts` uses lazy `await import()` for any
-chain that ultimately imports `electron` (e.g. via `../db` →
-`../data-dir`). Other services like `draft-generator.ts` import the
-same chains eagerly at module load — running their evals via plain
-`tsx` crashes with `'electron' does not provide an export named
-'BrowserWindow'`.
+```bash
+# One feature:
+npm run eval:features -- --feature draft-generator
 
-Options to address per-feature:
+# All registered features:
+npm run eval:features -- --all
 
-- **Easiest**: add the same lazy-import pattern that `email-analyzer.ts`
-  uses (see lines 1-25 of that file for the template). Small change in
-  the prod service; no behavior change.
-- **Alternative**: run feature-evals inside an Electron test context
-  (a Playwright project) — heavier but no prod changes needed.
+# Capture baseline (use only after intentional improvements):
+npm run eval:features -- --feature <name> --update-baseline
+```
 
-The framework here works the moment one of those is done for a given
-feature. The `draft-generator` starter fixtures are committed so the
-fixture format is established; the runner crashes today on the
-electron import (filed as TODO in this README).
+Requires `ANTHROPIC_API_KEY` in `.env.local`. Local-only — never CI.
+
+## Status note (May 2026)
+
+The previous "Electron-imports break tsx" limitation has been **resolved**
+via the data-dir lazy refactor — `src/main/data-dir.ts` defers the
+`electron` require to call-time, so every AI service module now imports
+cleanly outside an Electron context. Adding a new feature is just:
+runner wrapper + fixtures + register. No per-service surgery needed.
