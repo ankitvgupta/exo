@@ -1303,6 +1303,9 @@ function InlineReply({
     setEditorInitialContent(newHtml);
     form.handleEditorChange(newHtml, externalDraft.body);
     onContentChange?.({ bodyHtml: newHtml, bodyText: externalDraft.body });
+    // Clear any pre-refine snapshot — otherwise the "Revert" button would
+    // silently replace the freshly regenerated body with the old pre-refine one.
+    setPreRefineContent(null);
     if (externalDraft.to && JSON.stringify(externalDraft.to) !== JSON.stringify(form.to)) {
       form.setTo(externalDraft.to);
     }
