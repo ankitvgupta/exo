@@ -1461,13 +1461,20 @@ function InlineReply({
       // Optimistically remove the thread from the local store. The IPC handler
       // only broadcasts sync:emails-removed in the online-success path, so we
       // can't rely on it for demo mode, offline mode, or the queued path.
+      // Use removeEmailsAndAdvance (not removeEmails) when the archived thread
+      // is currently selected — otherwise split view keeps the now-stale
+      // selection and shows a blank detail pane.
       const threadId = replyInfo.threadId;
       const state = useAppStore.getState();
       const threadEmailIds = state.emails
         .filter((e) => e.threadId === threadId && e.accountId === accountId)
         .map((e) => e.id);
       if (threadEmailIds.length > 0) {
-        state.removeEmails(threadEmailIds);
+        if (state.selectedThreadId === threadId) {
+          state.removeEmailsAndAdvance(threadEmailIds, null, null);
+        } else {
+          state.removeEmails(threadEmailIds);
+        }
       }
       window.api.emails
         .archiveThread(threadId, accountId)
