@@ -35,12 +35,13 @@
  *   node scripts/seed-test-inbox.mjs --dry-run # validate fixtures, no API
  */
 
-import { createInterface } from "node:readline";
+import { createServer } from "node:http";
 import { google } from "googleapis";
 import { OAuth2Client } from "google-auth-library";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { spawn } from "node:child_process";
 
 import { directQuestions } from "./seed-fixtures/direct-questions.mjs";
 import { newsletters } from "./seed-fixtures/newsletters.mjs";
@@ -80,7 +81,12 @@ const TEST_ACCOUNT = "exoemailtest@gmail.com";
 const SEED_LABEL = "exo-seed";
 const TARGET_COUNT_DEFAULT = 80;
 const OAUTH_SCOPES = ["https://www.googleapis.com/auth/gmail.modify"];
-const OAUTH_REDIRECT = "urn:ietf:wg:oauth:2.0:oob";
+// Match the loopback redirect the main app uses — the OAuth client in
+// MAIN_VITE_GOOGLE_CLIENT_ID already whitelists this URI. Google
+// deprecated the OOB ("urn:ietf:wg:oauth:2.0:oob") flow in 2022.
+const OAUTH_REDIRECT_PORT = 3847;
+const OAUTH_REDIRECT = `http://localhost:${OAUTH_REDIRECT_PORT}/oauth2callback`;
+const ENV_LOCAL_PATH = join(__dirname, "..", ".env.local");
 
 const args = new Set(process.argv.slice(2));
 const FLAG_RESET = args.has("--reset");
@@ -179,14 +185,132 @@ function buildRawMessage(fixture, indexAcrossAll, idToMessageId) {
 // OAuth + label helpers
 // ============================================================
 
-async function promptForCode() {
-  return new Promise((resolve) => {
-    const rl = createInterface({ input: process.stdin, output: process.stdout });
-    rl.question("Paste the OAuth code here: ", (code) => {
-      rl.close();
-      resolve(code.trim());
+/**
+ * Open URL in the user's default browser (best-effort).
+ */
+function openInBrowser(url) {
+  const cmd = process.platform === "darwin" ? "open"
+    : process.platform === "win32" ? "start"
+    : "xdg-open";
+  try {
+    spawn(cmd, [url], { detached: true, stdio: "ignore" }).unref();
+  } catch {
+    /* ignore — we already printed the URL */
+  }
+}
+
+/**
+ * Run the OAuth dance via a local HTTP loopback server. Returns the
+ * Google `tokens` response (access_token + refresh_token).
+ *
+ * Same redirect URI the main app uses, so the OAuth client doesn't
+ * need any extra whitelist entries.
+ */
+async function runOAuthLoopback(client) {
+  const authUrl = client.generateAuthUrl({
+    access_type: "offline",
+    prompt: "consent",
+    scope: OAUTH_SCOPES,
+  });
+
+  console.log(
+    `\n────────────────────────────────────────────────────────────────────\n` +
+      `OAuth setup for ${TEST_ACCOUNT}\n` +
+      `────────────────────────────────────────────────────────────────────\n\n` +
+      `Opening your browser to the Google consent screen. If it doesn't\n` +
+      `open automatically, paste this URL into a browser signed in as\n` +
+      `${TEST_ACCOUNT}:\n\n  ${authUrl}\n\n` +
+      `Listening on ${OAUTH_REDIRECT} — Google will redirect here with the\n` +
+      `auth code as soon as you approve.\n`,
+  );
+
+  return new Promise((resolve, reject) => {
+    const server = createServer(async (req, res) => {
+      try {
+        const url = new URL(req.url ?? "/", `http://localhost:${OAUTH_REDIRECT_PORT}`);
+        if (url.pathname !== "/oauth2callback") {
+          res.writeHead(404, { "Content-Type": "text/plain", Connection: "close" });
+          res.end("Not found");
+          return;
+        }
+        const code = url.searchParams.get("code");
+        const error = url.searchParams.get("error");
+        if (error) {
+          res.writeHead(400, { "Content-Type": "text/plain", Connection: "close" });
+          res.end(`OAuth error: ${error}`);
+          server.closeAllConnections?.();
+          server.close();
+          reject(new Error(`OAuth error: ${error}`));
+          return;
+        }
+        if (!code) {
+          res.writeHead(400, { "Content-Type": "text/plain", Connection: "close" });
+          res.end("Missing authorization code");
+          server.closeAllConnections?.();
+          server.close();
+          reject(new Error("Missing authorization code in callback"));
+          return;
+        }
+
+        res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", Connection: "close" });
+        res.end(`<html><body style="font-family: system-ui; display:flex; justify-content:center; align-items:center; height:100vh; margin:0;"><div style="text-align:center"><h1>✓ Test account connected</h1><p>You can close this tab and return to the terminal.</p></div></body></html>`);
+
+        // Close the server right after responding so node can exit cleanly.
+        setTimeout(() => {
+          server.closeAllConnections?.();
+          server.close();
+        }, 100);
+
+        const { tokens } = await client.getToken(code);
+        resolve(tokens);
+      } catch (err) {
+        try {
+          res.writeHead(500, { "Content-Type": "text/plain", Connection: "close" });
+          res.end("Internal error");
+        } catch {
+          /* response may already be sent */
+        }
+        server.closeAllConnections?.();
+        server.close();
+        reject(err);
+      }
+    });
+
+    server.on("error", (err) => {
+      if (err && err.code === "EADDRINUSE") {
+        reject(
+          new Error(
+            `Port ${OAUTH_REDIRECT_PORT} is in use — another process is bound (perhaps the Exo app is running?). Quit it and try again.`,
+          ),
+        );
+      } else {
+        reject(err);
+      }
+    });
+
+    server.listen(OAUTH_REDIRECT_PORT, "127.0.0.1", () => {
+      openInBrowser(authUrl);
     });
   });
+}
+
+/**
+ * Persist EXOEMAILTEST_REFRESH_TOKEN into .env.local in-place.
+ * Replaces the existing line if present, otherwise appends. Idempotent.
+ */
+function persistRefreshToken(refreshToken) {
+  let content = "";
+  if (existsSync(ENV_LOCAL_PATH)) {
+    content = readFileSync(ENV_LOCAL_PATH, "utf8");
+  }
+  const re = /^EXOEMAILTEST_REFRESH_TOKEN=.*$/m;
+  if (re.test(content)) {
+    content = content.replace(re, `EXOEMAILTEST_REFRESH_TOKEN=${refreshToken}`);
+  } else {
+    if (content.length > 0 && !content.endsWith("\n")) content += "\n";
+    content += `EXOEMAILTEST_REFRESH_TOKEN=${refreshToken}\n`;
+  }
+  writeFileSync(ENV_LOCAL_PATH, content, { mode: 0o600 });
 }
 
 async function ensureCredentials() {
@@ -214,30 +338,23 @@ async function ensureCredentials() {
     return client;
   }
 
-  // Interactive one-time setup
-  const authUrl = client.generateAuthUrl({
-    access_type: "offline",
-    prompt: "consent",
-    scope: OAUTH_SCOPES,
-  });
-  console.log(
-    `\nNo EXOEMAILTEST_REFRESH_TOKEN found. One-time setup:\n\n` +
-      `  1. Sign in to ${TEST_ACCOUNT} in your browser.\n` +
-      `  2. Visit:\n     ${authUrl}\n` +
-      `  3. Approve.\n` +
-      `  4. Paste the resulting code here.\n`,
-  );
-
-  const code = await promptForCode();
-  const { tokens } = await client.getToken(code);
+  // Run the loopback OAuth flow.
+  const tokens = await runOAuthLoopback(client);
   if (!tokens.refresh_token) {
-    console.error("Google didn't return a refresh token. Try revoking the app in Google Account settings and re-running.");
+    console.error(
+      "\nGoogle returned tokens but no refresh_token. This usually means\n" +
+        "you've consented to this app before with the same account. To fix:\n" +
+        "  1. Visit https://myaccount.google.com/permissions\n" +
+        "  2. Sign in as " + TEST_ACCOUNT + "\n" +
+        "  3. Remove the Exo entry\n" +
+        "  4. Re-run this script\n",
+    );
     process.exit(1);
   }
 
+  persistRefreshToken(tokens.refresh_token);
   console.log(
-    `\nSuccess. Add this to .env.local and re-run:\n\n` +
-      `  EXOEMAILTEST_REFRESH_TOKEN=${tokens.refresh_token}\n`,
+    `\nRefresh token persisted to .env.local. Continuing to seed the inbox...\n`,
   );
   client.setCredentials(tokens);
   return client;
