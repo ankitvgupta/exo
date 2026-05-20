@@ -1085,6 +1085,7 @@ function InlineReply({
   onBccChange,
   restoredDraft,
   draftEmailId,
+  watchedDraftEmailId,
   onDiscardDraft,
   nameMap: externalNameMap,
 }: {
@@ -1102,6 +1103,10 @@ function InlineReply({
   restoredDraft?: RestoredDraft | null;
   /** Email ID that owns the AI-generated draft (for refine/revert). */
   draftEmailId?: string;
+  /** Email ID to watch in the store for externally-saved drafts (e.g. agent regenerate).
+   *  Unlike draftEmailId, this is set even when the draft has status="edited" so that
+   *  the agent's update overrides the user's edits. */
+  watchedDraftEmailId?: string;
   /** Callback to discard the AI draft entirely. */
   onDiscardDraft?: () => void;
   /** Map of lowercase email → display name for rendering name chips */
@@ -1267,6 +1272,53 @@ function InlineReply({
   // is used to push new content into the editor, separate from bodyHtml which tracks
   // the latest editor value)
   const [editorInitialContent, setEditorInitialContent] = useState(restoredDraft?.bodyHtml || "");
+
+  // Watch the store for externally-saved drafts on the watched email (e.g. the agent
+  // regenerating via the right pane). When the draft's createdAt changes, push the new
+  // content into the editor. Without this, the agent updates the DB + Gmail but the
+  // inline reply keeps showing the previous body. Mirrors the watcher in ComposeNewEmail.
+  //
+  // A ref tracks the last-seen createdAt so we never accidentally fire on a
+  // mount-time undefined→defined transition (e.g. watchedDraftEmailId resolves
+  // after mount). Refs also keep the latest form callbacks reachable without
+  // declaring every form method in the deps array; we intentionally only react
+  // to createdAt changes (the signal that an external save happened).
+  const externalDraft = useAppStore((s) =>
+    watchedDraftEmailId ? s.emails.find((e) => e.id === watchedDraftEmailId)?.draft : undefined,
+  );
+  const externalDraftCreatedAt = externalDraft?.createdAt;
+  const lastSeenDraftCreatedAtRef = useRef(externalDraftCreatedAt);
+  useEffect(() => {
+    if (!externalDraft?.body) return;
+    if (externalDraftCreatedAt === lastSeenDraftCreatedAtRef.current) return;
+    // First sight of a draft (lastSeen undefined): if the editor already shows this
+    // body — initialized via restoredDraft on mount — just record createdAt and skip
+    // the push so we don't clobber any in-progress edits with the same content.
+    if (lastSeenDraftCreatedAtRef.current === undefined && form.bodyText === externalDraft.body) {
+      lastSeenDraftCreatedAtRef.current = externalDraftCreatedAt;
+      return;
+    }
+    lastSeenDraftCreatedAtRef.current = externalDraftCreatedAt;
+    const newHtml = draftBodyToHtml(externalDraft.body);
+    setEditorInitialContent(newHtml);
+    form.handleEditorChange(newHtml, externalDraft.body);
+    onContentChange?.({ bodyHtml: newHtml, bodyText: externalDraft.body });
+    // Clear any pre-refine snapshot — otherwise the "Revert" button would
+    // silently replace the freshly regenerated body with the old pre-refine one.
+    setPreRefineContent(null);
+    if (externalDraft.to && JSON.stringify(externalDraft.to) !== JSON.stringify(form.to)) {
+      form.setTo(externalDraft.to);
+    }
+    if (externalDraft.cc && JSON.stringify(externalDraft.cc) !== JSON.stringify(form.cc)) {
+      form.setCc(externalDraft.cc);
+    }
+    if (externalDraft.bcc && JSON.stringify(externalDraft.bcc) !== JSON.stringify(form.bcc)) {
+      form.setBcc(externalDraft.bcc);
+    }
+    // Deps intentionally limited to createdAt — the signal that an external save
+    // happened. Other values (form, onContentChange, externalDraft) are read from
+    // the latest render closure when the effect fires.
+  }, [externalDraftCreatedAt]);
 
   const handleRefine = useCallback(async () => {
     if (!refineCritique.trim() || !draftEmailId || isRefining) return;
@@ -3652,6 +3704,7 @@ function EmailDetailInner({ isFullView = false }: EmailDetailProps) {
                         ? draftEmail.id
                         : undefined
                     }
+                    watchedDraftEmailId={draftEmail?.id}
                     onDiscardDraft={handleDiscardDraft}
                     nameMap={nameMap}
                   />
