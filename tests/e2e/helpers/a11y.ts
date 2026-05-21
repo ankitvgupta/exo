@@ -11,6 +11,12 @@ export type CheckA11yOptions = {
    * intermediate states.
    */
   exclude?: string[];
+  /**
+   * axe rule IDs to disable. Use to opt out of rules that surface real
+   * product debt we haven't fixed yet, with a comment in the spec
+   * explaining the tracking issue.
+   */
+  disableRules?: string[];
 };
 
 const IMPACT_RANK: Record<A11yImpact, number> = {
@@ -43,15 +49,23 @@ export async function checkA11y(page: Page, options: CheckA11yOptions = {}): Pro
   await page.evaluate(axe.source);
 
   const results = await page.evaluate(
-    ({ tags, exclude }) => {
+    ({ tags, exclude, disableRules }) => {
       const excludeSelectors = exclude.map((sel) => [sel]);
       const context =
         excludeSelectors.length > 0
           ? { exclude: excludeSelectors, include: [["html"]] }
           : "html";
-      return window.axe.run(context, { runOnly: { type: "tag", values: tags } });
+      const rules = Object.fromEntries(disableRules.map((id) => [id, { enabled: false }]));
+      return window.axe.run(context, {
+        runOnly: { type: "tag", values: tags },
+        rules,
+      });
     },
-    { tags: WCAG_TAGS, exclude: options.exclude ?? [] },
+    {
+      tags: WCAG_TAGS,
+      exclude: options.exclude ?? [],
+      disableRules: options.disableRules ?? [],
+    },
   );
 
   const blocking = results.violations.filter((v) => {
