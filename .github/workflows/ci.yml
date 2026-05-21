@@ -318,11 +318,10 @@ jobs:
             exit 1
           fi
 
-          # Parse the mode field. Require at least one full-mode run at
-          # the current HEAD before merge. Quick mode passes for now
-          # (iteration is fine) but emits a warning so the gate is
-          # visible. To merge, run the full `npm run pre-pr` once with
-          # the final commit in place.
+          # Parse the mode field. The final pre-pr run before merge must
+          # be a full one — quick mode is fine for iteration but doesn't
+          # exercise the real-Gmail tests. Anything other than `full`
+          # (the default) fails the gate.
           MARKER_MODE=$(echo "$MARKER" | sed -n 's/.*mode=\([a-z-]*\).*/\1/p')
           echo "Marker mode: ${MARKER_MODE:-unknown}"
 
@@ -331,4 +330,16 @@ jobs:
             exit 1
           fi
 
-          echo "Pre-PR report is fresh (SHA $MARKER_SHA matches HEAD, mode=${MARKER_MODE:-unknown})."
+          # Also extract the verdict from the report block body. The
+          # marker existing is necessary but not sufficient — the report
+          # itself must say PASS. Otherwise a developer could run pre-pr
+          # with failures and the gate would still let it through.
+          VERDICT=$(echo "$BODY" | grep -E '^\*\*Pre-PR verdict\*\*:' | head -n1 | sed -E 's|.*verdict\*\*:[[:space:]]*([A-Z]+).*|\1|')
+          echo "Pre-PR verdict in report: ${VERDICT:-unknown}"
+
+          if [ "$VERDICT" != "PASS" ]; then
+            echo "::error::Pre-PR report verdict is '${VERDICT:-unknown}', not PASS. Investigate the failing phases (see the report block in this PR's body) and re-run 'npm run pre-pr' once it's clean."
+            exit 1
+          fi
+
+          echo "Pre-PR report is fresh and passing (SHA $MARKER_SHA, mode=${MARKER_MODE}, verdict=$VERDICT)."
