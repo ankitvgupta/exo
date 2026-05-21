@@ -36,6 +36,28 @@ For each fixture across every registered feature:
 Total cost for 10 runs × 8 fixtures × 3 features ≈ ~$1-2 and ~90s wall
 clock at concurrency=5.
 
+## Judge model matters: Opus vs Sonnet
+
+Empirical comparison of `claude-opus-4-7` vs `claude-sonnet-4-6` as
+the judge on identical structured rubrics, 10 runs each:
+
+| Fixture | Sonnet stddev | Opus stddev | Change |
+|---|---|---|---|
+| dg-1 | 2.42 | **0.60** | ~75% variance reduction |
+| dg-2 | 1.00 | 1.26 | slightly higher (different absolute scores) |
+| dg-3 | 1.49 | 1.18 | ~20% reduction |
+
+Opus has more reasoning headroom for following structured rubrics
+mechanically. On dg-1 (the bimodal case under Sonnet), Opus
+consistently scores 10 — it doesn't get confused by partial criteria.
+
+Cost difference per pre-pr is negligible: ~8 fixtures × 1 judge call
+each = $0.10 Sonnet → $0.50 Opus. Worth it for the variance reduction.
+
+**Current default: `claude-opus-4-7`**. Switching judge models requires
+re-baselining (absolute scores aren't comparable across models — Opus
+tends to score higher overall, e.g. dg-2 mean 8 vs Sonnet 6).
+
 ## Why "judge variance" isn't the only problem
 
 After the first round of variance analysis, we rewrote the
@@ -54,10 +76,13 @@ output — the feature either addresses "section 3" cleanly (→ 10) or
 misses it entirely (→ 5). Each mode is stable; the feature itself
 flips between modes ~60/40 across runs.
 
-**Multi-sample at eval time** would reduce this: sampling N=3 per
-fixture and taking the median reduces feature-noise stddev by √N (≈
-1.7x at N=3). Tradeoff: 3x more API spend per pre-pr run. Tracked as
-a TODO — see end of doc.
+**Multi-sample at eval time** would reduce this (sample N times per
+fixture, take median, reduces stddev by √N). **Explicitly out of
+scope per user direction — one run per fixture is fine.** Accept the
+bimodal feature variance; the 3pt threshold + p25 baselines means a
+fixture has to score 3 points below its empirical floor to fail,
+which only happens when the feature genuinely breaks (not when it
+oscillates within its normal range).
 
 ## Results (2026-05-21, structured rubrics)
 

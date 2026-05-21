@@ -1,19 +1,20 @@
 {
   "version": 1,
   "feature": "draft-generator",
-  "generatedAt": "2026-05-21T06:00:00Z",
+  "judgeModel": "claude-opus-4-7",
+  "generatedAt": "2026-05-21T06:05:00Z",
   "scores": {
     "dg-1-direct-question": {
-      "score": 5,
-      "reason": "p25 of 10-run variance analysis under structured rubric. Scores: 5,5,5,5,5,9,10,10,10,10. Bimodal distribution — the feature deterministically hits all rubric points OR misses the section-3 focus. Stddev 2.42 reflects FEATURE variance (not judge). Floor at 5 protects against regression below the lower mode."
+      "score": 10,
+      "reason": "p25 of 10-run variance analysis under Opus judge with structured rubric. Scores: 8,10,10,10,10,10,10,10,10,10. Stddev 0.60 (vs 2.42 under Sonnet) — Opus has the headroom to follow the structured rubric mechanically. Floor at 10 may seem aggressive but reflects empirical behavior; with threshold=3, fails only on score <=7."
     },
     "dg-2-scheduling": {
-      "score": 5,
-      "reason": "p25 of 10-run variance analysis under structured rubric. Scores: 5,5,5,5,5,7,7,7,7,7. Stddev 1.0 (dropped from 1.43 with the loose rubric). Bimodal at 5 vs 7 — feature either picks a slot or doesn't."
+      "score": 8,
+      "reason": "p25 of 10-run variance analysis under Opus judge. Scores: 6,6,8,8,8,8,8,8,10,10. Stddev 1.26, mean 8. Opus consistently scores this higher than Sonnet did (mean 6.0) — Opus is more generous about partial slot-picking."
     },
     "dg-3-decline": {
       "score": 1,
-      "reason": "p25 of 10-run variance analysis under structured rubric. Scores: 0,0,1,2,2,3,3,4,4,4. Median 3, mean 2.3. The feature consistently fails this scenario — fails to decline, commits on user's behalf, asks irrelevant questions. The judge is mechanical now; this is genuine feature weakness in DEFAULT_DRAFT_PROMPT. Floor at 1 means even a complete miss (0) regresses; current code is well above the floor."
+      "reason": "p25 of 10-run variance analysis under Opus judge. Scores: 1,1,1,1,2,2,2,2,3,5. Stddev 1.18, mean 2. Both Sonnet and Opus agree the feature consistently fails this scenario — high-confidence signal that DEFAULT_DRAFT_PROMPT needs iteration on the decline/hedge flow."
     }
   }
 }
