@@ -321,8 +321,17 @@ async function main(): Promise<void> {
     reports.push(report);
     printReport(report);
     if (updateBaseline && report.fixturesRun > 0) {
-      saveBaseline(feature, report.results);
-      console.log(`  baseline updated → ${baselinePath(feature)}`);
+      // Refuse to persist a baseline when any fixture hit an infra error —
+      // saveBaseline would otherwise write score:0 placeholders, permanently
+      // muting those fixtures from the regression gate on future runs.
+      if (report.infraErrors.length > 0) {
+        console.error(
+          `  baseline NOT updated for ${feature}: ${report.infraErrors.length} fixture(s) had infrastructure errors. Fix those and re-run with --update-baseline.`,
+        );
+      } else {
+        saveBaseline(feature, report.results);
+        console.log(`  baseline updated → ${baselinePath(feature)}`);
+      }
     }
     if (report.regressions.length > 0) anyRegressions = true;
     if (report.infraErrors.length > 0) anyInfraErrors = true;
