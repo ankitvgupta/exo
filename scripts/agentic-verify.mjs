@@ -30,8 +30,34 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execSync } from "node:child_process";
+import { createServer } from "node:net";
 import { query } from "@anthropic-ai/claude-agent-sdk";
 import { extractFinalJson, summarizeToolCalls, renderReportMd } from "./lib/agentic-helpers.mjs";
+
+/**
+ * Find an available TCP port in [9223, 9999]. Skips 9222 by default
+ * because Chrome's remote-debug port is commonly 9222 and would conflict.
+ * Tries up to 20 ports starting from `start`.
+ */
+async function findFreePort(start = 9223, attempts = 20) {
+  for (let i = 0; i < attempts; i++) {
+    const candidate = start + i;
+    const ok = await new Promise((resolve) => {
+      const server = createServer();
+      server.once("error", () => resolve(false));
+      server.once("listening", () => {
+        server.close(() => resolve(true));
+      });
+      try {
+        server.listen(candidate, "127.0.0.1");
+      } catch {
+        resolve(false);
+      }
+    });
+    if (ok) return candidate;
+  }
+  throw new Error(`No free port in [${start}, ${start + attempts}]`);
+}
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(__dirname, "..");
@@ -82,8 +108,12 @@ const MODE = flag("mode", "verify-diff");
 const ACTION_BUDGET = Number(flag("action-budget", MODE === "explore" ? 100 : 40));
 const BUDGET_USD = Number(flag("budget-usd", MODE === "explore" ? 2 : 0.5));
 const TIMEOUT_MS = Number(flag("timeout-ms", 10 * 60 * 1000));
-const CDP_PORT = Number(flag("cdp-port", 9222));
-const CDP_URL = `http://127.0.0.1:${CDP_PORT}`;
+// CDP_PORT defaults to "auto" — pick a free port at runtime so we don't
+// clash with a running Chrome (which often holds 9222). User can pin
+// via --cdp-port=<N>. Resolved later in main() once we can await.
+const CDP_PORT_RAW = flag("cdp-port", "auto");
+let CDP_PORT = CDP_PORT_RAW === "auto" ? 0 : Number(CDP_PORT_RAW);
+let CDP_URL = CDP_PORT ? `http://127.0.0.1:${CDP_PORT}` : "";
 
 if (!["verify-diff", "explore"].includes(MODE)) {
   console.error(`Unknown mode: ${MODE}. Use --mode=verify-diff or --mode=explore.`);
@@ -229,6 +259,16 @@ function killElectron(electron) {
 
 async function main() {
   const sha = headSha();
+
+  // Resolve CDP port lazily so we can pick a free one if the user didn't pin.
+  if (CDP_PORT === 0) {
+    CDP_PORT = await findFreePort(9223);
+    CDP_URL = `http://127.0.0.1:${CDP_PORT}`;
+    log(`Auto-selected CDP port: ${CDP_PORT}`);
+  } else {
+    CDP_URL = `http://127.0.0.1:${CDP_PORT}`;
+  }
+
   log(`mode=${MODE} sha=${sha} action_budget=${ACTION_BUDGET} budget_usd=${BUDGET_USD}`);
 
   let prompt;
