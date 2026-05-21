@@ -200,7 +200,7 @@ async function runFeature(feature: string): Promise<FeatureReport> {
   const fixtures = loadFixtures(feature);
   if (fixtures.length === 0) {
     console.warn(`[${feature}] no fixtures found in ${fixturesDir(feature)} — skipping`);
-    return { feature, fixturesRun: 0, results: [], regressions: [] };
+    return { feature, fixturesRun: 0, results: [], regressions: [], infraErrors: [] };
   }
 
   const baseline = loadBaseline(feature);
