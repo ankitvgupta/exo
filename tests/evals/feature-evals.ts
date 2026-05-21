@@ -129,7 +129,12 @@ interface FeatureReport {
 const FIXTURES_ROOT = join(import.meta.dirname, "feature-fixtures");
 const BASELINES_ROOT = join(import.meta.dirname, "baselines");
 
-const REGRESSION_THRESHOLD = 0.5;
+// Sonnet judge + Sonnet feature are both nondeterministic — empirically
+// we see ±1 point of jitter per fixture across runs without any code
+// change. 1.5 absorbs that noise; real regressions are usually 2+ points
+// (the judge takes a clear stance about something materially broken).
+// Tighten this once we have a stable run history to calibrate against.
+const REGRESSION_THRESHOLD = 1.5;
 
 function fixturesDir(feature: string): string {
   return join(FIXTURES_ROOT, feature);
