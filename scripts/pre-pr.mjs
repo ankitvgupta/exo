@@ -73,7 +73,11 @@ const NO_INJECT = args.has("--no-inject");
 const MODE = QUICK ? "quick" : FULL_SYNC ? "full-sync" : "full";
 
 function gitShortSha() {
-  return execSync("git rev-parse --short HEAD", { cwd: REPO_ROOT }).toString().trim();
+  // --short=7 (not bare --short) so the length matches the CI side
+  // (`${PR_HEAD_SHA:0:7}` always takes exactly 7 chars). Git's bare
+  // --short uses `core.abbrev` which auto-grows beyond 7 for large
+  // repos and would produce a marker that CI flags as stale.
+  return execSync("git rev-parse --short=7 HEAD", { cwd: REPO_ROOT }).toString().trim();
 }
 
 function gitChangedFiles() {

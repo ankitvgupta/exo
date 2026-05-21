@@ -225,7 +225,8 @@ function resolveDataMode(rawFlag, changedFiles) {
 
 function headSha() {
   try {
-    return execSync("git rev-parse --short HEAD", { cwd: REPO_ROOT }).toString().trim();
+    // Pin abbreviation length to 7 to match the CI side (see pre-pr.mjs).
+    return execSync("git rev-parse --short=7 HEAD", { cwd: REPO_ROOT }).toString().trim();
   } catch {
     return "(unknown)";
   }
