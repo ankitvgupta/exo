@@ -52,7 +52,10 @@ loadEnvFile(join(REPO_ROOT, ".env.local"));
  * should pingAccount() before using which will throw with a clear error.
  */
 export const TEST_ACCOUNT = process.env.EXOEMAILTEST_EMAIL ?? "";
-const OAUTH_REDIRECT = "urn:ietf:wg:oauth:2.0:oob";
+// Same loopback the seed script and main app use. We don't actually
+// initiate OAuth from here (we only use the refresh token), but keep
+// the constant consistent so the OAuth2Client is constructed identically.
+const OAUTH_REDIRECT = "http://localhost:3847/oauth2callback";
 
 /**
  * Check whether the env is set up enough to run real-Gmail tests.

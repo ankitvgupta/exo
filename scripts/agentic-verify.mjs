@@ -344,7 +344,7 @@ async function main() {
           "chrome-devtools": {
             type: "stdio",
             command: "npx",
-            args: ["-y", "chrome-devtools-mcp@latest", `--browser-url=${CDP_URL}`],
+            args: ["-y", "chrome-devtools-mcp@1.0.1", `--browser-url=${CDP_URL}`],
           },
         },
       },
