@@ -1,19 +1,19 @@
 {
   "version": 1,
   "feature": "calendaring-agent",
-  "generatedAt": "2026-05-20T06:14:31.734Z",
+  "generatedAt": "2026-05-21T05:54:00Z",
   "scores": {
     "ca-1-explicit-scheduling": {
-      "score": 7,
-      "reason": "Floor of observed scores across runs (7, 8, 9). The judge oscillates because the rubric awards partial credit for capturing duration but not the specific times — different judge passes weight that gap differently. 7 is the conservative baseline; with threshold=1.5 a real regression must land at 5 or below."
+      "score": 9,
+      "reason": "p25 of 10-run variance analysis. Scores: 7,8,9,9,9,10,10,10,10,10. Stddev 0.98, mean 9.2. Strong feature, narrow noise."
     },
     "ca-2-not-scheduling": {
       "score": 10,
-      "reason": "Correctly identifies no scheduling context, recognizing EOD as a deadline rather than a meeting request"
+      "reason": "Deterministic across 10 runs — scores 10,10,10,10,10,10,10,10,10,10. The judge has no ambiguity on negative-case scheduling detection."
     },
     "ca-3-ambiguous-time": {
       "score": 9,
-      "reason": "Initial baseline score 10 lowered to 9 after observing judge noise across runs — the rubric accepts either true or false for the borderline case, so the judge oscillates between scoring 9 and 10. Conservative baseline avoids flapping while still catching real regressions."
+      "reason": "p25 of 10-run variance analysis. Scores: 9,9,9,9,9,9,10,10,10,10. Stddev 0.49, mean 9.4. Borderline 'let's catch up sometime' case — judge mostly 9s with occasional 10s."
     }
   }
 }

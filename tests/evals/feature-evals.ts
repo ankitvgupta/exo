@@ -129,12 +129,16 @@ interface FeatureReport {
 const FIXTURES_ROOT = join(import.meta.dirname, "feature-fixtures");
 const BASELINES_ROOT = join(import.meta.dirname, "baselines");
 
-// Sonnet judge + Sonnet feature are both nondeterministic — empirically
-// we see ±1 point of jitter per fixture across runs without any code
-// change. 1.5 absorbs that noise; real regressions are usually 2+ points
-// (the judge takes a clear stance about something materially broken).
-// Tighten this once we have a stable run history to calibrate against.
-const REGRESSION_THRESHOLD = 1.5;
+// Empirically calibrated via `npx tsx scripts/evals-variance.ts` — see
+// docs/EVAL_VARIANCE.md for the methodology and raw data. Max observed
+// stddev across all fixtures was 1.43 (dg-2-scheduling); two stddev =
+// 2.86, rounded up to 3.0. At threshold=3 a fixture must score 3+
+// points below baseline to fail, which empirically only happens when
+// the judge takes a clear stance about something materially broken.
+// Baselines are set to the p25 of observed runs (10 runs per fixture)
+// so we're not over-optimistic about deterministic-looking fixtures
+// that occasionally drop.
+const REGRESSION_THRESHOLD = 3.0;
 
 function fixturesDir(feature: string): string {
   return join(FIXTURES_ROOT, feature);

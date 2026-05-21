@@ -1,19 +1,19 @@
 {
   "version": 1,
   "feature": "draft-generator",
-  "generatedAt": "2026-05-20T06:12:13.218Z",
+  "generatedAt": "2026-05-21T05:53:00Z",
   "scores": {
     "dg-1-direct-question": {
-      "score": 4,
-      "reason": "Commits to the Tuesday deadline but completely ignores the section 3 / staffing focus the sender called out, which is a notable gap per the rubric."
+      "score": 6,
+      "reason": "p25 of 10-run variance analysis (scripts/evals-variance.ts). Scores: 4,6,6,6,7,7,7,7,7,8. Stddev 1.02, mean 6.5. The judge consistently dings the draft for not acknowledging the section-3 focus."
     },
     "dg-2-scheduling": {
-      "score": 3,
-      "reason": "Fails to pick one specific slot (just echoes both options back), doesn't confirm the 30-minute duration, and doesn't mention the integration work context — essentially a vague 'sounds good, send me a time' response that defeats the purpose."
+      "score": 4,
+      "reason": "p25 of 10-run variance analysis. Scores: 4,4,4,5,5,5,6,6,6,9. Stddev 1.43 (highest across all fixtures), mean 5.4. Wide variance reflects real prompt weakness — the draft generator often doesn't commit to a specific offered time slot."
     },
     "dg-3-decline": {
       "score": 2,
-      "reason": "The draft commits positively on the user's behalf ('i'd probably be up for it') without knowing their availability, asks about time of day for a fixed event (wrong framing), and doesn't decline — violating the core rubric requirement for a low-priority ask that should politely decline."
+      "reason": "p25 of 10-run variance analysis. Scores: 1,2,2,3,3,3,4,4,4,6. Stddev 1.33, mean 3.2. The judge consistently flags that the draft fails to decline gracefully and commits on the user's behalf without their input. This is a real prompt weakness — see DEFAULT_DRAFT_PROMPT iteration TODO."
     }
   }
 }
