@@ -98,9 +98,9 @@ Generally i will give one git worktree one branch to work with and itll be clear
 
 ## Code reviews
 - All of my repos are set up to use automatic code review software, either provided by claude or other review apps.
-- After creating a PR, you should check at the 2, 5, and 10 minute marks for if the code review bots have put in a review, or any other users have. If they haven't at the 10 minute mark, alert me.
-- Once the code review bots do their review, you should medodically analyze their review comments, and resolve the high priority ones. anything that is a major security issue or breaking failure should get first priority. for lower priority issues, make your best determination around whether they are critical to solve now or if they can be dealt with later. summarize your findings in a PR comment, both with what issues you chose to solve and which ones you did not.
-- if I ask you to do another pass through the reviews, you should primarily look at the PR comments since the last commit you made to assess what things to fix. i may have gone in and put in manual comments.
+- **The standard post-PR workflow is `/review` then `/reviewloop`** (see Pull requests above). `/reviewloop` handles waiting on bots, fetching comments, fixing actionable issues, resolving threads, and re-checking CI — do not run a parallel manual polling loop alongside it.
+- If `/reviewloop` exits unresolved (max iterations, bot still unsatisfied), prioritize remaining comments by severity: major security or breaking issues first, then judgment-call P2/P3 issues. Summarize what you fixed vs. deferred in a PR comment.
+- If I ask you to do another pass through the reviews, you should primarily look at the PR comments since the last commit you made to assess what things to fix. I may have gone in and put in manual comments.
 
 ## Bash commands
 - This is absolutely critical: you should not syntax like  `2>&1 &` to run in the background because it causes unnecessary permission prompts. Instead, use the `run_in_background` parameter of the Bash tool. This leads to better process management.
