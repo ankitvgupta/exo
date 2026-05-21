@@ -179,7 +179,7 @@ ${wrapUntrustedEmail(`From: ${email.from}\nTo: ${email.to}\nSubject: ${email.sub
     if (enableSenderLookup) {
       for (const recipient of to) {
         const recipientEmail = this.extractSenderEmail(recipient);
-        const cached = getEnrichmentBySender(recipientEmail, "web-search");
+        const cached = await getEnrichmentBySenderLazy(recipientEmail, "web-search");
         if (cached?.data) {
           const profile = cached.data as { summary: string; name: string; email: string };
           if (profile.summary) {

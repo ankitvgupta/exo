@@ -23,7 +23,7 @@
     "pack": "electron-builder --dir",
     "dist": "electron-builder",
     "release": "npm run build && electron-builder --publish always",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "npm run typecheck:node && npm run typecheck:web",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json",
     "test": "./scripts/run-tests.sh",
