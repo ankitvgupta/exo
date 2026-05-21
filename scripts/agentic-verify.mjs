@@ -173,14 +173,29 @@ function gitDiffSummary() {
     const stat = execSync(`git diff --shortstat ${base}..HEAD`, { cwd: REPO_ROOT })
       .toString()
       .trim();
-    return { base, files: files || "(none)", shortstat: stat || "(no changes)" };
+    const patch = execSync(`git diff --no-ext-diff --unified=40 ${base}..HEAD`, {
+      cwd: REPO_ROOT,
+      maxBuffer: 1024 * 1024 * 8,
+    }).toString();
+    return {
+      base,
+      files: files || "(none)",
+      shortstat: stat || "(no changes)",
+      patch: truncateForPrompt(patch || "(no patch)", 30_000),
+    };
   } catch (err) {
     return {
       base: "(unknown)",
       files: "(diff failed)",
       shortstat: `diff failed: ${err instanceof Error ? err.message : String(err)}`,
+      patch: "(diff failed)",
     };
   }
+}
+
+function truncateForPrompt(text, maxChars) {
+  if (text.length <= maxChars) return text;
+  return `${text.slice(0, maxChars)}\n\n[diff truncated at ${maxChars} characters]`;
 }
 
 /**
@@ -372,6 +387,7 @@ async function main() {
     const template = loadPrompt("verify-diff");
     prompt = fillTemplate(template, {
       DIFF_SUMMARY: diff.shortstat,
+      DIFF_PATCH: diff.patch,
       CHANGED_FILES: diff.files,
       ACTION_BUDGET,
       BUDGET_USD,
