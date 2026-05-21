@@ -200,7 +200,12 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
         }
         if (viewMode === "full") {
           e.preventDefault();
-          setViewMode("split");
+          useAppStore.setState({
+            viewMode: "split",
+            selectedEmailId: null,
+            selectedThreadId: null,
+            focusedThreadEmailId: null,
+          });
           return;
         }
         if (activeSearchQuery) {
