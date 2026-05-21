@@ -318,4 +318,17 @@ jobs:
             exit 1
           fi
 
-          echo "Pre-PR report is fresh (SHA $MARKER_SHA matches HEAD)."
+          # Parse the mode field. Require at least one full-mode run at
+          # the current HEAD before merge. Quick mode passes for now
+          # (iteration is fine) but emits a warning so the gate is
+          # visible. To merge, run the full `npm run pre-pr` once with
+          # the final commit in place.
+          MARKER_MODE=$(echo "$MARKER" | sed -n 's/.*mode=\([a-z-]*\).*/\1/p')
+          echo "Marker mode: ${MARKER_MODE:-unknown}"
+
+          if [ "$MARKER_MODE" = "quick" ]; then
+            echo "::error::Pre-PR was last run with --quick. Before merging, run a full 'npm run pre-pr' (no --quick) so the real-Gmail tests fire against the test account. Quick mode is fine for iteration but is not sufficient to merge."
+            exit 1
+          fi
+
+          echo "Pre-PR report is fresh (SHA $MARKER_SHA matches HEAD, mode=${MARKER_MODE:-unknown})."

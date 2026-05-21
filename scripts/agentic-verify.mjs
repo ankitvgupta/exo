@@ -105,6 +105,14 @@ function flag(name, defaultValue = null) {
 }
 
 const MODE = flag("mode", "verify-diff");
+// --data=auto|real|demo
+//   auto  : detect from the diff. Files matching DATA_REAL_PATTERNS push
+//           the run toward real-account mode; everything else is demo.
+//   real  : force real mode (uses .dev-data/ tokens for the test account
+//           and sets EXO_DISABLE_PREFETCH so we don't burn API spend on
+//           background analysis).
+//   demo  : force demo mode (current default). Hermetic, no real Gmail.
+const DATA_MODE_RAW = flag("data", "auto");
 const ACTION_BUDGET = Number(flag("action-budget", MODE === "explore" ? 100 : 40));
 const BUDGET_USD = Number(flag("budget-usd", MODE === "explore" ? 2 : 0.5));
 const TIMEOUT_MS = Number(flag("timeout-ms", 10 * 60 * 1000));
@@ -175,6 +183,46 @@ function gitDiffSummary() {
   }
 }
 
+/**
+ * Files whose changes warrant testing against the REAL test Gmail
+ * account, not demo data. Anything matching these patterns means the
+ * agent is more likely to find real bugs when it can interact with
+ * actual Gmail-shaped state (multipart bodies, threading, labels,
+ * send-as aliases, etc.) than with the curated demo fixtures.
+ */
+const DATA_REAL_PATTERNS = [
+  /^src\/main\/services\/gmail-client\.ts$/,
+  /^src\/main\/services\/email-sync\.ts$/,
+  /^src\/main\/services\/prefetch-service\.ts$/,
+  /^src\/main\/services\/email-analyzer\.ts$/,
+  /^src\/main\/services\/draft-generator\.ts$/,
+  /^src\/main\/services\/calendaring-agent\.ts$/,
+  /^src\/main\/services\/archive-ready-analyzer\.ts$/,
+  /^src\/main\/services\/sender-lookup\.ts$/,
+  /^src\/main\/services\/style-profiler\.ts$/,
+  /^src\/main\/ipc\/gmail\.ipc\.ts$/,
+  /^src\/main\/ipc\/sync\.ipc\.ts$/,
+  /^src\/main\/ipc\/analysis\.ipc\.ts$/,
+  /^src\/main\/ipc\/drafts\.ipc\.ts$/,
+  /^src\/main\/ipc\/compose\.ipc\.ts$/,
+];
+
+/**
+ * Decide whether the agent should run against the real test account
+ * or demo data, given the changed files and the user's explicit flag.
+ */
+function resolveDataMode(rawFlag, changedFiles) {
+  if (rawFlag === "real" || rawFlag === "demo") return rawFlag;
+  // auto: any changed file matching a real-pattern → real
+  const realRelevant = changedFiles.filter((f) =>
+    DATA_REAL_PATTERNS.some((p) => p.test(f)),
+  );
+  if (realRelevant.length > 0) {
+    return { mode: "real", reason: `diff touches ${realRelevant.join(", ")}` };
+  }
+  return { mode: "demo", reason: "diff is UI/scripts/tests only" };
+}
+
 function headSha() {
   try {
     return execSync("git rev-parse --short HEAD", { cwd: REPO_ROOT }).toString().trim();
@@ -221,13 +269,23 @@ async function waitForCdp(timeoutMs = 30_000) {
   throw new Error(`CDP at ${CDP_URL} not ready after ${timeoutMs}ms`);
 }
 
-function launchElectron() {
-  log(`Launching Electron in demo mode with --remote-debugging-port=${CDP_PORT}...`);
+function launchElectron(dataMode) {
+  // In `real` mode: don't set EXO_DEMO_MODE — the app boots against the
+  // test account using .dev-data/ tokens. Set EXO_DISABLE_PREFETCH so
+  // the agent's run doesn't trigger background Claude analysis on every
+  // seeded email (would burn $$).
+  const launchEnv =
+    dataMode === "real"
+      ? { ...process.env, EXO_DEMO_MODE: "", EXO_DISABLE_PREFETCH: "true" }
+      : { ...process.env, EXO_DEMO_MODE: "true" };
+  log(
+    `Launching Electron in ${dataMode} mode with --remote-debugging-port=${CDP_PORT}...`,
+  );
   const electron = spawn(
     "npx",
     ["electron-vite", "dev", "--", `--remote-debugging-port=${CDP_PORT}`],
     {
-      env: { ...process.env, EXO_DEMO_MODE: "true" },
+      env: launchEnv,
       stdio: ["ignore", "pipe", "pipe"],
       cwd: REPO_ROOT,
     },
@@ -271,9 +329,24 @@ async function main() {
 
   log(`mode=${MODE} sha=${sha} action_budget=${ACTION_BUDGET} budget_usd=${BUDGET_USD}`);
 
+  // Resolve data mode (real vs demo) from the diff + the user's flag.
+  // In explore mode, default to demo since there's no diff to consult.
+  const diffForMode = MODE === "verify-diff" ? gitDiffSummary() : { files: "" };
+  const changedList =
+    diffForMode.files && diffForMode.files !== "(none)" && diffForMode.files !== "(diff failed)"
+      ? diffForMode.files.split("\n").filter(Boolean)
+      : [];
+  const dataResolution = resolveDataMode(DATA_MODE_RAW, changedList);
+  const dataMode = typeof dataResolution === "string" ? dataResolution : dataResolution.mode;
+  if (typeof dataResolution === "object") {
+    log(`data mode: ${dataResolution.mode} (${dataResolution.reason})`);
+  } else {
+    log(`data mode: ${dataResolution} (forced via --data)`);
+  }
+
   let prompt;
   if (MODE === "verify-diff") {
-    const diff = gitDiffSummary();
+    const diff = diffForMode;
     if (diff.files === "(none)" || diff.files === "(diff failed)") {
       log(
         `No diff vs origin/main detected (base=${diff.base}). verify-diff has nothing to scope — bailing.`,
@@ -307,7 +380,7 @@ async function main() {
     prompt = fillTemplate(template, { ACTION_BUDGET, BUDGET_USD });
   }
 
-  const electron = launchElectron();
+  const electron = launchElectron(dataMode);
   let killed = false;
   function cleanup() {
     if (killed) return;
