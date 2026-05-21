@@ -18,8 +18,15 @@ import { test, expect, Page, ElectronApplication } from "@playwright/test";
 import { launchElectronApp, closeApp } from "./launch-helpers";
 import { checkA11y } from "./helpers/a11y";
 
-// Hard gate: visual regression only runs in Linux CI or with explicit override.
-const isVisualEnv = process.platform === "linux" || process.env.EXO_FORCE_VISUAL === "1";
+// Hard gate: visual regression is opt-in. It only runs in the dedicated
+// CI job (mcr.microsoft.com/playwright docker image, pinned tag) so the
+// committed baselines match the rendering. The Tests job runs the e2e
+// project too, but on bare ubuntu-latest + xvfb where font rendering
+// differs — running there would always fail the snapshot diff. Gate
+// strictly by env: the visual-regression workflow sets
+// EXO_VISUAL_REGRESSION=1, dev opts in with EXO_FORCE_VISUAL=1.
+const isVisualEnv =
+  process.env.EXO_VISUAL_REGRESSION === "1" || process.env.EXO_FORCE_VISUAL === "1";
 
 test.beforeAll(() => {
   if (!isVisualEnv) {

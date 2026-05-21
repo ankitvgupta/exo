@@ -194,6 +194,7 @@ jobs:
     env:
       CI: true
       EXO_DEMO_MODE: true
+      EXO_VISUAL_REGRESSION: "1"
       ELECTRON_DISABLE_SANDBOX: 1
       NODE_OPTIONS: --max-old-space-size=4096
     steps:
