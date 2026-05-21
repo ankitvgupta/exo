@@ -12,7 +12,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
  * credentials, and database from `~/Library/Application Support/exo/`
  * into `.dev-data/` on first dev run — which meant a fresh worktree could
  * silently re-import real-account state. That's now banned: dev signs in
- * as `exoemailtest@gmail.com` only.
+ * as the dedicated test account (configured via `EXOEMAILTEST_EMAIL`
+ * in `.env.local`) only.
  *
  * If anyone reintroduces a copy-from-prod step in `data-dir.ts`, this
  * test fails. Keeping the guard at the file-content level (not behavior)

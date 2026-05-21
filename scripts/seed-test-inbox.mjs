@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 /**
- * Seed the test Gmail account (exoemailtest@gmail.com) with realistic
- * fixture emails via Gmail API `users.messages.insert`. This is NOT an
- * external send — `messages.insert` places a message directly into the
- * inbox with whatever From/To/Subject headers we specify in the raw
- * RFC 2822 body. No SMTP, no external traffic.
+ * Seed the test Gmail account (configured via EXOEMAILTEST_EMAIL in
+ * .env.local) with realistic fixture emails via Gmail API
+ * `users.messages.insert`. This is NOT an external send —
+ * `messages.insert` places a message directly into the inbox with
+ * whatever From/To/Subject headers we specify in the raw RFC 2822
+ * body. No SMTP, no external traffic.
  *
  * Used as a precondition for:
  *   - Layer 9a real-Gmail smoke tests (need realistic data in the inbox)
@@ -17,10 +18,11 @@
  *
  * One-time OAuth setup
  * --------------------
- * Before running this, you need a refresh token for exoemailtest@gmail.com
- * with the gmail.modify scope. The simplest path:
+ * Before running this, you need a refresh token for the test account
+ * (configured via EXOEMAILTEST_EMAIL) with the gmail.modify scope. The
+ * simplest path:
  *
- *   1. In a browser signed in as exoemailtest@gmail.com, visit the OAuth
+ *   1. In a browser signed in as the test account, visit the OAuth
  *      consent URL printed by the script when EXOEMAILTEST_REFRESH_TOKEN
  *      is missing.
  *   2. Approve the consent (you'll need the test account added as a test
@@ -77,7 +79,7 @@ function loadEnvFile(path) {
 loadEnvFile(join(__dirname, "..", ".env.local"));
 loadEnvFile(join(__dirname, "..", ".env"));
 
-const TEST_ACCOUNT = "exoemailtest@gmail.com";
+const TEST_ACCOUNT = process.env.EXOEMAILTEST_EMAIL ?? "";
 const SEED_LABEL = "exo-seed";
 const TARGET_COUNT_DEFAULT = 80;
 const OAUTH_SCOPES = ["https://www.googleapis.com/auth/gmail.modify"];
@@ -119,7 +121,7 @@ function rfcDate(d) {
  */
 function buildRawMessage(fixture, indexAcrossAll, idToMessageId) {
   const to = fixture.to ?? TEST_ACCOUNT;
-  const messageId = `<${fixture.id}-${Date.now()}@exoemailtest.local>`;
+  const messageId = `<${fixture.id}-${Date.now()}@test-inbox.local>`;
   idToMessageId.set(fixture.id, messageId);
 
   // Spread dates across ~30 days, most recent fixtures get most recent dates
@@ -133,9 +135,9 @@ function buildRawMessage(fixture, indexAcrossAll, idToMessageId) {
     `Subject: ${fixture.subject}`,
     `Date: ${rfcDate(fixture.date ? new Date(fixture.date) : date)}`,
     `Message-ID: ${messageId}`,
-    fixture.inReplyTo ? `In-Reply-To: ${idToMessageId.get(fixture.inReplyTo) ?? `<${fixture.inReplyTo}@exoemailtest.local>`}` : null,
+    fixture.inReplyTo ? `In-Reply-To: ${idToMessageId.get(fixture.inReplyTo) ?? `<${fixture.inReplyTo}@test-inbox.local>`}` : null,
     fixture.references
-      ? `References: ${fixture.references.map((r) => idToMessageId.get(r) ?? `<${r}@exoemailtest.local>`).join(" ")}`
+      ? `References: ${fixture.references.map((r) => idToMessageId.get(r) ?? `<${r}@test-inbox.local>`).join(" ")}`
       : null,
     "MIME-Version: 1.0",
   ].filter(Boolean);
@@ -314,8 +316,17 @@ function persistRefreshToken(refreshToken) {
 }
 
 async function ensureCredentials() {
-  const { EXOEMAILTEST_CLIENT_ID, EXOEMAILTEST_CLIENT_SECRET, EXOEMAILTEST_REFRESH_TOKEN } =
+  const { EXOEMAILTEST_EMAIL, EXOEMAILTEST_CLIENT_ID, EXOEMAILTEST_CLIENT_SECRET, EXOEMAILTEST_REFRESH_TOKEN } =
     process.env;
+
+  if (!EXOEMAILTEST_EMAIL) {
+    console.error(
+      `\nMissing EXOEMAILTEST_EMAIL in .env.local. This is the test\n` +
+        `account this script seeds. Add it alongside the other\n` +
+        `EXOEMAILTEST_* vars in .env.local.\n`,
+    );
+    process.exit(1);
+  }
 
   if (!EXOEMAILTEST_CLIENT_ID || !EXOEMAILTEST_CLIENT_SECRET) {
     console.error(

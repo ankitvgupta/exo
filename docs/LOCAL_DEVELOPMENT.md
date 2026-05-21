@@ -1,8 +1,11 @@
 # Local Development
 
 Everything you need to develop, test, and verify changes locally without
-ever touching your real Gmail inbox. The test account
-`exoemailtest@gmail.com` is the only inbox dev/tests interact with.
+ever touching your real Gmail inbox. The test account — referenced
+throughout this doc as `$EXOEMAILTEST_EMAIL`, the env var set in
+`.env.local` and `~/src/mail-app/.env` — is the only inbox dev/tests
+interact with. The literal address is not committed anywhere in this
+repo; it lives only in your local `.env*` files.
 
 ## Quick start (fresh worktree)
 
@@ -31,7 +34,7 @@ node scripts/setup-dev-data.mjs
 npm run dev
 ```
 
-After step 6, the app comes up signed in as `exoemailtest@gmail.com`
+After step 6, the app comes up signed in as `$EXOEMAILTEST_EMAIL`
 and syncs the 19 seeded fixture emails. You're developing against
 real Gmail-shaped data, never your personal inbox.
 
@@ -57,7 +60,7 @@ refresh token. CI never sees Anthropic or Gmail credentials.
 
 | Command | What it does | When you run it |
 |---|---|---|
-| `npm run dev` | Launches Electron in dev mode against `.dev-data/`. Signs in as `exoemailtest@gmail.com` if tokens are present. | Day-to-day development. |
+| `npm run dev` | Launches Electron in dev mode against `.dev-data/`. Signs in as `$EXOEMAILTEST_EMAIL` if tokens are present. | Day-to-day development. |
 | `npm run dev:demo` | Launches in demo mode — mock data, no real Gmail, no API calls. | Quickly poking at UI without OAuth setup. |
 | `node scripts/setup-dev-data.mjs` | Refreshes the OAuth tokens in `.dev-data/` from `.env.local` and writes credentials.json. Idempotent. | When `.dev-data/` is missing tokens, or after a token revoke/refresh. |
 | `node scripts/seed-test-inbox.mjs` | Inserts 19 fixture emails into the test Gmail inbox via `users.messages.insert`. Idempotent (skips if already seeded). | First-time setup. After a Gmail wipe. Or `--reset` to re-seed cleanly. |
@@ -107,7 +110,7 @@ EXO_REAL_GMAIL_TEST=true npx playwright test --project=real-gmail-full-sync
 ```
 
 Both require `EXOEMAILTEST_*` creds in `.env.local`. Both target
-`exoemailtest@gmail.com` only.
+`$EXOEMAILTEST_EMAIL` only.
 
 ### Packaged-app smoke
 
@@ -155,7 +158,7 @@ Google only returns a refresh token on FIRST consent.
 
 Fix:
 1. Visit https://myaccount.google.com/permissions (signed in as
-   `exoemailtest@gmail.com`)
+   `$EXOEMAILTEST_EMAIL`)
 2. Find and revoke the Exo app
 3. Re-run `node scripts/seed-test-inbox.mjs`
 
@@ -166,7 +169,7 @@ The test account isn't on the OAuth consent screen's test-users list.
 Fix:
 1. Google Cloud Console → APIs & Services → OAuth consent screen
 2. Pick the project that owns your app's OAuth client
-3. Test users → Add users → `exoemailtest@gmail.com`
+3. Test users → Add users → `$EXOEMAILTEST_EMAIL`
 
 ### "Access token expired" / sync failures
 
@@ -242,7 +245,7 @@ in CI.
 
 ## Project-wide invariants
 
-- **Dev signs in as `exoemailtest@gmail.com` only.** Never your real
+- **Dev signs in as `$EXOEMAILTEST_EMAIL` only.** Never your real
   inbox. Years of personal email is not a development surface.
 - **No LLM or Gmail credentials in CI.** Anything that calls Claude
   runs locally. Anything that touches Gmail runs locally.

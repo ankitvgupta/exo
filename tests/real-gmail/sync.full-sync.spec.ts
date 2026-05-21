@@ -2,7 +2,8 @@
  * Real-Gmail Layer 9b — "sync pipeline" (full-sync mode).
  *
  * Wipes the local DB before each test and exercises the OAuth + full
- * sync code path against exoemailtest@gmail.com. Slow — only run when
+ * sync code path against the test account (configured via
+ * EXOEMAILTEST_EMAIL). Slow — only run when
  * touching sync, OAuth, or PrefetchService code.
  *
  * Sets EXO_DISABLE_PREFETCH=true so the sync test isn't entangled

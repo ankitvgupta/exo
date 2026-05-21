@@ -171,7 +171,7 @@ test.describe("Migration replay + symmetry", () => {
     const now = Date.now();
     db.prepare(
       "INSERT INTO accounts (id, email, display_name, is_primary, added_at) VALUES (?, ?, ?, ?, ?)",
-    ).run("acc-1", "exoemailtest@gmail.com", "Test", 1, now);
+    ).run("acc-1", "test@example.invalid", "Test", 1, now);
 
     // Now run migrations. Should bootstrap the numbered system from scratch.
     runMigrations(db);

@@ -4,7 +4,7 @@
  * @typedef {Object} SeedFixture
  * @property {string} id — stable identifier; used as Message-ID seed
  * @property {string} from — RFC 5322 From header value (e.g. `"Alice <alice@example.com>"`)
- * @property {string} [to] — RFC 5322 To header (defaults to `exoemailtest@gmail.com`)
+ * @property {string} [to] — RFC 5322 To header (defaults to the test account from EXOEMAILTEST_EMAIL)
  * @property {string} [cc] — optional Cc
  * @property {string} subject
  * @property {string} body — plain-text or HTML body

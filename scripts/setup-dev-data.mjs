@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
  * Pre-populate .dev-data/ with the test account's OAuth state so
- * `npm run dev` boots already signed in as exoemailtest@gmail.com.
+ * `npm run dev` boots already signed in as the test account (configured
+ * via EXOEMAILTEST_EMAIL in .env.local).
  *
  * Reads .env.local for EXOEMAILTEST_CLIENT_ID / _SECRET / _REFRESH_TOKEN,
  * exchanges the refresh token for a fresh access token, and writes:
@@ -101,7 +102,8 @@ async function main() {
   console.log(`\nAccess token: ${(tokens.access_token ?? "").length} chars`);
   console.log(`Refresh token: present`);
   console.log(`Expires in: ~${expiresIn} min`);
-  console.log(`\n.dev-data/ is ready. Run \`npm run dev\` — the app should boot signed in as exoemailtest@gmail.com.`);
+  const acct = process.env.EXOEMAILTEST_EMAIL ?? "the test account";
+  console.log(`\n.dev-data/ is ready. Run \`npm run dev\` — the app should boot signed in as ${acct}.`);
 }
 
 main().catch((err) => {

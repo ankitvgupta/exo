@@ -8,7 +8,8 @@
  * Only packaged (released) builds use `app.getPath("userData")`.
  *
  * As of 2026-05-20, dev runs start with an empty `.dev-data/` and
- * authenticate fresh against the test Gmail account (`exoemailtest@gmail.com`).
+ * authenticate fresh against the dedicated test Gmail account (set via
+ * `EXOEMAILTEST_EMAIL` in `.env.local`).
  * Real-account state is never copied into dev — the prior bootstrap that
  * pulled tokens/db from the production directory has been removed.
  *

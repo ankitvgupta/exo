@@ -79,7 +79,8 @@ export default defineConfig({
       name: "real-gmail",
       testDir: "./tests/real-gmail",
       testMatch: /.*\.spec\.ts/,
-      // Layer 9 — real-Gmail integration tests against exoemailtest@gmail.com.
+      // Layer 9 — real-Gmail integration tests against the test account
+      // (configured via EXOEMAILTEST_EMAIL in .env.local).
       // LOCAL ONLY. Gated by EXO_REAL_GMAIL_TEST=true so accidental
       // invocations skip cleanly. Refresh-token-only auth from .env.local.
       // Excludes full-sync (the real-gmail-full-sync project below is the

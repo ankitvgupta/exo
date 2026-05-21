@@ -46,7 +46,12 @@ loadEnvFile(join(REPO_ROOT, ".env.local"));
 // Config
 // ============================================================
 
-export const TEST_ACCOUNT = "exoemailtest@gmail.com";
+/**
+ * The test account email is read from EXOEMAILTEST_EMAIL in .env.local
+ * (never committed). Falls back to an empty string if not set; consumers
+ * should pingAccount() before using which will throw with a clear error.
+ */
+export const TEST_ACCOUNT = process.env.EXOEMAILTEST_EMAIL ?? "";
 const OAUTH_REDIRECT = "urn:ietf:wg:oauth:2.0:oob";
 
 /**
@@ -58,6 +63,7 @@ export function requiredEnvCheck(): string | null {
     return "EXO_REAL_GMAIL_TEST != true — real-gmail tests gated";
   }
   const required = [
+    "EXOEMAILTEST_EMAIL",
     "EXOEMAILTEST_CLIENT_ID",
     "EXOEMAILTEST_CLIENT_SECRET",
     "EXOEMAILTEST_REFRESH_TOKEN",

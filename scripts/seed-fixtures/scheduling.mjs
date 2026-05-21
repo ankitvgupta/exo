@@ -3,7 +3,7 @@
  * The calendaring-agent eval suite should detect these as scheduling.
  *
  * Threading is wired via Message-IDs that the seed script substitutes
- * `<id>@exoemailtest.local` into. The `inReplyTo` field references the
+ * `<id>@test-inbox.local` into. The `inReplyTo` field references the
  * id of the parent fixture; the script resolves to a real Message-ID at
  * insert time.
  *

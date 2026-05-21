@@ -2,7 +2,7 @@
  * Real-Gmail Layer 9a — "feature on real Gmail data" (cached mode).
  *
  * Tests the dev app against the existing .dev-data/ DB, which holds
- * exoemailtest@gmail.com state from prior `npm run dev` runs (+ the
+ * test account state from prior `npm run dev` runs (+ the
  * seed-test-inbox.mjs fixtures). No fresh sync — that's the 9b spec.
  *
  * What this catches:
@@ -93,7 +93,7 @@ test.describe("Real-Gmail Layer 9a — cached .dev-data", () => {
   });
 
   test("inbox renders seeded emails (>= 1 visible thread)", async () => {
-    // The dev DB has whatever's been synced from exoemailtest@gmail.com.
+    // The dev DB has whatever's been synced from the test account.
     // After running seed-test-inbox.mjs + a dev sync, there should be
     // ≥1 thread visible.
     const threadRow = page.locator("div[data-thread-id]").first();
