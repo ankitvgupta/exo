@@ -63,6 +63,7 @@ Do not allow flaky tests. If you have 1 test that fails in a large test run, don
 - Prior to making a pull request, always run the type checker and ensure they pass
 - **Always run `npm run pre-pr` at least once per PR (no `--quick`) before merge.** It runs the LLM-judged evals + agentic-verify + real-Gmail tests and injects the report into the PR body. The CI job `verify-prepr-report` requires (a) a marker block exists, (b) `mode=full`, (c) verdict=PASS. The marker SHA is informational only — not gated against HEAD, so one passing full run per PR is sufficient. Use `--quick` freely for iteration; switch to a full run before requesting review or merging. See `docs/LOCAL_DEVELOPMENT.md`.
 - Once a pull request has been open for a branch, you should ask me whether you should commit and push changes to that branch. After every push to a branch, include a link to the branch in the output to me so I can quickly navigate to the PR.
+- **After opening a PR, autonomously run `/review` then `/reviewloop`** without waiting to be asked. `/review` catches pre-landing issues (SQL safety, LLM trust boundaries, structural problems); `/reviewloop` then iterates against Greptile/Devin/other bots until comments are resolved and CI is green. Still surface major decisions or contested changes back to me — autonomy is about not asking for permission to start, not about silently shipping judgment calls.
 
 # Git commands
 You should regularly make commits in the feature branch for major functionality you ship.
