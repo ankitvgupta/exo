@@ -304,12 +304,15 @@ function printReport(report: FeatureReport): void {
   if (report.fixturesRun === 0) return;
 
   for (const r of report.results) {
-    const deltaStr =
-      r.delta === null
-        ? "(no baseline)"
-        : r.delta >= 0
-          ? `+${r.delta.toFixed(1)}`
-          : r.delta.toFixed(1);
+    const deltaStr = r.judgeError
+      ? "(judge error)"
+      : r.infraError
+        ? "(infra error)"
+        : r.delta === null
+          ? "(no baseline)"
+          : r.delta >= 0
+            ? `+${r.delta.toFixed(1)}`
+            : r.delta.toFixed(1);
     console.log(`  [${r.judge.score}/10] ${r.fixtureId} ${deltaStr}`);
     console.log(`    ${r.description}`);
     console.log(`    judge: ${r.judge.reason}`);
@@ -370,8 +373,20 @@ async function main(): Promise<void> {
     reports.push(report);
     printReport(report);
     if (updateBaseline && report.fixturesRun > 0) {
-      saveBaseline(feature, report.results);
-      console.log(`  baseline updated → ${baselinePath(feature)}`);
+      // Refuse to persist baselines when any fixture has a score-0
+      // placeholder (judge or infra error). Otherwise --update-baseline
+      // during an outage would write score 0 for the broken fixtures,
+      // and future runs would compute deltas like +7 against that — a
+      // permanent regression-detection blind spot.
+      const blockingErrors = report.judgeErrors.length + report.infraErrors.length;
+      if (blockingErrors > 0) {
+        console.warn(
+          `  [${feature}] baseline NOT updated — ${blockingErrors} judge/infra error(s) present. Fix the underlying failure and re-run.`,
+        );
+      } else {
+        saveBaseline(feature, report.results);
+        console.log(`  baseline updated → ${baselinePath(feature)}`);
+      }
     }
     if (report.regressions.length > 0) anyRegressions = true;
     if (report.infraErrors.length > 0) anyInfraErrors = true;
