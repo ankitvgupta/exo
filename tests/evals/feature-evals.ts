@@ -113,6 +113,9 @@ interface FixtureResult {
   baselineScore: number | null;
   delta: number | null;
   output: string;
+  /** Set when runFixture threw — the judge result is then skipped so an
+   *  infrastructure crash isn't silently graded as a model regression. */
+  infraError?: string;
 }
 
 interface FeatureReport {
@@ -120,6 +123,11 @@ interface FeatureReport {
   fixturesRun: number;
   results: FixtureResult[];
   regressions: string[];
+  /** Infrastructure errors (runFixture threw) — distinct from judge
+   *  regressions. The runner exits non-zero on either, but they're
+   *  reported separately so a developer doesn't chase a phantom model
+   *  regression that's really a broken service call. */
+  infraErrors: string[];
 }
 
 // ============================================================
@@ -198,16 +206,34 @@ async function runFeature(feature: string): Promise<FeatureReport> {
   const baseline = loadBaseline(feature);
   const results: FixtureResult[] = [];
   const regressions: string[] = [];
+  const infraErrors: string[] = [];
 
   for (const fixture of fixtures) {
     console.log(`[${feature}] running ${fixture.id}...`);
     let output: string;
+    let infraError: string | undefined;
     try {
       output = await runFixture(fixture.input, fixture.id);
     } catch (err) {
-      const errMsg = err instanceof Error ? err.message : String(err);
-      console.error(`  ${fixture.id}: runFixture error: ${errMsg}`);
+      infraError = err instanceof Error ? err.message : String(err);
+      console.error(`  ${fixture.id}: runFixture error: ${infraError}`);
       output = "";
+    }
+
+    if (infraError) {
+      // Skip the judge entirely — grading an empty string against the
+      // rubric would assign a low score and surface as a false regression.
+      infraErrors.push(`${fixture.id}: ${infraError}`);
+      results.push({
+        fixtureId: fixture.id,
+        description: fixture.description,
+        judge: { score: 0, reason: `infrastructure error: ${infraError}` },
+        baselineScore: baseline?.scores[fixture.id]?.score ?? null,
+        delta: null,
+        output: "",
+        infraError,
+      });
+      continue;
     }
 
     const judgement = await judge(output, fixture.rubric, fixture.id);
@@ -230,7 +256,7 @@ async function runFeature(feature: string): Promise<FeatureReport> {
     });
   }
 
-  return { feature, fixturesRun: results.length, results, regressions };
+  return { feature, fixturesRun: results.length, results, regressions, infraErrors };
 }
 
 function printReport(report: FeatureReport): void {
@@ -249,6 +275,11 @@ function printReport(report: FeatureReport): void {
   if (report.regressions.length > 0) {
     console.log(`\n  REGRESSIONS (> ${REGRESSION_THRESHOLD} pts below baseline):`);
     for (const reg of report.regressions) console.log(`    - ${reg}`);
+  }
+
+  if (report.infraErrors.length > 0) {
+    console.log(`\n  INFRASTRUCTURE ERRORS (runFixture threw — not a model regression):`);
+    for (const err of report.infraErrors) console.log(`    - ${err}`);
   }
 }
 
@@ -284,6 +315,7 @@ async function main(): Promise<void> {
 
   const reports: FeatureReport[] = [];
   let anyRegressions = false;
+  let anyInfraErrors = false;
   for (const feature of targets) {
     const report = await runFeature(feature);
     reports.push(report);
@@ -293,6 +325,7 @@ async function main(): Promise<void> {
       console.log(`  baseline updated → ${baselinePath(feature)}`);
     }
     if (report.regressions.length > 0) anyRegressions = true;
+    if (report.infraErrors.length > 0) anyInfraErrors = true;
   }
 
   if (all && TODO_FEATURES.length > 0) {
@@ -301,6 +334,11 @@ async function main(): Promise<void> {
   }
 
   console.log(`\nTotal fixtures run: ${reports.reduce((s, r) => s + r.fixturesRun, 0)}`);
+  if (anyInfraErrors) {
+    console.error("\nEval FAILED: infrastructure errors (runFixture threw — not a model regression).");
+    console.error("Check the runner code path, not the model or rubric.");
+    process.exit(1);
+  }
   if (anyRegressions) {
     console.error("\nEval FAILED: regressions detected vs baseline");
     process.exit(1);

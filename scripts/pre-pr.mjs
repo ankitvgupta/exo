@@ -111,12 +111,32 @@ const FEATURE_PATHS = {
   "draft-edit-learner": [/draft-edit-learner/, /memory-learner/],
 };
 
+// Mirror of the FEATURES registry in tests/evals/feature-evals.ts. Kept
+// in sync manually — when an eval suite lands for a TODO feature, add
+// its name here. Letting a feature into the quick-mode eval list
+// without scaffolding makes feature-evals throw "Unknown feature" and
+// fail the eval phase with a misleading spurious failure.
+const REGISTERED_FEATURES = new Set([
+  "draft-generator",
+  "calendaring-agent",
+  "archive-ready-analyzer",
+]);
+
 function affectedFeatures(changedFiles) {
   const features = new Set();
+  const skipped = new Set();
   for (const file of changedFiles) {
     for (const [feature, patterns] of Object.entries(FEATURE_PATHS)) {
-      if (patterns.some((p) => p.test(file))) features.add(feature);
+      if (patterns.some((p) => p.test(file))) {
+        if (REGISTERED_FEATURES.has(feature)) features.add(feature);
+        else skipped.add(feature);
+      }
     }
+  }
+  if (skipped.size > 0) {
+    console.log(
+      `[evals] note: diff touched feature(s) without eval scaffolding yet: ${[...skipped].join(", ")}`,
+    );
   }
   return [...features];
 }
