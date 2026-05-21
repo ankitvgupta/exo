@@ -296,7 +296,13 @@ jobs:
     # Hermetic — uses default GITHUB_TOKEN only. No Anthropic key, no
     # Gmail creds. Makes running `npm run pre-pr` functionally required
     # before merge: this job fails the PR if the marker block in the PR
-    # body is missing or stale (SHA doesn't match HEAD).
+    # body is missing, mode=quick, or verdict != PASS.
+    #
+    # Only meaningful on pull_request events — workflow_dispatch has no
+    # PR context (github.event.pull_request.number is empty), so this
+    # job would fail with a confusing red status on dispatched runs
+    # (e.g., the visual-regression baseline regeneration).
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       pull-requests: read
