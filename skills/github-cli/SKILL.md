@@ -1,3 +1,8 @@
+---
+name: github-cli
+description: Use the GitHub CLI from this repo across local Mac, Codex, and hosted Claude environments. Use when interacting with GitHub PRs, issues, checks, reviews, or arbitrary GitHub API endpoints.
+---
+
 # GitHub CLI (`gh`) Usage
 
 How to interact with the GitHub API from this repo. There are two environments to handle.
@@ -12,8 +17,8 @@ gh issue list
 gh api repos/{owner}/{repo}/pulls
 ```
 
-### Claude Code on Web
-Three differences from local:
+### Hosted Agent Environments
+Three differences from local can apply:
 
 1. **`gh` is not pre-installed.** Install the latest version:
    ```bash
@@ -23,7 +28,7 @@ Three differences from local:
      && cp /tmp/gh_${GH_VERSION}_linux_amd64/bin/gh /usr/local/bin/gh
    ```
 
-2. **Auth uses `GITHUB_TOKEN` env var**, which is already set. `gh` picks it up automatically — no `gh auth login` needed.
+2. **Auth may use `GITHUB_TOKEN` env var**, which is often already set. `gh` picks it up automatically — no `gh auth login` needed.
 
 3. **Git remotes use a proxy URL** (e.g. `http://local_proxy@127.0.0.1:PORT/git/owner/repo`), not `github.com`. This means `gh` can't auto-detect the repo. **Always pass `--repo owner/repo`** for subcommands that need it (pr, issue, release, etc.), or use `gh api` with explicit paths.
 

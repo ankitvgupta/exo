@@ -7,9 +7,16 @@ Test the Exo Electron app interactively using Chrome DevTools Protocol (CDP) via
 
 ## Prerequisites
 
-1. **chrome-devtools MCP must be configured** — add it to your MCP config:
+1. **chrome-devtools MCP must be configured**.
+
+   Claude:
    ```bash
    claude mcp add chrome-devtools -- npx -y chrome-devtools-mcp@latest --browser-url=http://127.0.0.1:9222
+   ```
+
+   Codex:
+   ```bash
+   codex mcp add chrome-devtools -- npx -y chrome-devtools-mcp@latest --browser-url=http://127.0.0.1:9222
    ```
 
 2. **App must be launched with remote debugging port**:
@@ -33,19 +40,19 @@ Test the Exo Electron app interactively using Chrome DevTools Protocol (CDP) via
    Wait for the dev server to be ready (look for "dev server running" or similar output).
 
 2. **List available pages**:
-   Use `mcp__chrome-devtools__list_pages` to see Electron's renderer windows.
+   Use the chrome-devtools MCP list-pages tool to see Electron's renderer windows.
 
 3. **Select the main window**:
-   Use `mcp__chrome-devtools__select_page` with the page ID of the main app window (not DevTools or blank pages).
+   Select the page ID of the main app window (not DevTools or blank pages).
 
 4. **Take a snapshot** to see the current UI state:
-   Use `mcp__chrome-devtools__take_snapshot` to get an accessibility tree of the page.
+   Take an accessibility snapshot of the selected page.
 
 5. **Interact with the app**:
-   - `mcp__chrome-devtools__click` — click buttons, links, tabs
-   - `mcp__chrome-devtools__fill` — type into inputs and textareas
-   - `mcp__chrome-devtools__take_screenshot` — capture visual state
-   - `mcp__chrome-devtools__evaluate_script` — run JS in the renderer context
+   - click buttons, links, tabs
+   - fill inputs and textareas
+   - take screenshots to capture visual state
+   - evaluate JS in the renderer context when DOM inspection is needed
 
 6. **Stop the app** when done by killing the background process.
 
