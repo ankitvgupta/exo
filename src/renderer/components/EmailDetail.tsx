@@ -2104,7 +2104,7 @@ function NewEmailCompose({
         <span className="text-gray-900 dark:text-gray-100 font-medium text-sm">New Message</span>
         <button
           onClick={onDiscard ?? (() => onCancel(getFormState()))}
-          className="ml-auto p-1.5 text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 rounded transition-colors"
+          className="ml-auto p-1.5 text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 rounded transition-colors"
           title="Discard draft"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2145,7 +2145,7 @@ function NewEmailCompose({
             </div>
             <button
               onClick={() => form.setShowCcBcc(!form.showCcBcc)}
-              className="ml-2 flex-shrink-0 p-1 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+              className="ml-2 flex-shrink-0 p-1 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
               data-testid="compose-cc-bcc-toggle"
               title={form.showCcBcc ? "Hide Cc/Bcc/From" : "Show Cc/Bcc/From"}
             >

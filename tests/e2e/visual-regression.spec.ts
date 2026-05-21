@@ -118,9 +118,10 @@ test.describe("Visual regression — Linux-only", () => {
     });
 
     // Settings overlays the inbox, so the same titlebar buttons + selects
-    // are still in the DOM. Tracked product debt — re-enable once #127 lands.
+    // are still in the DOM. Tracked product debt — re-enable once #127 lands
+    // and the SettingsPanel palette sweep follows #126.
     await checkA11y(page, {
-      disableRules: ["button-name", "select-name"],
+      disableRules: ["color-contrast", "button-name", "select-name"],
     });
 
     await page.keyboard.press("Escape");

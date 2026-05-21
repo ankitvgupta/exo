@@ -40,7 +40,7 @@ export function ComposeToolbar({
       />
       <button
         onClick={onPickFiles}
-        className="p-1.5 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+        className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
         title="Attach file"
       >
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -52,7 +52,7 @@ export function ComposeToolbar({
           />
         </svg>
       </button>
-      <span className="text-xs text-gray-400 dark:text-gray-500">Cmd+Enter to send</span>
+      <span className="text-xs text-gray-500 dark:text-gray-400">Cmd+Enter to send</span>
       {availableSignatures.length > 0 && (
         <select
           value={activeSignatureId ?? ""}
