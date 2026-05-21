@@ -73,11 +73,10 @@ test.describe("Visual regression — Linux-only", () => {
 
     await checkA11y(page, {
       exclude: ["[data-testid='email-date']"],
-      // Tracked product debt — re-enable once the markup/palette pass lands.
-      //   color-contrast: #126 (tailwind text-gray-300/400 on white)
+      // Tracked product debt — re-enable once the markup pass lands.
       //   button-name:    #127 (icon-only toolbar buttons missing aria-label)
       //   select-name:    #127 (account/EA selects missing accessible names)
-      disableRules: ["color-contrast", "button-name", "select-name"],
+      disableRules: ["button-name", "select-name"],
     });
   });
 
@@ -92,7 +91,7 @@ test.describe("Visual regression — Linux-only", () => {
       maxDiffPixelRatio: 0.01,
     });
 
-    await checkA11y(page, { disableRules: ["color-contrast"] });
+    await checkA11y(page);
 
     // Close compose so the next test starts from inbox.
     await page.keyboard.press("Escape");
@@ -119,10 +118,9 @@ test.describe("Visual regression — Linux-only", () => {
     });
 
     // Settings overlays the inbox, so the same titlebar buttons + selects
-    // are still in the DOM. Tracked product debt — re-enable once #126
-    // and #127 are fixed.
+    // are still in the DOM. Tracked product debt — re-enable once #127 lands.
     await checkA11y(page, {
-      disableRules: ["color-contrast", "button-name", "select-name"],
+      disableRules: ["button-name", "select-name"],
     });
 
     await page.keyboard.press("Escape");

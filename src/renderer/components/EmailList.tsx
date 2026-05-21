@@ -493,7 +493,7 @@ export function EmailList() {
             className={`px-2 py-1 text-sm font-medium rounded transition-colors focus:outline-none ${
               !isSentView
                 ? "text-gray-900 dark:text-gray-100"
-                : "text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
+                : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
             }`}
           >
             Inbox
@@ -503,7 +503,7 @@ export function EmailList() {
             className={`px-2 py-1 text-sm font-medium rounded transition-colors inline-flex items-center gap-1 focus:outline-none ${
               isSentView
                 ? "text-gray-900 dark:text-gray-100"
-                : "text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
+                : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
             }`}
           >
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -581,7 +581,7 @@ export function EmailList() {
           <button
             onClick={cycleDensity}
             title={`Density: ${densityLabels[inboxDensity]}`}
-            className="p-1 rounded text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            className="p-1 rounded text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
           >
             <svg
               className="w-4 h-4"

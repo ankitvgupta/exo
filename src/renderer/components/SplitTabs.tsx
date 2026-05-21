@@ -31,7 +31,7 @@ function Tab({ active, onClick, count, children }: TabProps) {
       {children}
       {count !== undefined && (
         <span
-          className={`ml-1.5 text-xs ${active ? "text-blue-500 dark:text-blue-400" : "text-gray-400"}`}
+          className={`ml-1.5 text-xs ${active ? "text-blue-600 dark:text-blue-400" : "text-gray-500 dark:text-gray-400"}`}
         >
           {count}
         </span>
