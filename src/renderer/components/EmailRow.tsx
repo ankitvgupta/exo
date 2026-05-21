@@ -282,7 +282,7 @@ export const EmailRow = memo(
           {snoozeInfo && (
             <span
               className={`flex items-center gap-0.5 flex-shrink-0 ${
-                isSelected && !isChecked ? "text-white/60" : "text-amber-600 dark:text-amber-400"
+                isSelected && !isChecked ? "text-white/60" : "text-amber-700 dark:text-amber-400"
               }`}
               title={`Snoozed until ${formatSnoozeTime(snoozeInfo.snoozeUntil)}`}
             >
@@ -303,7 +303,7 @@ export const EmailRow = memo(
               isSelected && !isChecked
                 ? "text-white/60"
                 : snoozeInfo
-                  ? "text-amber-600 dark:text-amber-400"
+                  ? "text-amber-700 dark:text-amber-400"
                   : "text-gray-500 dark:text-gray-400"
             }`}
           >
