@@ -42,6 +42,7 @@ export function ComposeToolbar({
         onClick={onPickFiles}
         className="p-1.5 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
         title="Attach file"
+        aria-label="Attach file"
       >
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path
@@ -57,6 +58,7 @@ export function ComposeToolbar({
         <select
           value={activeSignatureId ?? ""}
           onChange={(e) => onSignatureChange(e.target.value || null)}
+          aria-label="Signature"
           className="ml-auto text-sm border border-gray-300 dark:border-gray-600 rounded px-2 py-1.5 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300"
         >
           <option value="">No signature</option>
