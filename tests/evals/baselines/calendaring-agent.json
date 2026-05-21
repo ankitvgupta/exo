@@ -4,8 +4,8 @@
   "generatedAt": "2026-05-20T06:14:31.734Z",
   "scores": {
     "ca-1-explicit-scheduling": {
-      "score": 9,
-      "reason": "Correctly identifies hasSchedulingContext as true and captures the 30-minute duration, but doesn't explicitly mention Tuesday/Wednesday afternoon as the specific proposed times."
+      "score": 7,
+      "reason": "Floor of observed scores across runs (7, 8, 9). The judge oscillates because the rubric awards partial credit for capturing duration but not the specific times — different judge passes weight that gap differently. 7 is the conservative baseline; with threshold=1.5 a real regression must land at 5 or below."
     },
     "ca-2-not-scheduling": {
       "score": 10,
