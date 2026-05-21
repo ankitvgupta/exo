@@ -541,6 +541,14 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
   }
 
   private async processQueue(): Promise<void> {
+    if (process.env.EXO_DISABLE_PREFETCH === "true") {
+      // Real-Gmail tests (Layer 9) set this so the sync pipeline isn't
+      // entangled with PrefetchService LLM calls. AI features are tested
+      // separately via eval suites.
+      log.info(`[PERF] processQueue SKIPPED (EXO_DISABLE_PREFETCH=true)`);
+      this.queue.length = 0;
+      return;
+    }
     if (this.isRunning) {
       log.info(`[PERF] processQueue SKIPPED (already running)`);
       return;

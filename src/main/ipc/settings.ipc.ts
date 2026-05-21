@@ -37,9 +37,6 @@ import { createLogger } from "../services/logger";
 
 const log = createLogger("settings-ipc");
 
-// Lazy-initialized to avoid running before initDevData() — ES module import
-// hoisting would otherwise cause the Store constructor to create files in
-// .dev-data/ before production data is copied there.
 let _store: Store<{ config: Config }> | null = null;
 function getStore(): Store<{ config: Config }> {
   if (!_store) {
