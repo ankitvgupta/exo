@@ -30,11 +30,15 @@ function ghJson(args, opts = {}) {
 
 function repoSlug() {
   // Returns "owner/repo" for the current checkout's default remote.
-  const info = ghJson("repo view --json nameWithOwner --jq .nameWithOwner");
-  if (typeof info !== "string" || !info.includes("/")) {
+  // We can't go through ghJson here: `--jq .nameWithOwner` emits a raw
+  // unquoted string ("owner/repo\n"), which JSON.parse rejects. Parse
+  // the JSON object instead and pick the field ourselves.
+  const obj = ghJson("repo view --json nameWithOwner");
+  const slug = obj?.nameWithOwner;
+  if (typeof slug !== "string" || !slug.includes("/")) {
     throw new Error("Could not determine repo slug from `gh repo view`");
   }
-  return info;
+  return slug;
 }
 
 function findExistingCommentId(prNumber, marker) {
