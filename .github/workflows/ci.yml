@@ -151,8 +151,14 @@ jobs:
 
       - run: npm ci
 
-      - name: Build Electron app (needed for better-sqlite3 native module)
-        run: npm run build
+      - name: Rebuild better-sqlite3 for system Node
+        # `npm ci` runs postinstall (electron-builder install-app-deps),
+        # which builds native modules for Electron's Node ABI. The
+        # migrations test runs under plain Node via Playwright — so we
+        # need the system-Node ABI here.
+        run: |
+          rm -rf node_modules/better-sqlite3/build node_modules/better-sqlite3/prebuilds
+          npm rebuild better-sqlite3
 
       - name: Run migration replay tests
         run: npx playwright test --project=migrations
@@ -169,17 +175,21 @@ jobs:
   visual-regression:
     name: Visual Regression
     runs-on: ubuntu-latest
+    # Informational until baselines are committed. Without baselines,
+    # `toHaveScreenshot` reports "snapshot doesn't match expected" and
+    # fails. To bootstrap: run this job once with EXO_UPDATE_SNAPSHOTS=1
+    # (set via workflow_dispatch), commit the generated PNGs from the
+    # artifact, then this gate becomes real.
+    continue-on-error: true
     # Pin the docker image version so font rendering stays stable across
     # CI runs. Bump deliberately when refreshing baselines.
     container:
       image: mcr.microsoft.com/playwright:v1.58.2-jammy
-      options: --user 1001
     env:
       CI: true
       EXO_DEMO_MODE: true
       ELECTRON_DISABLE_SANDBOX: 1
       NODE_OPTIONS: --max-old-space-size=4096
-      HOME: /root
     steps:
       - uses: actions/checkout@v4
 
