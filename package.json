@@ -82,7 +82,6 @@
     "zustand": "^5.0.2"
   },
   "devDependencies": {
-    "@axe-core/playwright": "^4.11.3",
     "@playwright/test": "^1.58.2",
     "@tailwindcss/forms": "^0.5.9",
     "@types/better-sqlite3": "^7.6.12",
@@ -97,6 +96,7 @@
     "@typescript-eslint/parser": "^8.57.2",
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.20",
+    "axe-core": "^4.11.4",
     "electron": "^39.8.5",
     "electron-builder": "^25.1.8",
     "electron-vite": "^3.0.0",

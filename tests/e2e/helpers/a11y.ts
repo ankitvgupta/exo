@@ -1,5 +1,5 @@
 import type { Page } from "@playwright/test";
-import AxeBuilder from "@axe-core/playwright";
+import axe from "axe-core";
 
 export type A11yImpact = "minor" | "moderate" | "serious" | "critical";
 
@@ -20,31 +20,39 @@ const IMPACT_RANK: Record<A11yImpact, number> = {
   critical: 3,
 };
 
+const WCAG_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"];
+
 /**
  * Run axe-core against the current page and throw if any violations meet
  * the configured impact threshold. Default threshold is "serious" (also
  * fails on "critical"). Minor/moderate violations are silent — capture
  * those separately when you care.
  *
- * Scoped to WCAG 2.0 A/AA + WCAG 2.1 A/AA rule sets, which is the
- * pragmatic baseline for shipping a desktop app.
+ * Why we inject axe-core's source ourselves instead of using
+ * `@axe-core/playwright`: AxeBuilder.analyze() opens an isolated page via
+ * `BrowserContext.newPage()` to evaluate the rules, but Electron's
+ * `_electron.launch()` exposes a single-window context that rejects
+ * `Target.createTarget` with "Not supported". Injecting `axe.source`
+ * inline avoids the second target entirely and works in both Chromium
+ * and Electron driven by Playwright.
  */
 export async function checkA11y(page: Page, options: CheckA11yOptions = {}): Promise<void> {
   const failOn = options.failOn ?? "serious";
   const threshold = IMPACT_RANK[failOn];
 
-  let builder = new AxeBuilder({ page }).withTags([
-    "wcag2a",
-    "wcag2aa",
-    "wcag21a",
-    "wcag21aa",
-  ]);
+  await page.evaluate(axe.source);
 
-  for (const sel of options.exclude ?? []) {
-    builder = builder.exclude(sel);
-  }
-
-  const results = await builder.analyze();
+  const results = await page.evaluate(
+    ({ tags, exclude }) => {
+      const excludeSelectors = exclude.map((sel) => [sel]);
+      const context =
+        excludeSelectors.length > 0
+          ? { exclude: excludeSelectors, include: [["html"]] }
+          : "html";
+      return window.axe.run(context, { runOnly: { type: "tag", values: tags } });
+    },
+    { tags: WCAG_TAGS, exclude: options.exclude ?? [] },
+  );
 
   const blocking = results.violations.filter((v) => {
     const impact = (v.impact ?? "minor") as A11yImpact;
@@ -60,4 +68,10 @@ export async function checkA11y(page: Page, options: CheckA11yOptions = {}): Pro
     `Accessibility violations (>= ${failOn}) detected:\n${summary}\n` +
       `See https://dequeuniversity.com/rules/axe/ for rule details.`,
   );
+}
+
+declare global {
+  interface Window {
+    axe: typeof axe;
+  }
 }

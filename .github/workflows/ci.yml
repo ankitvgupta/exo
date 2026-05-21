@@ -3,6 +3,12 @@ name: CI
 on:
   pull_request:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      update_snapshots:
+        description: "Regenerate visual baselines (PNGs) and upload as artifact. Download + commit to tests/e2e/visual-regression.spec.ts-snapshots/."
+        type: boolean
+        default: false
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -208,10 +214,27 @@ jobs:
         # platform === linux + the screenshot project. Run only it.
         # xvfb-run is required: Electron needs a display, and the Playwright
         # docker image doesn't auto-start one (unlike Chromium-only runs).
+        # On workflow_dispatch with update_snapshots=true, regenerate the
+        # baselines instead of comparing — used to bootstrap or refresh.
         run: |
+          UPDATE_FLAG=""
+          if [ "${{ github.event.inputs.update_snapshots }}" = "true" ]; then
+            UPDATE_FLAG="--update-snapshots"
+            echo "Bootstrap/refresh mode: regenerating baselines"
+          fi
           xvfb-run --auto-servernum npx playwright test \
             --project=e2e \
-            tests/e2e/visual-regression.spec.ts
+            tests/e2e/visual-regression.spec.ts \
+            $UPDATE_FLAG
+
+      - name: Upload regenerated baselines (workflow_dispatch only)
+        if: ${{ github.event.inputs.update_snapshots == 'true' && !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-regression-baselines
+          path: tests/e2e/visual-regression.spec.ts-snapshots/
+          retention-days: 14
+          if-no-files-found: warn
 
       - name: Upload screenshot diffs
         uses: actions/upload-artifact@v4
