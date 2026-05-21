@@ -4,10 +4,8 @@ import { readFileSync, existsSync, readdirSync } from "fs";
 import { electronApp, optimizer } from "@electron-toolkit/utils";
 import Store from "electron-store";
 
-import { getDataDir, initDevData } from "./data-dir";
+import { getDataDir } from "./data-dir";
 import { createLogger, closeLogs } from "./services/logger";
-
-initDevData();
 
 const log = createLogger("app");
 

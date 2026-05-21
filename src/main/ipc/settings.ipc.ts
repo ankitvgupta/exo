@@ -37,9 +37,6 @@ import { createLogger } from "../services/logger";
 
 const log = createLogger("settings-ipc");
 
-// Lazy-initialized to avoid running before initDevData() — ES module import
-// hoisting would otherwise cause the Store constructor to create files in
-// .dev-data/ before production data is copied there.
 let _store: Store<{ config: Config }> | null = null;
 function getStore(): Store<{ config: Config }> {
   if (!_store) {
@@ -65,12 +62,11 @@ function getStore(): Store<{ config: Config }> {
             enabled: true,
             priorities: ["high", "medium", "low"],
           },
-          posthog: {
-            enabled: false,
-            sessionReplay: false,
-          },
+          // posthog intentionally omitted from defaults — getConfig() applies
+          // a version-aware default so pre-existing installs (configVersion < 2)
+          // are not silently opted in to analytics + session replay.
           keyboardBindings: "superhuman" as const,
-          configVersion: 1,
+          configVersion: 2,
         },
       },
     });
@@ -94,6 +90,24 @@ export function getConfig(): Config {
       config.autoDraft.priorities.push("low");
     }
     config.configVersion = 1;
+    getStore().set("config", config);
+  }
+
+  // v2 migration: set posthog defaults explicitly so we can distinguish a brand-new
+  // install (where we opt in to analytics + session replay) from a pre-existing
+  // install with no persisted posthog choice (where we opt out, to avoid silently
+  // enabling session replay on upgrade for users who never saw the wizard step).
+  if ((config.configVersion ?? 0) < 2) {
+    if (!config.posthog) {
+      config.posthog = { enabled: false, sessionReplay: false };
+    }
+    config.configVersion = 2;
+    getStore().set("config", config);
+  } else if (!config.posthog) {
+    // Fresh install at configVersion >= 2 with no persisted posthog (e.g., user
+    // hasn't completed the wizard yet) — opt in by default. Wizard will overwrite
+    // with the user's actual choice.
+    config.posthog = { enabled: true, sessionReplay: true };
     getStore().set("config", config);
   }
 

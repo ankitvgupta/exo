@@ -61,6 +61,7 @@ Do not allow flaky tests. If you have 1 test that fails in a large test run, don
 - Prior to making a pull request, always run the tests and ensure they pass
 - Prior to making a pull request, always run the linters and ensure they pass
 - Prior to making a pull request, always run the type checker and ensure they pass
+- **Always run `npm run pre-pr` at least once per PR (no `--quick`) before merge.** It runs the LLM-judged evals + agentic-verify + real-Gmail tests and injects the report into the PR body. The CI job `verify-prepr-report` requires (a) a marker block exists, (b) `mode=full`, (c) verdict=PASS. The marker SHA is informational only — not gated against HEAD, so one passing full run per PR is sufficient. Use `--quick` freely for iteration; switch to a full run before requesting review or merging. See `docs/LOCAL_DEVELOPMENT.md`.
 - Once a pull request has been open for a branch, you should ask me whether you should commit and push changes to that branch. After every push to a branch, include a link to the branch in the output to me so I can quickly navigate to the PR.
 
 # Git commands
@@ -92,7 +93,7 @@ Generally i will give one git worktree one branch to work with and itll be clear
 - When starting work in a new worktree, copy over any gitignored files needed from the main worktree (environment variables, local config, credentials, etc.).
 - Do NOT copy `.claude/` directory contents or `CLAUDE.md` — those are tracked by git and will already be in the worktree.
 - Do NOT use `git -C <path>` or `git -c` flags unnecessarily — you are already working inside the worktree, so just run git commands directly from the current directory.
-- **Worktree dev setup for this project**: The main worktree is at `/Users/ankit/src/mail-app/`. To run `npm run dev` with real accounts, copy `.env` from the main worktree — it's needed at build time for `MAIN_VITE_GOOGLE_CLIENT_ID` / `MAIN_VITE_GOOGLE_CLIENT_SECRET` and `ANTHROPIC_API_KEY`. Everything else (tokens, config, splits) is shared via `~/Library/Application Support/exo/` or `.dev-data/` and does not need to be copied.
+- **Worktree dev setup for this project**: The main worktree is at `/Users/ankit/src/mail-app/`. Copy `.env` from the main worktree — it's needed at build time for `MAIN_VITE_GOOGLE_CLIENT_ID` / `MAIN_VITE_GOOGLE_CLIENT_SECRET` and `ANTHROPIC_API_KEY`. Dev signs in as the dedicated test account only (set via `EXOEMAILTEST_EMAIL` in `.env.local`) — never the user's real inbox. On a fresh worktree, `.dev-data/` starts empty; run `npm run dev` and OAuth as the test account once to populate it. Real-account state from `~/Library/Application Support/exo/` is **NOT** auto-copied into `.dev-data/` (that bootstrap was removed in May 2026). If you need realistic test data, run `node scripts/seed-test-inbox.mjs` once `.env.local` has the test-account refresh token.
 
 ## Code reviews
 - All of my repos are set up to use automatic code review software, either provided by claude or other review apps.
