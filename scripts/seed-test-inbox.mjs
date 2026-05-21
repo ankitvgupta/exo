@@ -89,6 +89,7 @@ const OAUTH_SCOPES = ["https://www.googleapis.com/auth/gmail.modify"];
 const OAUTH_REDIRECT_PORT = 3847;
 const OAUTH_REDIRECT = `http://localhost:${OAUTH_REDIRECT_PORT}/oauth2callback`;
 const ENV_LOCAL_PATH = join(__dirname, "..", ".env.local");
+const ENV_PATH = join(__dirname, "..", ".env");
 
 const args = new Set(process.argv.slice(2));
 const FLAG_RESET = args.has("--reset");
@@ -297,13 +298,16 @@ async function runOAuthLoopback(client) {
 }
 
 /**
- * Persist EXOEMAILTEST_REFRESH_TOKEN into .env.local in-place.
- * Replaces the existing line if present, otherwise appends. Idempotent.
+ * Persist EXOEMAILTEST_REFRESH_TOKEN to disk. Prefers .env.local if it
+ * already exists (some users keep test creds segregated there); otherwise
+ * writes to .env. Replaces the existing line if present, else appends.
+ * Returns the path it wrote to so the caller can tell the user.
  */
 function persistRefreshToken(refreshToken) {
+  const target = existsSync(ENV_LOCAL_PATH) ? ENV_LOCAL_PATH : ENV_PATH;
   let content = "";
-  if (existsSync(ENV_LOCAL_PATH)) {
-    content = readFileSync(ENV_LOCAL_PATH, "utf8");
+  if (existsSync(target)) {
+    content = readFileSync(target, "utf8");
   }
   const re = /^EXOEMAILTEST_REFRESH_TOKEN=.*$/m;
   if (re.test(content)) {
@@ -312,7 +316,8 @@ function persistRefreshToken(refreshToken) {
     if (content.length > 0 && !content.endsWith("\n")) content += "\n";
     content += `EXOEMAILTEST_REFRESH_TOKEN=${refreshToken}\n`;
   }
-  writeFileSync(ENV_LOCAL_PATH, content, { mode: 0o600 });
+  writeFileSync(target, content, { mode: 0o600 });
+  return target;
 }
 
 async function ensureCredentials() {
@@ -321,9 +326,9 @@ async function ensureCredentials() {
 
   if (!EXOEMAILTEST_EMAIL) {
     console.error(
-      `\nMissing EXOEMAILTEST_EMAIL in .env.local. This is the test\n` +
-        `account this script seeds. Add it alongside the other\n` +
-        `EXOEMAILTEST_* vars in .env.local.\n`,
+      `\nMissing EXOEMAILTEST_EMAIL in .env (or .env.local). This is the\n` +
+        `test account this script seeds. Add it alongside the other\n` +
+        `EXOEMAILTEST_* vars.\n`,
     );
     process.exit(1);
   }
@@ -331,9 +336,9 @@ async function ensureCredentials() {
   if (!EXOEMAILTEST_CLIENT_ID || !EXOEMAILTEST_CLIENT_SECRET) {
     console.error(
       `\nMissing OAuth client credentials. Set EXOEMAILTEST_CLIENT_ID and\n` +
-        `EXOEMAILTEST_CLIENT_SECRET in .env.local. You can reuse the same OAuth\n` +
-        `client you use for app dev (the test account just needs to be added\n` +
-        `as a test user on the OAuth consent screen).\n`,
+        `EXOEMAILTEST_CLIENT_SECRET in .env (or .env.local). You can reuse the\n` +
+        `same OAuth client you use for app dev (the test account just needs\n` +
+        `to be added as a test user on the OAuth consent screen).\n`,
     );
     process.exit(1);
   }
@@ -363,9 +368,10 @@ async function ensureCredentials() {
     process.exit(1);
   }
 
-  persistRefreshToken(tokens.refresh_token);
+  const written = persistRefreshToken(tokens.refresh_token);
+  const rel = written.endsWith(".env.local") ? ".env.local" : ".env";
   console.log(
-    `\nRefresh token persisted to .env.local. Continuing to seed the inbox...\n`,
+    `\nRefresh token persisted to ${rel}. Continuing to seed the inbox...\n`,
   );
   client.setCredentials(tokens);
   return client;

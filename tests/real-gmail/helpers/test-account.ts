@@ -2,8 +2,9 @@
  * Helper utilities for the real-Gmail Playwright project.
  *
  * Auth via refresh token (no interactive OAuth in tests). Reads creds
- * from .env.local. Provides Gmail client + cleanup helpers scoped to a
- * single test run via the [exo-test-{runId}] label pattern.
+ * from .env.local then falls back to .env (both are gitignored). Provides
+ * Gmail client + cleanup helpers scoped to a single test run via the
+ * [exo-test-{runId}] label pattern.
  *
  * Local-only. The real-gmail Playwright project is gated on
  * EXO_REAL_GMAIL_TEST=true and the project is never enabled in CI.
@@ -18,7 +19,9 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(__dirname, "..", "..", "..");
 
 // ============================================================
-// .env.local loader (no dotenv dep)
+// .env.local + .env loader (no dotenv dep)
+// .env.local wins (loaded first); .env fills any gaps. Both are
+// gitignored — using either alone is fine.
 // ============================================================
 
 function loadEnvFile(path: string): void {
@@ -41,6 +44,7 @@ function loadEnvFile(path: string): void {
 }
 
 loadEnvFile(join(REPO_ROOT, ".env.local"));
+loadEnvFile(join(REPO_ROOT, ".env"));
 
 // ============================================================
 // Config
@@ -48,8 +52,9 @@ loadEnvFile(join(REPO_ROOT, ".env.local"));
 
 /**
  * The test account email is read from EXOEMAILTEST_EMAIL in .env.local
- * (never committed). Falls back to an empty string if not set; consumers
- * should pingAccount() before using which will throw with a clear error.
+ * or .env (both gitignored, never committed). Falls back to an empty
+ * string if not set; consumers should pingAccount() before using which
+ * will throw with a clear error.
  */
 export const TEST_ACCOUNT = process.env.EXOEMAILTEST_EMAIL ?? "";
 // Same loopback the seed script and main app use. We don't actually
@@ -72,7 +77,7 @@ export function requiredEnvCheck(): string | null {
     "EXOEMAILTEST_REFRESH_TOKEN",
   ];
   for (const k of required) {
-    if (!process.env[k]) return `${k} missing from .env.local`;
+    if (!process.env[k]) return `${k} missing from .env.local or .env`;
   }
   return null;
 }
@@ -164,7 +169,7 @@ export async function pingAccount(): Promise<string> {
   if (email.toLowerCase() !== TEST_ACCOUNT.toLowerCase()) {
     throw new Error(
       `Auth is for ${email}, expected ${TEST_ACCOUNT}. ` +
-        `Check EXOEMAILTEST_REFRESH_TOKEN in .env.local — it must be for the test account.`,
+        `Check EXOEMAILTEST_REFRESH_TOKEN in .env.local or .env — it must be for the test account.`,
     );
   }
   return email;

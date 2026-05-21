@@ -27,9 +27,9 @@ import { runDraftGeneratorFixture } from "./features/draft-generator";
 import { runCalendaringFixture } from "./features/calendaring-agent";
 import { runArchiveReadyFixture } from "./features/archive-ready-analyzer";
 
-// .env.local loader — feature-evals needs ANTHROPIC_API_KEY at runtime.
-// Claude Code scrubs the env from subprocesses so .env.local is the
-// canonical source. No new deps.
+// .env.local + .env loader — feature-evals needs ANTHROPIC_API_KEY at
+// runtime. Claude Code scrubs the env from subprocesses, so we read from
+// disk. .env.local wins (loaded first); .env fills any gaps. No new deps.
 function loadEnvFile(path: string): void {
   if (!existsSync(path)) return;
   for (const line of readFileSync(path, "utf8").split(/\r?\n/)) {
@@ -50,6 +50,7 @@ function loadEnvFile(path: string): void {
 }
 
 loadEnvFile(join(import.meta.dirname, "..", "..", ".env.local"));
+loadEnvFile(join(import.meta.dirname, "..", "..", ".env"));
 
 // ============================================================
 // Feature registry

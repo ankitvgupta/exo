@@ -45,6 +45,7 @@ function loadEnvFile(path) {
 }
 
 loadEnvFile(join(REPO_ROOT, ".env.local"));
+loadEnvFile(join(REPO_ROOT, ".env"));
 
 async function main() {
   const { EXOEMAILTEST_CLIENT_ID, EXOEMAILTEST_CLIENT_SECRET, EXOEMAILTEST_REFRESH_TOKEN } =
@@ -56,7 +57,9 @@ async function main() {
     EXOEMAILTEST_REFRESH_TOKEN,
   })) {
     if (!v) {
-      console.error(`FATAL: ${k} missing from .env.local. Run scripts/seed-test-inbox.mjs first.`);
+      console.error(
+        `FATAL: ${k} missing from .env.local or .env. Run scripts/seed-test-inbox.mjs first.`,
+      );
       process.exit(1);
     }
   }

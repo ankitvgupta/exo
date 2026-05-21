@@ -2,10 +2,10 @@
 
 Everything you need to develop, test, and verify changes locally without
 ever touching your real Gmail inbox. The test account — referenced
-throughout this doc as `$EXOEMAILTEST_EMAIL`, the env var set in
-`.env.local` and `~/src/mail-app/.env` — is the only inbox dev/tests
-interact with. The literal address is not committed anywhere in this
-repo; it lives only in your local `.env*` files.
+throughout this doc as `$EXOEMAILTEST_EMAIL`, the env var set in `.env`
+(or `.env.local`) — is the only inbox dev/tests interact with. The
+literal address is not committed anywhere in this repo; it lives only
+in your local `.env*` files (both gitignored).
 
 ## Quick start (fresh worktree)
 
@@ -13,37 +13,46 @@ repo; it lives only in your local `.env*` files.
 # 1. Install dependencies
 npm install
 
-# 2. Copy env files from the main worktree
-cp /Users/ankit/src/mail-app/.env .          # build-time OAuth client + ANTHROPIC_API_KEY
-cp .env.local.example .env.local             # local-only test creds
+# 2. Copy .env from the main worktree — it already contains everything:
+#    MAIN_VITE_GOOGLE_CLIENT_* (build-time OAuth client)
+#    ANTHROPIC_API_KEY         (evals, agentic-verify, pre-pr)
+#    EXOEMAILTEST_EMAIL        (the test account address)
+#    EXOEMAILTEST_CLIENT_*     (test-account OAuth client — same OAuth
+#                               app as MAIN_VITE_GOOGLE_*, just renamed)
+#    EXOEMAILTEST_REFRESH_TOKEN (set by `seed-test-inbox.mjs` after first
+#                                OAuth — only present if you've ever set
+#                                up real-Gmail testing on this machine)
+cp /Users/ankit/src/mail-app/.env .
 
-# 3. Fill in .env.local
-#    ANTHROPIC_API_KEY — required for evals, agentic-verify, pre-pr
-#    EXOEMAILTEST_CLIENT_ID + _SECRET — copy from .env
-#       (drop the MAIN_VITE_GOOGLE_ prefix)
-#    EXOEMAILTEST_REFRESH_TOKEN — get via the seed script (next step)
-
-# 4. Seed the test inbox (one-time OAuth + insert 19 fixtures)
+# 3. (Optional) If the refresh token isn't in .env yet, run the seed
+#    script to OAuth as the test account once. It writes the token back
+#    to .env (or .env.local if that exists) and inserts 19 fixture emails.
 node scripts/seed-test-inbox.mjs
 
-# 5. Prime .dev-data/ so the app boots already signed in as the test
+# 4. Prime .dev-data/ so the app boots already signed in as the test
 #    account (no setup wizard, no manual OAuth in the app UI)
 node scripts/setup-dev-data.mjs
 
-# 6. Launch dev
+# 5. Launch dev
 npm run dev
 ```
 
-After step 6, the app comes up signed in as `$EXOEMAILTEST_EMAIL`
+After step 5, the app comes up signed in as `$EXOEMAILTEST_EMAIL`
 and syncs the 19 seeded fixture emails. You're developing against
 real Gmail-shaped data, never your personal inbox.
+
+`.env.local` is supported as an optional per-worktree override — every
+secret-loading script reads `.env.local` first, then falls back to
+`.env`. Use `.env.local` only if you want secrets that don't follow
+`.env` from worktree to worktree (e.g. a different ANTHROPIC_API_KEY per
+worktree). Otherwise `.env` alone is sufficient.
 
 ## How the credential layout works
 
 | File | What it holds | Who reads it | Source of truth |
 |---|---|---|---|
-| `.env` | Build-time Google OAuth client (`MAIN_VITE_GOOGLE_CLIENT_*`) + optional `ANTHROPIC_API_KEY` | `electron-vite` at build time | The main worktree, copied per checkout |
-| `.env.local` | `ANTHROPIC_API_KEY`, `EXOEMAILTEST_*` (client id/secret + refresh token) | Eval / spike / seed / agentic-verify scripts | Per-worktree, never committed |
+| `.env` | OAuth clients (`MAIN_VITE_GOOGLE_*`, `EXOEMAILTEST_CLIENT_*`), `ANTHROPIC_API_KEY`, `EXOEMAILTEST_EMAIL`, `EXOEMAILTEST_REFRESH_TOKEN` | `electron-vite` (build time) + every secret-loading script (runtime) | The main worktree, copied per checkout |
+| `.env.local` | Optional per-worktree override of any of the above | Same scripts; loaded first, wins on conflict | Per-worktree, never committed |
 | `.dev-data/credentials.json` | OAuth client id/secret in the format the app expects | Electron at runtime | Written by `scripts/setup-dev-data.mjs` |
 | `.dev-data/tokens.json` | OAuth tokens (access + refresh) for the default account | Electron at runtime | Written by `scripts/setup-dev-data.mjs` |
 | `.dev-data/data/exo.db` | SQLite — accounts, emails, drafts, analyses | Electron at runtime | Populated by sync on first dev run |

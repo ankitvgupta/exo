@@ -130,7 +130,7 @@ if (!["verify-diff", "explore"].includes(MODE)) {
 
 if (!process.env.ANTHROPIC_API_KEY) {
   console.error(
-    `ANTHROPIC_API_KEY is required. Put it in .env.local (see .env.local.example).`,
+    `ANTHROPIC_API_KEY is required. Put it in .env or .env.local (see .env.local.example).`,
   );
   process.exit(1);
 }

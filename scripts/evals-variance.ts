@@ -45,6 +45,7 @@ function loadEnvFile(path: string): void {
   }
 }
 loadEnvFile(join(REPO_ROOT, ".env.local"));
+loadEnvFile(join(REPO_ROOT, ".env"));
 
 type FeatureRunner = (input: unknown, fixtureId: string) => Promise<string>;
 const FEATURES: Record<string, FeatureRunner> = {
@@ -153,7 +154,7 @@ async function analyzeFixture(
 
 async function main(): Promise<void> {
   if (!process.env.ANTHROPIC_API_KEY) {
-    console.error("ANTHROPIC_API_KEY missing — set it in .env.local.");
+    console.error("ANTHROPIC_API_KEY missing — set it in .env.local or .env.");
     process.exit(1);
   }
 
