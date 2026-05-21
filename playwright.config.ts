@@ -32,7 +32,20 @@ export default defineConfig({
       name: "integration",
       testDir: "./tests",
       testMatch: /.*\.spec\.ts/,
-      testIgnore: [/unit\//, /e2e\//, /problematic\//],
+      // Each opt-in suite has its own project (migrations, packaged, agentic,
+      // real-gmail, soak). Exclude them here so the integration project
+      // doesn't accidentally inherit a 60min soak run or a real-Gmail OAuth
+      // attempt during normal CI.
+      testIgnore: [
+        /unit\//,
+        /e2e\//,
+        /problematic\//,
+        /agentic\//,
+        /real-gmail\//,
+        /soak\//,
+        /migrations\//,
+        /packaged\//,
+      ],
       fullyParallel: true,
     },
     {
