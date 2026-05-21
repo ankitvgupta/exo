@@ -41,14 +41,13 @@ function repoSlug() {
   return slug;
 }
 
-function findExistingCommentId(prNumber, marker) {
+function findExistingCommentId(prNumber, marker, slug) {
   // We deliberately do NOT use `--paginate`: gh emits one JSON document
   // per page when paginating + --jq, which breaks JSON.parse. 100 is
   // GitHub's max page size and is plenty for the bot-written +
   // human-review comments a typical PR accrues. If a PR ever exceeds
   // 100 comments and the upsert misses an old marker, the worst case
   // is one duplicate comment — not a correctness break.
-  const slug = repoSlug();
   const comments = ghJson(
     `api repos/${slug}/issues/${prNumber}/comments?per_page=100 --jq '[.[] | {id, body}]'`,
   );
@@ -97,7 +96,7 @@ export function upsertPrComment({ content, prNumber, name = DEFAULT_NAME }) {
   const marker = `<!-- ${name} -->`;
   const body = `${marker}\n${content}`;
   const slug = repoSlug();
-  const existingId = findExistingCommentId(pr, marker);
+  const existingId = findExistingCommentId(pr, marker, slug);
 
   if (existingId) {
     // PATCH via gh api. --field reads from stdin when value is "-@" but

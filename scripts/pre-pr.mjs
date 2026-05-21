@@ -153,9 +153,10 @@ function affectedFeatures(changedFiles) {
 // ============================================================
 
 /**
- * Returns the newest `*-verify-diff.{md,json}` pair in RUNS_DIR with
+ * Returns the newest `*-verify-diff.{md,json,log}` set in RUNS_DIR with
  * mtime >= `sinceMs`, or null if none found. Used to attach the full
- * agentic-verify markdown report to the PR comment.
+ * agentic-verify markdown report AND the literal trace log to the PR
+ * comment.
  *
  * We filter by mtime instead of just "newest in dir" so a stale run
  * left over from a previous session doesn't get spliced into a comment
@@ -174,7 +175,12 @@ function findLatestVerifyReport(sinceMs) {
   if (candidates.length === 0) return null;
   const md = candidates[0].file;
   const json = md.replace(/\.md$/, ".json");
-  return { md, json: existsSync(json) ? json : null };
+  const logPath = md.replace(/\.md$/, ".log");
+  return {
+    md,
+    json: existsSync(json) ? json : null,
+    log: existsSync(logPath) ? logPath : null,
+  };
 }
 
 // ============================================================
@@ -363,73 +369,117 @@ async function main() {
  * verify report inside a <details> block so the comment stays compact
  * by default. Failed-phase logs get their own collapsibles.
  *
- * GitHub comments have a 65,536-character body cap. We truncate the
- * agentic report if it would push us over.
+ * GitHub comments have a 65,536-character body cap. We build the
+ * header + trailer (failures + footer) first, measure them, and only
+ * then size the embedded agentic report to fit the remaining budget.
+ * This way the report — which can be safely truncated and is by far
+ * the largest chunk — absorbs the budget pressure when multiple
+ * phases fail with verbose logs.
  */
 const COMMENT_BODY_BUDGET = 60_000; // leave headroom under the 65,536 cap
 
 function buildPrCommentBody({ verdict, phases, sha, mode, verifyReport }) {
-  const lines = [];
+  // Header (always cheap, always included verbatim).
+  const headerLines = [];
   const emoji = verdict === "PASS" ? "✅" : "❌";
-  lines.push(`## ${emoji} Pre-PR verification — ${verdict}`);
-  lines.push("");
-  lines.push(`- **mode**: \`${mode}\``);
-  lines.push(`- **sha**: \`${sha}\``);
-  lines.push(`- **generated**: ${new Date().toISOString()}`);
-  lines.push("");
-  lines.push("| Phase | Status | Duration |");
-  lines.push("|---|---|---|");
+  headerLines.push(`## ${emoji} Pre-PR verification — ${verdict}`);
+  headerLines.push("");
+  headerLines.push(`- **mode**: \`${mode}\``);
+  headerLines.push(`- **sha**: \`${sha}\``);
+  headerLines.push(`- **generated**: ${new Date().toISOString()}`);
+  headerLines.push("");
+  headerLines.push("| Phase | Status | Duration |");
+  headerLines.push("|---|---|---|");
   for (const p of phases) {
     const statusEmoji = p.ok ? "✅" : "❌";
-    lines.push(`| ${p.name} | ${statusEmoji} exit ${p.status} | ${(p.ms / 1000).toFixed(1)}s |`);
+    headerLines.push(`| ${p.name} | ${statusEmoji} exit ${p.status} | ${(p.ms / 1000).toFixed(1)}s |`);
   }
-  lines.push("");
+  headerLines.push("");
+  const header = headerLines.join("\n");
 
-  // Full agentic-verify report (the headline artifact). Always include
-  // it when we found one; collapsed so the summary stays readable.
-  if (verifyReport?.md && existsSync(verifyReport.md)) {
-    let md = readFileSync(verifyReport.md, "utf8");
-    const header = lines.join("\n");
-    const overhead = 400; // for the <details> wrapper + tail
-    const budget = COMMENT_BODY_BUDGET - header.length - overhead;
-    let truncationNote = "";
-    if (md.length > budget) {
-      md = md.slice(0, budget);
-      truncationNote = `\n\n_…truncated for comment size. Full report at \`${verifyReport.md.replace(REPO_ROOT + "/", "")}\` locally._`;
-    }
-    lines.push("<details><summary><strong>Agentic verification — full report</strong></summary>");
-    lines.push("");
-    lines.push(md);
-    if (truncationNote) lines.push(truncationNote);
-    lines.push("");
-    lines.push("</details>");
-    lines.push("");
-  } else {
-    lines.push("_Agentic verification report not found — likely the phase failed before writing its report. See logs below._");
-    lines.push("");
-  }
-
-  // Failed phase logs (tail), for quick debugging from the PR thread.
+  // Trailer (failures + footer). Built up-front so we know its real
+  // size before deciding how much of the agentic report to inline.
+  // Each failed phase's tail is capped at 40 lines × 200 chars max so
+  // a single phase with very long log lines can't blow the budget on
+  // its own.
+  const trailerLines = [];
   const failed = phases.filter((p) => !p.ok);
   if (failed.length > 0) {
-    lines.push("### Failures");
-    lines.push("");
+    trailerLines.push("### Failures");
+    trailerLines.push("");
     for (const p of failed) {
-      lines.push(`<details><summary>${p.name} — exit ${p.status}</summary>`);
-      lines.push("");
-      lines.push("```");
-      const tail = (p.stdout + p.stderr).split("\n").slice(-40).join("\n");
-      lines.push(tail);
-      lines.push("```");
-      lines.push("</details>");
-      lines.push("");
+      trailerLines.push(`<details><summary>${p.name} — exit ${p.status}</summary>`);
+      trailerLines.push("");
+      trailerLines.push("```");
+      const tail = (p.stdout + p.stderr)
+        .split("\n")
+        .slice(-40)
+        .map((line) => (line.length > 200 ? line.slice(0, 200) + " …" : line))
+        .join("\n");
+      trailerLines.push(tail);
+      trailerLines.push("```");
+      trailerLines.push("</details>");
+      trailerLines.push("");
+    }
+  }
+  trailerLines.push("");
+  trailerLines.push(
+    "<sub>This comment is upserted by `npm run pre-pr`. The CI gate reads the marker block in the PR description, not this comment.</sub>",
+  );
+  const trailer = trailerLines.join("\n");
+
+  // Middle: TWO collapsibles —
+  //   1. Summary (verdict, anomalies, etc.) — open by default so it's
+  //      visible without clicking.
+  //   2. Literal trace (the .log file) — closed by default. Can be
+  //      large (multiple kB per tool call), so the trace section
+  //      absorbs whatever budget remains; the summary is always shown
+  //      in full because it's small and the headline information.
+  //
+  // If the trace would exceed the remaining budget, we keep the TAIL
+  // — that's where the verdict, final assistant text, and most recent
+  // activity live; the start is just Electron boot boilerplate.
+  let summarySection = "";
+  if (verifyReport?.md && existsSync(verifyReport.md)) {
+    const md = readFileSync(verifyReport.md, "utf8");
+    summarySection =
+      "<details open><summary><strong>Agentic verification — summary</strong></summary>\n\n" +
+      md +
+      "\n\n</details>\n";
+  }
+
+  let traceSection = "";
+  if (verifyReport?.log && existsSync(verifyReport.log)) {
+    const wrapperOverhead = 400; // <details>/<summary>/code-fence/truncation note
+    const budget =
+      COMMENT_BODY_BUDGET -
+      header.length -
+      trailer.length -
+      summarySection.length -
+      wrapperOverhead;
+    if (budget > 500) {
+      let logText = readFileSync(verifyReport.log, "utf8");
+      let truncationNote = "";
+      if (logText.length > budget) {
+        const localPath = verifyReport.log.replace(REPO_ROOT + "/", "");
+        logText = "…[start truncated for comment size]\n" + logText.slice(-budget);
+        truncationNote = `\n_Full trace at \`${localPath}\` locally._\n`;
+      }
+      traceSection =
+        "<details><summary><strong>Agentic verification — literal trace</strong></summary>\n\n" +
+        truncationNote +
+        "\n```\n" +
+        logText +
+        "\n```\n\n</details>\n";
     }
   }
 
-  lines.push("");
-  lines.push("<sub>This comment is upserted by `npm run pre-pr`. The CI gate reads the marker block in the PR description, not this comment.</sub>");
+  if (!summarySection && !traceSection) {
+    summarySection =
+      "_Agentic verification report not found — likely the phase failed before writing its report. See logs below._\n";
+  }
 
-  return lines.join("\n");
+  return [header, summarySection, traceSection, trailer].join("\n");
 }
 
 main().catch((err) => {
