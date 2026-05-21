@@ -61,6 +61,7 @@ Do not allow flaky tests. If you have 1 test that fails in a large test run, don
 - Prior to making a pull request, always run the tests and ensure they pass
 - Prior to making a pull request, always run the linters and ensure they pass
 - Prior to making a pull request, always run the type checker and ensure they pass
+- **Always run `npm run pre-pr` (or `npm run pre-pr -- --quick` for iteration) before opening or updating a PR.** This runs the LLM-judged evals + agentic-verify against the diff and injects the report into the PR body. The CI job `verify-prepr-report` enforces that the marker block matches the HEAD SHA — forgetting to run pre-pr will eventually block the merge. See `docs/LOCAL_DEVELOPMENT.md` for the full mechanics.
 - Once a pull request has been open for a branch, you should ask me whether you should commit and push changes to that branch. After every push to a branch, include a link to the branch in the output to me so I can quickly navigate to the PR.
 
 # Git commands
