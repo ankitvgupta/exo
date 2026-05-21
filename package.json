@@ -45,7 +45,7 @@
     "pre-pr": "node scripts/pre-pr.mjs"
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.2.37",
+    "@anthropic-ai/claude-agent-sdk": "0.2.112",
     "@anthropic-ai/sdk": "^0.71.2",
     "@electron-toolkit/utils": "^4.0.0",
     "@floating-ui/dom": "^1.7.6",

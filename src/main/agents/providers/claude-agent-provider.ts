@@ -377,6 +377,24 @@ export class ClaudeAgentProvider implements AgentProvider {
  * so we need to explicitly resolve the path to the unpacked location.
  *
  * In dev mode, `require.resolve` returns the normal filesystem path which works fine.
+ *
+ * TODO(sdk-upgrade): The SDK is pinned exactly to 0.2.112 — this is the last version that ships
+ * a `cli.js` JS entrypoint. SDK 0.2.113+ replaced it with precompiled per-platform
+ * native binaries delivered via optionalDependencies (e.g. `@anthropic-ai/claude-agent-sdk-darwin-arm64/claude`).
+ *
+ * When upgrading past 0.2.112:
+ *   1. Delete this `resolvedCliPath` IIFE and the `pathToClaudeCodeExecutable` option below.
+ *   2. Delete the `spawnClaudeCodeProcess` override + `cpSpawn` import — the native binary
+ *      is self-contained, no Electron-as-Node trick needed.
+ *   3. Broaden the `asarUnpack` glob in package.json so the platform-specific binary
+ *      packages (`@anthropic-ai/claude-agent-sdk-darwin-arm64`, etc.) are also
+ *      unpacked, not just the main SDK package — native binaries can't be exec'd
+ *      from inside an asar archive.
+ *   4. In CI, install optional deps for every target platform before packaging
+ *      (optionalDependencies only resolve for the current platform by default).
+ *   5. Smoke-test the packaged app — verify the binary in app.asar.unpacked is exec'd
+ *      correctly and is marked executable.
+ * See GitHub issue #90 for the bundled-CLI-version drift that motivated the 0.2.112 pin.
  */
 const resolvedCliPath = (() => {
   // require.resolve finds the SDK's package.json entry point (sdk.mjs).
