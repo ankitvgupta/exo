@@ -36,16 +36,39 @@ For each fixture across every registered feature:
 Total cost for 10 runs × 8 fixtures × 3 features ≈ ~$1-2 and ~90s wall
 clock at concurrency=5.
 
-## Results (2026-05-21)
+## Why "judge variance" isn't the only problem
+
+After the first round of variance analysis, we rewrote the
+draft-generator rubrics from loose checklists into structured
+point-tables. Result was mixed and instructive:
+
+| Fixture | Old stddev | New stddev | What happened |
+|---|---|---|---|
+| dg-2 | 1.43 | **1.00** | Judge variance dropped — rubric was the problem |
+| dg-3 | 1.33 | 1.49 | Same — the feature consistently fails this case |
+| dg-1 | 1.02 | **2.42** | Variance went UP — judge is now mechanical, but the FEATURE is bimodal (5 or 10) |
+
+**Lesson:** structured rubrics fix *judge* variance but expose *feature*
+variance. dg-1's scores 5,5,5,5,5,9,10,10,10,10 are deterministic per
+output — the feature either addresses "section 3" cleanly (→ 10) or
+misses it entirely (→ 5). Each mode is stable; the feature itself
+flips between modes ~60/40 across runs.
+
+**Multi-sample at eval time** would reduce this: sampling N=3 per
+fixture and taking the median reduces feature-noise stddev by √N (≈
+1.7x at N=3). Tradeoff: 3x more API spend per pre-pr run. Tracked as
+a TODO — see end of doc.
+
+## Results (2026-05-21, structured rubrics)
 
 Variance analysis across 8 fixtures, 10 runs each. Sonnet 4.6 judge.
 
 | Feature / Fixture | Range | Stddev | Median | Mean | Scores |
 |---|---|---|---|---|---|
-| **draft-generator** |  |  |  |  |  |
-| dg-1-direct-question | 4 | 1.02 | 7 | 6.5 | 4,6,6,6,7,7,7,7,7,8 |
-| dg-2-scheduling | 5 | 1.43 | 5 | 5.4 | 4,4,4,5,5,5,6,6,6,9 |
-| dg-3-decline | 5 | 1.33 | 3 | 3.2 | 1,2,2,3,3,3,4,4,4,6 |
+| **draft-generator (structured rubrics)** |  |  |  |  |  |
+| dg-1-direct-question | 5 | 2.42 | 9 | 7.4 | 5,5,5,5,5,9,10,10,10,10 (bimodal — feature variance) |
+| dg-2-scheduling | 2 | 1.00 | 7 | 6.0 | 5,5,5,5,5,7,7,7,7,7 |
+| dg-3-decline | 4 | 1.49 | 3 | 2.3 | 0,0,1,2,2,3,3,4,4,4 |
 | **calendaring-agent** |  |  |  |  |  |
 | ca-1-explicit-scheduling | 3 | 0.98 | 10 | 9.2 | 7,8,9,9,9,10,10,10,10,10 |
 | ca-2-not-scheduling | 0 | 0 | 10 | 10.0 | 10×10 |
@@ -95,6 +118,23 @@ weaknesses** that no single eval run would have caught:
 3. **calendaring-agent + archive-ready-analyzer are strong.** Five of
    eight fixtures are deterministic 10s, the other three are narrow
    variance. Don't iterate; lock in.
+
+## Follow-ups
+
+1. **Multi-sample at eval time (high value, modest cost).** Sample
+   N=3 per fixture in `feature-evals.ts`, take median, compare to
+   baseline. Reduces feature-variance stddev by √N. Tripling cost is
+   tolerable once per pre-pr.
+
+2. **Iterate on `DEFAULT_DRAFT_PROMPT`.** dg-3-decline averages 3/10
+   under a mechanical rubric — that's not noise, that's a real product
+   gap. Worth a separate PR that improves the prompt and lifts the
+   baseline.
+
+3. **Add more fixtures per feature.** 2-3 per feature catches some
+   regressions; 8-12 per feature catches more, statistically. Especially
+   for analyzer-edit-learner and draft-edit-learner which haven't been
+   added yet.
 
 ## When to re-run
 
