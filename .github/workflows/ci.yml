@@ -206,8 +206,10 @@ jobs:
       - name: Run visual regression
         # The `visual-regression` spec is in the e2e project but gated on
         # platform === linux + the screenshot project. Run only it.
+        # xvfb-run is required: Electron needs a display, and the Playwright
+        # docker image doesn't auto-start one (unlike Chromium-only runs).
         run: |
-          npx playwright test \
+          xvfb-run --auto-servernum npx playwright test \
             --project=e2e \
             tests/e2e/visual-regression.spec.ts
 
@@ -283,40 +285,32 @@ jobs:
 
       - name: Inspect PR body for the marker block
         # Behavior:
-        #   - Marker present + SHA matches HEAD → pass.
-        #   - Marker present + SHA mismatches → FAIL (stale report).
-        #   - Marker absent → warn but pass. This avoids blocking the
-        #     bootstrap PR that adds this very gate. Once pre-pr.mjs has
-        #     been run on a branch at least once, the marker presence
-        #     becomes effectively required (a regression would have to
-        #     re-blank the body, which CI would catch via the SHA check
-        #     on the next push).
-        #   - Marker present but missing SHA= → warn (treat as legacy).
+        #   - Marker absent → FAIL. The developer must have run pre-pr at
+        #     least once on this PR.
+        #   - Marker present + mode=quick → FAIL. The final report must be
+        #     from a full run (quick skips real-Gmail).
+        #   - Marker present + verdict != PASS → FAIL.
+        #   - Otherwise → pass.
+        #
+        # The marker SHA is intentionally NOT checked against HEAD. Forcing
+        # a fresh pre-pr on every push imposes a ~10min cycle per typo fix
+        # and gates noisy iteration. Trusting "one full passing pre-pr per
+        # PR" is the right granularity — reviewers see when major changes
+        # land after the marker and can ask for a re-run.
         run: |
-          SHORT_SHA="${PR_HEAD_SHA:0:7}"
-          echo "Looking for marker SHA=$SHORT_SHA in PR #$PR_NUMBER body"
+          echo "Inspecting PR #$PR_NUMBER body for pre-pr marker"
 
           BODY=$(gh pr view "$PR_NUMBER" --json body --jq .body)
           MARKER=$(echo "$BODY" | grep -E '<!-- PRE-PR-REPORT-START' | head -n1 || true)
 
           if [ -z "$MARKER" ]; then
-            echo "::warning::No <!-- PRE-PR-REPORT-START --> marker in PR body."
-            echo "::warning::Run 'npm run pre-pr' locally before merging once Phase 1.5 / 1.75 are live."
-            echo "Allowing the PR through this time (bootstrap mode)."
-            exit 0
-          fi
-
-          MARKER_SHA=$(echo "$MARKER" | sed -n 's/.*SHA=\([0-9a-f]*\).*/\1/p')
-          if [ -z "$MARKER_SHA" ]; then
-            echo "::warning::Marker present but missing SHA= (legacy format). Re-run 'npm run pre-pr'."
-            exit 0
-          fi
-
-          if [ "$MARKER_SHA" != "$SHORT_SHA" ]; then
-            echo "::error::Pre-PR report is stale. Marker SHA=$MARKER_SHA, PR HEAD SHA=$SHORT_SHA."
+            echo "::error::No <!-- PRE-PR-REPORT-START --> marker in PR body."
             echo "::error::Run 'npm run pre-pr' locally and push the updated body."
             exit 1
           fi
+
+          MARKER_SHA=$(echo "$MARKER" | sed -n 's/.*SHA=\([0-9a-f]*\).*/\1/p')
+          echo "Marker SHA: ${MARKER_SHA:-unknown} (informational; not gated against HEAD)"
 
           # Parse the mode field. The final pre-pr run before merge must
           # be a full one — quick mode is fine for iteration but doesn't
@@ -342,4 +336,4 @@ jobs:
             exit 1
           fi
 
-          echo "Pre-PR report is fresh and passing (SHA $MARKER_SHA, mode=${MARKER_MODE}, verdict=$VERDICT)."
+          echo "Pre-PR report is passing (SHA $MARKER_SHA, mode=${MARKER_MODE}, verdict=$VERDICT)."

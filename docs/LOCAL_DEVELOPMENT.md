@@ -234,11 +234,16 @@ PR body via `gh pr edit`:
 <!-- PRE-PR-REPORT-END -->
 ```
 
-The CI job `verify-prepr-report` checks for this marker:
-- Marker matching HEAD SHA → pass.
-- Marker present with stale SHA → fail (need to re-run pre-pr).
-- Marker absent → warn but pass (bootstrap mode for the PR that adds
-  this gate; will harden later).
+The CI job `verify-prepr-report` checks the marker:
+- Marker absent → fail (run pre-pr at least once on the PR).
+- `mode=quick` → fail (final report must be from a full run; quick
+  skips real-Gmail).
+- Verdict != PASS → fail.
+- Otherwise → pass.
+
+The marker `SHA=` is informational only — it's NOT gated against HEAD.
+One passing full run per PR is sufficient; iterate freely with
+`--quick` and switch to full before requesting review or merging.
 
 No Anthropic key, no Gmail token, no third-party API key ever lives
 in CI.
