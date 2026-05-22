@@ -331,11 +331,8 @@ test.describe("Error States - UI Resilience", () => {
   });
 
   test("double-clicking an email doesn't cause issues", async () => {
-    // Find an email to double-click
-    const emailButton = page
-      .locator("button")
-      .filter({ hasText: /HIGH|MEDIUM|LOW/ })
-      .first();
+    // Priority pills were collapsed in issue #143 — pick any visible thread.
+    const emailButton = page.locator("[data-thread-id]").first();
 
     if (await emailButton.isVisible()) {
       await emailButton.dblclick();
