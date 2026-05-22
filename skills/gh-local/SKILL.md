@@ -24,10 +24,10 @@ The user may specify:
    - Always use `--container-architecture linux/amd64` for consistent behavior on Apple Silicon.
    - If a specific job was requested: `act pull_request -j <job> --container-architecture linux/amd64 -P ubuntu-latest=catthehacker/ubuntu:act-latest`
    - If running all jobs: `act pull_request --container-architecture linux/amd64 -P ubuntu-latest=catthehacker/ubuntu:act-latest`
-   - Run the command in the background using the `run_in_background` parameter and set `timeout` to 600000 (10 minutes).
+   - Run the command using the agent's long-running/background execution support with a 10-minute timeout. Do not shell-background it with `&`.
 
 3. **Monitor progress**:
-   - Check on the output periodically (every 60-90 seconds) using `tail -50` on the output file.
+   - Check on the native long-running session output periodically (every 60-90 seconds).
    - Report progress to the user as steps complete (e.g., "npm ci done", "build complete", "tests running").
 
 4. **Report results**:
