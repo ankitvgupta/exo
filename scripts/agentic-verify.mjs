@@ -297,6 +297,11 @@ function launchElectron(dataMode) {
   log(
     `Launching Electron in ${dataMode} mode with --remote-debugging-port=${CDP_PORT}...`,
   );
+  // `detached: true` makes the child the leader of a new process group.
+  // We can then signal the whole tree at once via `process.kill(-pid, ...)`.
+  // Without this, killing the npx wrapper leaves electron-vite and Electron
+  // (and Electron's GPU/network/renderer helpers) orphaned — historically
+  // we've leaked dozens of these from aborted pre-pr / agentic-verify runs.
   const electron = spawn(
     "npx",
     ["electron-vite", "dev", "--", `--remote-debugging-port=${CDP_PORT}`],
@@ -304,6 +309,7 @@ function launchElectron(dataMode) {
       env: launchEnv,
       stdio: ["ignore", "pipe", "pipe"],
       cwd: REPO_ROOT,
+      detached: true,
     },
   );
   electron.stdout.on("data", (d) =>
@@ -315,15 +321,81 @@ function launchElectron(dataMode) {
   return electron;
 }
 
+/**
+ * Kill the entire Electron process group. Returns a promise that resolves
+ * once the leader has actually exited (or after a hard SIGKILL deadline),
+ * so the caller can safely process.exit() without leaving children behind.
+ */
 function killElectron(electron) {
-  if (electron.killed) return;
-  try {
-    electron.kill("SIGTERM");
-    setTimeout(() => {
-      if (!electron.killed) electron.kill("SIGKILL");
+  return new Promise((resolve) => {
+    const pid = electron.pid;
+    if (!pid || electron.exitCode !== null || electron.signalCode !== null) {
+      resolve();
+      return;
+    }
+
+    let exited = false;
+    const onExit = () => {
+      if (exited) return;
+      exited = true;
+      resolve();
+    };
+    electron.once("exit", onExit);
+    electron.once("close", onExit);
+
+    // Signal the whole process group (negative pid). electron-vite spawns
+    // Electron, which spawns helpers — they all need to die together.
+    try {
+      process.kill(-pid, "SIGTERM");
+    } catch {
+      try {
+        electron.kill("SIGTERM");
+      } catch {
+        /* already gone */
+      }
+    }
+
+    const sigkillTimer = setTimeout(() => {
+      if (exited) return;
+      try {
+        process.kill(-pid, "SIGKILL");
+      } catch {
+        try {
+          electron.kill("SIGKILL");
+        } catch {
+          /* already gone */
+        }
+      }
     }, 3000);
+
+    // Hard deadline: even if SIGKILL didn't take, give up and let the
+    // OS reap. We've at least requested the kill.
+    const giveUpTimer = setTimeout(onExit, 6000);
+
+    electron.once("exit", () => {
+      clearTimeout(sigkillTimer);
+      clearTimeout(giveUpTimer);
+    });
+  });
+}
+
+/**
+ * Synchronous best-effort kill, for `process.on("exit", ...)` — Node's
+ * exit event doesn't await async work, so we can't `await killElectron`
+ * there. This sends SIGKILL to the process group as a last resort.
+ */
+function killElectronSync(electron) {
+  const pid = electron?.pid;
+  if (!pid) return;
+  if (electron.exitCode !== null || electron.signalCode !== null) return;
+  try {
+    process.kill(-pid, "SIGKILL");
   } catch {
-    // ignore
+    try {
+      electron.kill("SIGKILL");
+    } catch {
+      /* already gone */
+    }
   }
 }
 
@@ -399,21 +471,47 @@ async function main() {
 
   const electron = launchElectron(dataMode);
   let killed = false;
-  function cleanup() {
+  async function cleanup() {
     if (killed) return;
     killed = true;
-    killElectron(electron);
+    await killElectron(electron);
   }
-  process.on("SIGINT", () => {
-    log("SIGINT");
-    cleanup();
-    flushLog();
-    process.exit(130);
-  });
 
-  const timeout = setTimeout(() => {
+  // Register cleanup on every plausible exit path. Historically only
+  // SIGINT was handled, so Ctrl-C-from-pre-pr, SIGTERM from a parent,
+  // SIGHUP on terminal close, and uncaught exceptions all leaked the
+  // Electron process tree.
+  function installExitHandlers() {
+    const onSignal = (signal, exitCode) => async () => {
+      log(signal);
+      await cleanup();
+      flushLog();
+      process.exit(exitCode);
+    };
+    process.once("SIGINT", onSignal("SIGINT", 130));
+    process.once("SIGTERM", onSignal("SIGTERM", 143));
+    process.once("SIGHUP", onSignal("SIGHUP", 129));
+    process.once("uncaughtException", async (err) => {
+      log(`uncaughtException: ${err instanceof Error ? err.stack : String(err)}`);
+      await cleanup();
+      flushLog();
+      process.exit(1);
+    });
+    process.once("unhandledRejection", async (reason) => {
+      log(`unhandledRejection: ${reason instanceof Error ? reason.stack : String(reason)}`);
+      await cleanup();
+      flushLog();
+      process.exit(1);
+    });
+    // Last-resort synchronous cleanup. Runs even if something else
+    // calls process.exit() without going through cleanup() first.
+    process.on("exit", () => killElectronSync(electron));
+  }
+  installExitHandlers();
+
+  const timeout = setTimeout(async () => {
     log(`hard timeout after ${TIMEOUT_MS}ms`);
-    cleanup();
+    await cleanup();
     flushLog();
     process.exit(124);
   }, TIMEOUT_MS);
@@ -470,8 +568,8 @@ async function main() {
       }
     }
 
-    cleanup();
     clearTimeout(timeout);
+    await cleanup();
 
     const finalText = textChunks.join("\n\n");
     const parsed = extractFinalJson(finalText);
@@ -512,8 +610,8 @@ async function main() {
     process.exit(0);
   } catch (err) {
     log(`FATAL: ${err instanceof Error ? err.stack : String(err)}`);
-    cleanup();
     clearTimeout(timeout);
+    await cleanup();
     flushLog();
     console.error(`\nFATAL — see ${LOG_PATH}`);
     process.exit(1);
