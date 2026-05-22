@@ -271,18 +271,34 @@ function fillTemplate(template, vars) {
 // Electron lifecycle
 // ============================================================
 
-async function waitForCdp(timeoutMs = 30_000) {
+// Default 3 min — first-run cold electron-vite builds can take 1-2 min
+// to produce a CDP-listening main process after `npx electron-vite dev`
+// returns. Previous 30s default consistently flaked on cold caches.
+async function waitForCdp(timeoutMs = 180_000) {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
+    // Bound each fetch independently — without a per-fetch signal,
+    // `fetch` can hang for the full Node default if Electron has the
+    // socket bound but isn't yet responding (cold CDP init). One
+    // hanging fetch would consume the entire `timeoutMs` budget and
+    // produce a misleading "not ready after Nms" error where N is
+    // the configured budget, not the actual elapsed wall time.
+    const controller = new AbortController();
+    const fetchAbort = setTimeout(() => controller.abort(), 2_000);
     try {
-      const r = await fetch(`${CDP_URL}/json/version`);
+      const r = await fetch(`${CDP_URL}/json/version`, { signal: controller.signal });
       if (r.ok) return;
     } catch {
-      // not ready
+      // not ready / aborted — keep polling
+    } finally {
+      clearTimeout(fetchAbort);
     }
     await new Promise((res) => setTimeout(res, 500));
   }
-  throw new Error(`CDP at ${CDP_URL} not ready after ${timeoutMs}ms`);
+  const actualMs = Date.now() - start;
+  throw new Error(
+    `CDP at ${CDP_URL} not ready after ${actualMs}ms (budget ${timeoutMs}ms)`,
+  );
 }
 
 function launchElectron(dataMode) {
@@ -553,6 +569,33 @@ async function main() {
     const toolCalls = [];
     const textChunks = [];
     let resultMeta = null;
+    // Per-tool-call cap so a single huge `take_snapshot` (which dumps
+    // the entire DOM) can't bloat the log file. The PR comment trims
+    // again at body-size scale; this cap keeps individual entries
+    // human-readable while preserving the bulk of the trace.
+    const TOOL_RESULT_LOG_CAP = 4000;
+    let toolIndex = 0;
+    const toolIdToIndex = new Map();
+
+    function formatToolInput(input) {
+      try {
+        const s = JSON.stringify(input);
+        return s.length > 800 ? s.slice(0, 800) + " …[truncated]" : s;
+      } catch {
+        return String(input);
+      }
+    }
+
+    function extractToolResultText(block) {
+      const c = block.content;
+      if (typeof c === "string") return c;
+      if (Array.isArray(c)) {
+        return c
+          .map((part) => (typeof part?.text === "string" ? part.text : JSON.stringify(part)))
+          .join("\n");
+      }
+      return JSON.stringify(c ?? "");
+    }
 
     for await (const msg of result) {
       if (msg.type === "system" && msg.subtype === "init") {
@@ -564,11 +607,32 @@ async function main() {
       if (msg.type === "assistant") {
         for (const block of msg.message.content ?? []) {
           if (block.type === "tool_use") {
+            toolIndex += 1;
             toolCalls.push({ name: block.name, input: block.input });
-            log(`tool: ${block.name}`);
+            if (block.id) toolIdToIndex.set(block.id, toolIndex);
+            log(`tool#${toolIndex}: ${block.name}`);
+            log(`  input: ${formatToolInput(block.input)}`);
           } else if (block.type === "text" && block.text) {
             textChunks.push(block.text);
-            log(`text: ${block.text.replace(/\n/g, " ").slice(0, 200)}`);
+            log(`text: ${block.text}`);
+          }
+        }
+      }
+      if (msg.type === "user") {
+        for (const block of msg.message.content ?? []) {
+          if (block.type === "tool_result") {
+            const idx = toolIdToIndex.get(block.tool_use_id) ?? "?";
+            const tag = block.is_error ? "error" : "result";
+            const text = extractToolResultText(block);
+            const capped =
+              text.length > TOOL_RESULT_LOG_CAP
+                ? text.slice(0, TOOL_RESULT_LOG_CAP) +
+                  ` …[truncated, ${text.length - TOOL_RESULT_LOG_CAP} more chars]`
+                : text;
+            // Indent multi-line output so it's visually grouped with
+            // the tool call in the log.
+            const indented = capped.split("\n").map((l) => `  ${l}`).join("\n");
+            log(`${tag}#${idx}:\n${indented}`);
           }
         }
       }

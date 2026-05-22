@@ -50,6 +50,8 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
     setKeyboardBindings,
     undoSendDelaySeconds,
     setUndoSendDelay,
+    sendAndArchive,
+    setSendAndArchive,
     currentAccountId,
     highlightMemoryIds,
   } = useAppStore();
@@ -374,6 +376,11 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
   const handleUndoSendDelayChange = async (seconds: number) => {
     setUndoSendDelay(seconds);
     await window.api.settings.set({ undoSendDelay: seconds });
+  };
+
+  const handleSendAndArchiveToggle = async (enabled: boolean) => {
+    setSendAndArchive(enabled);
+    await window.api.settings.set({ sendAndArchive: enabled });
   };
 
   const handleKeyboardBindingsChange = async (bindings: "superhuman" | "gmail") => {
@@ -1060,6 +1067,36 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                       {label}
                     </button>
                   ))}
+                </div>
+              </div>
+
+              {/* Send & Archive */}
+              <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-600 mb-6">
+                <div className="flex items-center justify-between">
+                  <div className="pr-4">
+                    <h3 className="font-semibold text-gray-900 dark:text-gray-100">
+                      Send &amp; Archive
+                    </h3>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                      When replying, sending also archives the conversation. New emails and forwards
+                      are unaffected.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => handleSendAndArchiveToggle(!sendAndArchive)}
+                    aria-label="Toggle Send and Archive"
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors flex-shrink-0 ${
+                      sendAndArchive
+                        ? "bg-blue-600 dark:bg-blue-500"
+                        : "bg-gray-200 dark:bg-gray-700"
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        sendAndArchive ? "translate-x-6" : "translate-x-1"
+                      }`}
+                    />
+                  </button>
                 </div>
               </div>
 

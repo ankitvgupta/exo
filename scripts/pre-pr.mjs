@@ -19,24 +19,30 @@
  *     - skip real-gmail
  *   --full-sync  : default + real-gmail mode 9b (full sync test)
  *   --no-inject  : run everything but don't touch the PR body
+ *   --no-comment : run everything but don't upsert the PR comment
  *
  * Output:
  *   .pre-pr-report.md         — committed locally (gitignored)
- *   <PR body>                 — marker block updated via gh
+ *   <PR body>                 — marker block updated via gh (CI gate)
+ *   <PR comment>              — single upserted comment with full
+ *                               agentic-verify report in <details>;
+ *                               updates in place on repeat runs
  *   stdout                    — progress + final verdict
  *
  * Local-only. Requires ANTHROPIC_API_KEY in .env.local or env.
  */
 
 import { execSync, spawnSync } from "node:child_process";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { injectIntoPrBody } from "./lib/pr-body-splice.mjs";
+import { upsertPrComment } from "./lib/pr-comment-upsert.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(__dirname, "..");
 const REPORT_PATH = join(REPO_ROOT, ".pre-pr-report.md");
+const RUNS_DIR = join(__dirname, ".agentic-runs");
 
 // ============================================================
 // .env.local loader
@@ -72,6 +78,7 @@ const args = new Set(process.argv.slice(2));
 const QUICK = args.has("--quick");
 const FULL_SYNC = args.has("--full-sync");
 const NO_INJECT = args.has("--no-inject");
+const NO_COMMENT = args.has("--no-comment");
 
 const MODE = QUICK ? "quick" : FULL_SYNC ? "full-sync" : "full";
 
@@ -140,6 +147,41 @@ function affectedFeatures(changedFiles) {
     );
   }
   return [...features];
+}
+
+// ============================================================
+// Find the most recent agentic-verify report (newer than a cutoff).
+// ============================================================
+
+/**
+ * Returns the newest `*-verify-diff.{md,json,log}` set in RUNS_DIR with
+ * mtime >= `sinceMs`, or null if none found. Used to attach the full
+ * agentic-verify markdown report AND the literal trace log to the PR
+ * comment.
+ *
+ * We filter by mtime instead of just "newest in dir" so a stale run
+ * left over from a previous session doesn't get spliced into a comment
+ * for a run that crashed before writing its own report.
+ */
+function findLatestVerifyReport(sinceMs) {
+  if (!existsSync(RUNS_DIR)) return null;
+  const candidates = readdirSync(RUNS_DIR)
+    .filter((f) => f.endsWith("-verify-diff.md"))
+    .map((f) => {
+      const full = join(RUNS_DIR, f);
+      return { file: full, mtime: statSync(full).mtimeMs };
+    })
+    .filter((c) => c.mtime >= sinceMs)
+    .sort((a, b) => b.mtime - a.mtime);
+  if (candidates.length === 0) return null;
+  const md = candidates[0].file;
+  const json = md.replace(/\.md$/, ".json");
+  const logPath = md.replace(/\.md$/, ".log");
+  return {
+    md,
+    json: existsSync(json) ? json : null,
+    log: existsSync(logPath) ? logPath : null,
+  };
 }
 
 // ============================================================
@@ -241,6 +283,11 @@ async function main() {
   // "inconclusive" (exit 3). We still run the phase to confirm the
   // app boots clean, but accept inconclusive as a soft pass in that
   // case so eval-infra-only PRs aren't blocked.
+  //
+  // verifyStartMs captures wall-clock so the PR-comment upsert step
+  // can pick out THIS run's agentic-verify report file from RUNS_DIR
+  // and skip stale ones from prior sessions.
+  const verifyStartMs = Date.now();
   const infraOnly = isInfraOnlyDiff(changed);
   if (infraOnly) {
     console.log(
@@ -342,8 +389,147 @@ async function main() {
     }
   }
 
+  if (!NO_COMMENT) {
+    try {
+      const commentBody = buildPrCommentBody({
+        verdict,
+        phases,
+        sha,
+        mode: MODE,
+        verifyReport: findLatestVerifyReport(verifyStartMs),
+      });
+      const result = upsertPrComment({ content: commentBody });
+      if (result.status === "no-pr") {
+        console.log("No PR open — skipped comment upsert.");
+      } else {
+        console.log(`PR comment ${result.status}: ${result.url}`);
+      }
+    } catch (err) {
+      console.error(`Failed to upsert PR comment: ${err instanceof Error ? err.message : err}`);
+      console.error("PR body marker block is still the source of truth for CI.");
+    }
+  }
+
   console.log(`\nVerdict: ${verdict}`);
   process.exit(allOk ? 0 : 1);
+}
+
+/**
+ * Compose the human-readable PR comment. Summary on top, full agentic
+ * verify report inside a <details> block so the comment stays compact
+ * by default. Failed-phase logs get their own collapsibles.
+ *
+ * GitHub comments have a 65,536-character body cap. We build the
+ * header + trailer (failures + footer) first, measure them, and only
+ * then size the embedded agentic report to fit the remaining budget.
+ * This way the report — which can be safely truncated and is by far
+ * the largest chunk — absorbs the budget pressure when multiple
+ * phases fail with verbose logs.
+ */
+const COMMENT_BODY_BUDGET = 60_000; // leave headroom under the 65,536 cap
+
+function buildPrCommentBody({ verdict, phases, sha, mode, verifyReport }) {
+  // Header (always cheap, always included verbatim).
+  const headerLines = [];
+  const emoji = verdict === "PASS" ? "✅" : "❌";
+  headerLines.push(`## ${emoji} Pre-PR verification — ${verdict}`);
+  headerLines.push("");
+  headerLines.push(`- **mode**: \`${mode}\``);
+  headerLines.push(`- **sha**: \`${sha}\``);
+  headerLines.push(`- **generated**: ${new Date().toISOString()}`);
+  headerLines.push("");
+  headerLines.push("| Phase | Status | Duration |");
+  headerLines.push("|---|---|---|");
+  for (const p of phases) {
+    const statusEmoji = p.ok ? "✅" : "❌";
+    headerLines.push(`| ${p.name} | ${statusEmoji} exit ${p.status} | ${(p.ms / 1000).toFixed(1)}s |`);
+  }
+  headerLines.push("");
+  const header = headerLines.join("\n");
+
+  // Trailer (failures + footer). Built up-front so we know its real
+  // size before deciding how much of the agentic report to inline.
+  // Each failed phase's tail is capped at 40 lines × 200 chars max so
+  // a single phase with very long log lines can't blow the budget on
+  // its own.
+  const trailerLines = [];
+  const failed = phases.filter((p) => !p.ok);
+  if (failed.length > 0) {
+    trailerLines.push("### Failures");
+    trailerLines.push("");
+    for (const p of failed) {
+      trailerLines.push(`<details><summary>${p.name} — exit ${p.status}</summary>`);
+      trailerLines.push("");
+      trailerLines.push("```");
+      const tail = (p.stdout + p.stderr)
+        .split("\n")
+        .slice(-40)
+        .map((line) => (line.length > 200 ? line.slice(0, 200) + " …" : line))
+        .join("\n");
+      trailerLines.push(tail);
+      trailerLines.push("```");
+      trailerLines.push("</details>");
+      trailerLines.push("");
+    }
+  }
+  trailerLines.push("");
+  trailerLines.push(
+    "<sub>This comment is upserted by `npm run pre-pr`. The CI gate reads the marker block in the PR description, not this comment.</sub>",
+  );
+  const trailer = trailerLines.join("\n");
+
+  // Middle: TWO collapsibles —
+  //   1. Summary (verdict, anomalies, etc.) — open by default so it's
+  //      visible without clicking.
+  //   2. Literal trace (the .log file) — closed by default. Can be
+  //      large (multiple kB per tool call), so the trace section
+  //      absorbs whatever budget remains; the summary is always shown
+  //      in full because it's small and the headline information.
+  //
+  // If the trace would exceed the remaining budget, we keep the TAIL
+  // — that's where the verdict, final assistant text, and most recent
+  // activity live; the start is just Electron boot boilerplate.
+  let summarySection = "";
+  if (verifyReport?.md && existsSync(verifyReport.md)) {
+    const md = readFileSync(verifyReport.md, "utf8");
+    summarySection =
+      "<details open><summary><strong>Agentic verification — summary</strong></summary>\n\n" +
+      md +
+      "\n\n</details>\n";
+  }
+
+  let traceSection = "";
+  if (verifyReport?.log && existsSync(verifyReport.log)) {
+    const wrapperOverhead = 400; // <details>/<summary>/code-fence/truncation note
+    const budget =
+      COMMENT_BODY_BUDGET -
+      header.length -
+      trailer.length -
+      summarySection.length -
+      wrapperOverhead;
+    if (budget > 500) {
+      let logText = readFileSync(verifyReport.log, "utf8");
+      let truncationNote = "";
+      if (logText.length > budget) {
+        const localPath = verifyReport.log.replace(REPO_ROOT + "/", "");
+        logText = "…[start truncated for comment size]\n" + logText.slice(-budget);
+        truncationNote = `\n_Full trace at \`${localPath}\` locally._\n`;
+      }
+      traceSection =
+        "<details><summary><strong>Agentic verification — literal trace</strong></summary>\n\n" +
+        truncationNote +
+        "\n```\n" +
+        logText +
+        "\n```\n\n</details>\n";
+    }
+  }
+
+  if (!summarySection && !traceSection) {
+    summarySection =
+      "_Agentic verification report not found — likely the phase failed before writing its report. See logs below._\n";
+  }
+
+  return [header, summarySection, traceSection, trailer].join("\n");
 }
 
 main().catch((err) => {
