@@ -838,6 +838,14 @@ export type ScheduledMessageStats = {
   total: number;
 };
 
+// Blocked sender (mirrors a Gmail filter that routes a sender to Spam)
+export type BlockedSender = {
+  senderEmail: string;
+  accountId: string;
+  gmailFilterId: string | null;
+  blockedAt: number;
+};
+
 // App state for Zustand
 export type AppState = {
   emails: DashboardEmail[];

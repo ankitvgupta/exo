@@ -94,6 +94,8 @@ const SCOPES = [
   "https://www.googleapis.com/auth/gmail.compose",
   "https://www.googleapis.com/auth/gmail.send",
   "https://www.googleapis.com/auth/gmail.modify",
+  // Needed for users.settings.filters.create/delete (block-sender feature)
+  "https://www.googleapis.com/auth/gmail.settings.basic",
   "https://www.googleapis.com/auth/userinfo.profile",
   "https://www.googleapis.com/auth/calendar.readonly",
 ];
@@ -1735,6 +1737,77 @@ export class GmailClient {
       }
       throw error;
     }
+  }
+
+  /**
+   * Create a Gmail filter that routes all future mail from `senderEmail` to Trash
+   * (mirrors Gmail's native "Block sender"). Why Trash and not Spam: the Filters
+   * API rejects "SPAM" in addLabelIds — only TRASH/IMPORTANT/STARRED/UNREAD plus
+   * user labels are allowed there. TRASH matches the user intent ("make this go
+   * away") and Gmail's UI block flow uses the same approach. Returns the new
+   * filter's ID so we can delete it on unblock.
+   */
+  async createBlockFilter(senderEmail: string): Promise<string> {
+    const gmail = this.gmail!;
+    const response = await gmail.users.settings.filters.create({
+      userId: "me",
+      requestBody: {
+        criteria: { from: senderEmail },
+        action: {
+          addLabelIds: ["TRASH"],
+          removeLabelIds: ["INBOX", "UNREAD"],
+        },
+      },
+    });
+    if (!response.data.id) {
+      throw new Error("Gmail filter creation did not return an ID");
+    }
+    return response.data.id;
+  }
+
+  /** Delete a Gmail filter by ID. Idempotent — swallows 404 (filter already gone). */
+  async deleteFilter(filterId: string): Promise<void> {
+    const gmail = this.gmail!;
+    try {
+      await gmail.users.settings.filters.delete({ userId: "me", id: filterId });
+    } catch (err: unknown) {
+      const errObj = err as { code?: number; status?: number };
+      if (errObj.code === 404 || errObj.status === 404) return;
+      throw err;
+    }
+  }
+
+  /**
+   * Move multiple messages to Trash in parallel. Uses messages.trash (not
+   * batchModify + addLabel:TRASH) because only trash() triggers Gmail's 30-day
+   * auto-delete behavior — batchModify just adds the label without the lifecycle.
+   * Returns the IDs that failed so the caller can decide whether to restore them.
+   */
+  async batchMoveToTrash(messageIds: string[]): Promise<{ failedIds: string[] }> {
+    return this.batchTrash(messageIds);
+  }
+
+  /**
+   * Reverse of batchMoveToTrash — used when unblocking. Uses messages.untrash to
+   * restore the message from Trash; the resulting labels include INBOX iff the
+   * message had it before trashing (Gmail remembers).
+   */
+  async batchRestoreFromTrash(messageIds: string[]): Promise<{ failedIds: string[] }> {
+    if (messageIds.length === 0) return { failedIds: [] };
+    const failedIds: string[] = [];
+    const CONCURRENCY = 5;
+    for (let i = 0; i < messageIds.length; i += CONCURRENCY) {
+      const batch = messageIds.slice(i, i + CONCURRENCY);
+      const results = await Promise.allSettled(
+        batch.map((id) => this.gmail!.users.messages.untrash({ userId: "me", id })),
+      );
+      for (let j = 0; j < results.length; j++) {
+        if (results[j].status === "rejected") {
+          failedIds.push(batch[j]);
+        }
+      }
+    }
+    return { failedIds };
   }
 
   async searchSentEmails(maxResults: number = 500): Promise<SentEmail[]> {
