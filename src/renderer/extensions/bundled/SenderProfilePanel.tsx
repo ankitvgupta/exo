@@ -53,7 +53,7 @@ export function SenderProfilePanel({
     senderEmail.includes("@");
 
   // Deferred commit: optimistically remove the thread from view and queue an
-  // undo. The IPC (create Gmail filter + move messages to spam) only fires
+  // undo. The IPC (create Gmail filter + trash existing messages) only fires
   // when the undo timer elapses; clicking Undo within 5s restores the view
   // and the server-side action never happens.
   const handleBlock = () => {
@@ -102,7 +102,7 @@ export function SenderProfilePanel({
           type="button"
           onClick={handleBlock}
           className="mb-4 text-xs text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:underline"
-          title="Create a Gmail filter that routes this sender to Spam"
+          title="Create a Gmail filter that routes this sender to Trash"
         >
           Block sender
         </button>

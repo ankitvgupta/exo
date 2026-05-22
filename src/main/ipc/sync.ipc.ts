@@ -1682,9 +1682,12 @@ export function registerSyncIpc(): void {
 
   // Block a sender — mirrors Gmail's native "Block sender" command:
   //  1. Creates a server-side Gmail filter that routes future messages from
-  //     this sender to Spam (so it propagates to mobile/web Gmail too).
-  //  2. Moves existing inbox messages from this sender to Spam (Gmail's filter
-  //     only acts on incoming mail, so existing ones need a separate batchModify).
+  //     this sender to Trash (so it propagates to mobile/web Gmail too). We use
+  //     TRASH rather than SPAM because the Gmail Filters API rejects SPAM in
+  //     addLabelIds.
+  //  2. Trashes existing inbox messages from this sender via messages.trash
+  //     (filters only act on *incoming* mail). Using trash() rather than label
+  //     mutation triggers Gmail's normal 30-day auto-delete.
   //  3. Records the (sender, account, filterId) in blocked_senders so we can
   //     undo cleanly and skip Claude analysis on any leak-through.
   //
@@ -1737,7 +1740,7 @@ export function registerSyncIpc(): void {
         return { success: false, error: `Failed to create Gmail filter: ${msg}` };
       }
 
-      // Find existing inbox messages from this sender and route to Spam.
+      // Find existing inbox messages from this sender and route to Trash.
       // searchAllEmails handles pagination; cap at a reasonable number so
       // one bad outreach campaign doesn't lock us up.
       let movedEmailIds: string[] = [];
@@ -1748,17 +1751,31 @@ export function registerSyncIpc(): void {
         );
         movedEmailIds = existing.map((m) => m.id);
         if (movedEmailIds.length > 0) {
-          await client.batchMoveToSpam(movedEmailIds);
+          const { failedIds } = await client.batchMoveToTrash(movedEmailIds);
+          const succeededIds = movedEmailIds.filter((id) => !failedIds.includes(id));
+          movedEmailIds = succeededIds;
 
           // Optimistically remove from local DB so the inbox UI updates immediately.
-          for (const id of movedEmailIds) {
+          for (const id of succeededIds) {
             deleteEmail(id, accountId);
           }
 
           // Notify renderer
-          const window = getMainWindow();
-          if (window) {
-            window.webContents.send("sync:emails-removed", { accountId, emailIds: movedEmailIds });
+          if (succeededIds.length > 0) {
+            const window = getMainWindow();
+            if (window) {
+              window.webContents.send("sync:emails-removed", {
+                accountId,
+                emailIds: succeededIds,
+              });
+            }
+          }
+
+          if (failedIds.length > 0) {
+            log.warn(
+              { sender: normalized, failedCount: failedIds.length },
+              "[Block] Some messages failed to trash (filter still in place for future mail)",
+            );
           }
         }
       } catch (error) {
@@ -1785,8 +1802,9 @@ export function registerSyncIpc(): void {
 
   // Unblock a sender — reverses block-sender:
   //  1. Deletes the Gmail filter (idempotent — 404 OK).
-  //  2. Optionally restores messages from Spam back to Inbox (only the ones
-  //     we just moved, identified by `restoreEmailIds`).
+  //  2. Optionally restores messages from Trash (only the ones we just moved,
+  //     identified by `restoreEmailIds` — untrash recovers their prior labels
+  //     including INBOX).
   //  3. Removes the (sender, account) row.
   ipcMain.handle(
     "emails:unblock-sender",
@@ -1831,15 +1849,15 @@ export function registerSyncIpc(): void {
         }
       }
 
-      // Restore messages from Spam if the caller asked us to.
+      // Restore messages from Trash if the caller asked us to.
       if (restoreEmailIds && restoreEmailIds.length > 0) {
         try {
-          await client.batchRestoreFromSpam(restoreEmailIds);
+          await client.batchRestoreFromTrash(restoreEmailIds);
         } catch (error) {
           // Non-fatal — the filter is gone, so blocking is reversed.
           log.error(
             { err: error, sender: normalized },
-            "[Block] Failed to restore messages from spam (filter was already deleted)",
+            "[Block] Failed to restore messages from trash (filter was already deleted)",
           );
         }
       }

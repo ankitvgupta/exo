@@ -151,7 +151,7 @@ async function commitAction(item: UndoActionItem, removeFromQueue: () => void): 
     case "block": {
       // Deferred commit: now (at end of undo timer) call the block IPC,
       // which creates the Gmail filter and moves existing matching messages
-      // to Spam. If the IPC fails permanently, restore the emails to view
+      // to Trash. If the IPC fails permanently, restore the emails to view
       // AND surface the error via the store — block failure must not be
       // silent, since the user has already moved on by the time it fires.
       if (!item.blockedSender) break;

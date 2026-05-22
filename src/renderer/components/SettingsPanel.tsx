@@ -3678,8 +3678,8 @@ function BlockedSendersSection() {
         Blocked Senders
       </h2>
       <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-        Senders here are routed to Spam by a Gmail filter, so the block applies in Gmail Web and on
-        mobile too. Unblock to delete the filter and restore future delivery.
+        Senders here are routed to Trash by a Gmail filter, so the block applies in Gmail Web and
+        on mobile too. Unblock to delete the filter and restore future delivery.
       </p>
 
       {error && (

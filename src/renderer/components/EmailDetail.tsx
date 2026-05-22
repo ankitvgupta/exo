@@ -3388,7 +3388,7 @@ function EmailDetailInner({ isFullView = false }: EmailDetailProps) {
   };
 
   // Block sender: deferred commit, same shape as archive/trash. The IPC
-  // (create Gmail filter + move existing messages to spam) only runs when
+  // (create Gmail filter + trash existing messages) only runs when
   // the undo toast's timer elapses — undo just restores the emails to
   // view and the server-side work never happens.
   const handleBlockSender = (rawSenderEmail: string) => {

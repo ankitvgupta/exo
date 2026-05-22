@@ -1740,9 +1740,12 @@ export class GmailClient {
   }
 
   /**
-   * Create a Gmail filter that moves all future mail from `senderEmail` to Spam
-   * (mirrors Gmail's native "Block sender" — adds SPAM, removes INBOX, marks read).
-   * Returns the new filter's ID so we can delete it on unblock.
+   * Create a Gmail filter that routes all future mail from `senderEmail` to Trash
+   * (mirrors Gmail's native "Block sender"). Why Trash and not Spam: the Filters
+   * API rejects "SPAM" in addLabelIds — only TRASH/IMPORTANT/STARRED/UNREAD plus
+   * user labels are allowed there. TRASH matches the user intent ("make this go
+   * away") and Gmail's UI block flow uses the same approach. Returns the new
+   * filter's ID so we can delete it on unblock.
    */
   async createBlockFilter(senderEmail: string): Promise<string> {
     const gmail = this.gmail!;
@@ -1751,7 +1754,7 @@ export class GmailClient {
       requestBody: {
         criteria: { from: senderEmail },
         action: {
-          addLabelIds: ["SPAM"],
+          addLabelIds: ["TRASH"],
           removeLabelIds: ["INBOX", "UNREAD"],
         },
       },
@@ -1775,43 +1778,36 @@ export class GmailClient {
   }
 
   /**
-   * Move multiple messages to Spam in a single batchModify call.
-   * Used when blocking — applies the same labels Gmail's native filter would,
-   * so the existing thread is immediately routed to Spam.
+   * Move multiple messages to Trash in parallel. Uses messages.trash (not
+   * batchModify + addLabel:TRASH) because only trash() triggers Gmail's 30-day
+   * auto-delete behavior — batchModify just adds the label without the lifecycle.
+   * Returns the IDs that failed so the caller can decide whether to restore them.
    */
-  async batchMoveToSpam(messageIds: string[]): Promise<void> {
-    if (messageIds.length === 0) return;
-    const gmail = this.gmail!;
-    const CHUNK_SIZE = 1000;
-    for (let i = 0; i < messageIds.length; i += CHUNK_SIZE) {
-      await gmail.users.messages.batchModify({
-        userId: "me",
-        requestBody: {
-          ids: messageIds.slice(i, i + CHUNK_SIZE),
-          addLabelIds: ["SPAM"],
-          removeLabelIds: ["INBOX", "UNREAD"],
-        },
-      });
-    }
+  async batchMoveToTrash(messageIds: string[]): Promise<{ failedIds: string[] }> {
+    return this.batchTrash(messageIds);
   }
 
   /**
-   * Reverse of batchMoveToSpam — used when unblocking. Restores INBOX and removes SPAM.
+   * Reverse of batchMoveToTrash — used when unblocking. Uses messages.untrash to
+   * restore the message from Trash; the resulting labels include INBOX iff the
+   * message had it before trashing (Gmail remembers).
    */
-  async batchRestoreFromSpam(messageIds: string[]): Promise<void> {
-    if (messageIds.length === 0) return;
-    const gmail = this.gmail!;
-    const CHUNK_SIZE = 1000;
-    for (let i = 0; i < messageIds.length; i += CHUNK_SIZE) {
-      await gmail.users.messages.batchModify({
-        userId: "me",
-        requestBody: {
-          ids: messageIds.slice(i, i + CHUNK_SIZE),
-          addLabelIds: ["INBOX"],
-          removeLabelIds: ["SPAM"],
-        },
-      });
+  async batchRestoreFromTrash(messageIds: string[]): Promise<{ failedIds: string[] }> {
+    if (messageIds.length === 0) return { failedIds: [] };
+    const failedIds: string[] = [];
+    const CONCURRENCY = 5;
+    for (let i = 0; i < messageIds.length; i += CONCURRENCY) {
+      const batch = messageIds.slice(i, i + CONCURRENCY);
+      const results = await Promise.allSettled(
+        batch.map((id) => this.gmail!.users.messages.untrash({ userId: "me", id })),
+      );
+      for (let j = 0; j < results.length; j++) {
+        if (results[j].status === "rejected") {
+          failedIds.push(batch[j]);
+        }
+      }
     }
+    return { failedIds };
   }
 
   async searchSentEmails(maxResults: number = 500): Promise<SentEmail[]> {
