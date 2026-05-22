@@ -1,7 +1,7 @@
 import { app, BrowserWindow, ipcMain, session, nativeTheme } from "electron";
 import { join } from "path";
 import { readFileSync, existsSync, readdirSync } from "fs";
-import { electronApp, optimizer } from "@electron-toolkit/utils";
+import { electronApp, optimizer, is } from "@electron-toolkit/utils";
 import Store from "electron-store";
 
 import { getDataDir } from "./data-dir";
@@ -53,6 +53,16 @@ import { calendarSyncService } from "./services/calendar-sync";
 import { emailSyncService } from "./services/email-sync";
 import * as webSearchExtension from "../extensions/mail-ext-web-search/src/index";
 import * as calendarExtension from "../extensions/mail-ext-calendar/src/index";
+
+// Anchor Electron's framework userData (SingletonLock, sessions, cache, IDB,
+// LocalStorage, ServiceWorkers, GPUCache) to the per-worktree `.dev-data/` in
+// dev. Without this, Electron defaults to `~/Library/Application Support/exo/`
+// — the same dir the packaged app uses — so dev runs both pollute real user
+// data and collide on the singleton lock across parallel worktrees. Must run
+// before any `app.getPath("userData")` call below.
+if (is.dev) {
+  app.setPath("userData", getDataDir());
+}
 
 // Skip Keychain for Chromium's internal cookie/localStorage encryption.
 // Without this, macOS prompts "wants to access data from other apps" on first launch
