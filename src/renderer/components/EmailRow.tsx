@@ -205,10 +205,10 @@ export const EmailRow = memo(
               title={accountChip.title}
               aria-label={accountChip.title}
               className={`flex-shrink-0 inline-flex items-center justify-center rounded font-semibold uppercase px-1 ${
-                density === "compact" ? "text-[9px] h-4 min-w-[18px]" : "text-[10px] h-5 min-w-[22px]"
-              } ${
-                isSelected && !isChecked ? "bg-white/20 text-white" : accountChip.colorClass
-              }`}
+                density === "compact"
+                  ? "text-[9px] h-4 min-w-[18px]"
+                  : "text-[10px] h-5 min-w-[22px]"
+              } ${isSelected && !isChecked ? "bg-white/20 text-white" : accountChip.colorClass}`}
             >
               {accountChip.label}
             </span>

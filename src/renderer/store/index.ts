@@ -735,8 +735,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       for (const arr of state.pendingRemovals.values()) {
         for (const e of arr) pendingIds.add(e.id);
       }
-      const incoming =
-        pendingIds.size > 0 ? emails.filter((e) => !pendingIds.has(e.id)) : emails;
+      const incoming = pendingIds.size > 0 ? emails.filter((e) => !pendingIds.has(e.id)) : emails;
       const other = state.emails.filter((e) => e.accountId !== accountId);
       const patched = applyOptimisticReads([...other, ...incoming]);
       if (

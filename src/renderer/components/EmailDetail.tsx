@@ -2506,8 +2506,7 @@ function EmailDetailInner({ isFullView = false }: EmailDetailProps) {
   // (fetch, send, archive, snooze, reply-info) below use threadAccountId so
   // actions always route to the right account regardless of which view is
   // active.
-  const threadAccountId: string | null =
-    currentAccountId ?? selectedEmail?.accountId ?? null;
+  const threadAccountId: string | null = currentAccountId ?? selectedEmail?.accountId ?? null;
 
   // Get current user email for "Me" detection — based on the open thread's
   // account so unified view correctly identifies the user across accounts.
@@ -2534,10 +2533,7 @@ function EmailDetailInner({ isFullView = false }: EmailDetailProps) {
     const fetchThread = async () => {
       setIsLoadingThread(true);
       try {
-        const response = await window.api.emails.getThread(
-          selectedEmail.threadId,
-          threadAccountId,
-        );
+        const response = await window.api.emails.getThread(selectedEmail.threadId, threadAccountId);
         if (response.success && response.data) {
           setFullThreadEmails(response.data);
           // Push into the store so the sidebar can also resolve these emails

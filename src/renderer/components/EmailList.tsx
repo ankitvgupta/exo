@@ -145,9 +145,7 @@ export function EmailList() {
         targetAccountIds.map((aid) =>
           window.api.snooze
             .list(aid)
-            .then(
-              (r: { success: boolean; data?: SnoozedEmail[]; expired?: SnoozedEmail[] }) => r,
-            )
+            .then((r: { success: boolean; data?: SnoozedEmail[]; expired?: SnoozedEmail[] }) => r)
             .catch(() => ({ success: false }) as { success: boolean }),
         ),
       );

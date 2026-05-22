@@ -1696,9 +1696,7 @@ export default function App() {
                 className="flex items-center space-x-2 px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
               >
                 <span className="text-gray-700 dark:text-gray-300 truncate max-w-[200px]">
-                  {isUnifiedView
-                    ? "All Inboxes"
-                    : currentAccount?.email || "Select account"}
+                  {isUnifiedView ? "All Inboxes" : currentAccount?.email || "Select account"}
                 </span>
                 {/* Sync status indicator */}
                 {isSyncing && (

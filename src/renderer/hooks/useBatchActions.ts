@@ -17,10 +17,7 @@ import { trackEvent } from "../services/posthog";
 // (e.g. user just optimistically archived them then selected, or a race
 // removed them) are logged and skipped — better than silently dropping the
 // user's action.
-function groupSelectedByAccount(): Map<
-  string,
-  { threadIds: string[]; emails: DashboardEmail[] }
-> {
+function groupSelectedByAccount(): Map<string, { threadIds: string[]; emails: DashboardEmail[] }> {
   const { selectedThreadIds, emails, sentEmails } = useAppStore.getState();
   const result = new Map<string, { threadIds: string[]; emails: DashboardEmail[] }>();
   for (const threadId of selectedThreadIds) {
@@ -40,10 +37,7 @@ function groupSelectedByAccount(): Map<
     // All emails in a thread belong to the same account.
     const accountId = threadEmails[0].accountId;
     if (!accountId) {
-      console.warn(
-        "[useBatchActions] thread without accountId, skipping batch action",
-        threadId,
-      );
+      console.warn("[useBatchActions] thread without accountId, skipping batch action", threadId);
       continue;
     }
     const entry = result.get(accountId) ?? { threadIds: [], emails: [] };
