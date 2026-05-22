@@ -45,7 +45,7 @@ For complex work (migrations, multi-file refactors, architectural changes), you 
 - ActiveRecord's lazy loading makes N+1s easy to introduce, always consider preloads when referencing associations
 - Extract complex query conditions into named scopes for reusability
 
-# Python
+### Python
 - Use type hints whenever possible
 - Prefer to use standard library features over third party libraries whenever possible, though not if they add considerable complexity or performance overhead
 
