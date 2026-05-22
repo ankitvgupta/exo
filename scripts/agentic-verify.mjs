@@ -271,18 +271,34 @@ function fillTemplate(template, vars) {
 // Electron lifecycle
 // ============================================================
 
-async function waitForCdp(timeoutMs = 30_000) {
+// Default 3 min — first-run cold electron-vite builds can take 1-2 min
+// to produce a CDP-listening main process after `npx electron-vite dev`
+// returns. Previous 30s default consistently flaked on cold caches.
+async function waitForCdp(timeoutMs = 180_000) {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
+    // Bound each fetch independently — without a per-fetch signal,
+    // `fetch` can hang for the full Node default if Electron has the
+    // socket bound but isn't yet responding (cold CDP init). One
+    // hanging fetch would consume the entire `timeoutMs` budget and
+    // produce a misleading "not ready after Nms" error where N is
+    // the configured budget, not the actual elapsed wall time.
+    const controller = new AbortController();
+    const fetchAbort = setTimeout(() => controller.abort(), 2_000);
     try {
-      const r = await fetch(`${CDP_URL}/json/version`);
+      const r = await fetch(`${CDP_URL}/json/version`, { signal: controller.signal });
       if (r.ok) return;
     } catch {
-      // not ready
+      // not ready / aborted — keep polling
+    } finally {
+      clearTimeout(fetchAbort);
     }
     await new Promise((res) => setTimeout(res, 500));
   }
-  throw new Error(`CDP at ${CDP_URL} not ready after ${timeoutMs}ms`);
+  const actualMs = Date.now() - start;
+  throw new Error(
+    `CDP at ${CDP_URL} not ready after ${actualMs}ms (budget ${timeoutMs}ms)`,
+  );
 }
 
 function launchElectron(dataMode) {
