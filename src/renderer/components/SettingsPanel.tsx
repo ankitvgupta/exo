@@ -1079,7 +1079,8 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                     role="switch"
                     aria-checked={isDefaultMailApp}
                     aria-label="Set as default mail app"
-                    disabled={isDefaultMailAppLoading}
+                    aria-disabled={isDefaultMailAppLoading}
+                    aria-busy={isDefaultMailAppLoading}
                     onClick={async () => {
                       if (isDefaultMailAppLoading) return;
                       setIsDefaultMailAppLoading(true);

@@ -2016,7 +2016,7 @@ export default function App() {
               onClick={() => removeExtensionAuthRequired(extId)}
               className="p-1 text-amber-600 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-200 transition-colors"
               title="Dismiss"
-              aria-label="Dismiss"
+              aria-label={`Dismiss ${displayName} authentication notice`}
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
@@ -2075,7 +2075,7 @@ export default function App() {
               onClick={() => removeAgentAuthRequired(providerId)}
               className="p-1 text-amber-600 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-200 transition-colors"
               title="Dismiss"
-              aria-label="Dismiss"
+              aria-label={`Dismiss ${displayName} authentication notice`}
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
