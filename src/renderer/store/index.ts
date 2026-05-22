@@ -15,7 +15,7 @@ import type {
   SendMessageOptions,
   LocalDraft,
 } from "../../shared/types";
-import { emailMatchesSplit } from "../utils/split-conditions";
+import { threadMatchesSplit as threadMatchesSplitShared } from "../utils/split-conditions";
 import type {
   AgentProviderConfig,
   AgentTaskInfo,
@@ -1947,15 +1947,12 @@ export function useThreadedEmails() {
   }, [emails, currentAccountId, currentUserEmail, snoozedThreadIds, recentlyRepliedThreadIds]);
 }
 
+// Local thin wrapper around the shared threadMatchesSplit util so the rest
+// of this file can keep passing EmailThread objects around without exposing
+// the split-conditions module to that type (which would create an import
+// cycle).
 function threadMatchesSplit(thread: EmailThread, split: InboxSplit): boolean {
-  // Splits are per-account: a split only applies to threads from its owning
-  // account. In unified ("All Inboxes") mode multiple accounts' splits are
-  // visible at once, so we must scope-check to avoid e.g. an exclusive split
-  // from account A hiding unrelated threads from account B.
-  if (thread.latestEmail.accountId && thread.latestEmail.accountId !== split.accountId) {
-    return false;
-  }
-  return emailMatchesSplit(thread.latestEmail, split);
+  return threadMatchesSplitShared(thread.latestEmail, split);
 }
 
 // Selector for split-filtered threaded emails

@@ -1,15 +1,13 @@
 import { useMemo } from "react";
 import { useAppStore, useThreadedEmails, type EmailThread } from "../store";
+import { threadMatchesSplit as threadMatchesSplitShared } from "../utils/split-conditions";
 import type { InboxSplit } from "../../shared/types";
-import { emailMatchesSplit } from "../utils/split-conditions";
 
+// Thin wrapper around the shared util so the rest of the file can pass
+// EmailThread objects directly. The shared util takes the latestEmail to
+// avoid an import cycle with the store's EmailThread type.
 function threadMatchesSplit(thread: EmailThread, split: InboxSplit): boolean {
-  // Scope each split to its owning account so unified ("All Inboxes") mode
-  // never matches a thread from a different account.
-  if (thread.latestEmail.accountId && thread.latestEmail.accountId !== split.accountId) {
-    return false;
-  }
-  return emailMatchesSplit(thread.latestEmail, split);
+  return threadMatchesSplitShared(thread.latestEmail, split);
 }
 
 interface TabProps {
