@@ -23,6 +23,9 @@ release/
 *.swp
 *.swo
 
+# Claude Code harness runtime state
+.claude/scheduled_tasks.lock
+
 # SQLite database (stored in user data directory, but just in case)
 *.db
 *.db-journal

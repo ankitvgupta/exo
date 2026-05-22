@@ -1736,6 +1736,7 @@ export default function App() {
             onClick={openSearch}
             className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors flex items-center gap-1"
             title="Search (/)"
+            aria-label="Search"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
@@ -1886,6 +1887,7 @@ export default function App() {
             onClick={() => setShowSettings(true)}
             className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors focus:outline-none"
             title="Settings"
+            aria-label="Settings"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
@@ -1907,6 +1909,7 @@ export default function App() {
             disabled={isFetching || isSyncing}
             className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-50"
             title="Refresh"
+            aria-label="Refresh"
           >
             <svg
               className={`w-5 h-5 ${isFetching || isSyncing ? "animate-spin" : ""}`}
@@ -2013,6 +2016,7 @@ export default function App() {
               onClick={() => removeExtensionAuthRequired(extId)}
               className="p-1 text-amber-600 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-200 transition-colors"
               title="Dismiss"
+              aria-label={`Dismiss ${displayName} authentication notice`}
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
@@ -2071,6 +2075,7 @@ export default function App() {
               onClick={() => removeAgentAuthRequired(providerId)}
               className="p-1 text-amber-600 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-200 transition-colors"
               title="Dismiss"
+              aria-label={`Dismiss ${displayName} authentication notice`}
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path

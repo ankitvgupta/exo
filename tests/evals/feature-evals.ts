@@ -116,6 +116,9 @@ interface FixtureResult {
   /** Set when runFixture threw — the judge result is then skipped so an
    *  infrastructure crash isn't silently graded as a model regression. */
   infraError?: string;
+  /** Set when the judge itself failed (API/parse error). The
+   *  regression-delta check is skipped — see #129. */
+  judgeError?: string;
 }
 
 interface FeatureReport {
@@ -128,6 +131,10 @@ interface FeatureReport {
    *  reported separately so a developer doesn't chase a phantom model
    *  regression that's really a broken service call. */
   infraErrors: string[];
+  /** Judge errors (the judge call failed — API/parse). Same treatment
+   *  as infraErrors: skip the delta check, exit non-zero, report
+   *  separately so a Claude 5xx doesn't look like a model regression. */
+  judgeErrors: string[];
 }
 
 // ============================================================
@@ -200,13 +207,21 @@ async function runFeature(feature: string): Promise<FeatureReport> {
   const fixtures = loadFixtures(feature);
   if (fixtures.length === 0) {
     console.warn(`[${feature}] no fixtures found in ${fixturesDir(feature)} — skipping`);
-    return { feature, fixturesRun: 0, results: [], regressions: [], infraErrors: [] };
+    return {
+      feature,
+      fixturesRun: 0,
+      results: [],
+      regressions: [],
+      infraErrors: [],
+      judgeErrors: [],
+    };
   }
 
   const baseline = loadBaseline(feature);
   const results: FixtureResult[] = [];
   const regressions: string[] = [];
   const infraErrors: string[] = [];
+  const judgeErrors: string[] = [];
 
   for (const fixture of fixtures) {
     console.log(`[${feature}] running ${fixture.id}...`);
@@ -238,6 +253,23 @@ async function runFeature(feature: string): Promise<FeatureReport> {
 
     const judgement = await judge(output, fixture.rubric, fixture.id);
     const baselineScore = baseline?.scores[fixture.id]?.score ?? null;
+
+    // Judge itself failed — skip the delta check so a Claude 5xx or
+    // parser bug doesn't surface as a phantom model regression. See #129.
+    if (judgement.judgeError) {
+      judgeErrors.push(`${fixture.id}: ${judgement.judgeError}`);
+      results.push({
+        fixtureId: fixture.id,
+        description: fixture.description,
+        judge: judgement,
+        baselineScore,
+        delta: null,
+        output,
+        judgeError: judgement.judgeError,
+      });
+      continue;
+    }
+
     const delta = baselineScore !== null ? judgement.score - baselineScore : null;
 
     if (delta !== null && delta < -REGRESSION_THRESHOLD) {
@@ -256,7 +288,14 @@ async function runFeature(feature: string): Promise<FeatureReport> {
     });
   }
 
-  return { feature, fixturesRun: results.length, results, regressions, infraErrors };
+  return {
+    feature,
+    fixturesRun: results.length,
+    results,
+    regressions,
+    infraErrors,
+    judgeErrors,
+  };
 }
 
 function printReport(report: FeatureReport): void {
@@ -265,8 +304,15 @@ function printReport(report: FeatureReport): void {
   if (report.fixturesRun === 0) return;
 
   for (const r of report.results) {
-    const deltaStr =
-      r.delta === null ? "(no baseline)" : r.delta >= 0 ? `+${r.delta.toFixed(1)}` : r.delta.toFixed(1);
+    const deltaStr = r.judgeError
+      ? "(judge error)"
+      : r.infraError
+        ? "(infra error)"
+        : r.delta === null
+          ? "(no baseline)"
+          : r.delta >= 0
+            ? `+${r.delta.toFixed(1)}`
+            : r.delta.toFixed(1);
     console.log(`  [${r.judge.score}/10] ${r.fixtureId} ${deltaStr}`);
     console.log(`    ${r.description}`);
     console.log(`    judge: ${r.judge.reason}`);
@@ -280,6 +326,11 @@ function printReport(report: FeatureReport): void {
   if (report.infraErrors.length > 0) {
     console.log(`\n  INFRASTRUCTURE ERRORS (runFixture threw — not a model regression):`);
     for (const err of report.infraErrors) console.log(`    - ${err}`);
+  }
+
+  if (report.judgeErrors.length > 0) {
+    console.log(`\n  JUDGE ERRORS (judge call failed — not a model regression):`);
+    for (const err of report.judgeErrors) console.log(`    - ${err}`);
   }
 }
 
@@ -316,16 +367,30 @@ async function main(): Promise<void> {
   const reports: FeatureReport[] = [];
   let anyRegressions = false;
   let anyInfraErrors = false;
+  let anyJudgeErrors = false;
   for (const feature of targets) {
     const report = await runFeature(feature);
     reports.push(report);
     printReport(report);
     if (updateBaseline && report.fixturesRun > 0) {
-      saveBaseline(feature, report.results);
-      console.log(`  baseline updated → ${baselinePath(feature)}`);
+      // Refuse to persist baselines when any fixture has a score-0
+      // placeholder (judge or infra error). Otherwise --update-baseline
+      // during an outage would write score 0 for the broken fixtures,
+      // and future runs would compute deltas like +7 against that — a
+      // permanent regression-detection blind spot.
+      const blockingErrors = report.judgeErrors.length + report.infraErrors.length;
+      if (blockingErrors > 0) {
+        console.warn(
+          `  [${feature}] baseline NOT updated — ${blockingErrors} judge/infra error(s) present. Fix the underlying failure and re-run.`,
+        );
+      } else {
+        saveBaseline(feature, report.results);
+        console.log(`  baseline updated → ${baselinePath(feature)}`);
+      }
     }
     if (report.regressions.length > 0) anyRegressions = true;
     if (report.infraErrors.length > 0) anyInfraErrors = true;
+    if (report.judgeErrors.length > 0) anyJudgeErrors = true;
   }
 
   if (all && TODO_FEATURES.length > 0) {
@@ -335,8 +400,17 @@ async function main(): Promise<void> {
 
   console.log(`\nTotal fixtures run: ${reports.reduce((s, r) => s + r.fixturesRun, 0)}`);
   if (anyInfraErrors) {
-    console.error("\nEval FAILED: infrastructure errors (runFixture threw — not a model regression).");
+    console.error(
+      "\nEval FAILED: infrastructure errors (runFixture threw — not a model regression).",
+    );
     console.error("Check the runner code path, not the model or rubric.");
+    process.exit(1);
+  }
+  if (anyJudgeErrors) {
+    console.error("\nEval FAILED: judge errors (judge call failed — not a model regression).");
+    console.error(
+      "Check Anthropic API status or the judge response parser, not the feature output.",
+    );
     process.exit(1);
   }
   if (anyRegressions) {
@@ -346,8 +420,7 @@ async function main(): Promise<void> {
 }
 
 const isDirectExecution =
-  import.meta.url === `file://${process.argv[1]}` ||
-  process.argv[1]?.endsWith("feature-evals.ts");
+  import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith("feature-evals.ts");
 
 if (isDirectExecution) {
   main().catch((err) => {
