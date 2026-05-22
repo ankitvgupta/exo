@@ -1389,7 +1389,6 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
       emailId,
       subject: "",
       from: "",
-      priority: "",
       status: "running",
       startedAt: Date.now(),
     });

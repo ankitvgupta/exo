@@ -591,7 +591,6 @@ export function registerSyncIpc(): void {
                 ? {
                     needsReply: expectedAnalysis.needsReply,
                     reason: expectedAnalysis.reason,
-                    priority: expectedAnalysis.priority,
                     analyzedAt: Date.now(),
                   }
                 : undefined),
