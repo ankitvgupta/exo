@@ -2022,10 +2022,7 @@ export function removeBlockedSender(senderEmail: string, accountId: string): voi
   );
 }
 
-export function getBlockedSender(
-  senderEmail: string,
-  accountId: string,
-): BlockedSenderRow | null {
+export function getBlockedSender(senderEmail: string, accountId: string): BlockedSenderRow | null {
   const db = getDatabase();
   const row = db
     .prepare(

@@ -46,11 +46,7 @@ export function SenderProfilePanel({
   // Hide the block button on reminder emails — the visible sender is the
   // original-sender (e.g. someone you bcc'd via Boomerang), and blocking
   // them via the reminder service header would do the wrong thing.
-  const canBlock =
-    !isReminder &&
-    !!email.accountId &&
-    !!senderEmail &&
-    senderEmail.includes("@");
+  const canBlock = !isReminder && !!email.accountId && !!senderEmail && senderEmail.includes("@");
 
   // Deferred commit: optimistically remove the thread from view and queue an
   // undo. The IPC (create Gmail filter + trash existing messages) only fires

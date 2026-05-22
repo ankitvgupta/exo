@@ -930,41 +930,33 @@ function ThreadMessage({
             </span>
             {/* Block sender — only show when there is a real sender email
                 (not on outbound messages where senderEmail is the user). */}
-            {onBlockSender &&
-              senderEmail &&
-              !isFromMe &&
-              senderEmail.includes("@") && (
-                <span
-                  role="button"
-                  aria-label="Block sender"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onBlockSender(senderEmail);
-                  }}
-                  className={`p-1 rounded transition-colors ${
-                    useWhiteCard
-                      ? "text-gray-400 hover:text-red-600 hover:bg-red-50"
-                      : "text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
-                  }`}
-                  title={`Block ${senderEmail}`}
-                >
-                  {/* "no-entry" / ban circle — matches Gmail's block visual */}
-                  <svg
-                    className="w-3.5 h-3.5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <circle cx="12" cy="12" r="9" strokeWidth={2} />
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M5.6 5.6l12.8 12.8"
-                    />
-                  </svg>
-                </span>
-              )}
+            {onBlockSender && senderEmail && !isFromMe && senderEmail.includes("@") && (
+              <span
+                role="button"
+                aria-label="Block sender"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onBlockSender(senderEmail);
+                }}
+                className={`p-1 rounded transition-colors ${
+                  useWhiteCard
+                    ? "text-gray-400 hover:text-red-600 hover:bg-red-50"
+                    : "text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
+                }`}
+                title={`Block ${senderEmail}`}
+              >
+                {/* "no-entry" / ban circle — matches Gmail's block visual */}
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <circle cx="12" cy="12" r="9" strokeWidth={2} />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M5.6 5.6l12.8 12.8"
+                  />
+                </svg>
+              </span>
+            )}
           </span>
         )}
       </button>

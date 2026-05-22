@@ -3672,8 +3672,8 @@ function BlockedSendersSection() {
         Blocked Senders
       </h2>
       <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-        Senders here are routed to Trash by a Gmail filter, so the block applies in Gmail Web and
-        on mobile too. Unblock to delete the filter and restore future delivery.
+        Senders here are routed to Trash by a Gmail filter, so the block applies in Gmail Web and on
+        mobile too. Unblock to delete the filter and restore future delivery.
       </p>
 
       {error && (
@@ -3690,10 +3690,7 @@ function BlockedSendersSection() {
             const key = `${row.accountId}:${row.senderEmail}`;
             const accountEmail = accountEmailById.get(row.accountId) ?? row.accountId;
             return (
-              <li
-                key={key}
-                className="flex items-center justify-between px-3 py-2 text-sm"
-              >
+              <li key={key} className="flex items-center justify-between px-3 py-2 text-sm">
                 <div className="min-w-0">
                   <p className="font-medium text-gray-900 dark:text-gray-100 truncate">
                     {row.senderEmail}
