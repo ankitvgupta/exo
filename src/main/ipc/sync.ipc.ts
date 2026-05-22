@@ -1745,11 +1745,11 @@ export function registerSyncIpc(): void {
       // one bad outreach campaign doesn't lock us up.
       let movedEmailIds: string[] = [];
       try {
-        const existing = await client.searchAllEmails(
+        const inboxMessages = await client.searchAllEmails(
           `from:${normalized} in:inbox`,
           5000, // upper bound — practical cap for a single-sender backlog
         );
-        movedEmailIds = existing.map((m) => m.id);
+        movedEmailIds = inboxMessages.map((m) => m.id);
         if (movedEmailIds.length > 0) {
           const { failedIds } = await client.batchMoveToTrash(movedEmailIds);
           const succeededIds = movedEmailIds.filter((id) => !failedIds.includes(id));

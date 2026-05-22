@@ -18,6 +18,7 @@ import {
   type ModelConfig,
   type ModelTier,
   type CliToolConfig,
+  type BlockedSender,
 } from "../../shared/types";
 import { useAppStore, type Account, type SettingsTab } from "../store";
 import { reconfigurePostHog, trackEvent } from "../services/posthog";
@@ -3622,13 +3623,6 @@ function UsageCostSection() {
 // Blocked senders settings section
 // =============================================================================
 
-interface BlockedSenderRow {
-  senderEmail: string;
-  accountId: string;
-  gmailFilterId: string | null;
-  blockedAt: number;
-}
-
 function BlockedSendersSection() {
   const queryClient = useQueryClient();
   const accounts = useAppStore((s) => s.accounts);
@@ -3639,7 +3633,7 @@ function BlockedSendersSection() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = (await (window as any).api.emails.listBlockedSenders()) as {
         success: boolean;
-        data?: BlockedSenderRow[];
+        data?: BlockedSender[];
         error?: string;
       };
       if (!result.success) throw new Error(result.error);

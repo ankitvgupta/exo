@@ -178,10 +178,10 @@ export type UndoActionItem = {
   archiveReadyThreadIds?: string[];
   // For snooze undo: thread IDs to unsnooze
   snoozedThreadIds?: string[];
-  // For block: the bare sender email that was blocked. On undo we call
-  // emails:unblock-sender with this address. Already committed server-side
-  // when the toast appears (the block IPC runs synchronously at click time),
-  // so commitAction is a no-op for "block".
+  // For block: the bare sender email that was blocked. The block IPC is
+  // deferred (commitAction in UndoActionToast calls emails:block-sender when
+  // the timer elapses), and undo within the window simply restores the
+  // emails to view — nothing server-side has happened yet.
   blockedSender?: string;
 };
 
