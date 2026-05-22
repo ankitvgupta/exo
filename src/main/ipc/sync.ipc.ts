@@ -696,7 +696,7 @@ export function registerSyncIpc(): void {
       // Save demo analysis data for each email so archive-ready checks pass
       const { DEMO_EXPECTED_ANALYSIS } = await import("../demo/fake-inbox");
       for (const [emailId, analysis] of Object.entries(DEMO_EXPECTED_ANALYSIS)) {
-        saveAnalysis(emailId, analysis.needsReply, analysis.reason, analysis.priority ?? "low");
+        saveAnalysis(emailId, analysis.needsReply, analysis.reason);
       }
 
       // Seed demo AI drafts so draft-edit learning can be tested
@@ -1581,7 +1581,6 @@ export function registerSyncIpc(): void {
                 ? {
                     needsReply: analysis.needsReply,
                     reason: analysis.reason,
-                    priority: analysis.priority,
                     analyzedAt: Date.now(),
                   }
                 : undefined,

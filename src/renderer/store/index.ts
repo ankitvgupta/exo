@@ -1875,21 +1875,14 @@ export function useThreadedEmails() {
     );
     const unanalyzed = activeThreads.filter((t) => !t.analysis && !effectiveUserReplied(t));
 
-    // Sort needsReply by priority (high > medium > low)
-    const priorityOrder: Record<string, number> = { high: 0, medium: 1, low: 2 };
-    const sortedNeedsReply = [...needsReply].sort((a, b) => {
-      const aPriority = priorityOrder[a.analysis?.priority || "medium"] ?? 1;
-      const bPriority = priorityOrder[b.analysis?.priority || "medium"] ?? 1;
-      return aPriority - bPriority;
-    });
-
-    // Ordered threads: unanalyzed → needs reply (by priority) → done → skipped
-    const threads = [...unanalyzed, ...sortedNeedsReply, ...done, ...skipped];
+    // Ordered threads: unanalyzed → needs reply → done → skipped.
+    // Within needsReply, preserve the chronological order produced by groupByThread.
+    const threads = [...unanalyzed, ...needsReply, ...done, ...skipped];
 
     return {
       threads,
       chronologicalThreads: activeThreads, // sorted by latestReceivedDate desc (from groupByThread)
-      needsReply: sortedNeedsReply,
+      needsReply,
       done,
       skipped,
       skippedCount: skipped.length,

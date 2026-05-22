@@ -128,12 +128,9 @@ function printReport(report: EvalReport): void {
   );
 
   for (const r of report.results) {
-    const status = r.score === 10 ? "PASS" : r.score >= 5 ? "PARTIAL" : "FAIL";
-    const details: string[] = [];
-    if (!r.needs_reply_correct) details.push("needs_reply mismatch");
-    if (!r.priority_correct) details.push("priority mismatch");
-    const detailStr = details.length > 0 ? ` (${details.join(", ")})` : "";
-    console.log(`  [${status}] ${r.fixture_id}: ${r.score}/10${detailStr}`);
+    const status = r.score === 10 ? "PASS" : "FAIL";
+    const details = r.needs_reply_correct ? "" : " (needs_reply mismatch)";
+    console.log(`  [${status}] ${r.fixture_id}: ${r.score}/10${details}`);
     console.log(`         ${r.description}`);
   }
 

@@ -1,7 +1,8 @@
 /**
  * Analysis Edit Learner
  *
- * When a user overrides an email's priority/needs_reply classification, this service:
+ * When a user overrides an email's needs-reply classification (Priority vs Other),
+ * this service:
  *
  * 1. If the user provides a reason:
  *    - Classifies scope (person/domain/category/global) via Claude
@@ -47,9 +48,7 @@ interface AnalysisOverride {
   subject: string;
   bodySnippet: string; // first ~500 chars of email body
   originalNeedsReply: boolean;
-  originalPriority: string | null; // "high" | "medium" | "low" | null
   newNeedsReply: boolean;
-  newPriority: string | null;
 }
 
 interface AnalysisObservation {
@@ -299,7 +298,7 @@ async function analyzeOverride(override: AnalysisOverride): Promise<AnalysisObse
       messages: [
         {
           role: "user",
-          content: `You are analyzing why a user changed the priority classification of an email. Extract up to 3 generalizable rules about how this type of email should be prioritized in the future.
+          content: `You are analyzing why a user changed the Priority/Other classification of an email. Each email is classified as either Priority (needs a reply from the user) or Other (no reply needed). Extract up to 3 generalizable rules about how this type of email should be classified in the future.
 
 CONTEXT:
 - From: <sender_email>${override.senderEmail}</sender_email> (domain: <sender_domain>${override.senderDomain}</sender_domain>)
@@ -313,7 +312,7 @@ ANALYSIS FRAMEWORK:
 Think about WHY the user changed this classification:
 1. Is it about this specific sender? (e.g., "emails from my manager always need a reply")
 2. Is it about the domain/organization? (e.g., "emails from @ourcompany.com are always important")
-3. Is it about the type of email? (e.g., "recruiter emails should be medium, not low")
+3. Is it about the type of email? (e.g., "recruiter outreach always needs a reply")
 4. Is it a global rule? (e.g., "emails with direct questions always need replies")
 
 SCOPE RULES:
@@ -328,8 +327,8 @@ Return a JSON array. Each item:
 
 Content should be a clear directive for an email triage system, like:
 - "Emails from this sender always need a reply — they are my manager"
-- "GitHub review requests (not just notifications) should be medium priority"
-- "Recruiter outreach should be medium priority, not low"
+- "GitHub review requests (not just notifications) should be marked as priority"
+- "Recruiter outreach should be marked as priority"
 - "Emails with direct questions to me should never be skipped"
 
 Return [] if the override seems purely situational with no generalizable pattern.
@@ -495,11 +494,7 @@ For global: scopeValue = null`,
 }
 
 function formatOverrideDescription(override: AnalysisOverride): string {
-  const fromLabel = override.originalNeedsReply
-    ? `needs reply (${override.originalPriority ?? "no"} priority)`
-    : "no reply needed (skipped)";
-  const toLabel = override.newNeedsReply
-    ? `needs reply (${override.newPriority ?? "no"} priority)`
-    : "no reply needed (skipped)";
+  const fromLabel = override.originalNeedsReply ? "Priority (needs reply)" : "Other (no reply)";
+  const toLabel = override.newNeedsReply ? "Priority (needs reply)" : "Other (no reply)";
   return `Changed from "${fromLabel}" to "${toLabel}"`;
 }

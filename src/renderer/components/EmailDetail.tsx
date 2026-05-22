@@ -90,7 +90,6 @@ declare global {
         overridePriority: (
           emailId: string,
           newNeedsReply: boolean,
-          newPriority: string | null,
           reason?: string,
         ) => Promise<IpcResponse<{ analysisUpdated: boolean }>>;
       };
@@ -3741,17 +3740,16 @@ function EmailDetailInner({ isFullView = false }: EmailDetailProps) {
           ))}
         </div>
 
-        {/* Analysis section with priority override — uses latestReceivedEmail
+        {/* Analysis section with Priority/Other override — uses latestReceivedEmail
              so the user's own sent reply doesn't override the thread's analysis */}
         {latestReceivedEmail?.analysis && (
           <AnalysisPrioritySection
             email={latestReceivedEmail}
-            onAnalysisUpdated={(newNeedsReply, newPriority) => {
+            onAnalysisUpdated={(newNeedsReply) => {
               updateEmail(latestReceivedEmail.id, {
                 analysis: {
                   ...latestReceivedEmail.analysis!,
                   needsReply: newNeedsReply,
-                  priority: (newPriority as "high" | "medium" | "low" | "skip" | null) ?? undefined,
                 },
               });
             }}
