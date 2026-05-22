@@ -1038,9 +1038,7 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
       this.forceQueuedDrafts.delete(emailId);
     }
 
-    log.info(
-      `[Prefetch] Starting agent draft for email ${emailId} (priority=${email.analysis?.priority ?? "unknown"})`,
-    );
+    log.info(`[Prefetch] Starting agent draft for email ${emailId}`);
 
     const taskId = buildAutoDraftTaskId(emailId);
 
@@ -1241,7 +1239,6 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
           emailId: t.emailId,
           subject: email?.subject || "(no subject)",
           from: email?.from || "",
-          priority: email?.analysis?.priority || "low",
           status: "queued" as const,
         };
       });
