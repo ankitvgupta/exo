@@ -61,7 +61,16 @@ Do not allow flaky tests. If you have 1 test that fails in a large test run, don
 - Prior to making a pull request, always run the tests and ensure they pass
 - Prior to making a pull request, always run the linters and ensure they pass
 - Prior to making a pull request, always run the type checker and ensure they pass
-- **Always run `npm run pre-pr` at least once per PR (no `--quick`) before merge.** It runs the LLM-judged evals + agentic-verify + real-Gmail tests and injects the report into the PR body. The CI job `verify-prepr-report` requires (a) a marker block exists, (b) `mode=full`, (c) verdict=PASS. The marker SHA is informational only — not gated against HEAD, so one passing full run per PR is sufficient. Use `--quick` freely for iteration; switch to a full run before requesting review or merging. See `docs/LOCAL_DEVELOPMENT.md`.
+- **Always run `npm run pre-pr` (full, no `--quick`) BEFORE opening the PR.** It runs the LLM-judged evals + agentic-verify + real-Gmail tests and injects the report into the PR body. The CI job `verify-prepr-report` requires (a) a marker block exists, (b) `mode=full`, (c) verdict=PASS. Use `--quick` freely for iteration; the full run is what gates PR-open. See `docs/LOCAL_DEVELOPMENT.md`.
+- **Triage pre-PR results before opening:**
+  - **Major issues** (eval regressions vs. baseline, agentic-verify failures on the diff, real-Gmail test failures, crashes, broken core flows, type/lint/test failures) → fix locally and re-run pre-PR until the report is clean. Do not open the PR yet.
+  - **Mild issues** (minor eval score wobble within noise, flaky non-blocking sub-checks, cosmetic warnings, slow but passing checks) → open the PR so CI starts running, then fix the mild issues in follow-up commits in parallel with CI. Call out the mild issues explicitly in the PR description so they aren't forgotten.
+  - When in doubt about severity, treat as major and fix first.
+- **Re-run pre-PR periodically during code review** when there have been substantial changes. The first pre-PR run is a snapshot of the diff at PR-open; if `/reviewloop` or subsequent commits change a lot, that snapshot goes stale. Heuristics for when to re-run (full mode, which also re-injects the report):
+  - After a `/reviewloop` iteration that touched core behavior (analyzer, draft generator, sync, IPC, prompts) — not just comment/doc tweaks.
+  - After roughly every ~10 review-driven commits, or whenever the diff since the last pre-PR run grows by ≳200 lines of non-trivial code.
+  - Before requesting human review and again before merge, even if nothing seems to have changed materially since the last run — the marker SHA in the report makes drift easy to spot.
+  - If a re-run surfaces major issues, treat the PR as not-yet-mergeable and fix them in the same loop.
 - Once a pull request has been open for a branch, you should ask me whether you should commit and push changes to that branch. After every push to a branch, include a link to the branch in the output to me so I can quickly navigate to the PR.
 - **After opening a PR, autonomously run `/review` then `/reviewloop`** without waiting to be asked. `/review` catches pre-landing issues (SQL safety, LLM trust boundaries, structural problems); `/reviewloop` then iterates against Greptile/Devin/other bots until comments are resolved and CI is green. Still surface major decisions or contested changes back to me — autonomy is about not asking for permission to start, not about silently shipping judgment calls.
 
