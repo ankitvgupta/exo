@@ -145,15 +145,16 @@ const FIXTURES_ROOT = join(import.meta.dirname, "feature-fixtures");
 const BASELINES_ROOT = join(import.meta.dirname, "baselines");
 
 // Empirically calibrated via `npx tsx scripts/evals-variance.ts` — see
-// docs/EVAL_VARIANCE.md for the methodology and raw data. Max observed
-// stddev across all fixtures was 1.43 (dg-2-scheduling); two stddev =
-// 2.86, rounded up to 3.0. At threshold=3 a fixture must score 3+
-// points below baseline to fail, which empirically only happens when
-// the judge takes a clear stance about something materially broken.
-// Baselines are set to the p25 of observed runs (10 runs per fixture)
-// so we're not over-optimistic about deterministic-looking fixtures
-// that occasionally drop.
-const REGRESSION_THRESHOLD = 3.0;
+// docs/EVAL_VARIANCE.md for the methodology and raw data. Re-measured
+// 2026-05-22 on draft-generator + calendaring-agent: max observed
+// stddev rose to 2.15 (dg-3-decline), so two stddev = 4.3, rounded up
+// to 5.0. The earlier 3.0 figure assumed stddev <=1.43 and was flaking
+// pre-pr ~50% of the time on bimodal fixtures (dg-1, ca-1) and tail
+// outliers (dg-2 hitting 3, ca-1 hitting 4–5). At threshold=5 a fixture
+// must score 5+ points below baseline to fail, which empirically only
+// happens when the judge takes a clear stance about something
+// materially broken. Baselines stay at p25 of observed runs.
+const REGRESSION_THRESHOLD = 5.0;
 
 function fixturesDir(feature: string): string {
   return join(FIXTURES_ROOT, feature);
