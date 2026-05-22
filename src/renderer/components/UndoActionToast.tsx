@@ -151,8 +151,18 @@ async function commitAction(item: UndoActionItem, removeFromQueue: () => void): 
     case "block": {
       // Deferred commit: now (at end of undo timer) call the block IPC,
       // which creates the Gmail filter and moves existing matching messages
-      // to Spam. If the IPC fails permanently, restore the emails to view.
+      // to Spam. If the IPC fails permanently, restore the emails to view
+      // AND surface the error via the store — block failure must not be
+      // silent, since the user has already moved on by the time it fires.
       if (!item.blockedSender) break;
+      const surfaceFailure = (reason: string) => {
+        const detail = /insufficient authentication scopes/i.test(reason)
+          ? "Gmail blocked sign-in: please re-authorize the account so Exo can manage Gmail filters."
+          : reason;
+        useAppStore
+          .getState()
+          .setError(`Block failed for ${item.blockedSender ?? "sender"}: ${detail}`);
+      };
       try {
         const result = (await api().emails.blockSender(item.blockedSender, accountId)) as {
           success: boolean;
@@ -160,11 +170,13 @@ async function commitAction(item: UndoActionItem, removeFromQueue: () => void): 
         };
         if (!result.success) {
           console.error("[Block] block IPC failed, restoring emails:", result.error);
+          surfaceFailure(result.error ?? "Unknown error");
           removeFromQueue();
           addEmails(item.emails);
         }
       } catch (err: unknown) {
         console.error("[Block] block IPC rejected, restoring emails:", err);
+        surfaceFailure(err instanceof Error ? err.message : String(err));
         removeFromQueue();
         addEmails(item.emails);
       }
