@@ -70,6 +70,14 @@ test.describe("Real-Gmail Layer 9a — cached .dev-data", () => {
     page = await app.firstWindow();
     await page.waitForLoadState("domcontentloaded");
     await page.waitForSelector("text=Exo", { timeout: 30_000 });
+    // The default Inbox view filters to Priority, which is empty until the
+    // PrefetchService analyzes emails. We set EXO_DISABLE_PREFETCH=true above,
+    // so all seeded fixtures stay in "Other" / "All". Click "All" to make the
+    // thread list visible to the rest of the suite.
+    const allTab = page.locator("button", { hasText: /^All\d/ }).first();
+    if (await allTab.isVisible({ timeout: 5_000 }).catch(() => false)) {
+      await allTab.click();
+    }
   });
 
   test.afterAll(async () => {
