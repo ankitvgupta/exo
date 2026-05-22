@@ -481,37 +481,49 @@ async function main() {
   // SIGINT was handled, so Ctrl-C-from-pre-pr, SIGTERM from a parent,
   // SIGHUP on terminal close, and uncaught exceptions all leaked the
   // Electron process tree.
+  //
+  // Signal handlers exit SYNCHRONOUSLY with the signal's exit code.
+  // If we awaited cleanup() here, the main `for await` loop would keep
+  // running concurrently — Electron's death tears down CDP, the agent
+  // SDK finishes naturally, and the normal-completion path's
+  // `process.exit(0/2/3)` would race ahead and replace the signal exit
+  // code. Kicking the async kill is fire-and-forget; the sync
+  // `on("exit", killElectronSync)` below sends SIGKILL to the whole
+  // process group, which the kernel delivers regardless of our state.
   function installExitHandlers() {
-    const onSignal = (signal, exitCode) => async () => {
+    const onSignal = (signal, exitCode) => () => {
       log(signal);
-      await cleanup();
+      killElectron(electron).catch(() => {});
       flushLog();
       process.exit(exitCode);
     };
     process.once("SIGINT", onSignal("SIGINT", 130));
     process.once("SIGTERM", onSignal("SIGTERM", 143));
     process.once("SIGHUP", onSignal("SIGHUP", 129));
-    process.once("uncaughtException", async (err) => {
+    process.once("uncaughtException", (err) => {
       log(`uncaughtException: ${err instanceof Error ? err.stack : String(err)}`);
-      await cleanup();
+      killElectron(electron).catch(() => {});
       flushLog();
       process.exit(1);
     });
-    process.once("unhandledRejection", async (reason) => {
+    process.once("unhandledRejection", (reason) => {
       log(`unhandledRejection: ${reason instanceof Error ? reason.stack : String(reason)}`);
-      await cleanup();
+      killElectron(electron).catch(() => {});
       flushLog();
       process.exit(1);
     });
     // Last-resort synchronous cleanup. Runs even if something else
     // calls process.exit() without going through cleanup() first.
-    process.on("exit", () => killElectronSync(electron));
+    process.once("exit", () => killElectronSync(electron));
   }
   installExitHandlers();
 
-  const timeout = setTimeout(async () => {
+  // Synchronous exit for the same reason as the signal handlers above:
+  // we can't `await` here without letting the main loop race to a
+  // different exit code. The sync on("exit") fallback handles cleanup.
+  const timeout = setTimeout(() => {
     log(`hard timeout after ${TIMEOUT_MS}ms`);
-    await cleanup();
+    killElectron(electron).catch(() => {});
     flushLog();
     process.exit(124);
   }, TIMEOUT_MS);
