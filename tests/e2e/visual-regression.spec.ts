@@ -73,10 +73,6 @@ test.describe("Visual regression — Linux-only", () => {
 
     await checkA11y(page, {
       exclude: ["[data-testid='email-date']"],
-      // Tracked product debt — re-enable once the markup pass lands.
-      //   button-name:    #127 (icon-only toolbar buttons missing aria-label)
-      //   select-name:    #127 (account/EA selects missing accessible names)
-      disableRules: ["button-name", "select-name"],
     });
   });
 
@@ -117,11 +113,10 @@ test.describe("Visual regression — Linux-only", () => {
       maxDiffPixelRatio: 0.01,
     });
 
-    // Settings overlays the inbox, so the same titlebar buttons + selects
-    // are still in the DOM. Tracked product debt — re-enable once #127 lands
-    // and the SettingsPanel palette sweep follows #126.
+    // SettingsPanel has its own palette debt that's out of scope for #126.
+    // Tracked as a follow-up sweep — keep color-contrast disabled here.
     await checkA11y(page, {
-      disableRules: ["color-contrast", "button-name", "select-name"],
+      disableRules: ["color-contrast"],
     });
 
     await page.keyboard.press("Escape");

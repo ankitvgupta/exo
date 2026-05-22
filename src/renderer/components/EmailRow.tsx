@@ -241,7 +241,7 @@ export const EmailRow = memo(
             {thread.draft ? (
               <>
                 <span
-                  className={`flex-shrink-0 ${isSelected && !isChecked ? "text-green-200" : "text-green-600 dark:text-green-400"}`}
+                  className={`flex-shrink-0 ${isSelected && !isChecked ? "text-green-200" : "text-green-700 dark:text-green-400"}`}
                 >
                   <svg
                     className="w-3 h-3 inline-block mr-0.5 -mt-px"

@@ -581,6 +581,7 @@ export function EmailList() {
           <button
             onClick={cycleDensity}
             title={`Density: ${densityLabels[inboxDensity]}`}
+            aria-label={`Density: ${densityLabels[inboxDensity]}`}
             className="p-1 rounded text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
           >
             <svg
