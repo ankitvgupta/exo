@@ -3239,7 +3239,12 @@ function EmailDetailInner({ isFullView = false }: EmailDetailProps) {
   );
 
   const handleBackToSplit = () => {
-    setViewMode("split");
+    useAppStore.setState({
+      viewMode: "split",
+      selectedEmailId: null,
+      selectedThreadId: null,
+      focusedThreadEmailId: null,
+    });
   };
 
   const isStarred = threadEmails.some((e) => e.labelIds?.includes("STARRED"));
