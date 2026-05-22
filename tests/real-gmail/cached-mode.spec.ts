@@ -14,7 +14,13 @@
  * Gated on EXO_REAL_GMAIL_TEST=true AND the env vars in .env.local.
  * Local-only — never CI.
  */
-import { test, expect, _electron as electron, type Page, type ElectronApplication } from "@playwright/test";
+import {
+  test,
+  expect,
+  _electron as electron,
+  type Page,
+  type ElectronApplication,
+} from "@playwright/test";
 import path from "path";
 import { fileURLToPath } from "url";
 import {
@@ -70,6 +76,17 @@ test.describe("Real-Gmail Layer 9a — cached .dev-data", () => {
     page = await app.firstWindow();
     await page.waitForLoadState("domcontentloaded");
     await page.waitForSelector("text=Exo", { timeout: 30_000 });
+
+    // Switch to the "All" inbox sub-tab. The default sub-tab is
+    // "Priority", which filters by analysis.priority — empty on a
+    // fresh .dev-data/ where no PrefetchService analyses have run yet
+    // (and Layer 9 tests set EXO_DISABLE_PREFETCH=true, so they never
+    // will). Using "All" makes thread visibility independent of the
+    // analysis pipeline.
+    const allTab = page.locator('button:has-text("All")').first();
+    if (await allTab.isVisible({ timeout: 5_000 }).catch(() => false)) {
+      await allTab.click();
+    }
   });
 
   test.afterAll(async () => {
@@ -132,9 +149,9 @@ test.describe("Real-Gmail Layer 9a — cached .dev-data", () => {
 
   test("search returns results", async () => {
     // Type into the search input if present
-    const searchInput = page.locator("[data-testid='search-input']").or(
-      page.locator("input[placeholder*='Search']").first(),
-    );
+    const searchInput = page
+      .locator("[data-testid='search-input']")
+      .or(page.locator("input[placeholder*='Search']").first());
     if (await searchInput.isVisible({ timeout: 1500 }).catch(() => false)) {
       await searchInput.click();
       await searchInput.fill("a");
@@ -144,8 +161,14 @@ test.describe("Real-Gmail Layer 9a — cached .dev-data", () => {
       const threadAfter = page.locator("div[data-thread-id]").first();
       const noResults = page.locator("text=/no results|nothing found/i");
       const ok = await Promise.race([
-        threadAfter.waitFor({ state: "visible", timeout: 5_000 }).then(() => true).catch(() => false),
-        noResults.waitFor({ state: "visible", timeout: 5_000 }).then(() => true).catch(() => false),
+        threadAfter
+          .waitFor({ state: "visible", timeout: 5_000 })
+          .then(() => true)
+          .catch(() => false),
+        noResults
+          .waitFor({ state: "visible", timeout: 5_000 })
+          .then(() => true)
+          .catch(() => false),
       ]);
       expect(ok).toBe(true);
     } else {
