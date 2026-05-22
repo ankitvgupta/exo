@@ -724,6 +724,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
         </div>
         <button
           onClick={onClose}
+          aria-label="Close settings"
           className="titlebar-no-drag p-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1075,7 +1076,11 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                     </p>
                   </div>
                   <button
-                    disabled={isDefaultMailAppLoading}
+                    role="switch"
+                    aria-checked={isDefaultMailApp}
+                    aria-label="Set as default mail app"
+                    aria-disabled={isDefaultMailAppLoading}
+                    aria-busy={isDefaultMailAppLoading}
                     onClick={async () => {
                       if (isDefaultMailAppLoading) return;
                       setIsDefaultMailAppLoading(true);
@@ -1189,6 +1194,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                             setModelConfig((prev) => ({ ...prev, [key]: tier as ModelTier }));
                           }
                         }}
+                        aria-label={`Model tier for ${label}`}
                         className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-500 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       >
                         {MODEL_TIERS.map((tier) => (
@@ -1348,6 +1354,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                   <button
                     role="switch"
                     aria-checked={allowPrereleaseUpdates}
+                    aria-label="Pre-release updates"
                     onClick={() => setAllowPrereleaseUpdates(!allowPrereleaseUpdates)}
                     className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
                       allowPrereleaseUpdates
@@ -1377,6 +1384,9 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                     </p>
                   </div>
                   <button
+                    role="switch"
+                    aria-checked={enableSenderLookup}
+                    aria-label="Enable sender lookup"
                     onClick={() => setEnableSenderLookup(!enableSenderLookup)}
                     className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
                       enableSenderLookup
@@ -1416,6 +1426,9 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                     </p>
                   </div>
                   <button
+                    role="switch"
+                    aria-checked={syncDraftsToGmail}
+                    aria-label="Sync drafts to Gmail"
                     onClick={() => setSyncDraftsToGmail(!syncDraftsToGmail)}
                     className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
                       syncDraftsToGmail
@@ -1857,6 +1870,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                             accountId: e.target.value || undefined,
                           })
                         }
+                        aria-label="Signature account"
                         className="w-full p-3 border border-gray-300 dark:border-gray-500 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-gray-100"
                       >
                         <option value="">All accounts (global)</option>
