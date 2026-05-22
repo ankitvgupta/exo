@@ -339,7 +339,14 @@ export function EmailList() {
     }
   }, [threads, removeEmails, setCurrentSplitId, addUndoAction]);
 
-  const currentProgress = currentAccountId ? syncProgress[currentAccountId] : null;
+  // In unified mode (currentAccountId === null) surface the first account
+  // that's still mid-initial-sync, so the progress banner doesn't go invisible
+  // when the user is in "All Inboxes" view during a fresh background sync.
+  const currentProgress = currentAccountId
+    ? syncProgress[currentAccountId]
+    : isUnifiedView
+      ? (Object.values(syncProgress).find((p) => p && p.fetched < p.total) ?? null)
+      : null;
   const isInitialSyncing = currentProgress && currentProgress.fetched < currentProgress.total;
 
   const isPrefetching = prefetchProgress.status === "running";

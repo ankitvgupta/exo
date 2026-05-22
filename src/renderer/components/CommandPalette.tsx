@@ -602,7 +602,21 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
               available: () => currentAccountId !== null,
               execute: () => {
                 setCurrentAccountId(null);
+                // Match the per-account entries: pull existing cached emails
+                // from the local DB first so the inbox isn't briefly empty
+                // for accounts whose emails aren't already in the store,
+                // then kick the live sync. Uses replaceEmailsForAccount so
+                // concurrent per-account loads don't race on a read-modify-
+                // write of the global emails array.
                 for (const a of accounts) {
+                  window.api.sync
+                    .getEmails(a.id)
+                    .then((result: IpcResponse<DashboardEmail[]>) => {
+                      if (result.success && result.data) {
+                        useAppStore.getState().replaceEmailsForAccount(a.id, result.data);
+                      }
+                    })
+                    .catch(console.error);
                   window.api.sync.now(a.id).catch(console.error);
                 }
               },
