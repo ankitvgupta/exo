@@ -11,11 +11,13 @@
  * spend can be correlated back to specific fixtures.
  *
  * Failure modes:
- *   - Judge returns malformed JSON → fall back to score 5 with a
- *     diagnostic reason. The eval treats this as a no-op (no baseline
- *     regression) but logs a warning so we can investigate.
- *   - API error → same: score 5, diagnostic reason. Don't crash the
- *     whole eval run because of a single fixture's API hiccup.
+ *   - Judge API throws, returns no text block, or returns unparseable
+ *     JSON → return score 0 with `judgeError` set. The runner treats
+ *     this distinct from a real score: no regression-delta check, and
+ *     reports it separately so a Claude 5xx or parser bug doesn't
+ *     masquerade as a model regression. (See #129 — a midpoint
+ *     fallback score of 5 looked like a regression for any fixture
+ *     baselined above 8.)
  *
  * Calibration is DEFERRED — see TODOS.md. Risk: judge might silently
  * mis-score for the first month. Mitigation is spot-checking the
@@ -29,6 +31,10 @@ const JUDGE_MODEL = "claude-opus-4-7";
 export interface JudgeResult {
   score: number;
   reason: string;
+  /** Set when the judge itself failed (API error, no text block,
+   *  unparseable response). The runner skips the baseline-delta check
+   *  for these and reports them separately from real regressions. */
+  judgeError?: string;
 }
 
 const JUDGE_SYSTEM_PROMPT = `You are a strict grader evaluating the output of an AI feature against a rubric.
@@ -61,7 +67,11 @@ function parseJudgeResponse(text: string): JudgeResult | null {
       if (typeof parsed !== "object" || parsed === null) continue;
       const obj = parsed as { score?: unknown; reason?: unknown };
       const rawScore =
-        typeof obj.score === "number" ? obj.score : typeof obj.score === "string" ? Number(obj.score) : NaN;
+        typeof obj.score === "number"
+          ? obj.score
+          : typeof obj.score === "string"
+            ? Number(obj.score)
+            : NaN;
       if (!Number.isFinite(rawScore)) continue;
       const score = Math.max(0, Math.min(10, Math.round(rawScore)));
       const reason = typeof obj.reason === "string" ? obj.reason : String(obj.reason ?? "");
@@ -103,22 +113,23 @@ Grade strictly. Respond with the JSON object only.`;
     );
     const block = response.content.find((b) => b.type === "text");
     if (!block || block.type !== "text") {
-      console.warn(`[llm-judge] ${fixtureId}: no text block in response, defaulting to 5`);
-      return { score: 5, reason: "judge returned no text block; deterministic fallback" };
+      const reason = "judge returned no text block";
+      console.warn(`[llm-judge] ${fixtureId}: ${reason}`);
+      return { score: 0, reason, judgeError: reason };
     }
     responseText = block.text;
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
-    console.warn(`[llm-judge] ${fixtureId}: API error (${errMsg}), defaulting to 5`);
-    return { score: 5, reason: `judge API error: ${errMsg}` };
+    const reason = `judge API error: ${errMsg}`;
+    console.warn(`[llm-judge] ${fixtureId}: ${reason}`);
+    return { score: 0, reason, judgeError: reason };
   }
 
   const parsed = parseJudgeResponse(responseText);
   if (!parsed) {
-    console.warn(
-      `[llm-judge] ${fixtureId}: could not parse judge response, defaulting to 5. Raw: ${responseText.slice(0, 200)}`,
-    );
-    return { score: 5, reason: "judge response unparseable; deterministic fallback" };
+    const reason = "judge response unparseable";
+    console.warn(`[llm-judge] ${fixtureId}: ${reason}. Raw: ${responseText.slice(0, 200)}`);
+    return { score: 0, reason, judgeError: reason };
   }
   return parsed;
 }
@@ -136,7 +147,5 @@ export async function judgeDraftQuality(_input: {
   draftBody: string;
   expectedFormality: "formal" | "casual" | "neutral";
 }): Promise<never> {
-  throw new Error(
-    "judgeDraftQuality is deprecated. Use judge(output, rubric, fixtureId) instead.",
-  );
+  throw new Error("judgeDraftQuality is deprecated. Use judge(output, rubric, fixtureId) instead.");
 }
