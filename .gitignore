@@ -61,3 +61,10 @@ src/agents-private/
 
 # gstack QA reports
 .gstack/
+
+# Spike + agentic-verify run logs (Phase 1.5)
+scripts/.spike-runs/
+scripts/.agentic-runs/
+
+# Pre-PR local report (gitignored, injected into PR body)
+.pre-pr-report.md
