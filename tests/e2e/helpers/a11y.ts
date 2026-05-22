@@ -76,7 +76,11 @@ export async function checkA11y(page: Page, options: CheckA11yOptions = {}): Pro
   if (blocking.length === 0) return;
 
   const summary = blocking
-    .map((v) => `  - [${v.impact}] ${v.id}: ${v.help} (${v.nodes.length} node(s))`)
+    .map(
+      (v) =>
+        `  - [${v.impact}] ${v.id}: ${v.help} (${v.nodes.length} node(s))\n` +
+        v.nodes.map((n) => `      • ${n.target.join(" ")}`).join("\n"),
+    )
     .join("\n");
   throw new Error(
     `Accessibility violations (>= ${failOn}) detected:\n${summary}\n` +

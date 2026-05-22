@@ -24,6 +24,7 @@ function ConditionEditor({ condition, onChange, onRemove }: ConditionEditorProps
       <select
         value={condition.type}
         onChange={(e) => onChange({ ...condition, type: e.target.value as SplitCondition["type"] })}
+        aria-label="Condition type"
         className="text-sm border rounded px-2 py-1 w-24 dark:bg-gray-700 dark:text-gray-100 dark:border-gray-600"
       >
         {CONDITION_TYPES.map((t) => (
@@ -55,6 +56,7 @@ function ConditionEditor({ condition, onChange, onRemove }: ConditionEditorProps
         onClick={onRemove}
         className="text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-400 p-1 shrink-0"
         title="Remove condition"
+        aria-label="Remove condition"
       >
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path
@@ -161,6 +163,7 @@ function SplitEditor({ split, onSave, onCancel, existingCount }: SplitEditorProp
             <select
               value={conditionLogic}
               onChange={(e) => setConditionLogic(e.target.value as "and" | "or")}
+              aria-label="Condition match logic"
               className="text-xs border rounded px-2 py-1 dark:bg-gray-700 dark:text-gray-100 dark:border-gray-600"
             >
               <option value="or">Match ANY</option>
@@ -558,6 +561,7 @@ export function SplitConfigEditor() {
                   disabled={index === 0 || isSaving}
                   className="p-1 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-30"
                   title="Move up"
+                  aria-label={`Move "${split.name}" up`}
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
@@ -573,6 +577,7 @@ export function SplitConfigEditor() {
                   disabled={index === sortedSplits.length - 1 || isSaving}
                   className="p-1 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-30"
                   title="Move down"
+                  aria-label={`Move "${split.name}" down`}
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
@@ -588,6 +593,7 @@ export function SplitConfigEditor() {
                   disabled={isSaving || !!editingSplit}
                   className="p-1 text-gray-400 dark:text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 disabled:opacity-30"
                   title="Edit"
+                  aria-label={`Edit split "${split.name}"`}
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
@@ -603,6 +609,7 @@ export function SplitConfigEditor() {
                   disabled={isSaving}
                   className="p-1 text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 disabled:opacity-30"
                   title="Delete"
+                  aria-label={`Delete split "${split.name}"`}
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path

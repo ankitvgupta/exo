@@ -316,6 +316,7 @@ export function MemoriesTab({
                     setNewScope(e.target.value as MemoryScope);
                     setNewScopeValue("");
                   }}
+                  aria-label="Memory scope"
                   className="px-2 py-1.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded text-sm"
                 >
                   {(Object.keys(SCOPE_LABELS) as MemoryScope[]).map((s) => (
