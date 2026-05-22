@@ -663,6 +663,7 @@ export default function App() {
   const setInboxDensity = useAppStore((s) => s.setInboxDensity);
   const setKeyboardBindings = useAppStore((s) => s.setKeyboardBindings);
   const setUndoSendDelay = useAppStore((s) => s.setUndoSendDelay);
+  const setSendAndArchive = useAppStore((s) => s.setSendAndArchive);
   const setSentEmails = useAppStore((s) => s.setSentEmails);
   const addSentEmails = useAppStore((s) => s.addSentEmails);
   const setSplits = useAppStore((s) => s.setSplits);
@@ -705,6 +706,7 @@ export default function App() {
         data?: {
           inboxDensity?: InboxDensity;
           undoSendDelay?: number;
+          sendAndArchive?: boolean;
           keyboardBindings?: "superhuman" | "gmail";
           posthog?: { enabled: boolean; sessionReplay?: boolean };
         };
@@ -718,6 +720,9 @@ export default function App() {
           }
           if (result.data.undoSendDelay !== undefined) {
             setUndoSendDelay(result.data.undoSendDelay);
+          }
+          if (result.data.sendAndArchive !== undefined) {
+            setSendAndArchive(result.data.sendAndArchive);
           }
           // Initialize PostHog analytics — API key is baked in at build time,
           // user can only toggle enabled/sessionReplay in settings.
@@ -754,6 +759,7 @@ export default function App() {
     setInboxDensity,
     setKeyboardBindings,
     setUndoSendDelay,
+    setSendAndArchive,
   ]);
 
   // Toggle dark class on document.documentElement when resolvedTheme changes

@@ -379,6 +379,7 @@ export const ConfigSchema = z.object({
   theme: z.enum(["light", "dark", "system"]).default("system"),
   inboxDensity: z.enum(["default", "compact"]).default("compact"),
   undoSendDelay: z.number().min(0).max(30).default(5), // seconds; 0 = disabled
+  sendAndArchive: z.boolean().default(false),
   signatures: z.array(SignatureSchema).optional(),
   showExoBranding: z.boolean().default(true),
   stylePrompt: z.string().optional(),

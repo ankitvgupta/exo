@@ -1428,7 +1428,10 @@ function InlineReply({
   // Send with optimistic update support
   const handleSend = useCallback(async () => {
     const sendOptions = form.buildSendOptions();
-    const { undoSendDelaySeconds, addUndoSend } = useAppStore.getState();
+    const { undoSendDelaySeconds, addUndoSend, sendAndArchive } = useAppStore.getState();
+    // Archive only applies to replies — not forwards or new compose
+    const shouldArchive =
+      sendAndArchive && (composeMode === "reply" || composeMode === "reply-all");
 
     if (!form.canSend || form.isSending) return;
 
@@ -1440,6 +1443,7 @@ function InlineReply({
         recipients: form.to.join(", "),
         scheduledAt: Date.now(),
         delayMs: undoSendDelaySeconds * 1000,
+        archiveThreadId: shouldArchive ? replyInfo.threadId : undefined,
         composeContext: {
           mode: composeMode,
           replyToEmailId,
@@ -1497,7 +1501,38 @@ function InlineReply({
             : undefined,
       });
     }
-  }, [form, composeMode, replyToEmailId, replyInfo, isForward, onSend]);
+    // Archive on any successful send (including offline-queued where data may be
+    // absent), matching UndoSendToast's behavior. Skipped on failure.
+    if (
+      shouldArchive &&
+      replyInfo.threadId &&
+      response &&
+      response !== "undo-queued" &&
+      response.success
+    ) {
+      // Optimistically remove the thread from the local store. The IPC handler
+      // only broadcasts sync:emails-removed in the online-success path, so we
+      // can't rely on it for demo mode, offline mode, or the queued path.
+      // Use removeEmailsAndAdvance (not removeEmails) when the archived thread
+      // is currently selected — otherwise split view keeps the now-stale
+      // selection and shows a blank detail pane.
+      const threadId = replyInfo.threadId;
+      const state = useAppStore.getState();
+      const threadEmailIds = state.emails
+        .filter((e) => e.threadId === threadId && e.accountId === accountId)
+        .map((e) => e.id);
+      if (threadEmailIds.length > 0) {
+        if (state.selectedThreadId === threadId) {
+          state.removeEmailsAndAdvance(threadEmailIds, null, null);
+        } else {
+          state.removeEmails(threadEmailIds);
+        }
+      }
+      window.api.emails
+        .archiveThread(threadId, accountId)
+        .catch((err: unknown) => console.error("[Send & Archive] archive failed", err));
+    }
+  }, [form, composeMode, replyToEmailId, replyInfo, isForward, onSend, accountId]);
 
   const handleScheduleSend = useCallback(
     async (scheduledAt: number) => {

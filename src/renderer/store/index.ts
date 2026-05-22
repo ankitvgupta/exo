@@ -144,6 +144,7 @@ export type UndoSendItem = {
   recipients: string; // Display string e.g. "john@example.com"
   scheduledAt: number; // Timestamp when added
   delayMs: number; // Delay before actual send
+  archiveThreadId?: string; // If set, archive this thread after the actual send completes
   // Context for reopening the compose UI on undo
   composeContext?: {
     mode: ComposeMode;
@@ -276,6 +277,9 @@ interface AppState {
   // Undo send state
   undoSendDelaySeconds: number;
   undoSendQueue: UndoSendItem[];
+
+  // Send & Archive — when true, the thread is archived after a successful send
+  sendAndArchive: boolean;
 
   // Draft-edit learned notifications
   draftEditLearned: {
@@ -471,6 +475,9 @@ interface AppState {
   addUndoSend: (item: UndoSendItem) => void;
   removeUndoSend: (id: string) => void;
 
+  // Send & Archive action
+  setSendAndArchive: (enabled: boolean) => void;
+
   // Undo archive/delete actions
   addUndoAction: (item: UndoActionItem) => void;
   removeUndoAction: (id: string) => void;
@@ -638,6 +645,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   // Undo send state
   undoSendDelaySeconds: 5,
   undoSendQueue: [],
+
+  // Send & Archive
+  sendAndArchive: false,
 
   // Undo archive/delete state
   undoActionQueue: [],
@@ -1180,6 +1190,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   // Undo send actions
   setUndoSendDelay: (seconds) => set({ undoSendDelaySeconds: seconds }),
+  setSendAndArchive: (enabled) => set({ sendAndArchive: enabled }),
   addUndoSend: (item) => set((state) => ({ undoSendQueue: [...state.undoSendQueue, item] })),
   removeUndoSend: (id) =>
     set((state) => ({ undoSendQueue: state.undoSendQueue.filter((i) => i.id !== id) })),
