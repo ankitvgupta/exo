@@ -27,7 +27,7 @@ The user may specify:
    - Run the command using the agent's long-running/background execution support with a 10-minute timeout. Do not shell-background it with `&`.
 
 3. **Monitor progress**:
-   - Check on the output periodically (every 60-90 seconds) using `tail -50` on the output file.
+   - Check on the native long-running session output periodically (every 60-90 seconds).
    - Report progress to the user as steps complete (e.g., "npm ci done", "build complete", "tests running").
 
 4. **Report results**:
