@@ -102,7 +102,7 @@ function getPriorityLabel(thread: EmailThread): { text: string; className: strin
   const colors: Record<string, string> = {
     high: "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300",
     medium: "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300",
-    low: "bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400",
+    low: "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400",
   };
   return {
     text: priority.charAt(0).toUpperCase() + priority.slice(1),
