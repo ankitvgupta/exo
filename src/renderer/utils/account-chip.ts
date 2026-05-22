@@ -26,7 +26,10 @@ export function accountChipFor(
 ): { label: string; colorClass: string; title: string } | undefined {
   if (!email) return undefined;
   const local = email.split("@")[0] ?? email;
-  const label = local.slice(0, 1).toUpperCase();
+  // 2-char label so two Gmails starting with the same letter
+  // (e.g. ankit@ and avi@) get visibly distinct chips. Falls back to 1 char
+  // for single-character locals.
+  const label = local.slice(0, 2).toUpperCase();
   const colorClass = PALETTE[hashString(email) % PALETTE.length];
   return { label, colorClass, title: email };
 }

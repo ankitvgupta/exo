@@ -197,13 +197,15 @@ export const EmailRow = memo(
           onClick={onClick}
           className="flex-1 flex items-center gap-2 min-w-0 h-full text-left"
         >
-          {/* Account chip — only shown in unified ("All Inboxes") view */}
+          {/* Account chip — only shown in unified ("All Inboxes") view.
+              Widened to fit a 2-char label so accounts with the same first
+              letter (e.g. "AN" vs "AV") are visibly distinct. */}
           {accountChip && (
             <span
               title={accountChip.title}
               aria-label={accountChip.title}
-              className={`flex-shrink-0 inline-flex items-center justify-center rounded font-semibold uppercase ${
-                density === "compact" ? "text-[9px] w-4 h-4" : "text-[10px] w-5 h-5"
+              className={`flex-shrink-0 inline-flex items-center justify-center rounded font-semibold uppercase px-1 ${
+                density === "compact" ? "text-[9px] h-4 min-w-[18px]" : "text-[10px] h-5 min-w-[22px]"
               } ${
                 isSelected && !isChecked ? "bg-white/20 text-white" : accountChip.colorClass
               }`}

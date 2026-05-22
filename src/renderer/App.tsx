@@ -1461,47 +1461,56 @@ export default function App() {
   const reloadSentEmailsForAccount = async (accountId: string) => {
     const sentResult = await window.api.sync.getSentEmails(accountId);
     if (sentResult.success && sentResult.data) {
-      const otherAccountSent = useAppStore
-        .getState()
-        .sentEmails.filter((e) => e.accountId !== accountId);
-      setSentEmails([...otherAccountSent, ...sentResult.data]);
+      // Atomic per-account replacement — see store action note.
+      useAppStore.getState().replaceSentEmailsForAccount(accountId, sentResult.data);
     }
   };
 
   const handleRefresh = async () => {
     setError(null);
-    try {
-      // In unified mode (currentAccountId === null) refresh every account in
-      // parallel; otherwise refresh just the active one.
-      const targets =
-        currentAccountId === null
-          ? accounts.map((a) => a.id)
-          : currentAccountId
-            ? [currentAccountId]
-            : [];
+    // In unified mode (currentAccountId === null) refresh every account in
+    // parallel; otherwise refresh just the active one.
+    const targets =
+      currentAccountId === null
+        ? accounts.map((a) => a.id)
+        : currentAccountId
+          ? [currentAccountId]
+          : [];
 
-      if (targets.length === 0) {
-        // No accounts configured — fall through to legacy path.
+    if (targets.length === 0) {
+      // No accounts configured — fall through to legacy path.
+      try {
         await fetchEmails();
-        return;
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to fetch emails");
       }
+      return;
+    }
 
-      await Promise.all(
-        targets.map(async (aid) => {
-          await window.api.sync.now(aid);
-          const result = await window.api.sync.getEmails(aid);
-          if (result.success && result.data) {
-            const otherAccountEmails = useAppStore
-              .getState()
-              .emails.filter((e) => e.accountId !== aid);
-            setEmails([...otherAccountEmails, ...result.data]);
-            prefetchEmailBodies(result.data.map((e: DashboardEmail) => e.id)).catch(console.error);
-          }
-          await reloadSentEmailsForAccount(aid);
-        }),
-      );
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch emails");
+    // allSettled so one account's failure (e.g. expired token) doesn't hide
+    // the others' results. Each account's store write goes through
+    // replaceEmailsForAccount, an atomic read-modify-write that survives
+    // concurrent resolves without losing other accounts' just-fetched emails.
+    const results = await Promise.allSettled(
+      targets.map(async (aid) => {
+        await window.api.sync.now(aid);
+        const result = await window.api.sync.getEmails(aid);
+        if (result.success && result.data) {
+          useAppStore.getState().replaceEmailsForAccount(aid, result.data);
+          prefetchEmailBodies(result.data.map((e: DashboardEmail) => e.id)).catch(console.error);
+        }
+        await reloadSentEmailsForAccount(aid);
+      }),
+    );
+
+    const failed = results
+      .map((r, i) => (r.status === "rejected" ? targets[i] : null))
+      .filter((x): x is string => x !== null);
+    if (failed.length > 0) {
+      const failedEmails = failed.map((aid) => accounts.find((a) => a.id === aid)?.email ?? aid);
+      console.error("[Refresh] Failed for accounts:", failedEmails);
+      // Show the failure but don't blow away the partial success.
+      setError(`Refresh failed for ${failedEmails.join(", ")}`);
     }
   };
 

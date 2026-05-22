@@ -74,7 +74,9 @@ export function EmailList() {
     () => (isUnifiedView ? accounts.map((a) => a.id) : currentAccountId ? [currentAccountId] : []),
     [isUnifiedView, accounts, currentAccountId],
   );
-  const accountIdsKey = targetAccountIds.join(",");
+  // Sort before joining so the key doesn't churn just because accounts were
+  // reordered (e.g. primary flag toggled, new account inserted).
+  const accountIdsKey = [...targetAccountIds].sort().join(",");
   // Map accountId → email for badge rendering. Stable shape (string-keyed).
   const accountEmailById = useMemo(() => {
     const m = new Map<string, string>();
@@ -177,9 +179,13 @@ export function EmailList() {
   // Listen for snooze events from main process. In single-account mode we
   // accept only the active account; in unified mode we accept any account
   // present in the current view (targetAccountIds). Uses refs so we don't
-  // re-register listeners on every account switch.
+  // re-register listeners on every account switch. Ref is updated in a
+  // useEffect (not during render) so concurrent renders + StrictMode don't
+  // leave the ref pointing at a discarded set.
   const targetAccountIdsRef = useRef<Set<string>>(new Set(targetAccountIds));
-  targetAccountIdsRef.current = new Set(targetAccountIds);
+  useEffect(() => {
+    targetAccountIdsRef.current = new Set(targetAccountIds);
+  }, [accountIdsKey, targetAccountIds]);
   const acceptAccount = (aid: string) => targetAccountIdsRef.current.has(aid);
 
   useEffect(() => {

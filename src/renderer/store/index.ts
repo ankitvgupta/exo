@@ -331,6 +331,12 @@ interface AppState {
   sentEmails: DashboardEmail[];
 
   setEmails: (emails: DashboardEmail[]) => void;
+  // Atomically replace emails for a single account. Use this when refreshing
+  // a per-account slice so concurrent refreshes for different accounts don't
+  // race on a read-modify-write outside the store. See handleRefresh's
+  // fan-out path in unified mode.
+  replaceEmailsForAccount: (accountId: string, emails: DashboardEmail[]) => void;
+  replaceSentEmailsForAccount: (accountId: string, emails: DashboardEmail[]) => void;
   addEmails: (emails: DashboardEmail[]) => void;
   removeEmails: (emailIds: string[]) => void;
   /** Atomically remove emails and update selection in one render — prevents flicker during archive/trash. */
@@ -715,6 +721,45 @@ export const useAppStore = create<AppState>((set, get) => ({
       return { emails: patched };
     });
   },
+  replaceEmailsForAccount: (accountId, emails) => {
+    // Atomic read-modify-write so concurrent calls (e.g. unified-mode refresh
+    // fanning out across accounts) don't race. Keeps the same undo /
+    // optimistic-read suppression that setEmails uses.
+    set((state) => {
+      const pendingIds = new Set<string>();
+      for (const action of state.undoActionQueue) {
+        if (action.type === "archive" || action.type === "trash") {
+          for (const e of action.emails) pendingIds.add(e.id);
+        }
+      }
+      for (const arr of state.pendingRemovals.values()) {
+        for (const e of arr) pendingIds.add(e.id);
+      }
+      const incoming =
+        pendingIds.size > 0 ? emails.filter((e) => !pendingIds.has(e.id)) : emails;
+      const other = state.emails.filter((e) => e.accountId !== accountId);
+      const patched = applyOptimisticReads([...other, ...incoming]);
+      if (
+        state.viewMode === "full" &&
+        state.selectedEmailId &&
+        state.emails.some((e) => e.id === state.selectedEmailId) &&
+        !patched.some((e) => e.id === state.selectedEmailId)
+      ) {
+        return {
+          emails: patched,
+          viewMode: "split" as const,
+          selectedEmailId: null,
+          selectedThreadId: null,
+        };
+      }
+      return { emails: patched };
+    });
+  },
+  replaceSentEmailsForAccount: (accountId, emails) =>
+    set((state) => {
+      const other = state.sentEmails.filter((e) => e.accountId !== accountId);
+      return { sentEmails: [...other, ...emails] };
+    }),
   addEmails: (newEmails) => {
     set((state) => {
       // Suppress emails pending in the undo action queue (archive/trash).

@@ -11,24 +11,35 @@ import { trackEvent } from "../services/posthog";
  * fires one undo action per account, since the undo IPC path is per-account.
  */
 
-// Group selected threads by their owning account. Threads with no accountId
-// (shouldn't happen normally) are dropped silently — they'd have no IPC path
-// to act on anyway.
+// Group selected threads by their owning account. Looks for thread emails in
+// both `emails` (inbox) and `sentEmails` (sent view) so threads visible in
+// either context get acted on. Threads whose emails aren't in the store at all
+// (e.g. user just optimistically archived them then selected, or a race
+// removed them) are logged and skipped — better than silently dropping the
+// user's action.
 function groupSelectedByAccount(): Map<
   string,
   { threadIds: string[]; emails: DashboardEmail[] }
 > {
-  const { selectedThreadIds, emails } = useAppStore.getState();
+  const { selectedThreadIds, emails, sentEmails } = useAppStore.getState();
   const result = new Map<string, { threadIds: string[]; emails: DashboardEmail[] }>();
   for (const threadId of selectedThreadIds) {
-    const threadEmails = emails.filter((e) => e.threadId === threadId);
-    if (threadEmails.length === 0) continue;
+    // Search inbox first, then sent — covers both __sent__ split selections
+    // and normal inbox selections.
+    let threadEmails = emails.filter((e) => e.threadId === threadId);
+    if (threadEmails.length === 0) {
+      threadEmails = sentEmails.filter((e) => e.threadId === threadId);
+    }
+    if (threadEmails.length === 0) {
+      console.warn(
+        "[useBatchActions] thread not found in emails or sentEmails, skipping",
+        threadId,
+      );
+      continue;
+    }
     // All emails in a thread belong to the same account.
     const accountId = threadEmails[0].accountId;
     if (!accountId) {
-      // Shouldn't happen in practice — every synced email has an accountId.
-      // Log so we'd notice if it ever did, then skip rather than silently
-      // dropping the user's action on the floor.
       console.warn(
         "[useBatchActions] thread without accountId, skipping batch action",
         threadId,
