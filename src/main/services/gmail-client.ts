@@ -94,6 +94,8 @@ const SCOPES = [
   "https://www.googleapis.com/auth/gmail.compose",
   "https://www.googleapis.com/auth/gmail.send",
   "https://www.googleapis.com/auth/gmail.modify",
+  // Needed for users.settings.filters.create/delete (block-sender feature)
+  "https://www.googleapis.com/auth/gmail.settings.basic",
   "https://www.googleapis.com/auth/userinfo.profile",
   "https://www.googleapis.com/auth/calendar.readonly",
 ];
@@ -1734,6 +1736,81 @@ export class GmailClient {
         throw new Error("HISTORY_EXPIRED");
       }
       throw error;
+    }
+  }
+
+  /**
+   * Create a Gmail filter that moves all future mail from `senderEmail` to Spam
+   * (mirrors Gmail's native "Block sender" — adds SPAM, removes INBOX, marks read).
+   * Returns the new filter's ID so we can delete it on unblock.
+   */
+  async createBlockFilter(senderEmail: string): Promise<string> {
+    const gmail = this.gmail!;
+    const response = await gmail.users.settings.filters.create({
+      userId: "me",
+      requestBody: {
+        criteria: { from: senderEmail },
+        action: {
+          addLabelIds: ["SPAM"],
+          removeLabelIds: ["INBOX", "UNREAD"],
+        },
+      },
+    });
+    if (!response.data.id) {
+      throw new Error("Gmail filter creation did not return an ID");
+    }
+    return response.data.id;
+  }
+
+  /** Delete a Gmail filter by ID. Idempotent — swallows 404 (filter already gone). */
+  async deleteFilter(filterId: string): Promise<void> {
+    const gmail = this.gmail!;
+    try {
+      await gmail.users.settings.filters.delete({ userId: "me", id: filterId });
+    } catch (err: unknown) {
+      const errObj = err as { code?: number; status?: number };
+      if (errObj.code === 404 || errObj.status === 404) return;
+      throw err;
+    }
+  }
+
+  /**
+   * Move multiple messages to Spam in a single batchModify call.
+   * Used when blocking — applies the same labels Gmail's native filter would,
+   * so the existing thread is immediately routed to Spam.
+   */
+  async batchMoveToSpam(messageIds: string[]): Promise<void> {
+    if (messageIds.length === 0) return;
+    const gmail = this.gmail!;
+    const CHUNK_SIZE = 1000;
+    for (let i = 0; i < messageIds.length; i += CHUNK_SIZE) {
+      await gmail.users.messages.batchModify({
+        userId: "me",
+        requestBody: {
+          ids: messageIds.slice(i, i + CHUNK_SIZE),
+          addLabelIds: ["SPAM"],
+          removeLabelIds: ["INBOX", "UNREAD"],
+        },
+      });
+    }
+  }
+
+  /**
+   * Reverse of batchMoveToSpam — used when unblocking. Restores INBOX and removes SPAM.
+   */
+  async batchRestoreFromSpam(messageIds: string[]): Promise<void> {
+    if (messageIds.length === 0) return;
+    const gmail = this.gmail!;
+    const CHUNK_SIZE = 1000;
+    for (let i = 0; i < messageIds.length; i += CHUNK_SIZE) {
+      await gmail.users.messages.batchModify({
+        userId: "me",
+        requestBody: {
+          ids: messageIds.slice(i, i + CHUNK_SIZE),
+          addLabelIds: ["INBOX"],
+          removeLabelIds: ["SPAM"],
+        },
+      });
     }
   }
 

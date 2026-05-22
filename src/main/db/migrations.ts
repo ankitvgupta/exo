@@ -279,6 +279,23 @@ export const NUMBERED_MIGRATIONS: Migration[] = [
       );
     },
   },
+  {
+    version: 4,
+    name: "add_blocked_senders_table",
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS blocked_senders (
+          sender_email TEXT NOT NULL,
+          account_id TEXT NOT NULL,
+          gmail_filter_id TEXT,
+          blocked_at INTEGER NOT NULL,
+          PRIMARY KEY (sender_email, account_id),
+          FOREIGN KEY (account_id) REFERENCES accounts(id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_blocked_senders_account ON blocked_senders(account_id);
+      `);
+    },
+  },
 ];
 
 function runNumberedMigrations(db: DatabaseInstance): void {

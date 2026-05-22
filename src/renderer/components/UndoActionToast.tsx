@@ -147,6 +147,29 @@ async function commitAction(item: UndoActionItem, removeFromQueue: () => void): 
       // The timer is set server-side.
       break;
     }
+
+    case "block": {
+      // Deferred commit: now (at end of undo timer) call the block IPC,
+      // which creates the Gmail filter and moves existing matching messages
+      // to Spam. If the IPC fails permanently, restore the emails to view.
+      if (!item.blockedSender) break;
+      try {
+        const result = (await api().emails.blockSender(item.blockedSender, accountId)) as {
+          success: boolean;
+          error?: string;
+        };
+        if (!result.success) {
+          console.error("[Block] block IPC failed, restoring emails:", result.error);
+          removeFromQueue();
+          addEmails(item.emails);
+        }
+      } catch (err: unknown) {
+        console.error("[Block] block IPC rejected, restoring emails:", err);
+        removeFromQueue();
+        addEmails(item.emails);
+      }
+      break;
+    }
   }
 
   cancelHandlers.delete(item.id);
@@ -231,6 +254,15 @@ function UndoActionToastItem({ item }: { item: UndoActionItem }) {
         }
         break;
       }
+
+      case "block": {
+        // Undo before the timer fires — no server work has happened yet,
+        // so just restore the emails to the view. Remove from queue first
+        // so addEmails suppression doesn't filter them out.
+        removeUndoAction(item.id);
+        addEmails(item.emails);
+        return;
+      }
     }
 
     removeUndoAction(item.id);
@@ -286,9 +318,14 @@ function UndoActionToastItem({ item }: { item: UndoActionItem }) {
     star: "starred",
     unstar: "unstarred",
     snooze: "snoozed",
+    block: "",
   };
-  const verb = verbMap[item.type];
-  const label = `${noun} ${verb}.`;
+  // Block: show "Blocked sender@example.com." (sender-centric, not thread-centric)
+  // — the user wants to see who they blocked, not how many threads moved.
+  const label =
+    item.type === "block"
+      ? `Blocked ${item.blockedSender ?? "sender"}.`
+      : `${noun} ${verbMap[item.type]}.`;
 
   return (
     <div className="bg-gray-900 dark:bg-gray-700 text-white rounded-lg shadow-lg flex items-center justify-between px-4 py-3 min-w-[280px]">

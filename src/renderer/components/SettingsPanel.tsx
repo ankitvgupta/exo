@@ -771,6 +771,17 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
             Accounts
           </button>
           <button
+            onClick={() => setActiveTab("blocked")}
+            data-active={activeTab === "blocked" ? "true" : undefined}
+            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+              activeTab === "blocked"
+                ? "bg-blue-100 dark:bg-blue-900/60 text-blue-800 dark:text-blue-300"
+                : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+            }`}
+          >
+            Blocked
+          </button>
+          <button
             onClick={() => setActiveTab("calendar")}
             data-active={activeTab === "calendar" ? "true" : undefined}
             className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
@@ -1642,6 +1653,12 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                 access your emails.
               </p>
             </div>
+          </div>
+        )}
+
+        {activeTab === "blocked" && (
+          <div className="max-w-3xl mx-auto space-y-6">
+            <BlockedSendersSection />
           </div>
         )}
 
@@ -3597,6 +3614,119 @@ function UsageCostSection() {
           <p className="text-sm text-gray-400 dark:text-gray-500">No calls recorded yet.</p>
         )}
       </div>
+    </div>
+  );
+}
+
+// =============================================================================
+// Blocked senders settings section
+// =============================================================================
+
+interface BlockedSenderRow {
+  senderEmail: string;
+  accountId: string;
+  gmailFilterId: string | null;
+  blockedAt: number;
+}
+
+function BlockedSendersSection() {
+  const queryClient = useQueryClient();
+  const accounts = useAppStore((s) => s.accounts);
+
+  const { data: blocked, isLoading } = useQuery({
+    queryKey: ["blocked-senders"],
+    queryFn: async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result = (await (window as any).api.emails.listBlockedSenders()) as {
+        success: boolean;
+        data?: BlockedSenderRow[];
+        error?: string;
+      };
+      if (!result.success) throw new Error(result.error);
+      return result.data ?? [];
+    },
+  });
+
+  const [unblocking, setUnblocking] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const accountEmailById = new Map(accounts.map((a) => [a.id, a.email]));
+
+  const handleUnblock = async (senderEmail: string, accountId: string) => {
+    const key = `${accountId}:${senderEmail}`;
+    setUnblocking(key);
+    setError(null);
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result = (await (window as any).api.emails.unblockSender(senderEmail, accountId)) as {
+        success: boolean;
+        error?: string;
+      };
+      if (!result.success) {
+        setError(result.error ?? "Failed to unblock sender");
+        return;
+      }
+      queryClient.invalidateQueries({ queryKey: ["blocked-senders"] });
+    } finally {
+      setUnblocking(null);
+    }
+  };
+
+  return (
+    <div>
+      <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
+        Blocked Senders
+      </h2>
+      <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+        Senders here are routed to Spam by a Gmail filter, so the block applies in Gmail Web and on
+        mobile too. Unblock to delete the filter and restore future delivery.
+      </p>
+
+      {error && (
+        <div className="mb-3 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded px-3 py-2">
+          {error}
+        </div>
+      )}
+
+      {isLoading ? (
+        <p className="text-sm text-gray-500 dark:text-gray-400">Loading…</p>
+      ) : blocked && blocked.length > 0 ? (
+        <ul className="divide-y divide-gray-200 dark:divide-gray-700 border border-gray-200 dark:border-gray-700 rounded">
+          {blocked.map((row) => {
+            const key = `${row.accountId}:${row.senderEmail}`;
+            const accountEmail = accountEmailById.get(row.accountId) ?? row.accountId;
+            return (
+              <li
+                key={key}
+                className="flex items-center justify-between px-3 py-2 text-sm"
+              >
+                <div className="min-w-0">
+                  <p className="font-medium text-gray-900 dark:text-gray-100 truncate">
+                    {row.senderEmail}
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                    Blocked {new Date(row.blockedAt).toLocaleDateString()} · {accountEmail}
+                    {row.gmailFilterId ? "" : " · (no Gmail filter — local only)"}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleUnblock(row.senderEmail, row.accountId)}
+                  disabled={unblocking === key}
+                  className="ml-3 px-3 py-1 text-sm text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded disabled:opacity-50"
+                >
+                  {unblocking === key ? "Unblocking…" : "Unblock"}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <p className="text-sm text-gray-500 dark:text-gray-400">
+          You haven't blocked anyone. Click the block icon in any email header (or use the Sender
+          panel) to start.
+        </p>
+      )}
     </div>
   );
 }

@@ -31,8 +31,14 @@ import {
   updateAccountDisplayName,
   deleteAgentTrace,
   saveDraft,
+  addBlockedSender,
+  removeBlockedSender,
+  getBlockedSenders,
+  getBlockedSender,
   type AccountRecord,
+  type BlockedSenderRow,
 } from "../db";
+import { extractEmail } from "../utils/address-formatting";
 import { getOnboardingClient, clearOnboardingClient } from "./onboarding.ipc";
 import { calendarSyncService } from "../services/calendar-sync";
 import type { IpcResponse, DashboardEmail } from "../../shared/types";
@@ -1671,6 +1677,184 @@ export function registerSyncIpc(): void {
           error: error instanceof Error ? error.message : "Unknown error",
         };
       }
+    },
+  );
+
+  // Block a sender — mirrors Gmail's native "Block sender" command:
+  //  1. Creates a server-side Gmail filter that routes future messages from
+  //     this sender to Spam (so it propagates to mobile/web Gmail too).
+  //  2. Moves existing inbox messages from this sender to Spam (Gmail's filter
+  //     only acts on incoming mail, so existing ones need a separate batchModify).
+  //  3. Records the (sender, account, filterId) in blocked_senders so we can
+  //     undo cleanly and skip Claude analysis on any leak-through.
+  //
+  // Returns the list of emailIds we just moved so the renderer can refresh.
+  ipcMain.handle(
+    "emails:block-sender",
+    async (
+      _,
+      { accountId, senderEmail }: { accountId: string; senderEmail: string },
+    ): Promise<
+      IpcResponse<{ senderEmail: string; gmailFilterId: string | null; movedEmailIds: string[] }>
+    > => {
+      const normalized = extractEmail(senderEmail).trim().toLowerCase();
+      if (!normalized || !normalized.includes("@")) {
+        return { success: false, error: "Invalid sender email" };
+      }
+
+      // Idempotency: already blocked? Return existing state.
+      const existing = getBlockedSender(normalized, accountId);
+      if (existing) {
+        return {
+          success: true,
+          data: {
+            senderEmail: normalized,
+            gmailFilterId: existing.gmailFilterId,
+            movedEmailIds: [],
+          },
+        };
+      }
+
+      if (useFakeData) {
+        addBlockedSender(normalized, accountId, null);
+        return {
+          success: true,
+          data: { senderEmail: normalized, gmailFilterId: null, movedEmailIds: [] },
+        };
+      }
+
+      const client = activeClients.get(accountId);
+      if (!client) {
+        return { success: false, error: "Account not connected" };
+      }
+
+      let filterId: string | null = null;
+      try {
+        filterId = await client.createBlockFilter(normalized);
+      } catch (error) {
+        log.error({ err: error, sender: normalized }, "[Block] Failed to create Gmail filter");
+        const msg = error instanceof Error ? error.message : "Unknown error";
+        return { success: false, error: `Failed to create Gmail filter: ${msg}` };
+      }
+
+      // Find existing inbox messages from this sender and route to Spam.
+      // searchAllEmails handles pagination; cap at a reasonable number so
+      // one bad outreach campaign doesn't lock us up.
+      let movedEmailIds: string[] = [];
+      try {
+        const existing = await client.searchAllEmails(
+          `from:${normalized} in:inbox`,
+          5000, // upper bound — practical cap for a single-sender backlog
+        );
+        movedEmailIds = existing.map((m) => m.id);
+        if (movedEmailIds.length > 0) {
+          await client.batchMoveToSpam(movedEmailIds);
+
+          // Optimistically remove from local DB so the inbox UI updates immediately.
+          for (const id of movedEmailIds) {
+            deleteEmail(id, accountId);
+          }
+
+          // Notify renderer
+          const window = getMainWindow();
+          if (window) {
+            window.webContents.send("sync:emails-removed", { accountId, emailIds: movedEmailIds });
+          }
+        }
+      } catch (error) {
+        // Filter is in place — future mail is handled. Existing-message move
+        // failed but the block is still partially effective. Surface so the
+        // user can decide whether to retry.
+        log.error(
+          { err: error, sender: normalized },
+          "[Block] Filter created but moving existing messages failed",
+        );
+      }
+
+      addBlockedSender(normalized, accountId, filterId);
+      log.info(
+        `[Block] Blocked ${normalized} (filterId=${filterId}, moved=${movedEmailIds.length})`,
+      );
+
+      return {
+        success: true,
+        data: { senderEmail: normalized, gmailFilterId: filterId, movedEmailIds },
+      };
+    },
+  );
+
+  // Unblock a sender — reverses block-sender:
+  //  1. Deletes the Gmail filter (idempotent — 404 OK).
+  //  2. Optionally restores messages from Spam back to Inbox (only the ones
+  //     we just moved, identified by `restoreEmailIds`).
+  //  3. Removes the (sender, account) row.
+  ipcMain.handle(
+    "emails:unblock-sender",
+    async (
+      _,
+      {
+        accountId,
+        senderEmail,
+        restoreEmailIds,
+      }: { accountId: string; senderEmail: string; restoreEmailIds?: string[] },
+    ): Promise<IpcResponse<{ senderEmail: string }>> => {
+      const normalized = extractEmail(senderEmail).trim().toLowerCase();
+      const row = getBlockedSender(normalized, accountId);
+      if (!row) {
+        // Already unblocked — succeed silently.
+        return { success: true, data: { senderEmail: normalized } };
+      }
+
+      if (useFakeData) {
+        removeBlockedSender(normalized, accountId);
+        return { success: true, data: { senderEmail: normalized } };
+      }
+
+      const client = activeClients.get(accountId);
+      if (!client) {
+        return { success: false, error: "Account not connected" };
+      }
+
+      // Delete filter first (idempotent). If it fails we don't want to leave a
+      // dangling DB row that says the user is blocked when they aren't, so we
+      // surface the error rather than swallowing it.
+      if (row.gmailFilterId) {
+        try {
+          await client.deleteFilter(row.gmailFilterId);
+        } catch (error) {
+          const msg = error instanceof Error ? error.message : "Unknown error";
+          log.error(
+            { err: error, sender: normalized },
+            "[Block] Failed to delete Gmail filter on unblock",
+          );
+          return { success: false, error: `Failed to delete Gmail filter: ${msg}` };
+        }
+      }
+
+      // Restore messages from Spam if the caller asked us to.
+      if (restoreEmailIds && restoreEmailIds.length > 0) {
+        try {
+          await client.batchRestoreFromSpam(restoreEmailIds);
+        } catch (error) {
+          // Non-fatal — the filter is gone, so blocking is reversed.
+          log.error(
+            { err: error, sender: normalized },
+            "[Block] Failed to restore messages from spam (filter was already deleted)",
+          );
+        }
+      }
+
+      removeBlockedSender(normalized, accountId);
+      log.info(`[Block] Unblocked ${normalized}`);
+      return { success: true, data: { senderEmail: normalized } };
+    },
+  );
+
+  // List all blocked senders (optionally scoped to one account)
+  ipcMain.handle(
+    "emails:list-blocked-senders",
+    async (_, { accountId }: { accountId?: string }): Promise<IpcResponse<BlockedSenderRow[]>> => {
+      return { success: true, data: getBlockedSenders(accountId) };
     },
   );
 }

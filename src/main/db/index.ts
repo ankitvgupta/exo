@@ -1992,6 +1992,73 @@ export function getSenderProfiles(): SenderProfile[] {
 }
 
 // ============================================
+// Blocked senders (mirrors Gmail filter that routes a sender to Spam)
+// ============================================
+
+export type BlockedSenderRow = {
+  senderEmail: string;
+  accountId: string;
+  gmailFilterId: string | null;
+  blockedAt: number;
+};
+
+export function addBlockedSender(
+  senderEmail: string,
+  accountId: string,
+  gmailFilterId: string | null,
+): void {
+  const db = getDatabase();
+  db.prepare(
+    `INSERT OR REPLACE INTO blocked_senders (sender_email, account_id, gmail_filter_id, blocked_at)
+     VALUES (?, ?, ?, ?)`,
+  ).run(senderEmail.toLowerCase(), accountId, gmailFilterId, Date.now());
+}
+
+export function removeBlockedSender(senderEmail: string, accountId: string): void {
+  const db = getDatabase();
+  db.prepare(`DELETE FROM blocked_senders WHERE sender_email = ? AND account_id = ?`).run(
+    senderEmail.toLowerCase(),
+    accountId,
+  );
+}
+
+export function getBlockedSender(
+  senderEmail: string,
+  accountId: string,
+): BlockedSenderRow | null {
+  const db = getDatabase();
+  const row = db
+    .prepare(
+      `SELECT sender_email as senderEmail, account_id as accountId,
+              gmail_filter_id as gmailFilterId, blocked_at as blockedAt
+       FROM blocked_senders WHERE sender_email = ? AND account_id = ?`,
+    )
+    .get(senderEmail.toLowerCase(), accountId) as BlockedSenderRow | undefined;
+  return row ?? null;
+}
+
+export function isSenderBlocked(senderEmail: string, accountId: string): boolean {
+  const db = getDatabase();
+  const row = db
+    .prepare(
+      `SELECT 1 as found FROM blocked_senders WHERE sender_email = ? AND account_id = ? LIMIT 1`,
+    )
+    .get(senderEmail.toLowerCase(), accountId);
+  return row !== undefined;
+}
+
+export function getBlockedSenders(accountId?: string): BlockedSenderRow[] {
+  const db = getDatabase();
+  const sql = `SELECT sender_email as senderEmail, account_id as accountId,
+                      gmail_filter_id as gmailFilterId, blocked_at as blockedAt
+               FROM blocked_senders
+               ${accountId ? "WHERE account_id = ?" : ""}
+               ORDER BY blocked_at DESC`;
+  const stmt = db.prepare(sql);
+  return (accountId ? stmt.all(accountId) : stmt.all()) as BlockedSenderRow[];
+}
+
+// ============================================
 // Memory operations
 // ============================================
 
