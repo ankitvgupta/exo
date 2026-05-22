@@ -4,6 +4,11 @@ import type { InboxSplit } from "../../shared/types";
 import { emailMatchesSplit } from "../utils/split-conditions";
 
 function threadMatchesSplit(thread: EmailThread, split: InboxSplit): boolean {
+  // Scope each split to its owning account so unified ("All Inboxes") mode
+  // never matches a thread from a different account.
+  if (thread.latestEmail.accountId && thread.latestEmail.accountId !== split.accountId) {
+    return false;
+  }
   return emailMatchesSplit(thread.latestEmail, split);
 }
 
@@ -50,9 +55,14 @@ export function SplitTabs() {
   const localDrafts = useAppStore((state) => state.localDrafts);
   const { threads, needsReply, done, snoozedCount } = useThreadedEmails();
 
-  // Filter splits for current account
+  // Filter splits for current account. In unified mode (currentAccountId
+  // === null) include every account's splits — threadMatchesSplit enforces
+  // per-account scoping so they don't cross-pollinate.
   const splits = useMemo(
-    () => allSplits.filter((s) => s.accountId === currentAccountId),
+    () =>
+      currentAccountId === null
+        ? allSplits
+        : allSplits.filter((s) => s.accountId === currentAccountId),
     [allSplits, currentAccountId],
   );
 
@@ -105,8 +115,19 @@ export function SplitTabs() {
     return map;
   }, [threads, needsReply, done, splits, isNonExclusive]);
 
-  // Sort splits by order
-  const sortedSplits = useMemo(() => [...splits].sort((a, b) => a.order - b.order), [splits]);
+  // Sort splits by order. In unified mode, two accounts may have splits with
+  // the same name (e.g. both have "Newsletter") — disambiguate with a "(2)",
+  // "(3)" suffix on subsequent occurrences (sort order is preserved).
+  const sortedSplits = useMemo(() => {
+    const sorted = [...splits].sort((a, b) => a.order - b.order);
+    if (currentAccountId !== null) return sorted.map((s) => ({ split: s, displayName: s.name }));
+    const seen = new Map<string, number>();
+    return sorted.map((s) => {
+      const n = (seen.get(s.name) ?? 0) + 1;
+      seen.set(s.name, n);
+      return { split: s, displayName: n === 1 ? s.name : `${s.name} (${n})` };
+    });
+  }, [splits, currentAccountId]);
 
   // Always show the tab bar — Priority, Other, Archive Ready always visible; All on the far right
   return (
@@ -147,7 +168,7 @@ export function SplitTabs() {
       </Tab>
 
       {/* Custom splits */}
-      {sortedSplits.map((split) => (
+      {sortedSplits.map(({ split, displayName }) => (
         <Tab
           key={split.id}
           active={currentSplitId === split.id}
@@ -155,7 +176,7 @@ export function SplitTabs() {
           count={counts.get(split.id)}
         >
           {split.icon && <span className="mr-1">{split.icon}</span>}
-          {split.name}
+          {displayName}
         </Tab>
       ))}
 

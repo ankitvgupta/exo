@@ -408,7 +408,8 @@ export function SplitConfigEditor() {
   if (!currentAccountId) {
     return (
       <div className="text-sm text-gray-500 dark:text-gray-400">
-        Select an account to manage splits.
+        Switch from <span className="font-medium">All Inboxes</span> to a single account in the
+        title bar to manage that account's splits.
       </div>
     );
   }

@@ -872,6 +872,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       globalAgentTaskKey: null,
       currentSplitId: nextSplitId,
     });
+    // Persist so unified-vs-account selection survives app restart. Same path
+    // as inboxDensity/keyboardBindings. Fire-and-forget; UI already updated.
+    void window.api.settings.set({ lastSelectedAccountId: accountId });
   },
   setSyncStatus: (accountId, status) =>
     set((state) => {
@@ -1901,6 +1904,13 @@ export function useThreadedEmails() {
 }
 
 function threadMatchesSplit(thread: EmailThread, split: InboxSplit): boolean {
+  // Splits are per-account: a split only applies to threads from its owning
+  // account. In unified ("All Inboxes") mode multiple accounts' splits are
+  // visible at once, so we must scope-check to avoid e.g. an exclusive split
+  // from account A hiding unrelated threads from account B.
+  if (thread.latestEmail.accountId && thread.latestEmail.accountId !== split.accountId) {
+    return false;
+  }
   return emailMatchesSplit(thread.latestEmail, split);
 }
 
@@ -1918,8 +1928,14 @@ export function useSplitFilteredThreads() {
   const sentEmails = useAppStore((state) => state.sentEmails);
 
   return useMemo(() => {
-    // Filter splits for current account
-    const splits = allSplits.filter((s) => s.accountId === currentAccountId);
+    // Filter splits for current account. In unified mode (null) we consider
+    // every account's splits — threadMatchesSplit enforces the per-account
+    // scope so an exclusive split from one account won't hide threads from
+    // another.
+    const splits =
+      currentAccountId === null
+        ? allSplits
+        : allSplits.filter((s) => s.accountId === currentAccountId);
 
     // Helper to filter out threads matching exclusive splits (unless recently unsnoozed)
     const exclusiveSplits = splits.filter((s) => s.exclusive);

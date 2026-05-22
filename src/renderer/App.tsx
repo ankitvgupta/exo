@@ -709,6 +709,7 @@ export default function App() {
           sendAndArchive?: boolean;
           keyboardBindings?: "superhuman" | "gmail";
           posthog?: { enabled: boolean; sessionReplay?: boolean };
+          lastSelectedAccountId?: string | null;
         };
       }) => {
         if (result.success && result.data) {
@@ -827,10 +828,26 @@ export default function App() {
           );
           setAccounts(fullAccounts);
 
-          // Set current account to primary or first available
+          // Restore last-selected inbox view from settings (null = unified).
+          // Fall back to primary/first if the persisted account no longer
+          // exists (account was removed) or this is a first run.
+          const settingsResult = await window.api.settings.get();
+          const persisted = (settingsResult as { data?: { lastSelectedAccountId?: string | null } })
+            ?.data?.lastSelectedAccountId;
           const primaryAccount = fullAccounts.find((a) => a.isPrimary) || fullAccounts[0];
+          let initialAccountId: string | null;
+          if (persisted === null) {
+            initialAccountId = null; // unified
+          } else if (
+            typeof persisted === "string" &&
+            fullAccounts.some((a) => a.id === persisted)
+          ) {
+            initialAccountId = persisted;
+          } else {
+            initialAccountId = primaryAccount?.id ?? null;
+          }
+          setCurrentAccountId(initialAccountId);
           if (primaryAccount) {
-            setCurrentAccountId(primaryAccount.id);
             // Identify user in PostHog using primary email
             identifyUser(primaryAccount.email, {
               account_count: fullAccounts.length,
@@ -1454,24 +1471,35 @@ export default function App() {
   const handleRefresh = async () => {
     setError(null);
     try {
-      if (currentAccountId) {
-        // Use sync for multi-account support
-        await window.api.sync.now(currentAccountId);
-        // Reload emails from database after sync
-        const result = await window.api.sync.getEmails(currentAccountId);
-        if (result.success && result.data) {
-          const otherAccountEmails = useAppStore
-            .getState()
-            .emails.filter((e) => e.accountId !== currentAccountId);
-          setEmails([...otherAccountEmails, ...result.data]);
-          prefetchEmailBodies(result.data.map((e: DashboardEmail) => e.id)).catch(console.error);
-        }
-        // Reload sent emails too
-        await reloadSentEmailsForAccount(currentAccountId);
-      } else {
-        // Fallback to legacy fetch for default account
+      // In unified mode (currentAccountId === null) refresh every account in
+      // parallel; otherwise refresh just the active one.
+      const targets =
+        currentAccountId === null
+          ? accounts.map((a) => a.id)
+          : currentAccountId
+            ? [currentAccountId]
+            : [];
+
+      if (targets.length === 0) {
+        // No accounts configured — fall through to legacy path.
         await fetchEmails();
+        return;
       }
+
+      await Promise.all(
+        targets.map(async (aid) => {
+          await window.api.sync.now(aid);
+          const result = await window.api.sync.getEmails(aid);
+          if (result.success && result.data) {
+            const otherAccountEmails = useAppStore
+              .getState()
+              .emails.filter((e) => e.accountId !== aid);
+            setEmails([...otherAccountEmails, ...result.data]);
+            prefetchEmailBodies(result.data.map((e: DashboardEmail) => e.id)).catch(console.error);
+          }
+          await reloadSentEmailsForAccount(aid);
+        }),
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch emails");
     }
@@ -1553,14 +1581,22 @@ export default function App() {
     return <SetupWizard onComplete={handleSetupComplete} />;
   }
 
-  // Get current account and its sync status
+  // Get current account and its sync status. In unified mode (currentAccountId
+  // === null) we aggregate across all accounts so the title-bar still reflects
+  // useful state — "syncing" if any account is syncing; "expired" if any is.
   const currentAccount = accounts.find((a) => a.id === currentAccountId);
+  const isUnifiedView = currentAccountId === null && accounts.length > 0;
   const currentSyncStatus = currentAccountId
     ? syncStatuses.get(currentAccountId) || "idle"
-    : "idle";
+    : isUnifiedView && accounts.some((a) => syncStatuses.get(a.id) === "syncing")
+      ? "syncing"
+      : isUnifiedView && accounts.some((a) => syncStatuses.get(a.id) === "error")
+        ? "error"
+        : "idle";
   const isSyncing = currentSyncStatus === "syncing";
-  const isCurrentAccountExpired =
-    currentAccountId != null && expiredAccountIds.has(currentAccountId);
+  const isCurrentAccountExpired = isUnifiedView
+    ? accounts.some((a) => expiredAccountIds.has(a.id))
+    : currentAccountId != null && expiredAccountIds.has(currentAccountId);
 
   // Build list of expired accounts with their email addresses for the banner
   const expiredAccounts = accounts.filter((a) => expiredAccountIds.has(a.id));
@@ -1569,38 +1605,49 @@ export default function App() {
   // already in the store from initial load + background sync. We just flip
   // currentAccountId and let useThreadedEmails filter; background sync
   // picks up anything new without blocking the UI.
-  const handleAccountSwitch = (accountId: string) => {
+  //
+  // `accountId === null` means switch to the unified "All Inboxes" view —
+  // backfill + sync every connected account in parallel.
+  const handleAccountSwitch = (accountId: string | null) => {
     setCurrentAccountId(accountId);
     setAccountMenuOpen(false);
 
-    trackEvent("account_switched", { account_count: accounts.length });
+    trackEvent("account_switched", {
+      account_count: accounts.length,
+      unified: accountId === null,
+    });
 
-    // Backfill inbox/sent emails independently if missing for this account.
     const storeState = useAppStore.getState();
-    if (!storeState.emails.some((e) => e.accountId === accountId)) {
-      window.api.sync
-        .getEmails(accountId)
-        .then((result: IpcResponse<DashboardEmail[]>) => {
-          if (result.success && result.data && result.data.length > 0) {
-            addEmails(result.data);
-            prefetchEmailBodies(result.data.map((e: DashboardEmail) => e.id)).catch(console.error);
-          }
-        })
-        .catch(console.error);
-    }
-    if (!storeState.sentEmails.some((e) => e.accountId === accountId)) {
-      window.api.sync
-        .getSentEmails(accountId)
-        .then((sentResult: IpcResponse<DashboardEmail[]>) => {
-          if (sentResult.success && sentResult.data) {
-            addSentEmails(sentResult.data);
-          }
-        })
-        .catch(console.error);
-    }
+    const targetAccountIds = accountId === null ? accounts.map((a) => a.id) : [accountId];
 
-    // Trigger background sync to pick up any new emails (non-blocking)
-    window.api.sync.now(accountId).catch(console.error);
+    for (const aid of targetAccountIds) {
+      // Backfill inbox/sent emails independently if missing for this account.
+      if (!storeState.emails.some((e) => e.accountId === aid)) {
+        window.api.sync
+          .getEmails(aid)
+          .then((result: IpcResponse<DashboardEmail[]>) => {
+            if (result.success && result.data && result.data.length > 0) {
+              addEmails(result.data);
+              prefetchEmailBodies(result.data.map((e: DashboardEmail) => e.id)).catch(
+                console.error,
+              );
+            }
+          })
+          .catch(console.error);
+      }
+      if (!storeState.sentEmails.some((e) => e.accountId === aid)) {
+        window.api.sync
+          .getSentEmails(aid)
+          .then((sentResult: IpcResponse<DashboardEmail[]>) => {
+            if (sentResult.success && sentResult.data) {
+              addSentEmails(sentResult.data);
+            }
+          })
+          .catch(console.error);
+      }
+      // Trigger background sync to pick up any new emails (non-blocking)
+      window.api.sync.now(aid).catch(console.error);
+    }
   };
 
   const handleCancelScheduled = async (id: string) => {
@@ -1640,7 +1687,9 @@ export default function App() {
                 className="flex items-center space-x-2 px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
               >
                 <span className="text-gray-700 dark:text-gray-300 truncate max-w-[200px]">
-                  {currentAccount?.email || "Select account"}
+                  {isUnifiedView
+                    ? "All Inboxes"
+                    : currentAccount?.email || "Select account"}
                 </span>
                 {/* Sync status indicator */}
                 {isSyncing && (
@@ -1692,6 +1741,29 @@ export default function App() {
               {accountMenuOpen && (
                 <div className="absolute top-full left-0 mt-1 w-64 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg dark:shadow-black/40 z-50">
                   <div className="py-1">
+                    {accounts.length > 1 && (
+                      <>
+                        <button
+                          onClick={() => handleAccountSwitch(null)}
+                          className={`w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center justify-between ${
+                            isUnifiedView ? "bg-blue-50 dark:bg-blue-900/30" : ""
+                          }`}
+                        >
+                          <div className="flex items-center space-x-2">
+                            {/* Stacked-dots glyph to visually differentiate from per-account rows */}
+                            <span className="relative inline-block w-2 h-2 flex-shrink-0">
+                              <span className="absolute top-0 left-0 w-1.5 h-1.5 rounded-full bg-blue-500" />
+                              <span className="absolute bottom-0 right-0 w-1.5 h-1.5 rounded-full bg-purple-500" />
+                            </span>
+                            <span className="truncate">All Inboxes</span>
+                          </div>
+                          <span className="text-xs text-gray-500 dark:text-gray-400">
+                            {accounts.length}
+                          </span>
+                        </button>
+                        <div className="border-t border-gray-200 dark:border-gray-700 my-1" />
+                      </>
+                    )}
                     {accounts.map((account) => (
                       <button
                         key={account.id}

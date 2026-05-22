@@ -2500,9 +2500,25 @@ function EmailDetailInner({ isFullView = false }: EmailDetailProps) {
 
   const selectedEmail = storeEmail ?? fetchedEmail;
 
-  // Get current user email for "Me" detection
-  const currentAccount = accounts.find((a) => a.id === currentAccountId);
+  // The account that owns the currently-open thread. In single-account mode
+  // this equals currentAccountId; in unified ("All Inboxes") mode currentAccountId
+  // is null and we derive it from the selected email. All thread-scoped IPCs
+  // (fetch, send, archive, snooze, reply-info) below use threadAccountId so
+  // actions always route to the right account regardless of which view is
+  // active.
+  const threadAccountId: string | null =
+    currentAccountId ?? selectedEmail?.accountId ?? null;
+
+  // Get current user email for "Me" detection — based on the open thread's
+  // account so unified view correctly identifies the user across accounts.
+  const currentAccount = accounts.find((a) => a.id === threadAccountId);
   const currentUserEmail = currentAccount?.email;
+
+  // Account used to default a brand-new compose (no thread context). In unified
+  // mode falls back to the primary or first account; the user can override via
+  // FromSelector inside the compose form.
+  const newComposeAccountId: string | null =
+    currentAccountId ?? accounts.find((a) => a.isPrimary)?.id ?? accounts[0]?.id ?? null;
 
   // State to hold full thread emails fetched from Gmail (includes sent replies)
   const [fullThreadEmails, setFullThreadEmails] = useState<DashboardEmail[]>([]);
@@ -2510,7 +2526,7 @@ function EmailDetailInner({ isFullView = false }: EmailDetailProps) {
 
   // Fetch full thread when thread changes
   useEffect(() => {
-    if (!selectedEmail || !currentAccountId) {
+    if (!selectedEmail || !threadAccountId) {
       setFullThreadEmails([]);
       return;
     }
@@ -2520,7 +2536,7 @@ function EmailDetailInner({ isFullView = false }: EmailDetailProps) {
       try {
         const response = await window.api.emails.getThread(
           selectedEmail.threadId,
-          currentAccountId,
+          threadAccountId,
         );
         if (response.success && response.data) {
           setFullThreadEmails(response.data);
@@ -2536,7 +2552,7 @@ function EmailDetailInner({ isFullView = false }: EmailDetailProps) {
     };
 
     fetchThread();
-  }, [selectedEmail?.threadId, currentAccountId]);
+  }, [selectedEmail?.threadId, threadAccountId]);
 
   // Mark-as-read is handled imperatively in the Enter/click handlers
   // (store.markThreadAsRead) — not here — so it fires instantly before render.
@@ -2899,7 +2915,7 @@ function EmailDetailInner({ isFullView = false }: EmailDetailProps) {
       isFullView &&
       composeState?.isOpen &&
       composeState.replyToEmailId &&
-      currentAccountId &&
+      threadAccountId &&
       selectedThreadId
     ) {
       const mode = composeState.mode;
@@ -2910,7 +2926,7 @@ function EmailDetailInner({ isFullView = false }: EmailDetailProps) {
         // by composeState, not reactive to email/account changes).
         const storeState = useAppStore.getState();
         const storeEmails = storeState.emails;
-        const acct = storeState.accounts.find((a) => a.id === currentAccountId);
+        const acct = storeState.accounts.find((a) => a.id === threadAccountId);
         const userEmail = acct?.email;
         // Find the email in the thread that has a draft (may not be the latest)
         const threadId = storeEmails.find((e) => e.id === composeState.replyToEmailId)?.threadId;
@@ -2948,7 +2964,7 @@ function EmailDetailInner({ isFullView = false }: EmailDetailProps) {
           // These only matter at send time for Gmail threading — the UI is
           // already fully interactive without them.
           window.api.compose
-            .getReplyInfo(composeState.replyToEmailId, mode, currentAccountId)
+            .getReplyInfo(composeState.replyToEmailId, mode, threadAccountId)
             .then((response: IpcResponse<ReplyInfo | null>) => {
               if (requestId !== composeRequestIdRef.current) return;
               if (response.success && response.data) {
@@ -2972,7 +2988,7 @@ function EmailDetailInner({ isFullView = false }: EmailDetailProps) {
           // Fall back to the IPC call.
           setIsLoadingReplyInfo(true);
           window.api.compose
-            .getReplyInfo(composeState.replyToEmailId, mode, currentAccountId)
+            .getReplyInfo(composeState.replyToEmailId, mode, threadAccountId)
             .then((response: IpcResponse<ReplyInfo | null>) => {
               if (requestId !== composeRequestIdRef.current) return;
               if (!response.success || !response.data) {
@@ -2994,7 +3010,7 @@ function EmailDetailInner({ isFullView = false }: EmailDetailProps) {
   }, [
     isFullView,
     composeState,
-    currentAccountId,
+    threadAccountId,
     closeCompose,
     setInlineReplyOpen,
     selectedThreadId,
@@ -3042,11 +3058,11 @@ function EmailDetailInner({ isFullView = false }: EmailDetailProps) {
     // Add the sent email to the store optimistically.
     // Always use the current thread's threadId so forwards appear in the
     // thread view alongside the original email, just like replies do.
-    if (currentAccountId && currentUserEmail) {
+    if (threadAccountId && currentUserEmail) {
       const sentEmail: DashboardEmail = {
         id: sentInfo.id,
         threadId: selectedEmail?.threadId ?? sentInfo.threadId,
-        accountId: currentAccountId,
+        accountId: threadAccountId,
         from: currentUserEmail,
         to: sentInfo.to.join(", "),
         cc: sentInfo.cc?.join(", "),
@@ -3094,8 +3110,8 @@ function EmailDetailInner({ isFullView = false }: EmailDetailProps) {
     setRestoredDraft(null);
     setInlineReplyOpen(false);
     // Also trigger sync to ensure we have the canonical version
-    if (currentAccountId) {
-      window.api.sync.now(currentAccountId);
+    if (threadAccountId) {
+      window.api.sync.now(threadAccountId);
     }
   };
 
@@ -3139,9 +3155,11 @@ function EmailDetailInner({ isFullView = false }: EmailDetailProps) {
     }
     closeCompose();
     setViewMode("split");
-    // Trigger sync to get the sent message
-    if (currentAccountId) {
-      window.api.sync.now(currentAccountId);
+    // Trigger sync to get the sent message. The account is whatever the
+    // compose form was sent from — for a brand-new compose that's the
+    // primary fallback derived above.
+    if (newComposeAccountId) {
+      window.api.sync.now(newComposeAccountId);
     }
   };
 
@@ -3160,7 +3178,7 @@ function EmailDetailInner({ isFullView = false }: EmailDetailProps) {
       formState.bodyHtml.replace(/<[^>]*>/g, "").trim();
     const existingDraftId = composeState?.restoredDraft?.localDraftId;
 
-    if (hasContent && currentAccountId) {
+    if (hasContent && newComposeAccountId) {
       if (existingDraftId) {
         // Update existing draft with current form state
         await window.api.compose.updateLocalDraft(existingDraftId, {
@@ -3184,7 +3202,7 @@ function EmailDetailInner({ isFullView = false }: EmailDetailProps) {
       } else {
         // Save new draft
         const result = (await window.api.compose.saveLocalDraft({
-          accountId: currentAccountId,
+          accountId: newComposeAccountId,
           to: formState.to,
           cc: formState.cc.length > 0 ? formState.cc : undefined,
           bcc: formState.bcc.length > 0 ? formState.bcc : undefined,
@@ -3213,10 +3231,10 @@ function EmailDetailInner({ isFullView = false }: EmailDetailProps) {
   };
 
   // Show new email compose view when in "new" compose mode
-  if (composeState?.isOpen && composeState.mode === "new" && currentAccountId) {
+  if (composeState?.isOpen && composeState.mode === "new" && newComposeAccountId) {
     return (
       <NewEmailCompose
-        accountId={currentAccountId}
+        accountId={newComposeAccountId}
         onSend={handleNewEmailSent}
         onCancel={handleNewEmailCancel}
         onDiscard={handleNewEmailDiscard}
@@ -3279,7 +3297,7 @@ function EmailDetailInner({ isFullView = false }: EmailDetailProps) {
   const isStarred = threadEmails.some((e) => e.labelIds?.includes("STARRED"));
 
   const handleArchive = () => {
-    if (!currentAccountId || !selectedThreadId) return;
+    if (!threadAccountId || !selectedThreadId) return;
     const emailIds = threadEmails.map((e) => e.id);
 
     // Find next thread before removing
@@ -3306,7 +3324,7 @@ function EmailDetailInner({ isFullView = false }: EmailDetailProps) {
       id: `archive-${selectedThreadId}-${Date.now()}`,
       type: "archive",
       threadCount: 1,
-      accountId: currentAccountId,
+      accountId: threadAccountId,
       emails: [...threadEmails],
       scheduledAt: Date.now(),
       delayMs: 5000,
@@ -3314,7 +3332,7 @@ function EmailDetailInner({ isFullView = false }: EmailDetailProps) {
   };
 
   const handleTrash = () => {
-    if (!currentAccountId || !selectedThreadId) return;
+    if (!threadAccountId || !selectedThreadId) return;
     const emailIds = threadEmails.map((e) => e.id);
 
     // Find next thread before removing (same auto-advance as archive)
@@ -3341,7 +3359,7 @@ function EmailDetailInner({ isFullView = false }: EmailDetailProps) {
       id: `trash-${selectedThreadId}-${Date.now()}`,
       type: "trash",
       threadCount: 1,
-      accountId: currentAccountId,
+      accountId: threadAccountId,
       emails: [...threadEmails],
       scheduledAt: Date.now(),
       delayMs: 5000,
@@ -3349,7 +3367,7 @@ function EmailDetailInner({ isFullView = false }: EmailDetailProps) {
   };
 
   const handleMarkUnread = () => {
-    if (!currentAccountId || !latestEmail) return;
+    if (!threadAccountId || !latestEmail) return;
     const currentLabels = latestEmail.labelIds || ["INBOX"];
 
     // Optimistic update + undo — only if email was actually modified
@@ -3360,7 +3378,7 @@ function EmailDetailInner({ isFullView = false }: EmailDetailProps) {
         id: `mark-unread-${selectedThreadId}-${Date.now()}`,
         type: "mark-unread",
         threadCount: 1,
-        accountId: currentAccountId,
+        accountId: threadAccountId,
         emails: [latestEmail],
         scheduledAt: Date.now(),
         delayMs: 5000,
@@ -3372,7 +3390,7 @@ function EmailDetailInner({ isFullView = false }: EmailDetailProps) {
   };
 
   const handleToggleStar = () => {
-    if (!currentAccountId || !latestEmail) return;
+    if (!threadAccountId || !latestEmail) return;
     const newStarred = !isStarred;
     const changedEmails: typeof threadEmails = [];
     const previousLabels: Record<string, string[]> = {};
@@ -3402,7 +3420,7 @@ function EmailDetailInner({ isFullView = false }: EmailDetailProps) {
         id: `${newStarred ? "star" : "unstar"}-${selectedThreadId}-${Date.now()}`,
         type: newStarred ? "star" : "unstar",
         threadCount: 1,
-        accountId: currentAccountId,
+        accountId: threadAccountId,
         emails: changedEmails,
         scheduledAt: Date.now(),
         delayMs: 5000,
@@ -3582,7 +3600,7 @@ function EmailDetailInner({ isFullView = false }: EmailDetailProps) {
 
         {/* Snooze banner */}
         {snoozedThreads.has(latestEmail.threadId) &&
-          currentAccountId &&
+          threadAccountId &&
           (() => {
             const snoozeInfo = snoozedThreads.get(latestEmail.threadId);
             return snoozeInfo ? (
@@ -3607,7 +3625,7 @@ function EmailDetailInner({ isFullView = false }: EmailDetailProps) {
                 </div>
                 <button
                   onClick={async () => {
-                    await window.api.snooze.unsnooze(latestEmail.threadId, currentAccountId);
+                    await window.api.snooze.unsnooze(latestEmail.threadId, threadAccountId);
                     removeSnoozedThread(latestEmail.threadId);
                   }}
                   className="text-xs text-amber-600 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-200 font-medium"
@@ -3672,7 +3690,7 @@ function EmailDetailInner({ isFullView = false }: EmailDetailProps) {
                 onReplyAll={() => openCompose("reply-all", email.id)}
                 onForward={() => openCompose("forward", email.id)}
                 currentUserEmail={currentUserEmail}
-                accountId={currentAccountId ?? undefined}
+                accountId={threadAccountId ?? undefined}
                 threadEmails={threadEmails}
                 onPreviewAttachment={(attachment, data) =>
                   setPreviewAttachment({ attachment, data })
@@ -3687,13 +3705,13 @@ function EmailDetailInner({ isFullView = false }: EmailDetailProps) {
                   inlineReplyToEmailId in the store so this condition keeps matching. */}
               {inlineReplyToEmailId === email.id &&
                 inlineReplyInfo &&
-                currentAccountId &&
+                threadAccountId &&
                 currentUserEmail &&
                 inlineComposeMode && (
                   <InlineReply
                     key={`${inlineComposeMode}-${inlineReplyToEmailId}`}
                     replyInfo={inlineReplyInfo}
-                    accountId={currentAccountId}
+                    accountId={threadAccountId}
                     accountEmail={currentUserEmail}
                     composeMode={inlineComposeMode}
                     replyToEmailId={inlineReplyToEmailId}
