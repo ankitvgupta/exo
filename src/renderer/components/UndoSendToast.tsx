@@ -93,9 +93,18 @@ function UndoSendToastItem({ item }: { item: UndoSendItem }) {
     const ctx = item.composeContext;
     if (ctx) {
       const store = useAppStore.getState();
-      // Remove the optimistic "sent" email from the store
+      // Remove the optimistic "sent" email from the store. On the error path
+      // the send already ran (and failed), so focusedThreadEmailId /
+      // inlineReplyToEmailId may point at the optimistic ID; null them in the
+      // same setState as the removal to avoid a render that observes a
+      // dangling reference, matching the doSend success path above.
       if (ctx.optimisticEmailId) {
-        store.removeEmails([ctx.optimisticEmailId]);
+        const optimisticId = ctx.optimisticEmailId;
+        useAppStore.setState((s) => ({
+          emails: s.emails.filter((e) => e.id !== optimisticId),
+          ...(s.focusedThreadEmailId === optimisticId ? { focusedThreadEmailId: null } : {}),
+          ...(s.inlineReplyToEmailId === optimisticId ? { inlineReplyToEmailId: null } : {}),
+        }));
       }
       if (ctx.threadId) {
         store.setSelectedThreadId(ctx.threadId);
