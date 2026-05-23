@@ -154,14 +154,10 @@ function UndoSendToastItem({ item }: { item: UndoSendItem }) {
       )}
       {sendError && (
         <button
-          onClick={() => {
-            setSendError(null);
-            sentRef.current = false;
-            doSend();
-          }}
+          onClick={handleUndo}
           className="ml-4 text-sm font-medium text-blue-400 hover:text-blue-300 transition-colors flex-shrink-0"
         >
-          Retry
+          Edit
         </button>
       )}
     </div>
