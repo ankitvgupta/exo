@@ -306,10 +306,20 @@ function launchElectron(dataMode) {
   // test account using .dev-data/ tokens. Set EXO_DISABLE_PREFETCH so
   // the agent's run doesn't trigger background Claude analysis on every
   // seeded email (would burn $$).
+  //
+  // EXO_HEADLESS=true suppresses the visible BrowserWindow (src/main/window.ts
+  // creates it with `show: false` and skips the `ready-to-show` `.show()` call).
+  // CDP and IPC still work, so the chrome-devtools MCP agent is unaffected —
+  // the window just never paints, so pre-pr runs don't steal focus.
   const launchEnv =
     dataMode === "real"
-      ? { ...process.env, EXO_DEMO_MODE: "", EXO_DISABLE_PREFETCH: "true" }
-      : { ...process.env, EXO_DEMO_MODE: "true" };
+      ? {
+          ...process.env,
+          EXO_DEMO_MODE: "",
+          EXO_DISABLE_PREFETCH: "true",
+          EXO_HEADLESS: "true",
+        }
+      : { ...process.env, EXO_DEMO_MODE: "true", EXO_HEADLESS: "true" };
   log(
     `Launching Electron in ${dataMode} mode with --remote-debugging-port=${CDP_PORT}...`,
   );
