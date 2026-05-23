@@ -33,6 +33,7 @@ import { THREAD_NAV_EVENT } from "../hooks/useKeyboardShortcuts";
 import type { ComposeFormState } from "../hooks/useComposeForm";
 import { ComposeToolbar } from "./ComposeToolbar";
 import { FromSelector } from "./FromSelector";
+import { CrossAccountFromSelector } from "./CrossAccountFromSelector";
 import { trackEvent, captureException } from "../services/posthog";
 import { draftBodyToHtml } from "../../shared/draft-utils";
 import { AnalysisPrioritySection } from "./AnalysisPrioritySection";
@@ -1068,7 +1069,7 @@ interface SentMessageInfo {
 function InlineReply({
   replyInfo,
   accountId,
-  accountEmail: _accountEmail,
+  accountEmail,
   composeMode,
   replyToEmailId,
   onSend,
@@ -1107,6 +1108,11 @@ function InlineReply({
   nameMap?: Map<string, string>;
 }) {
   const isForward = composeMode === "forward";
+
+  // In unified ("All Inboxes") mode, always surface the From field even when
+  // the account has only one alias — confirms which account this reply is
+  // going from so the user doesn't accidentally reply from the wrong account.
+  const isUnifiedView = useAppStore((s) => s.currentAccountId === null);
 
   const form = useComposeForm({
     accountId,
@@ -1745,6 +1751,8 @@ function InlineReply({
                   selected={form.from}
                   onChange={form.setFrom}
                   fallbackDisplayName={form.accountDisplayName}
+                  accountEmail={accountEmail}
+                  alwaysShow={isUnifiedView}
                 />
               </div>
             )}
@@ -1997,18 +2005,37 @@ function InlineReply({
 
 // New email compose component (for starting a new thread)
 function NewEmailCompose({
-  accountId,
+  accountId: initialAccountId,
   onSend,
   onCancel,
   onDiscard,
   initialDraft,
 }: {
   accountId: string;
-  onSend: () => void;
-  onCancel: (formState: ComposeFormState) => void;
+  /**
+   * Called after a successful send. Receives the account the message was
+   * actually sent from — may differ from the prop's initial accountId if the
+   * user switched accounts via CrossAccountFromSelector in unified mode.
+   */
+  onSend: (sentFromAccountId: string) => void;
+  onCancel: (formState: ComposeFormState, currentAccountId: string) => void;
   onDiscard?: () => void;
   initialDraft?: RestoredDraft | null;
 }) {
+  // Account this compose is currently routed through. Lifted into local state
+  // so the user can re-route via CrossAccountFromSelector (unified inbox).
+  // Form state (to/cc/bcc/subject/body) is preserved across account switches
+  // because useComposeForm's useStates are keyed by component identity, not
+  // by accountId.
+  const [accountId, setComposeAccountId] = useState(initialAccountId);
+  // Reset to the initial account whenever the parent picks a new one (e.g.
+  // opening a new compose after closing one). Without this, switching to
+  // unified after a single-account compose would carry stale state.
+  useEffect(() => {
+    setComposeAccountId(initialAccountId);
+  }, [initialAccountId]);
+  const accountsListForCross = useAppStore((s) => s.accounts);
+
   const form = useComposeForm({
     accountId,
     initialTo: initialDraft?.to ?? [],
@@ -2071,19 +2098,19 @@ function NewEmailCompose({
     if (result === "undo-queued") {
       // Track on undo-queued: user may still undo, but intent to send is confirmed
       trackEvent("email_sent", { type: "new", has_attachments: hasAttachments });
-      onSend();
+      onSend(accountId);
     } else if (result && result.success) {
       trackEvent("email_sent", { type: "new", has_attachments: hasAttachments });
-      onSend();
+      onSend(accountId);
     }
-  }, [form, onSend]);
+  }, [form, onSend, accountId]);
 
   const handleScheduleSend = useCallback(
     async (scheduledAt: number) => {
       const success = await form.scheduleSend(scheduledAt);
-      if (success) onSend();
+      if (success) onSend(accountId);
     },
-    [form.scheduleSend, onSend],
+    [form.scheduleSend, onSend, accountId],
   );
 
   const getFormState = useCallback(
@@ -2112,7 +2139,7 @@ function NewEmailCompose({
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault();
-        onCancel(getFormState());
+        onCancel(getFormState(), accountId);
       }
     };
 
@@ -2132,7 +2159,7 @@ function NewEmailCompose({
       <div className="h-9 px-4 bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700/50 flex items-center flex-shrink-0">
         <span className="text-gray-900 dark:text-gray-100 font-medium text-sm">New Message</span>
         <button
-          onClick={onDiscard ?? (() => onCancel(getFormState()))}
+          onClick={onDiscard ?? (() => onCancel(getFormState(), accountId))}
           className="ml-auto p-1.5 text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 rounded transition-colors"
           title="Discard draft"
         >
@@ -2227,12 +2254,31 @@ function NewEmailCompose({
                 }
                 onChipDragStart={form.handleRecipientDragStart}
               />
-              <FromSelector
-                aliases={form.sendAsAliases}
-                selected={form.from}
-                onChange={form.setFrom}
-                fallbackDisplayName={form.accountDisplayName}
-              />
+              {accountsListForCross.length > 1 ? (
+                // Multi-account: render the cross-account picker INSTEAD of the
+                // per-account alias selector. Picking a different-account
+                // alias re-routes the compose form to that account via
+                // setComposeAccountId; useComposeForm reacts to the new
+                // accountId and re-fetches that account's aliases. Form
+                // body/recipients/subject are preserved across the switch.
+                <CrossAccountFromSelector
+                  accountId={accountId}
+                  selected={form.from}
+                  onChange={(nextAccountId, formatted) => {
+                    if (nextAccountId !== accountId) {
+                      setComposeAccountId(nextAccountId);
+                    }
+                    form.setFrom(formatted);
+                  }}
+                />
+              ) : (
+                <FromSelector
+                  aliases={form.sendAsAliases}
+                  selected={form.from}
+                  onChange={form.setFrom}
+                  fallbackDisplayName={form.accountDisplayName}
+                />
+              )}
             </>
           )}
 
@@ -3142,7 +3188,7 @@ function EmailDetailInner({ isFullView = false }: EmailDetailProps) {
     setInlineReplyOpen(false);
   }, [draftEmail, updateEmail, setInlineReplyOpen]);
 
-  const handleNewEmailSent = () => {
+  const handleNewEmailSent = (sentFromAccountId: string) => {
     // If this was a local draft, remove it now that it's been sent
     const localDraftId = composeState?.restoredDraft?.localDraftId;
     if (localDraftId) {
@@ -3151,22 +3197,26 @@ function EmailDetailInner({ isFullView = false }: EmailDetailProps) {
     }
     closeCompose();
     setViewMode("split");
-    // Trigger sync to get the sent message. The account is whatever the
-    // compose form was sent from — for a brand-new compose that's the
-    // primary fallback derived above.
-    if (newComposeAccountId) {
-      window.api.sync.now(newComposeAccountId);
+    // Trigger sync against the ACTUAL send account (in unified mode the user
+    // may have switched accounts via CrossAccountFromSelector). Without this,
+    // the sent message wouldn't show up in the right Sent folder until the
+    // next periodic sync.
+    if (sentFromAccountId) {
+      window.api.sync.now(sentFromAccountId);
     }
   };
 
-  const handleNewEmailCancel = async (formState: {
-    to: string[];
-    cc: string[];
-    bcc: string[];
-    subject: string;
-    bodyHtml: string;
-    bodyText: string;
-  }) => {
+  const handleNewEmailCancel = async (
+    formState: {
+      to: string[];
+      cc: string[];
+      bcc: string[];
+      subject: string;
+      bodyHtml: string;
+      bodyText: string;
+    },
+    cancelFromAccountId: string,
+  ) => {
     const hasContent =
       formState.to.length > 0 ||
       formState.subject.trim() ||
@@ -3174,7 +3224,7 @@ function EmailDetailInner({ isFullView = false }: EmailDetailProps) {
       formState.bodyHtml.replace(/<[^>]*>/g, "").trim();
     const existingDraftId = composeState?.restoredDraft?.localDraftId;
 
-    if (hasContent && newComposeAccountId) {
+    if (hasContent && cancelFromAccountId) {
       if (existingDraftId) {
         // Update existing draft with current form state
         await window.api.compose.updateLocalDraft(existingDraftId, {
@@ -3196,9 +3246,11 @@ function EmailDetailInner({ isFullView = false }: EmailDetailProps) {
           updatedAt: Date.now(),
         });
       } else {
-        // Save new draft
+        // Save new draft. The accountId is whatever the user had picked
+        // when cancelling — may differ from the initial newComposeAccountId
+        // if they switched via CrossAccountFromSelector.
         const result = (await window.api.compose.saveLocalDraft({
-          accountId: newComposeAccountId,
+          accountId: cancelFromAccountId,
           to: formState.to,
           cc: formState.cc.length > 0 ? formState.cc : undefined,
           bcc: formState.bcc.length > 0 ? formState.bcc : undefined,
