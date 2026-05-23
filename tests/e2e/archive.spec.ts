@@ -621,15 +621,11 @@ test.describe("Archive - Click to Select", () => {
     });
     console.log("[DEBUG] Focus after click:", JSON.stringify(focusInfo));
 
-    // Press Escape to go back to split view. This intentionally clears selection,
-    // so reselect before using list-level archive shortcuts.
+    // Press Escape to go back to split view. Selection is preserved on the row
+    // we were just viewing, so 'e' can archive it directly without reselecting.
     await page.keyboard.press("Escape");
     await page.waitForTimeout(300);
-    await expect(page.locator("div[data-thread-id][data-selected='true']")).toHaveCount(0);
-    await page.keyboard.press("j");
-    await expect(page.locator("div[data-thread-id][data-selected='true']")).toBeVisible({
-      timeout: 3000,
-    });
+    await expect(page.locator("div[data-thread-id][data-selected='true']")).toHaveCount(1);
 
     // Now press 'e' to archive
     const focusBeforeE = await page.evaluate(() => {
