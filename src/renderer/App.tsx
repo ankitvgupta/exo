@@ -836,8 +836,11 @@ export default function App() {
             ?.data?.lastSelectedAccountId;
           const primaryAccount = fullAccounts.find((a) => a.isPrimary) || fullAccounts[0];
           let initialAccountId: string | null;
-          if (persisted === null) {
-            initialAccountId = null; // unified
+          if (persisted === null && fullAccounts.length > 1) {
+            // Unified ("All Inboxes") only makes sense with 2+ accounts. If
+            // the user persisted unified previously but has since removed
+            // every account but one, fall back to that one account.
+            initialAccountId = null;
           } else if (
             typeof persisted === "string" &&
             fullAccounts.some((a) => a.id === persisted)
@@ -1610,13 +1613,19 @@ export default function App() {
   // Build list of expired accounts with their email addresses for the banner
   const expiredAccounts = accounts.filter((a) => expiredAccountIds.has(a.id));
 
-  // Handle account switch — instant because emails for all accounts are
-  // already in the store from initial load + background sync. We just flip
-  // currentAccountId and let useThreadedEmails filter; background sync
-  // picks up anything new without blocking the UI.
+  // Handle account switch. We always reload each target account's emails
+  // from the local DB on switch — the previous heuristic ("only refresh if
+  // we have zero emails for this account") wasn't enough: an account with
+  // even one stale email in memory would skip the refresh, so optimistic
+  // archives from a prior session, partial syncs, or just a long-lived
+  // session with churn would leave the inbox visibly incomplete after
+  // switching back. DB reads via sync.getEmails are cheap (sub-100ms),
+  // so always-fetching is the simple right answer. We use
+  // replaceEmailsForAccount so the per-account writes are atomic and
+  // concurrent unified-mode loads don't race on a read-modify-write.
   //
   // `accountId === null` means switch to the unified "All Inboxes" view —
-  // backfill + sync every connected account in parallel.
+  // refresh + sync every connected account in parallel.
   const handleAccountSwitch = (accountId: string | null) => {
     setCurrentAccountId(accountId);
     setAccountMenuOpen(false);
@@ -1626,34 +1635,26 @@ export default function App() {
       unified: accountId === null,
     });
 
-    const storeState = useAppStore.getState();
     const targetAccountIds = accountId === null ? accounts.map((a) => a.id) : [accountId];
 
     for (const aid of targetAccountIds) {
-      // Backfill inbox/sent emails independently if missing for this account.
-      if (!storeState.emails.some((e) => e.accountId === aid)) {
-        window.api.sync
-          .getEmails(aid)
-          .then((result: IpcResponse<DashboardEmail[]>) => {
-            if (result.success && result.data && result.data.length > 0) {
-              addEmails(result.data);
-              prefetchEmailBodies(result.data.map((e: DashboardEmail) => e.id)).catch(
-                console.error,
-              );
-            }
-          })
-          .catch(console.error);
-      }
-      if (!storeState.sentEmails.some((e) => e.accountId === aid)) {
-        window.api.sync
-          .getSentEmails(aid)
-          .then((sentResult: IpcResponse<DashboardEmail[]>) => {
-            if (sentResult.success && sentResult.data) {
-              addSentEmails(sentResult.data);
-            }
-          })
-          .catch(console.error);
-      }
+      window.api.sync
+        .getEmails(aid)
+        .then((result: IpcResponse<DashboardEmail[]>) => {
+          if (result.success && result.data) {
+            useAppStore.getState().replaceEmailsForAccount(aid, result.data);
+            prefetchEmailBodies(result.data.map((e: DashboardEmail) => e.id)).catch(console.error);
+          }
+        })
+        .catch(console.error);
+      window.api.sync
+        .getSentEmails(aid)
+        .then((sentResult: IpcResponse<DashboardEmail[]>) => {
+          if (sentResult.success && sentResult.data) {
+            useAppStore.getState().replaceSentEmailsForAccount(aid, sentResult.data);
+          }
+        })
+        .catch(console.error);
       // Trigger background sync to pick up any new emails (non-blocking)
       window.api.sync.now(aid).catch(console.error);
     }

@@ -13,10 +13,6 @@ interface EmailRowProps {
   onCheckboxChange: () => void;
   snoozeInfo?: SnoozedEmail;
   returnTime?: number; // Unsnooze return time — shown instead of last message time
-  // Account chip (rendered before the sender name). Provided only in the
-  // unified "All Inboxes" view so the user can tell at a glance which account
-  // a thread belongs to.
-  accountChip?: { label: string; colorClass: string; title: string };
 }
 
 // Density-specific style maps
@@ -128,7 +124,6 @@ export const EmailRow = memo(
     onCheckboxChange,
     snoozeInfo,
     returnTime,
-    accountChip,
   }: EmailRowProps) {
     const senderName = extractSenderName(thread.displaySender);
     const time = returnTime
@@ -197,23 +192,6 @@ export const EmailRow = memo(
           onClick={onClick}
           className="flex-1 flex items-center gap-2 min-w-0 h-full text-left"
         >
-          {/* Account chip — only shown in unified ("All Inboxes") view.
-              Widened to fit a 2-char label so accounts with the same first
-              letter (e.g. "AN" vs "AV") are visibly distinct. */}
-          {accountChip && (
-            <span
-              title={accountChip.title}
-              aria-label={accountChip.title}
-              className={`flex-shrink-0 inline-flex items-center justify-center rounded font-semibold uppercase px-1 ${
-                density === "compact"
-                  ? "text-[9px] h-4 min-w-[18px]"
-                  : "text-[10px] h-5 min-w-[22px]"
-              } ${isSelected && !isChecked ? "bg-white/20 text-white" : accountChip.colorClass}`}
-            >
-              {accountChip.label}
-            </span>
-          )}
-
           {/* Sender name */}
           <div
             className={`${ds.senderWidth} truncate font-medium flex-shrink-0 ${
@@ -358,9 +336,7 @@ export const EmailRow = memo(
     prev.isMultiSelectActive === next.isMultiSelectActive &&
     prev.density === next.density &&
     prev.snoozeInfo === next.snoozeInfo &&
-    prev.returnTime === next.returnTime &&
-    prev.accountChip?.label === next.accountChip?.label &&
-    prev.accountChip?.colorClass === next.accountChip?.colorClass,
+    prev.returnTime === next.returnTime,
   // onClick / onCheckboxChange intentionally omitted — they are stable in behavior
   // but are new arrow function references on each parent render.
 );

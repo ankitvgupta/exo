@@ -13,7 +13,6 @@ import {
 } from "../hooks/useBatchActions";
 import { draftBodyToHtml } from "../../shared/draft-utils";
 import { draftMatchesSplit } from "../utils/split-conditions";
-import { accountChipFor } from "../utils/account-chip";
 import { useVirtualizer } from "@tanstack/react-virtual";
 
 /** Check if bodyHtml already contains rich formatting tags (from TipTap or draftBodyToHtml).
@@ -77,12 +76,6 @@ export function EmailList() {
   // Sort before joining so the key doesn't churn just because accounts were
   // reordered (e.g. primary flag toggled, new account inserted).
   const accountIdsKey = [...targetAccountIds].sort().join(",");
-  // Map accountId → email for badge rendering. Stable shape (string-keyed).
-  const accountEmailById = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const a of accounts) m.set(a.id, a.email);
-    return m;
-  }, [accounts]);
 
   const isArchiveReadyView = currentSplitId === "__archive-ready__";
   const isDraftsView = currentSplitId === "__drafts__";
@@ -766,11 +759,6 @@ export function EmailList() {
                   density={inboxDensity}
                   onClick={(e) => handleThreadClick(thread, e)}
                   onCheckboxChange={() => toggleThreadSelected(thread.threadId)}
-                  accountChip={
-                    isUnifiedView
-                      ? accountChipFor(accountEmailById.get(thread.latestEmail.accountId ?? ""))
-                      : undefined
-                  }
                 />
               </div>
             ))}
@@ -832,11 +820,6 @@ export function EmailList() {
                     onCheckboxChange={() => handleCheckboxToggle(thread.threadId)}
                     snoozeInfo={isSnoozedView ? snoozedThreads.get(thread.threadId) : undefined}
                     returnTime={unsnoozedReturnTimes.get(thread.threadId)}
-                    accountChip={
-                      isUnifiedView
-                        ? accountChipFor(accountEmailById.get(thread.latestEmail.accountId ?? ""))
-                        : undefined
-                    }
                   />
                 </div>
               );

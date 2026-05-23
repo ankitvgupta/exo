@@ -631,12 +631,12 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
         available: () => account.id !== currentAccountId,
         execute: () => {
           setCurrentAccountId(account.id);
+          // Atomic per-account refresh — see App.tsx handleAccountSwitch
+          // for why we always re-fetch (stale slices), and the store action
+          // for why we use replaceEmailsForAccount (race-free).
           window.api.sync.getEmails(account.id).then((result: IpcResponse<DashboardEmail[]>) => {
             if (result.success && result.data) {
-              const otherEmails = useAppStore
-                .getState()
-                .emails.filter((e) => e.accountId !== account.id);
-              useAppStore.getState().setEmails([...otherEmails, ...result.data]);
+              useAppStore.getState().replaceEmailsForAccount(account.id, result.data);
             }
           });
           window.api.sync.now(account.id).catch(console.error);

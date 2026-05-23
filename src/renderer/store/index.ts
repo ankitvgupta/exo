@@ -910,9 +910,19 @@ export const useAppStore = create<AppState>((set, get) => ({
       currentSplitId !== null && !ALWAYS_VISIBLE_SPLITS.has(currentSplitId)
         ? "__priority__"
         : currentSplitId;
+    // Reset ALL per-thread selection state, not just selectedEmailId. Leaving
+    // selectedThreadId / focusedThreadEmailId / selectedThreadIds pointing at
+    // a thread from the previous account causes stale highlight, stale
+    // scroll-to-selected attempts, and (in full view) wedges the right pane
+    // until the next user action. The multi-select set across accounts is
+    // also meaningless — every batch action is scoped per-account.
     set({
       currentAccountId: accountId,
       selectedEmailId: null,
+      selectedThreadId: null,
+      focusedThreadEmailId: null,
+      selectedThreadIds: new Set<string>(),
+      selectedDraftId: null,
       globalAgentTaskKey: null,
       currentSplitId: nextSplitId,
     });
