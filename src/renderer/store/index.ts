@@ -1752,24 +1752,42 @@ export function getAppStateSnapshot(): Record<string, unknown> {
 }
 
 // Check if an email is sent by the user (not received)
-function isSentEmail(email: DashboardEmail, currentUserEmail?: string): boolean {
-  // Check labelIds first (most reliable)
+function isSentEmail(
+  email: DashboardEmail,
+  currentUserEmail?: string,
+  userEmailByAccount?: Map<string, string>,
+): boolean {
+  // Check labelIds first (most reliable).
   if (email.labelIds?.includes("SENT")) {
     return true;
   }
 
-  // Fall back to checking the from field
-  if (!currentUserEmail) return false;
+  // Fall back to comparing the from-field against the user's address.
+  // Prefer the per-account map (correct in both single-account and unified
+  // "All Inboxes" mode); fall back to the explicit currentUserEmail for
+  // single-account callers that don't pass a map.
+  const userEmail =
+    (email.accountId ? userEmailByAccount?.get(email.accountId) : undefined) ?? currentUserEmail;
+  if (!userEmail) return false;
+
   const fromLower = email.from.toLowerCase();
-  const userEmailLower = currentUserEmail.toLowerCase();
+  const userEmailLower = userEmail.toLowerCase();
   // Extract email from "Name <email>" format if present
   const emailMatch = fromLower.match(/<([^>]+)>/) || [null, fromLower];
   const fromEmail = emailMatch[1] || fromLower;
   return fromEmail.trim() === userEmailLower.trim();
 }
 
-// Helper to group emails by thread
-export function groupByThread(emails: DashboardEmail[], currentUserEmail?: string): EmailThread[] {
+// Helper to group emails by thread.
+// `currentUserEmail` is the single-account "Me" address; in unified mode it's
+// undefined and the per-account map below handles "Me" detection per email.
+// `userEmailByAccount` maps accountId → user email so sent-detection works
+// for emails from any account in the input (used by unified inbox).
+export function groupByThread(
+  emails: DashboardEmail[],
+  currentUserEmail?: string,
+  userEmailByAccount?: Map<string, string>,
+): EmailThread[] {
   const threadMap = new Map<string, DashboardEmail[]>();
 
   // Pre-compute timestamps once to avoid creating Date objects in every sort
@@ -1796,7 +1814,9 @@ export function groupByThread(emails: DashboardEmail[], currentUserEmail?: strin
     const latestEmail = threadEmails[threadEmails.length - 1];
 
     // Find the latest RECEIVED email (not sent by user) for inbox sorting
-    const receivedEmails = threadEmails.filter((e) => !isSentEmail(e, currentUserEmail));
+    const receivedEmails = threadEmails.filter(
+      (e) => !isSentEmail(e, currentUserEmail, userEmailByAccount),
+    );
     const latestReceivedEmail =
       receivedEmails.length > 0 ? receivedEmails[receivedEmails.length - 1] : latestEmail; // Fallback to latest if all are sent
 
@@ -1813,7 +1833,7 @@ export function groupByThread(emails: DashboardEmail[], currentUserEmail?: strin
       // latestReceivedEmail is from user - find any non-self email
       const nonSelfEmail = [...threadEmails]
         .reverse()
-        .find((e) => !isSentEmail(e, currentUserEmail));
+        .find((e) => !isSentEmail(e, currentUserEmail, userEmailByAccount));
       if (nonSelfEmail) {
         displaySender = nonSelfEmail.from;
       } else {
@@ -1869,9 +1889,18 @@ export function useThreadedEmails() {
   const snoozedThreadIds = useAppStore((state) => state.snoozedThreadIds);
   const recentlyRepliedThreadIds = useAppStore((state) => state.recentlyRepliedThreadIds);
 
-  // Get current user's email for sent detection
+  // Get current user's email for sent detection (single-account fast path).
   const currentAccount = accounts.find((a) => a.id === currentAccountId);
   const currentUserEmail = currentAccount?.email;
+
+  // Per-account map for sent detection in unified ("All Inboxes") mode:
+  // currentUserEmail above is undefined when currentAccountId is null, so
+  // sent-detection-by-from-field would fail for emails without the SENT
+  // label. The map lets isSentEmail resolve "Me" per email's accountId.
+  const userEmailByAccount = useMemo(
+    () => new Map(accounts.map((a) => [a.id, a.email])),
+    [accounts],
+  );
 
   // Memoize the expensive thread computation. j/k navigation only changes
   // selectedEmailId — none of these deps change, so the memo short-circuits
@@ -1896,8 +1925,8 @@ export function useThreadedEmails() {
     // Then filter out sent-only threads — threads where no email has the INBOX label.
     // Sent emails within inbox threads are kept (for conversation context), but threads
     // consisting solely of sent emails belong in the Sent view, not the inbox.
-    const allThreads = groupByThread(accountEmails, currentUserEmail).filter((t) =>
-      t.emails.some((e) => !e.labelIds || e.labelIds.includes("INBOX")),
+    const allThreads = groupByThread(accountEmails, currentUserEmail, userEmailByAccount).filter(
+      (t) => t.emails.some((e) => !e.labelIds || e.labelIds.includes("INBOX")),
     );
 
     // Separate snoozed threads from active threads
@@ -1954,7 +1983,14 @@ export function useThreadedEmails() {
       snoozed,
       snoozedCount: snoozed.length,
     };
-  }, [emails, currentAccountId, currentUserEmail, snoozedThreadIds, recentlyRepliedThreadIds]);
+  }, [
+    emails,
+    currentAccountId,
+    currentUserEmail,
+    userEmailByAccount,
+    snoozedThreadIds,
+    recentlyRepliedThreadIds,
+  ]);
 }
 
 // Local thin wrapper around the shared threadMatchesSplit util so the rest
@@ -2020,7 +2056,14 @@ export function useSplitFilteredThreads() {
       const sentAccountEmails = currentAccountId
         ? sentEmails.filter((e) => e.accountId === currentAccountId)
         : sentEmails;
-      const sentThreads = groupByThread(sentAccountEmails, currentUserEmail).sort(
+      // Same per-account "Me" map as useThreadedEmails so sent detection
+      // works for emails without a SENT label in unified mode.
+      const userEmailByAccount = new Map(accounts.map((a) => [a.id, a.email] as const));
+      const sentThreads = groupByThread(
+        sentAccountEmails,
+        currentUserEmail,
+        userEmailByAccount,
+      ).sort(
         (a, b) => new Date(b.latestEmail.date).getTime() - new Date(a.latestEmail.date).getTime(),
       );
 

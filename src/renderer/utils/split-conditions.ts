@@ -72,8 +72,13 @@ export function emailMatchesSplit(email: DashboardEmail, split: InboxSplit): boo
 // splits are visible at once, so an exclusive split from account A must not
 // hide threads from account B. Callers pass the thread's latestEmail so we
 // can avoid an import cycle with the store's EmailThread type.
+//
+// Emails with no accountId (legacy / partially-synced data — DashboardEmail.
+// accountId is optional) also fail this check, so they stay in the global
+// "All"/"Priority" inbox instead of being routed into some arbitrary account's
+// exclusive split tab and disappearing from the main view.
 export function threadMatchesSplit(latestEmail: DashboardEmail, split: InboxSplit): boolean {
-  if (latestEmail.accountId && latestEmail.accountId !== split.accountId) {
+  if (!latestEmail.accountId || latestEmail.accountId !== split.accountId) {
     return false;
   }
   return emailMatchesSplit(latestEmail, split);
