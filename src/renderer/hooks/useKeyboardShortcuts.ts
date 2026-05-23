@@ -199,11 +199,13 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
           return;
         }
         if (viewMode === "full") {
+          // Preserve selectedThreadId/selectedEmailId so the row the user was
+          // just viewing stays highlighted in the list and j/k resume from there.
+          // focusedThreadEmailId is full-view-only (which message inside a thread
+          // is focused), so it's still correct to clear that.
           e.preventDefault();
           useAppStore.setState({
             viewMode: "split",
-            selectedEmailId: null,
-            selectedThreadId: null,
             focusedThreadEmailId: null,
           });
           return;
