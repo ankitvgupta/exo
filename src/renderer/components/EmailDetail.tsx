@@ -698,6 +698,7 @@ function ThreadMessage({
   onReply,
   onReplyAll,
   onForward,
+  onBlockSender,
   currentUserEmail,
   accountId,
   threadEmails,
@@ -710,6 +711,7 @@ function ThreadMessage({
   onReply: () => void;
   onReplyAll: () => void;
   onForward: () => void;
+  onBlockSender?: (senderEmail: string) => void;
   currentUserEmail?: string;
   accountId?: string;
   threadEmails: DashboardEmail[];
@@ -925,6 +927,35 @@ function ThreadMessage({
                 />
               </svg>
             </span>
+            {/* Block sender — only show when there is a real sender email
+                (not on outbound messages where senderEmail is the user). */}
+            {onBlockSender && senderEmail && !isFromMe && senderEmail.includes("@") && (
+              <span
+                role="button"
+                aria-label="Block sender"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onBlockSender(senderEmail);
+                }}
+                className={`p-1 rounded transition-colors ${
+                  useWhiteCard
+                    ? "text-gray-400 hover:text-red-600 hover:bg-red-50"
+                    : "text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
+                }`}
+                title={`Block ${senderEmail}`}
+              >
+                {/* "no-entry" / ban circle — matches Gmail's block visual */}
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <circle cx="12" cy="12" r="9" strokeWidth={2} />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M5.6 5.6l12.8 12.8"
+                  />
+                </svg>
+              </span>
+            )}
           </span>
         )}
       </button>
@@ -3347,6 +3378,46 @@ function EmailDetailInner({ isFullView = false }: EmailDetailProps) {
     });
   };
 
+  // Block sender: deferred commit, same shape as archive/trash. The IPC
+  // (create Gmail filter + trash existing messages) only runs when
+  // the undo toast's timer elapses — undo just restores the emails to
+  // view and the server-side work never happens.
+  const handleBlockSender = (rawSenderEmail: string) => {
+    if (!currentAccountId || !selectedThreadId) return;
+    const senderEmail = rawSenderEmail.trim().toLowerCase();
+    if (!senderEmail.includes("@")) return;
+
+    const emailIds = threadEmails.map((e) => e.id);
+
+    // Auto-advance: same flow as handleArchive.
+    const currentIndex = currentThreads.findIndex((t) => t.threadId === selectedThreadId);
+    const remainingThreads = currentThreads.filter((t) => t.threadId !== selectedThreadId);
+    if (remainingThreads.length > 0) {
+      const nextIndex = Math.min(Math.max(currentIndex, 0), remainingThreads.length - 1);
+      const nextThread = remainingThreads[nextIndex];
+      if (nextThread) markThreadAsRead(nextThread.threadId);
+      removeEmailsAndAdvance(
+        emailIds,
+        nextThread?.threadId ?? null,
+        nextThread?.latestEmail.id ?? null,
+      );
+    } else {
+      removeEmailsAndAdvance(emailIds, null, null);
+      if (isFullView) setViewMode("split");
+    }
+
+    addUndoAction({
+      id: `block-${senderEmail}-${Date.now()}`,
+      type: "block",
+      threadCount: 1,
+      accountId: currentAccountId,
+      emails: [...threadEmails],
+      scheduledAt: Date.now(),
+      delayMs: 5000,
+      blockedSender: senderEmail,
+    });
+  };
+
   const handleMarkUnread = () => {
     if (!currentAccountId || !latestEmail) return;
     const currentLabels = latestEmail.labelIds || ["INBOX"];
@@ -3670,6 +3741,7 @@ function EmailDetailInner({ isFullView = false }: EmailDetailProps) {
                 onReply={() => openCompose("reply", email.id)}
                 onReplyAll={() => openCompose("reply-all", email.id)}
                 onForward={() => openCompose("forward", email.id)}
+                onBlockSender={handleBlockSender}
                 currentUserEmail={currentUserEmail}
                 accountId={currentAccountId ?? undefined}
                 threadEmails={threadEmails}

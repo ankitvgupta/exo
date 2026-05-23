@@ -95,24 +95,28 @@ test.describe("Sender Profile - Display", () => {
     await page.waitForTimeout(500);
   });
 
-  test("leaving full view clears sender sidebar and row selection", async () => {
+  test("leaving full view preserves row selection and sender sidebar", async () => {
     const selectedRow = page.locator("div[data-thread-id][data-selected='true']");
     await pressKeyUntilVisible(page, "j", selectedRow, { timeout: 15000 });
+    const selectedThreadIdBefore = await selectedRow.getAttribute("data-thread-id");
 
     const replyButton = page.locator("button[title='Reply All']").first();
     await pressKeyUntilVisible(page, "Enter", replyButton, { timeout: 10000 });
 
-    await expect(page.locator("[data-testid='sidebar-sender-name']")).toBeVisible({
-      timeout: 5000,
-    });
+    const senderName = page.locator("[data-testid='sidebar-sender-name']");
+    await expect(senderName).toBeVisible({ timeout: 5000 });
+    const senderBefore = await senderName.textContent();
 
     await page.keyboard.press("Escape");
 
+    // Full view is gone, but the row stays highlighted on the email we were
+    // just viewing so j/k resume from there. The preview sidebar keeps showing
+    // that email's sender.
     await expect(replyButton).toBeHidden({ timeout: 5000 });
-    await expect(selectedRow).toHaveCount(0);
-    await expect(page.locator("text=Select an email to see details")).toBeVisible({
-      timeout: 5000,
-    });
+    await expect(selectedRow).toHaveCount(1);
+    expect(await selectedRow.getAttribute("data-thread-id")).toBe(selectedThreadIdBefore);
+    await expect(senderName).toBeVisible({ timeout: 5000 });
+    expect(await senderName.textContent()).toBe(senderBefore);
   });
 });
 

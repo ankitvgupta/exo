@@ -594,6 +594,37 @@ async function prefetchEmailBodies(emailIds: string[]): Promise<void> {
   }
 }
 
+/**
+ * Bottom-left toast that surfaces transient errors set via `useAppStore.setError`.
+ * Auto-dismisses after 8s. Currently consumed by the block-sender flow (silent
+ * failure was flagged by agentic-verify); other call sites still log to console
+ * only, but can opt in by calling `setError` themselves.
+ */
+function GlobalErrorToast() {
+  const error = useAppStore((s) => s.error);
+  const setError = useAppStore((s) => s.setError);
+
+  useEffect(() => {
+    if (!error) return;
+    const t = setTimeout(() => setError(null), 8000);
+    return () => clearTimeout(t);
+  }, [error, setError]);
+
+  if (!error) return null;
+  return (
+    <div className="bg-red-600 text-white rounded-lg shadow-lg flex items-center justify-between px-4 py-3 min-w-[280px] max-w-md">
+      <span className="text-sm">{error}</span>
+      <button
+        onClick={() => setError(null)}
+        className="ml-4 text-sm font-medium text-red-100 hover:text-white flex-shrink-0"
+        aria-label="Dismiss"
+      >
+        ×
+      </button>
+    </div>
+  );
+}
+
 export default function App() {
   const [needsSetup, setNeedsSetup] = useState<boolean | null>(null);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
@@ -2166,6 +2197,7 @@ export default function App() {
         <UndoActionToast />
         <DraftEditLearnedToast />
         <AnalysisOverrideLearnedToast />
+        <GlobalErrorToast />
       </div>
 
       {/* Global Snooze Menu Overlay */}

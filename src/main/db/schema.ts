@@ -305,6 +305,19 @@ CREATE TABLE IF NOT EXISTS agent_conversation_mirror (
 -- Index for looking up agent traces by local_task_id
 CREATE INDEX IF NOT EXISTS idx_agent_conversation_mirror_task ON agent_conversation_mirror(local_task_id);
 
+-- Blocked senders (mirror of Gmail filters that route a sender to Spam).
+-- One row per (account, lowercased sender email). gmail_filter_id is the filter
+-- created via users.settings.filters API so we can delete it on unblock.
+CREATE TABLE IF NOT EXISTS blocked_senders (
+  sender_email TEXT NOT NULL,
+  account_id TEXT NOT NULL,
+  gmail_filter_id TEXT,
+  blocked_at INTEGER NOT NULL,
+  PRIMARY KEY (sender_email, account_id),
+  FOREIGN KEY (account_id) REFERENCES accounts(id)
+);
+CREATE INDEX IF NOT EXISTS idx_blocked_senders_account ON blocked_senders(account_id);
+
 -- Agent memories (persistent preferences for draft generation and analysis)
 CREATE TABLE IF NOT EXISTS memories (
   id TEXT PRIMARY KEY,

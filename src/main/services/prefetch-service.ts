@@ -12,6 +12,7 @@ import {
   getAccounts,
   updateDraftAgentTaskId,
   loadCompletedAgentDraftEmailIds,
+  isSenderBlocked,
 } from "../db";
 import { getConfig, getModelIdForFeature } from "../ipc/settings.ipc";
 import { getExtensionHost } from "../extensions";
@@ -684,6 +685,16 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
 
     const email = getEmail(emailId);
     if (!email) {
+      this.processedAnalysis.add(emailId);
+      return;
+    }
+
+    // Skip blocked senders — Gmail's server-side filter normally keeps these
+    // out of our local DB entirely, but if one leaks through (race between
+    // arrival and filter creation, or a manual sync that re-fetches a stale
+    // message) don't burn Claude tokens on it.
+    if (email.accountId && isSenderBlocked(this.extractSenderEmail(email.from), email.accountId)) {
+      log.info(`[Prefetch] Skipping blocked sender for ${emailId}`);
       this.processedAnalysis.add(emailId);
       return;
     }
