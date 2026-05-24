@@ -10,6 +10,7 @@ import {
 } from "../services/analysis-edit-learner";
 import { stripQuotedContent } from "../services/strip-quoted-content";
 import { createLogger } from "../services/logger";
+import { resolveLabelNames } from "../services/prefetch-service";
 
 const log = createLogger("analysis-ipc");
 
@@ -108,7 +109,13 @@ export function registerAnalysisIpc(): void {
           snippet: email.snippet,
         };
 
-        const result = await analyzerInstance.analyze(emailForAnalysis, userEmail, email.accountId);
+        const labelNames = await resolveLabelNames(email.labelIds, email.accountId);
+        const result = await analyzerInstance.analyze(
+          emailForAnalysis,
+          userEmail,
+          email.accountId,
+          labelNames,
+        );
 
         // Save analysis to database
         saveAnalysis(emailId, result.needs_reply, result.reason, result.priority);
@@ -183,10 +190,12 @@ export function registerAnalysisIpc(): void {
           };
 
           try {
+            const labelNames = await resolveLabelNames(email.labelIds, email.accountId);
             const result = await analyzerInstance.analyze(
               emailForAnalysis,
               userEmail,
               email.accountId,
+              labelNames,
             );
             saveAnalysis(emailId, result.needs_reply, result.reason, result.priority);
 

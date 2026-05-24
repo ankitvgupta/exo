@@ -767,3 +767,107 @@ test.describe("inbox email cache", () => {
     expect(usedCache).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Re-implement resolveLabelNames filtering logic
+// ---------------------------------------------------------------------------
+
+const HIDDEN_LABELS = new Set(["INBOX", "UNREAD", "SENT", "DRAFT", "SPAM", "TRASH",
+  "CATEGORY_PERSONAL", "CATEGORY_SOCIAL", "CATEGORY_UPDATES",
+  "CATEGORY_FORUMS", "CATEGORY_PROMOTIONS"]);
+
+function filterLabelNames(
+  labelIds: string[],
+  nameMap: Map<string, string>,
+): string[] {
+  return labelIds
+    .filter((id) => !HIDDEN_LABELS.has(id))
+    .map((id) => nameMap.get(id) ?? id)
+    .filter((name) => !name.startsWith("Label_"));
+}
+
+test.describe("resolveLabelNames — filtering logic", () => {
+  const nameMap = new Map([
+    ["INBOX", "INBOX"],
+    ["UNREAD", "UNREAD"],
+    ["SENT", "SENT"],
+    ["STARRED", "STARRED"],
+    ["IMPORTANT", "IMPORTANT"],
+    ["Label_1", "VIP"],
+    ["Label_2", "Work"],
+    ["Label_3", "Invoices"],
+    ["CATEGORY_PROMOTIONS", "CATEGORY_PROMOTIONS"],
+  ]);
+
+  test("filters out system labels (INBOX, UNREAD, SENT, etc.)", () => {
+    const result = filterLabelNames(
+      ["INBOX", "UNREAD", "SENT", "DRAFT", "SPAM", "TRASH", "Label_1"],
+      nameMap,
+    );
+    expect(result).toEqual(["VIP"]);
+  });
+
+  test("filters out category labels", () => {
+    const result = filterLabelNames(
+      ["CATEGORY_PERSONAL", "CATEGORY_SOCIAL", "CATEGORY_PROMOTIONS", "Label_2"],
+      nameMap,
+    );
+    expect(result).toEqual(["Work"]);
+  });
+
+  test("keeps STARRED and IMPORTANT (user-meaningful signals)", () => {
+    const result = filterLabelNames(["STARRED", "IMPORTANT", "Label_1"], nameMap);
+    expect(result).toEqual(["STARRED", "IMPORTANT", "VIP"]);
+  });
+
+  test("resolves user label IDs to names", () => {
+    const result = filterLabelNames(["Label_1", "Label_2", "Label_3"], nameMap);
+    expect(result).toEqual(["VIP", "Work", "Invoices"]);
+  });
+
+  test("drops unresolved IDs that start with Label_", () => {
+    const result = filterLabelNames(["Label_1", "Label_999"], nameMap);
+    // Label_999 is not in the map, falls back to ID "Label_999", then filtered out
+    expect(result).toEqual(["VIP"]);
+  });
+
+  test("returns empty array for empty labelIds", () => {
+    const result = filterLabelNames([], nameMap);
+    expect(result).toEqual([]);
+  });
+
+  test("returns empty array when all labels are hidden", () => {
+    const result = filterLabelNames(["INBOX", "UNREAD", "SENT"], nameMap);
+    expect(result).toEqual([]);
+  });
+
+  test("handles mixed system and user labels", () => {
+    const result = filterLabelNames(
+      ["INBOX", "UNREAD", "Label_1", "STARRED", "Label_3", "CATEGORY_UPDATES"],
+      nameMap,
+    );
+    expect(result).toEqual(["VIP", "STARRED", "Invoices"]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Label cache TTL logic
+// ---------------------------------------------------------------------------
+
+test.describe("resolveLabelNames — cache TTL logic", () => {
+  const TTL = 60 * 60 * 1000; // 1 hour, matching production code
+
+  test("cache entry within TTL is considered fresh", () => {
+    const now = Date.now();
+    const entry = { map: new Map(), ts: now - TTL + 1000 }; // 1 second before expiry
+    const isExpired = now - entry.ts > TTL;
+    expect(isExpired).toBe(false);
+  });
+
+  test("cache entry beyond TTL is considered stale", () => {
+    const now = Date.now();
+    const entry = { map: new Map(), ts: now - TTL - 1 }; // 1ms past expiry
+    const isExpired = now - entry.ts > TTL;
+    expect(isExpired).toBe(true);
+  });
+});

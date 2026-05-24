@@ -13,6 +13,7 @@ import { buildStyleContext } from "./style-profiler";
 import { buildMemoryContext } from "./memory-context";
 import { EmailAnalyzer } from "./email-analyzer";
 import { DraftGenerator } from "./draft-generator";
+import { resolveLabelNames } from "./prefetch-service";
 import { getAccounts } from "../db";
 import { DEFAULT_STYLE_PROMPT } from "../../shared/types";
 import type {
@@ -138,7 +139,13 @@ export async function generateDraftForEmail(
       getModelIdForFeature("analysis"),
       config.analysisPrompt ?? undefined,
     );
-    const analysisResult = await analyzer.analyze(emailForDraft);
+    const labelNames = await resolveLabelNames(email.labelIds, emailAccountId);
+    const analysisResult = await analyzer.analyze(
+      emailForDraft,
+      undefined,
+      emailAccountId,
+      labelNames,
+    );
     saveAnalysis(
       emailId,
       analysisResult.needs_reply,
