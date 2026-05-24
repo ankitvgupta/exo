@@ -225,6 +225,9 @@ interface AppState {
   // Command palette state
   isCommandPaletteOpen: boolean;
 
+  // Label picker state (toggled by 'l' hotkey)
+  isLabelPickerOpen: boolean;
+
   // Search state
   isSearchOpen: boolean;
   activeSearchQuery: string | null;
@@ -381,6 +384,10 @@ interface AppState {
   // Command palette actions
   openCommandPalette: () => void;
   closeCommandPalette: () => void;
+
+  // Label picker actions
+  openLabelPicker: () => void;
+  closeLabelPicker: () => void;
 
   // Find-in-page
   isFindBarOpen: boolean;
@@ -584,6 +591,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   // Command palette state
   isCommandPaletteOpen: false,
+
+  // Label picker state
+  isLabelPickerOpen: false,
 
   // Find-in-page state
   isFindBarOpen: false,
@@ -797,7 +807,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         selectedEmailId: nextEmailId,
       };
     }),
-  setSelectedEmailId: (id) => set({ selectedEmailId: id }),
+  setSelectedEmailId: (id) => set({ selectedEmailId: id, isLabelPickerOpen: false }),
   setSelectedThreadId: (id) => set({ selectedThreadId: id }),
   setFocusedThreadEmailId: (id) => set({ focusedThreadEmailId: id }),
   toggleThreadExpanded: (threadId) =>
@@ -917,6 +927,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   // Command palette actions
   openCommandPalette: () => set({ isCommandPaletteOpen: true }),
   closeCommandPalette: () => set({ isCommandPaletteOpen: false }),
+
+  // Label picker actions
+  openLabelPicker: () => set({ isLabelPickerOpen: true }),
+  closeLabelPicker: () => set({ isLabelPickerOpen: false }),
 
   // Find-in-page actions
   openFindBar: () => set({ isFindBarOpen: true }),
