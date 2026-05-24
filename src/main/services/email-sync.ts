@@ -1,4 +1,4 @@
-import { type GmailClient, isAuthError } from "./gmail-client";
+import { type GmailClient, isAuthError, isNotFoundError } from "./gmail-client";
 import {
   saveEmail,
   deleteEmail,
@@ -7,6 +7,7 @@ import {
   hasEmailsForAccount,
   getEmailIds,
   getInboxThreadIds,
+  getVisibleInboxLabelStates,
   getEmail,
   updateEmailLabelIds,
   deleteArchiveReadyForThreads,
@@ -25,6 +26,14 @@ import { createLogger } from "./logger";
 const log = createLogger("sync");
 
 const DEFAULT_SYNC_INTERVAL = 30000; // 30 seconds
+const INBOX_LABEL_RECONCILE_LIMIT = 25;
+const INBOX_LABEL_RECONCILE_CONCURRENCY = 5;
+
+function sameLabelSet(left: string[], right: string[]): boolean {
+  if (left.length !== right.length) return false;
+  const rightSet = new Set(right);
+  return left.every((label) => rightSet.has(label));
+}
 
 export type SyncStatus = "idle" | "syncing" | "error";
 export type AccountInfo = {
@@ -54,6 +63,7 @@ class EmailSyncService {
   private healthCheckIntervalId: NodeJS.Timeout | null = null;
   // Tracks whether we've done the one-time sent backfill per account
   private sentBackfillDone: Set<string> = new Set();
+  private inboxLabelReconcileDone: Set<string> = new Set();
   private onNewEmails?: (accountId: string, emails: DashboardEmail[]) => void;
   private onNewSentEmails?: (accountId: string, emails: DashboardEmail[]) => void;
   private onSyncStatusChange?: (accountId: string, status: SyncStatus) => void;
@@ -124,6 +134,11 @@ class EmailSyncService {
    */
   async registerAccount(client: GmailClient): Promise<AccountInfo> {
     const accountId = client.getAccountId();
+    const existingAccount = this.accounts.get(accountId);
+
+    if (existingAccount?.intervalId) {
+      clearInterval(existingAccount.intervalId);
+    }
 
     // Get profile to retrieve email address, and display name for account setup
     const [profile, displayName] = await Promise.all([
@@ -342,6 +357,78 @@ class EmailSyncService {
     callback: (accountId: string, progress: { fetched: number; total: number }) => void,
   ): void {
     this.onSyncProgress = callback;
+  }
+
+  /**
+   * Repair locally visible inbox rows against Gmail's current labels once per session.
+   * This backfills stale rows from older label-scoped History API syncs that could
+   * miss INBOX/UNREAD removals after the local history cursor had already advanced.
+   */
+  private async reconcileVisibleInboxLabels(accountId: string): Promise<void> {
+    if (this.inboxLabelReconcileDone.has(accountId)) return;
+    this.inboxLabelReconcileDone.add(accountId);
+
+    const account = this.accounts.get(accountId);
+    if (!account) return;
+
+    const candidates = getVisibleInboxLabelStates(accountId, INBOX_LABEL_RECONCILE_LIMIT);
+    if (candidates.length === 0) return;
+
+    const removedIds: string[] = [];
+    const labelUpdates: { emailId: string; labelIds: string[] }[] = [];
+
+    const reconcileOne = async (candidate: { id: string; labelIds: string[] | undefined }) => {
+      try {
+        const remoteLabels = await account.client.getMessageLabelIds(candidate.id);
+        const localLabels = candidate.labelIds ?? ["INBOX"];
+
+        if (
+          remoteLabels === null ||
+          (!remoteLabels.includes("INBOX") && !remoteLabels.includes("SENT"))
+        ) {
+          await this.deleteLocalEmailAfterRemoteRemoval(accountId, candidate.id);
+          removedIds.push(candidate.id);
+          return;
+        }
+
+        if (!sameLabelSet(localLabels, remoteLabels)) {
+          updateEmailLabelIds(candidate.id, remoteLabels);
+          labelUpdates.push({ emailId: candidate.id, labelIds: remoteLabels });
+        }
+      } catch (err) {
+        log.warn({ err }, `[Sync] Failed to reconcile Gmail labels for ${candidate.id}`);
+      }
+    };
+
+    for (let i = 0; i < candidates.length; i += INBOX_LABEL_RECONCILE_CONCURRENCY) {
+      await Promise.all(
+        candidates.slice(i, i + INBOX_LABEL_RECONCILE_CONCURRENCY).map(reconcileOne),
+      );
+    }
+
+    if (removedIds.length > 0) {
+      this.onEmailsRemoved?.(accountId, removedIds);
+    }
+    if (labelUpdates.length > 0) {
+      this.onEmailsUpdated?.(accountId, labelUpdates);
+    }
+
+    if (removedIds.length > 0 || labelUpdates.length > 0) {
+      log.info(
+        `[Sync] Reconciled ${removedIds.length} removed and ${labelUpdates.length} updated inbox labels for ${account.email}`,
+      );
+    }
+  }
+
+  private async deleteLocalEmailAfterRemoteRemoval(
+    accountId: string,
+    emailId: string,
+  ): Promise<void> {
+    const email = getEmail(emailId);
+    if (email?.draft?.gmailDraftId) {
+      await deleteGmailDraftById(accountId, email.draft.gmailDraftId).catch(() => {});
+    }
+    deleteEmail(emailId, accountId);
   }
 
   /**
@@ -921,14 +1008,22 @@ class EmailSyncService {
 
     // Fetch new emails
     if (changes.newMessageIds.length > 0) {
-      log.info(`[Sync] ${changes.newMessageIds.length} new emails for ${account.email}`);
+      const uniqueNewMessageIds = [...new Set(changes.newMessageIds)];
+      log.info(`[Sync] ${uniqueNewMessageIds.length} new emails for ${account.email}`);
 
       const newEmails: DashboardEmail[] = [];
+      const removedByCurrentLabels: string[] = [];
 
-      for (const id of changes.newMessageIds) {
+      for (const id of uniqueNewMessageIds) {
         try {
           const email = await client.readEmail(id);
           if (email) {
+            if (!email.labelIds?.includes("INBOX") && !email.labelIds?.includes("SENT")) {
+              await this.deleteLocalEmailAfterRemoteRemoval(accountId, id);
+              removedByCurrentLabels.push(id);
+              continue;
+            }
+
             saveEmail(email, accountId);
             newEmails.push({
               ...email,
@@ -939,8 +1034,17 @@ class EmailSyncService {
             });
           }
         } catch (err) {
+          if (isNotFoundError(err)) {
+            await this.deleteLocalEmailAfterRemoteRemoval(accountId, id);
+            removedByCurrentLabels.push(id);
+            continue;
+          }
           log.error({ err: err }, `[Sync] Failed to fetch email ${id}`);
         }
+      }
+
+      if (removedByCurrentLabels.length > 0) {
+        this.onEmailsRemoved?.(accountId, removedByCurrentLabels);
       }
 
       if (newEmails.length > 0) {
@@ -1084,6 +1188,8 @@ class EmailSyncService {
       log.info(`[Sync] ${labelUpdates.length} label updates for ${account.email}`);
       this.onEmailsUpdated?.(accountId, labelUpdates);
     }
+
+    await this.reconcileVisibleInboxLabels(accountId);
 
     // One-time backfill of sent emails for inbox threads (once per app session)
     if (!this.sentBackfillDone.has(accountId)) {

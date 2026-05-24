@@ -68,6 +68,23 @@ function sanitizeFtsQuery(query: string): string {
     .join(" ");
 }
 
+function hasInboxLabel(db: DB, accountId: string): Array<{ id: string; labelIds: string | null }> {
+  return db
+    .prepare(
+      `
+      SELECT id, label_ids as labelIds
+      FROM emails
+      WHERE account_id = ?
+        AND (
+          label_ids IS NULL
+          OR EXISTS (SELECT 1 FROM json_each(label_ids) WHERE value = 'INBOX')
+        )
+      ORDER BY date DESC
+    `,
+    )
+    .all(accountId) as Array<{ id: string; labelIds: string | null }>;
+}
+
 function createTestDb(): DB {
   const db = new DatabaseCtor!(":memory:");
   db.pragma("journal_mode = WAL");
@@ -1126,6 +1143,19 @@ test.describe("Database CRUD operations", () => {
       expect(ids).toContain("e1");
       expect(ids).toContain("e2");
       expect(ids).not.toContain("e3");
+    });
+
+    test("json_each inbox membership does not match labels that merely contain INBOX as a substring", () => {
+      saveEmail(
+        db,
+        makeEmail({ id: "e1", threadId: "t1", labelIds: ["PROJECT_INBOX_ARCHIVE"] }),
+        "acct1",
+      );
+      saveEmail(db, makeEmail({ id: "e2", threadId: "t2", labelIds: ["INBOX"] }), "acct1");
+      saveEmail(db, makeEmail({ id: "e3", threadId: "t3" }), "acct1");
+
+      const ids = hasInboxLabel(db, "acct1").map((row) => row.id).sort();
+      expect(ids).toEqual(["e2", "e3"]);
     });
 
     test("deleteEmail removes email and associated analyses/drafts", () => {

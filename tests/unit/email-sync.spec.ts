@@ -86,6 +86,10 @@ function filterDeletedMessages(deletedMessageIds: string[], newMessageIds: strin
   return deletedMessageIds.filter((id) => !newSet.has(id));
 }
 
+function deduplicateNewMessages(newMessageIds: string[]): string[] {
+  return [...new Set(newMessageIds)];
+}
+
 test.describe("Deleted/new message dedup (draft-sent overlap)", () => {
   test("removes IDs that appear in both deleted and new lists", () => {
     const deleted = ["msg-1", "msg-2", "msg-3"];
@@ -117,6 +121,10 @@ test.describe("Deleted/new message dedup (draft-sent overlap)", () => {
 
   test("handles both empty lists", () => {
     expect(filterDeletedMessages([], [])).toEqual([]);
+  });
+
+  test("deduplicates new message IDs before fetching email bodies", () => {
+    expect(deduplicateNewMessages(["msg-1", "msg-2", "msg-1"])).toEqual(["msg-1", "msg-2"]);
   });
 });
 
