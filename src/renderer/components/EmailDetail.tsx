@@ -2203,7 +2203,15 @@ function NewEmailCompose({
               onClick={() => form.setShowCcBcc(!form.showCcBcc)}
               className="ml-2 flex-shrink-0 p-1 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
               data-testid="compose-cc-bcc-toggle"
-              title={form.showCcBcc ? "Hide Cc/Bcc/From" : "Show Cc/Bcc/From"}
+              title={
+                form.showCcBcc
+                  ? accountsListForCross.length > 1
+                    ? "Hide Cc/Bcc"
+                    : "Hide Cc/Bcc/From"
+                  : accountsListForCross.length > 1
+                    ? "Show Cc/Bcc"
+                    : "Show Cc/Bcc/From"
+              }
             >
               <svg
                 className={`w-4 h-4 transition-transform ${form.showCcBcc ? "rotate-180" : ""}`}
@@ -2221,7 +2229,32 @@ function NewEmailCompose({
             </button>
           </div>
 
-          {/* Collapsible Cc/Bcc/From fields */}
+          {/* From field — always visible in unified ("All Inboxes") mode so
+              the user knows which account they're sending from without
+              having to expand Cc/Bcc. In single-account mode, From stays
+              inside the Cc/Bcc collapsible (only useful for switching
+              between aliases of that single account). */}
+          {accountsListForCross.length > 1 && (
+            // Multi-account cross-account picker — picking a different-account
+            // alias re-routes the compose form to that account via
+            // setComposeAccountId; useComposeForm reacts to the new accountId
+            // and re-fetches that account's aliases. Form body/recipients/
+            // subject are preserved across the switch.
+            <CrossAccountFromSelector
+              accountId={accountId}
+              selected={form.from}
+              onChange={(nextAccountId, formatted) => {
+                if (nextAccountId !== accountId) {
+                  setComposeAccountId(nextAccountId);
+                }
+                form.setFrom(formatted);
+              }}
+            />
+          )}
+
+          {/* Collapsible Cc/Bcc fields (plus per-account From selector in
+              single-account mode, where From hasn't already been rendered
+              above). */}
           {form.showCcBcc && (
             <>
               <AddressInput
@@ -2254,24 +2287,7 @@ function NewEmailCompose({
                 }
                 onChipDragStart={form.handleRecipientDragStart}
               />
-              {accountsListForCross.length > 1 ? (
-                // Multi-account: render the cross-account picker INSTEAD of the
-                // per-account alias selector. Picking a different-account
-                // alias re-routes the compose form to that account via
-                // setComposeAccountId; useComposeForm reacts to the new
-                // accountId and re-fetches that account's aliases. Form
-                // body/recipients/subject are preserved across the switch.
-                <CrossAccountFromSelector
-                  accountId={accountId}
-                  selected={form.from}
-                  onChange={(nextAccountId, formatted) => {
-                    if (nextAccountId !== accountId) {
-                      setComposeAccountId(nextAccountId);
-                    }
-                    form.setFrom(formatted);
-                  }}
-                />
-              ) : (
+              {accountsListForCross.length <= 1 && (
                 <FromSelector
                   aliases={form.sendAsAliases}
                   selected={form.from}
