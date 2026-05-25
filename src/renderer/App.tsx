@@ -1417,25 +1417,39 @@ export default function App() {
 
   // Fetch emails query — disabled during progressive sync to prevent
   // setEmails (full replace) from wiping incrementally-loaded emails.
+  // Also disabled in unified ("All Inboxes") mode: gmail.fetchUnread takes
+  // a single accountId and falls back to "default" when none is provided,
+  // so running it with currentAccountId=null would return only the default
+  // account's unread set and then setEmails would WIPE every other
+  // account's emails (the visible "All Inboxes only renders one account"
+  // bug). In unified mode, initializeSync's per-account fetch fan-out is
+  // the authoritative loader; on explicit refresh, handleRefresh does its
+  // own per-account fan-out with replaceEmailsForAccount.
   const hasActiveProgressiveSync = Object.values(syncProgress).some(
     (p) => p !== null && p.fetched < p.total,
   );
   const { refetch: fetchEmails, isFetching } = useQuery({
     queryKey: ["emails", currentAccountId],
     queryFn: async () => {
-      const result = await window.api.gmail.fetchUnread(100, currentAccountId ?? undefined);
+      // currentAccountId can't be null here — the `enabled` guard below
+      // disables the query in unified mode. Narrow defensively anyway.
+      if (currentAccountId == null) return [];
+      const result = await window.api.gmail.fetchUnread(100, currentAccountId);
       if (result.success) {
-        setEmails(result.data);
+        // Use replaceEmailsForAccount, not setEmails. setEmails would wipe
+        // every other account's emails from the store — fine when there
+        // was only one account, broken when more than one is loaded.
+        useAppStore.getState().replaceEmailsForAccount(currentAccountId, result.data);
         prefetchEmailBodies(result.data.map((e: DashboardEmail) => e.id)).catch(console.error);
         return result.data;
       }
       throw new Error(result.error);
     },
-    enabled: needsSetup === false && !hasActiveProgressiveSync,
+    enabled: needsSetup === false && !hasActiveProgressiveSync && currentAccountId !== null,
     // Disable auto-refetch on window focus — the sync loop + sync buffer
     // handle keeping emails up to date. Window-focus refetch does a full
-    // setEmails from DB which overwrites optimistic label updates
-    // (e.g. mark-as-read) that haven't been persisted yet.
+    // refetch from DB which overwrites optimistic label updates (e.g.
+    // mark-as-read) that haven't been persisted yet.
     refetchOnWindowFocus: false,
   });
 
