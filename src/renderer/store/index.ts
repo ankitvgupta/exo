@@ -869,9 +869,13 @@ export const useAppStore = create<AppState>((set, get) => ({
   setAccounts: (accounts) =>
     set({
       accounts,
-      // Set current to primary or first account if not set
+      // Set current to primary or first account if not set. `??` (not `||`)
+      // is critical: `||` treats `null` as falsy, which would silently
+      // overwrite the user's intentional unified ("All Inboxes") selection
+      // every time setAccounts fires — including on re-auth, add account,
+      // and remove account. Only undefined (never-set) should fall through.
       currentAccountId:
-        get().currentAccountId || accounts.find((a) => a.isPrimary)?.id || accounts[0]?.id || null,
+        get().currentAccountId ?? accounts.find((a) => a.isPrimary)?.id ?? accounts[0]?.id ?? null,
     }),
   addAccount: (account) =>
     set((state) => {
@@ -1654,12 +1658,17 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   markThreadAsRead: (threadId) => {
     const state = get();
-    const accountId = state.currentAccountId;
-    if (!accountId) return;
-
     const threadEmails = state.emails.filter((e) => e.threadId === threadId);
     const unreadEmails = threadEmails.filter((e) => e.labelIds?.includes("UNREAD"));
     if (unreadEmails.length === 0) return;
+
+    // Derive the target account from the thread itself, not from the global
+    // currentAccountId. In unified ("All Inboxes") mode currentAccountId is
+    // null, so the previous early-return broke the most fundamental
+    // interaction (opening an email in unified mode wouldn't mark it read on
+    // Gmail). The thread's emails always carry their owning accountId.
+    const accountId = state.currentAccountId ?? threadEmails[0]?.accountId;
+    if (!accountId) return;
 
     const unreadIds = new Set(unreadEmails.map((e) => e.id));
 
@@ -1685,9 +1694,12 @@ export const useAppStore = create<AppState>((set, get) => ({
       ),
     }));
 
-    // Fire-and-forget Gmail API calls
+    // Fire-and-forget Gmail API calls. Route each per its own account so a
+    // unified-view thread on account B uses B's credentials, not whatever
+    // happened to be selected globally.
     for (const email of unreadEmails) {
-      window.api.emails.setRead(email.id, accountId, true).catch((err: Error) => {
+      const emailAccountId = email.accountId ?? accountId;
+      window.api.emails.setRead(email.id, emailAccountId, true).catch((err: Error) => {
         console.error("Failed to mark email as read:", err);
       });
     }

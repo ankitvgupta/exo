@@ -717,10 +717,15 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
       const ALL_SENTINEL = "__all__";
       const getOrderedSplitIds = (): string[] => {
         const ids: string[] = ["__priority__", "__other__", "__archive-ready__"];
-        // Custom splits sorted by order
-        const customSplits = [...state.splits]
-          .filter((s) => s.accountId === currentAccountId)
-          .sort((a, b) => a.order - b.order);
+        // Custom splits sorted by order. In unified ("All Inboxes") mode
+        // include EVERY account's custom splits — SplitTabs renders them all
+        // so this keyboard cycle must match, or backtick/tilde would skip
+        // tabs that are visibly present.
+        const visibleSplits =
+          currentAccountId === null
+            ? state.splits
+            : state.splits.filter((s) => s.accountId === currentAccountId);
+        const customSplits = [...visibleSplits].sort((a, b) => a.order - b.order);
         for (const s of customSplits) ids.push(s.id);
         // Conditional virtual tabs (only when visible in SplitTabs)
         const hasLocalDrafts = state.localDrafts.some(

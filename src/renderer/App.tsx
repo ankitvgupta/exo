@@ -849,7 +849,53 @@ export default function App() {
           } else {
             initialAccountId = primaryAccount?.id ?? null;
           }
+
+          // Load cached emails for ALL accounts BEFORE flipping
+          // currentAccountId. Without this ordering, the first render in
+          // unified mode (initialAccountId === null) would fire with an
+          // empty/partial store.emails and the user would see "All Inboxes"
+          // showing only one account's emails for a beat (or until they
+          // manually refreshed). Fetching first means the very first paint
+          // already shows the full union across both accounts.
+          const allEmails: DashboardEmail[] = [];
+          const allSentEmails: DashboardEmail[] = [];
+          const accountResults = await Promise.all(
+            accountList.map((acc) =>
+              Promise.all([
+                window.api.sync.getEmails(acc.id),
+                window.api.sync.getSentEmails(acc.id),
+              ]),
+            ),
+          );
+          for (const [emailsResult, sentResult] of accountResults) {
+            if (emailsResult.success && emailsResult.data) {
+              allEmails.push(...emailsResult.data);
+            }
+            if (sentResult.success && sentResult.data) {
+              allSentEmails.push(...sentResult.data);
+            }
+          }
+          if (allEmails.length > 0) {
+            // Use addEmails (merge) instead of setEmails (replace) because
+            // progressive loading may already be adding emails to the store
+            // concurrently via sync:new-emails → bufferAddEmails. A full
+            // replace would wipe those progressive adds with a partial DB snapshot.
+            addEmails(allEmails);
+            // Backfill bodies in the background — emails were loaded without
+            // body content to avoid blocking the main thread on SQLite overflow reads.
+            prefetchEmailBodies(allEmails.map((e) => e.id)).catch((err) =>
+              console.error("Body prefetch failed:", err),
+            );
+          }
+          if (allSentEmails.length > 0) {
+            setSentEmails(allSentEmails);
+          }
+
+          // Now safe to flip currentAccountId — store.emails has every
+          // account's data, so useThreadedEmails will resolve the full
+          // union on first paint.
           setCurrentAccountId(initialAccountId);
+
           if (primaryAccount) {
             // Identify user in PostHog using primary email
             identifyUser(primaryAccount.email, {
@@ -859,40 +905,6 @@ export default function App() {
               account_count: fullAccounts.length,
             });
           }
-        }
-
-        // Load cached emails for all accounts (including expired ones)
-        // Fetch all accounts in parallel instead of sequentially
-        const allEmails: DashboardEmail[] = [];
-        const allSentEmails: DashboardEmail[] = [];
-        const accountResults = await Promise.all(
-          accountList.map((acc) =>
-            Promise.all([window.api.sync.getEmails(acc.id), window.api.sync.getSentEmails(acc.id)]),
-          ),
-        );
-        for (const [emailsResult, sentResult] of accountResults) {
-          if (emailsResult.success && emailsResult.data) {
-            allEmails.push(...emailsResult.data);
-          }
-          if (sentResult.success && sentResult.data) {
-            allSentEmails.push(...sentResult.data);
-          }
-        }
-        if (allEmails.length > 0) {
-          // Use addEmails (merge) instead of setEmails (replace) because
-          // progressive loading may already be adding emails to the store
-          // concurrently via sync:new-emails → bufferAddEmails. A full
-          // replace would wipe those progressive adds with a partial DB snapshot.
-          addEmails(allEmails);
-
-          // Backfill bodies in the background — emails were loaded without
-          // body content to avoid blocking the main thread on SQLite overflow reads.
-          prefetchEmailBodies(allEmails.map((e) => e.id)).catch((err) =>
-            console.error("Body prefetch failed:", err),
-          );
-        }
-        if (allSentEmails.length > 0) {
-          setSentEmails(allSentEmails);
         }
 
         // Load local drafts (new emails composed by agent or user)
