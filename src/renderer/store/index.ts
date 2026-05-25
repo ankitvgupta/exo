@@ -1805,9 +1805,20 @@ export function groupByThread(
   // Pre-compute timestamps once to avoid creating Date objects in every sort
   // comparison. With 1000+ emails and multiple sorts, this avoids tens of
   // thousands of redundant Date allocations per groupByThread call.
+  //
+  // CRITICAL: substitute `0` for any email whose `date` doesn't parse to a
+  // finite number. `new Date("").getTime()` (or any malformed date string)
+  // returns `NaN`, and a single NaN in the sort comparator
+  // `(a, b) => b.latestReceivedDate - a.latestReceivedDate` returns NaN — which
+  // JavaScript's Array.sort treats as "no preference," partially scrambling
+  // the surrounding region of the array. In unified ("All Inboxes") view a
+  // single email with a bad date string would push the freshest threads
+  // arbitrarily far down the list. Substituting 0 sends bad-date threads to
+  // the end of a DESC sort, where they cause no further damage.
   const dateCache = new Map<string, number>();
   for (const email of emails) {
-    dateCache.set(email.id, new Date(email.date).getTime());
+    const ts = new Date(email.date).getTime();
+    dateCache.set(email.id, Number.isFinite(ts) ? ts : 0);
   }
 
   // Group emails by threadId
