@@ -1639,7 +1639,15 @@ export class GmailClient {
     const unreadMessageIds: string[] = [];
     let latestHistoryId = startHistoryId;
 
-    // Fetch history for a single label, accumulating into the shared arrays above
+    // Fetch history for a single label, accumulating into the shared arrays above.
+    // Each `await gmail.users.history.list(...)` is async, but googleapis does
+    // ~50ms of synchronous CPU work per response (auth signing, JSON parse,
+    // schema validation). For an account whose history ID is far in the past,
+    // we paginate through dozens of pages with no actual changes, and the
+    // accumulated sync CPU + tight `do/while` is enough to starve other tasks
+    // on the main event loop for 7-9s — long enough for macOS to show the
+    // beachball. A setImmediate yield between pages keeps the loop healthy
+    // without measurably slowing the sync itself.
     const fetchLabel = async (labelId: string) => {
       let pageToken: string | undefined;
       do {
@@ -1707,6 +1715,11 @@ export class GmailClient {
           latestHistoryId = responseHistoryId;
         }
         pageToken = response.data.nextPageToken || undefined;
+        // Yield to the event loop every page so a long history walk doesn't
+        // monopolize the main thread (see comment on fetchLabel above).
+        if (pageToken) {
+          await new Promise<void>((resolve) => setImmediate(resolve));
+        }
       } while (pageToken);
     };
 

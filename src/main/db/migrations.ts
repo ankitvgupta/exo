@@ -296,6 +296,25 @@ export const NUMBERED_MIGRATIONS: Migration[] = [
       `);
     },
   },
+  {
+    version: 5,
+    name: "add_emails_merge_covering_index",
+    // buildMergeCache (db/index.ts) runs
+    //   SELECT thread_id, message_id, in_reply_to FROM emails WHERE account_id = ?
+    // every time the per-account merge cache is invalidated by saveEmail/
+    // deleteEmail. With ~8k inbox rows and the existing idx_emails_account index
+    // (which doesn't cover the SELECT columns), SQLite has to do row-by-row
+    // lookups in the main table — 190ms per rebuild, and the prefetch service
+    // can trigger 20+ rebuilds in one burst, causing 7-9s main-thread
+    // beachballs. A covering index lets the rebuild be served entirely from
+    // index pages, dropping it from ~190ms to single-digit ms.
+    up: (db) => {
+      db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_emails_merge_cover
+          ON emails(account_id, thread_id, message_id, in_reply_to);
+      `);
+    },
+  },
 ];
 
 function runNumberedMigrations(db: DatabaseInstance): void {
