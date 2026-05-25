@@ -168,6 +168,15 @@ function EmailListImpl() {
   // Read the live account id from the store inside each callback (not a ref
   // mirroring the deferred local var) so events for the new account aren't
   // dropped during the 1-frame useDeferredValue lag right after a switch.
+  //
+  // Idempotency note: window.api.snooze.on{Unsnoozed,Snoozed,ManuallyUnsnoozed}
+  // are ipcRenderer.on-style additive registrations. The [] deps array means
+  // this effect runs once per mount, and the cleanup calls removeAllListeners
+  // before re-mount — so we never accumulate duplicates in normal use. If
+  // EmailList is ever placed under a Suspense retry or StrictMode dev double-
+  // invoke, the cleanup runs first and re-registration is safe. Don't switch
+  // these to addEventListener-without-cleanup or to a non-empty deps array
+  // without updating removeAllListeners accordingly.
   useEffect(() => {
     window.api.snooze.onUnsnoozed((data: { emails: SnoozedEmail[] }) => {
       const liveId = useAppStore.getState().currentAccountId;
@@ -274,15 +283,34 @@ function EmailListImpl() {
   }, [recentlyRepliedThreadIds]);
 
   const handleArchiveAll = useCallback(() => {
-    if (!currentAccountId || threads.length === 0) return;
+    // Read the live account id + threads at click time so we don't act on
+    // the deferred snapshot. `currentAccountId` and `threads` in the render
+    // scope are useDeferredValue-wrapped — for the ~1 frame after an
+    // account switch they reflect the OLD account, but `currentSplitId`
+    // (which gates the Archive All button) is NOT deferred. Without this
+    // guard, a click in that window would archive the old account's
+    // threads while attributing the undo action to whatever the deferred
+    // value happened to be.
+    const liveState = useAppStore.getState();
+    const liveAccountId = liveState.currentAccountId;
+    if (!liveAccountId) return;
+    // Recompute the archive-ready threads against live data. This is the
+    // same filter `useSplitFilteredThreads` would produce for the live
+    // account; we keep this local to avoid coupling to that hook's shape.
+    const currentEmails = liveState.emails;
+    const liveArchiveReadyIds = liveState.archiveReadyThreadIds;
+    const liveThreadIds = new Set<string>();
+    for (const e of currentEmails) {
+      if (e.accountId !== liveAccountId) continue;
+      if (liveArchiveReadyIds.has(e.threadId)) liveThreadIds.add(e.threadId);
+    }
+    if (liveThreadIds.size === 0) return;
 
-    const archiveReadyThreadIds = threads.map((t) => t.threadId);
+    const archiveReadyThreadIds = Array.from(liveThreadIds);
     const allEmailIds: string[] = [];
     const allEmails: DashboardEmail[] = [];
-    const { emails: currentEmails } = useAppStore.getState();
-    for (const thread of threads) {
-      const threadEmails = currentEmails.filter((e) => e.threadId === thread.threadId);
-      for (const email of threadEmails) {
+    for (const email of currentEmails) {
+      if (liveThreadIds.has(email.threadId)) {
         allEmailIds.push(email.id);
         allEmails.push(email);
       }
@@ -294,14 +322,14 @@ function EmailListImpl() {
     addUndoAction({
       id: `archive-all-${Date.now()}`,
       type: "archive",
-      threadCount: threads.length,
-      accountId: currentAccountId,
+      threadCount: liveThreadIds.size,
+      accountId: liveAccountId,
       emails: allEmails,
       scheduledAt: Date.now(),
       delayMs: 5000,
       archiveReadyThreadIds,
     });
-  }, [currentAccountId, threads, removeEmails, setCurrentSplitId, addUndoAction]);
+  }, [removeEmails, setCurrentSplitId, addUndoAction]);
 
   const currentProgress = currentAccountId ? syncProgress[currentAccountId] : null;
   const isInitialSyncing = currentProgress && currentProgress.fetched < currentProgress.total;
