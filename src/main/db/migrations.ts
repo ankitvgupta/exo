@@ -298,6 +298,24 @@ export const NUMBERED_MIGRATIONS: Migration[] = [
   },
   {
     version: 5,
+    name: "drop_analyses_priority_column",
+    up: (db) => {
+      // Three-level priority (high/medium/low) was collapsed to a binary
+      // Priority/Other classification (issue #143). The column is unused
+      // after this release. Guard on table existence so fresh DBs (which
+      // get the final SCHEMA without the column) are a no-op here.
+      const tableExists = db
+        .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='analyses'")
+        .get();
+      if (!tableExists) return;
+      const cols = db.prepare("PRAGMA table_info(analyses)").all() as Array<{ name: string }>;
+      if (cols.some((c) => c.name === "priority")) {
+        db.exec("ALTER TABLE analyses DROP COLUMN priority");
+      }
+    },
+  },
+  {
+    version: 6,
     name: "add_emails_merge_covering_index",
     // buildMergeCache (db/index.ts) runs
     //   SELECT thread_id, message_id, in_reply_to FROM emails WHERE account_id = ?

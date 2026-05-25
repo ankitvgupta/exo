@@ -15,7 +15,6 @@
     },
     "analysis": {
       "needs_reply": true,
-      "priority": "high",
       "reason": "Direct request with a Tuesday deadline"
     }
   },

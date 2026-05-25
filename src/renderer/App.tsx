@@ -1003,7 +1003,6 @@ export default function App() {
     window.api.prefetch.onEmailAnalyzed((email: DashboardEmail) => {
       bufferUpdateEmails([{ emailId: email.id, changes: { analysis: email.analysis } }]);
       trackEvent("email_analyzed", {
-        priority: email.analysis?.priority ?? "unknown",
         needs_reply: email.analysis?.needsReply ?? false,
       });
     });

@@ -44,7 +44,6 @@ export type EmailSearchResult = z.infer<typeof EmailSearchResultSchema>;
 export const AnalysisResultSchema = z.object({
   needs_reply: z.boolean(),
   reason: z.string(),
-  priority: z.enum(["high", "medium", "low", "skip"]).optional(),
 });
 
 export type AnalysisResult = z.infer<typeof AnalysisResultSchema>;
@@ -78,7 +77,15 @@ export type ProcessingResult = z.infer<typeof ProcessingResultSchema>;
 // The JSON output format is appended automatically by EmailAnalyzer.
 export const DEFAULT_ANALYSIS_PROMPT = `Analyze this email and decide if it requires a reply from me.
 
-SKIP (no reply needed):
+NEEDS REPLY (Priority):
+- Direct questions addressed to me
+- Requests requiring my response or decision
+- Meeting coordination needing my input
+- Business/personal emails expecting a reply
+- Action items assigned to me
+- Anything that requires me to do external work (update a doc, send an invite, etc.)
+
+OTHER (no reply needed):
 - Newsletters, marketing, promotions
 - Automated notifications (GitHub, CI/CD, receipts, shipping, alerts)
 - Calendar invites (handled by calendar app)
@@ -86,24 +93,7 @@ SKIP (no reply needed):
 - FYI-only messages with no question or action
 - Transactional emails (order confirmations, password resets, etc.)
 - Social media notifications
-- Mailing list digests
-
-HIGH priority:
-- Urgent requests with deadlines
-- Direct questions from important contacts
-- Time-sensitive business decisions
-
-MEDIUM priority:
-- Direct questions addressed to me
-- Requests requiring my response
-- Meeting coordination needing my input
-- Business/personal emails expecting a reply
-- Action items assigned to me
-
-LOW priority:
-- Nice-to-reply but not urgent
-- Casual follow-ups
-- Informational threads where a brief acknowledgment would be polite`;
+- Mailing list digests`;
 
 // JSON format suffix appended automatically — never shown to the user
 export const ANALYSIS_JSON_FORMAT = `
@@ -111,8 +101,7 @@ export const ANALYSIS_JSON_FORMAT = `
 RESPOND WITH ONLY VALID JSON (no markdown, no code blocks):
 {
   "needs_reply": true or false,
-  "reason": "brief explanation",
-  "priority": "high" or "medium" or "low" (only if needs_reply is true)
+  "reason": "brief explanation"
 }`;
 
 // The user-editable draft prompt contains only the behavioral guidelines.
@@ -246,7 +235,6 @@ export type GeneratedDraftResponse = z.infer<typeof GeneratedDraftResponseSchema
 // Auto-draft configuration
 export const AutoDraftConfigSchema = z.object({
   enabled: z.boolean(),
-  priorities: z.array(z.enum(["high", "medium", "low"])),
 });
 
 export type AutoDraftConfig = z.infer<typeof AutoDraftConfigSchema>;
@@ -441,7 +429,6 @@ export type DashboardEmail = {
   analysis?: {
     needsReply: boolean;
     reason: string;
-    priority?: "high" | "medium" | "low" | "skip";
     analyzedAt: number;
   };
   draft?: {
