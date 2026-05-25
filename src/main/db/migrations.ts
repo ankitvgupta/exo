@@ -326,7 +326,16 @@ export const NUMBERED_MIGRATIONS: Migration[] = [
     // can trigger 20+ rebuilds in one burst, causing 7-9s main-thread
     // beachballs. A covering index lets the rebuild be served entirely from
     // index pages, dropping it from ~190ms to single-digit ms.
+    //
+    // Guard on table existence: migrations run BEFORE the SCHEMA `CREATE TABLE`
+    // statements in initDatabase, so on a fresh DB the `emails` table won't
+    // exist yet. SCHEMA itself includes this index (see schema.ts), so fresh
+    // DBs are still covered — this migration only matters for existing DBs.
     up: (db) => {
+      const tableExists = db
+        .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='emails'")
+        .get();
+      if (!tableExists) return;
       db.exec(`
         CREATE INDEX IF NOT EXISTS idx_emails_merge_cover
           ON emails(account_id, thread_id, message_id, in_reply_to);
