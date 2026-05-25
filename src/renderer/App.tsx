@@ -1424,7 +1424,19 @@ export default function App() {
     queryFn: async () => {
       const result = await window.api.gmail.fetchUnread(100, currentAccountId ?? undefined);
       if (result.success) {
-        setEmails(result.data);
+        // setEmails replaces the entire store. Per-account fetch + naive replace
+        // wipes other accounts' emails AND can replay a partial DB snapshot if
+        // sync is mid-flight, leaving the store with only the rows that happened
+        // to be in DB at fetch time (e.g. a fresh boot where sync delivered N
+        // new emails via sync:new-emails events but the DB write hadn't caught
+        // up with all of them yet). Apply the same per-account replace pattern
+        // handleRefresh uses (App.tsx:1497): preserve other accounts' emails,
+        // replace just the current account's.
+        const fetchAccountId = currentAccountId;
+        const otherAccountEmails = fetchAccountId
+          ? useAppStore.getState().emails.filter((e) => e.accountId !== fetchAccountId)
+          : [];
+        setEmails([...otherAccountEmails, ...result.data]);
         prefetchEmailBodies(result.data.map((e: DashboardEmail) => e.id)).catch(console.error);
         return result.data;
       }
