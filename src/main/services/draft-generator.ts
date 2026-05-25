@@ -153,7 +153,6 @@ ${calendaringContext}
 ---
 ANALYSIS (for context):
 Reason for reply: ${analysis.reason}
-Priority: ${analysis.priority || "medium"}
 
 ---
 ORIGINAL EMAIL:

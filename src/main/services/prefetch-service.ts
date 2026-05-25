@@ -48,7 +48,6 @@ async function getNotifyArchiveReadyFn(): Promise<
   return notifyArchiveReady;
 }
 
-type _PrefetchPriority = "high" | "medium" | "low";
 type PrefetchStatus = "idle" | "running" | "error";
 
 interface PrefetchTask {
@@ -63,7 +62,6 @@ export interface AgentDraftItem {
   emailId: string;
   subject: string;
   from: string;
-  priority: string;
   status: "queued" | "running" | "completed" | "failed";
   startedAt?: number;
   completedAt?: number;
@@ -92,8 +90,8 @@ export interface PrefetchProgress {
 }
 
 /**
- * Background service for pre-fetching sender profiles and auto-generating drafts
- * Prioritizes high priority emails, then medium, then low
+ * Background service for pre-fetching sender profiles and auto-generating drafts.
+ * Prioritizes priority (needs-reply) emails over other emails.
  */
 class PrefetchService {
   private isRunning = false;
@@ -228,30 +226,20 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
   }
 
   /**
-   * Queue sender profile prefetch for specific emails
+   * Queue sender profile prefetch for specific emails.
+   * Only prefetches for priority (needs-reply) emails.
    */
   queueSenderProfiles(emails: DashboardEmail[]): void {
-    // Sort by priority: high first, then medium
-    const priorityOrder: Record<string, number> = { high: 1, medium: 2, low: 3 };
+    for (const email of emails) {
+      if (!email.analysis?.needsReply) continue;
 
-    const sortedEmails = [...emails].sort((a, b) => {
-      const aPriority = priorityOrder[a.analysis?.priority || "low"] || 3;
-      const bPriority = priorityOrder[b.analysis?.priority || "low"] || 3;
-      return aPriority - bPriority;
-    });
-
-    for (const email of sortedEmails) {
       const senderEmail = this.extractSenderEmail(email.from);
       if (this.processedSenderProfiles.has(senderEmail)) continue;
-
-      // Only prefetch for high and medium priority
-      const priority = email.analysis?.priority;
-      if (priority !== "high" && priority !== "medium") continue;
 
       this.queue.push({
         emailId: email.id,
         type: "sender-profile",
-        priority: priority === "high" ? 10 : 20,
+        priority: 10,
       });
     }
 
@@ -305,15 +293,15 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
       log.info("[Prefetch] No unanalyzed inbox emails to process");
     }
 
-    // Queue sender-profiles for ALL analyzed inbox emails in priority order
-    // Priority: high(10) > medium(20) > low(30) > no-reply(40)
-    // Deduplicate by sender email to avoid redundant API calls
+    // Queue sender-profiles for analyzed inbox emails — priority (needs-reply)
+    // emails first, other emails after. Deduplicate by sender email to avoid
+    // redundant API calls. Onboarding-skipped emails (analysed needs_reply=false
+    // with reason "Pre-existing email before app setup") are bulk-marked old
+    // emails and still benefit from a sender profile when the user opens them,
+    // but we deprioritise them behind real inbox traffic.
     if (config.enableSenderLookup ?? true) {
       const needsSenderProfile = inboxEmails.filter((e) => {
         if (!e.analysis) return false; // Not analyzed yet
-        // Onboarding-skipped emails have priority="skip" — bulk-marked old emails
-        // that don't need any prefetching.
-        if (e.analysis.priority === "skip") return false;
         const senderEmail = this.extractSenderEmail(e.from);
         if (this.processedSenderProfiles.has(senderEmail)) return false;
         return true;
@@ -326,21 +314,8 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
         for (const email of needsSenderProfile) {
           const senderEmail = this.extractSenderEmail(email.from);
 
-          // Assign priority based on analysis result
-          let priority = 40; // Default: no reply needed
-          if (email.analysis?.needsReply) {
-            switch (email.analysis.priority) {
-              case "high":
-                priority = 10;
-                break;
-              case "medium":
-                priority = 20;
-                break;
-              case "low":
-                priority = 30;
-                break;
-            }
-          }
+          // Priority (needs-reply) emails are looked up before other emails.
+          const queuePriority = email.analysis?.needsReply ? 10 : 30;
 
           // Check if already queued for this sender
           if (this.pendingSenderLookups.has(senderEmail)) {
@@ -355,7 +330,7 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
           this.queue.push({
             emailId: email.id,
             type: "sender-profile",
-            priority,
+            priority: queuePriority,
           });
           queuedCount++;
         }
@@ -368,7 +343,7 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
     }
 
     // Queue agent-mode drafts for analyzed emails that need reply and don't have drafts.
-    // Respects autoDraft config: skip entirely if disabled, filter by priority if configured.
+    // Respects autoDraft config: skip entirely if disabled.
     // Deduplicate by thread — only draft for the newest email per thread, since one
     // draft reply per thread is all that's needed.
     const autoDraft = config.autoDraft;
@@ -380,14 +355,11 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
         log.info("[Prefetch] Auto-drafting disabled in config — skipping agent drafts");
       if (isTestMode || isDemoMode) log.info("[Prefetch] Test/demo mode — skipping agent drafts");
     }
-    const allowedPriorities = autoDraft?.priorities ?? ["high", "medium", "low"];
     const candidateEmails = skipAgentDrafts
       ? []
       : inboxEmails.filter(
           (e) =>
             e.analysis?.needsReply &&
-            e.analysis?.priority !== "skip" &&
-            allowedPriorities.includes(e.analysis?.priority || "low") &&
             !this.processedDrafts.has(e.id) &&
             !this.queue.some((t) => t.type === "agent-draft" && t.emailId === e.id) &&
             !this.agentDraftItems.has(e.id) &&
@@ -428,12 +400,10 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
     const needsDraft = Array.from(newestPerThread.values());
     if (needsDraft.length > 0) {
       for (const email of needsDraft) {
-        const priority =
-          email.analysis?.priority === "high" ? 5 : email.analysis?.priority === "medium" ? 15 : 25;
         this.queue.push({
           emailId: email.id,
           type: "agent-draft",
-          priority,
+          priority: 5,
         });
         this.processedDraftThreads.add(email.threadId);
       }
@@ -737,27 +707,14 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
       this.processedAnalysis.add(emailId);
       const config = getConfig();
       if (config.enableSenderLookup ?? true) {
-        let priority = 40;
-        if (email.analysis.needsReply) {
-          switch (email.analysis.priority) {
-            case "high":
-              priority = 10;
-              break;
-            case "medium":
-              priority = 20;
-              break;
-            case "low":
-              priority = 30;
-              break;
-          }
-        }
+        const queuePriority = email.analysis.needsReply ? 10 : 30;
         log.info(
-          `[Prefetch] Email ${emailId} already analyzed, queueing sender-profile (priority=${priority})`,
+          `[Prefetch] Email ${emailId} already analyzed, queueing sender-profile (priority=${queuePriority})`,
         );
         this.queue.push({
           emailId,
           type: "sender-profile",
-          priority,
+          priority: queuePriority,
         });
       }
       return;
@@ -786,13 +743,11 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
       const userEmail = account?.email;
 
       const result = await analyzer.analyze(emailForAnalysis, userEmail, email.accountId);
-      saveAnalysis(emailId, result.needs_reply, result.reason, result.priority);
+      saveAnalysis(emailId, result.needs_reply, result.reason);
       this.processedAnalysis.add(emailId);
       this.processedCounts.analysis++;
 
-      log.info(
-        `[Prefetch] Analyzed ${emailId}: ${result.priority} priority, needs_reply=${result.needs_reply}`,
-      );
+      log.info(`[Prefetch] Analyzed ${emailId}: needs_reply=${result.needs_reply}`);
 
       // Notify renderer that this email was analyzed
       const notify = await getNotifyFn();
@@ -801,29 +756,14 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
       // Queue follow-up tasks based on analysis result
       const config = getConfig();
 
-      // Queue sender profile for ALL emails (priority order: high > medium > low > no-reply)
-      // Deduplicate by sender email to avoid redundant API calls
+      // Queue sender profile for the email. Priority (needs-reply) emails run
+      // before other emails; deduplicate by sender to avoid redundant API calls.
       if (config.enableSenderLookup ?? true) {
         const senderEmail = this.extractSenderEmail(email.from);
 
-        // Skip if already processed
         if (!this.processedSenderProfiles.has(senderEmail)) {
-          let priority = 40; // Default: no reply needed
-          if (result.needs_reply) {
-            switch (result.priority) {
-              case "high":
-                priority = 10;
-                break;
-              case "medium":
-                priority = 20;
-                break;
-              case "low":
-                priority = 30;
-                break;
-            }
-          }
+          const queuePriority = result.needs_reply ? 10 : 30;
 
-          // Check if already queued for this sender
           if (this.pendingSenderLookups.has(senderEmail)) {
             // Already queued - just add this email to the waiting list
             this.pendingSenderLookups.get(senderEmail)!.push(emailId);
@@ -834,43 +774,38 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
             // New sender - queue it
             this.pendingSenderLookups.set(senderEmail, [emailId]);
             log.info(
-              `[Prefetch] Queueing sender-profile for ${emailId} (sender=${senderEmail}, priority=${priority})`,
+              `[Prefetch] Queueing sender-profile for ${emailId} (sender=${senderEmail}, priority=${queuePriority})`,
             );
             this.queue.push({
               emailId,
               type: "sender-profile",
-              priority,
+              priority: queuePriority,
             });
           }
         }
       }
 
       if (result.needs_reply && (!email.labelIds || email.labelIds.includes("INBOX"))) {
-        // Queue agent-mode draft only for inbox emails (skip archived/trashed)
-        // Treat NULL labelIds as inbox (demo mode emails have no labels)
-        // Respect autoDraft config: skip if disabled, filter by priority
+        // Queue agent-mode draft only for inbox emails (skip archived/trashed).
+        // Treat NULL labelIds as inbox (demo mode emails have no labels).
+        // Respect autoDraft config: skip if disabled.
         // Deduplicate by thread: only queue the most recent email per thread,
         // since the agent drafting system operates on the whole thread.
         const autoDraftConfig = config.autoDraft;
         const autoDraftAllowed = autoDraftConfig?.enabled !== false;
-        const autoDraftPriorities = autoDraftConfig?.priorities ?? ["high", "medium", "low"];
         const isTest = process.env.EXO_TEST_MODE === "true";
         const isDemo = process.env.EXO_DEMO_MODE === "true";
         if (
           autoDraftAllowed &&
           !isTest &&
           !isDemo &&
-          result.priority !== "skip" &&
-          autoDraftPriorities.includes(result.priority || "low") &&
           !this.processedDrafts.has(emailId) &&
           !this.isThreadAlreadyQueuedForDraft(email.threadId)
         ) {
-          const draftPriority =
-            result.priority === "high" ? 5 : result.priority === "medium" ? 15 : 25;
           this.queue.push({
             emailId,
             type: "agent-draft",
-            priority: draftPriority,
+            priority: 5,
           });
           this.processedDraftThreads.add(email.threadId);
         }
@@ -1027,7 +962,6 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
       emailId: task.emailId,
       subject: email.subject || "(no subject)",
       from: email.from || "",
-      priority: email.analysis?.priority || "low",
       status: "queued",
     });
 
@@ -1118,9 +1052,7 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
       this.forceQueuedDrafts.delete(emailId);
     }
 
-    log.info(
-      `[Prefetch] Starting agent draft for email ${emailId} (priority=${email.analysis?.priority ?? "unknown"})`,
-    );
+    log.info(`[Prefetch] Starting agent draft for email ${emailId}`);
 
     const taskId = buildAutoDraftTaskId(emailId);
 
@@ -1321,7 +1253,6 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
           emailId: t.emailId,
           subject: email?.subject || "(no subject)",
           from: email?.from || "",
-          priority: email?.analysis?.priority || "low",
           status: "queued" as const,
         };
       });
@@ -1472,7 +1403,6 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
       emailId,
       subject: "",
       from: "",
-      priority: "",
       status: "running",
       startedAt: Date.now(),
     });

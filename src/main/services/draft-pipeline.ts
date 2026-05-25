@@ -145,16 +145,10 @@ export async function generateDraftForEmail(
       analysisConfig.provider,
     );
     const analysisResult = await analyzer.analyze(emailForDraft);
-    saveAnalysis(
-      emailId,
-      analysisResult.needs_reply,
-      analysisResult.reason,
-      analysisResult.priority,
-    );
+    saveAnalysis(emailId, analysisResult.needs_reply, analysisResult.reason);
     email.analysis = {
       needsReply: analysisResult.needs_reply,
       reason: analysisResult.reason,
-      priority: analysisResult.priority,
       analyzedAt: Date.now(),
     };
   }
@@ -177,7 +171,6 @@ export async function generateDraftForEmail(
   const analysis: AnalysisResult = {
     needs_reply: email.analysis.needsReply,
     reason: email.analysis.reason,
-    priority: email.analysis.priority,
   };
 
   const enableSenderLookup = config.enableSenderLookup ?? true;

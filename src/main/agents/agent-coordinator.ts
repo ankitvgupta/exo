@@ -65,8 +65,8 @@ export class AgentCoordinator {
     getInboxEmails: (accountId?: string) => db.getInboxEmails(accountId),
     getAllEmails: (accountId?: string) => db.getAllEmails(accountId),
     searchEmails: (query: string, options?: db.SearchOptions) => db.searchEmails(query, options),
-    saveAnalysis: (emailId: string, needsReply: boolean, reason: string, priority?: string) =>
-      db.saveAnalysis(emailId, needsReply, reason, priority),
+    saveAnalysis: (emailId: string, needsReply: boolean, reason: string) =>
+      db.saveAnalysis(emailId, needsReply, reason),
     saveDraft: (
       emailId: string,
       draftBody: string,

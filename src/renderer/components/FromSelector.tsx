@@ -14,11 +14,24 @@ interface FromSelectorProps {
   onChange: (formatted: string) => void;
   /** Used as the display-name fallback when an alias has none of its own. */
   fallbackDisplayName?: string;
+  /**
+   * Account email to fall back to when there are no aliases (or only one).
+   * Required when alwaysShow is true.
+   */
+  accountEmail?: string;
+  /**
+   * Force the From line to render even when the account has fewer than 2
+   * aliases — shows as a non-interactive label so the user can see at a
+   * glance which account a reply is going from. Used in unified inbox view.
+   */
+  alwaysShow?: boolean;
 }
 
 /**
  * Custom dropdown for selecting which send-as address to use.
- * Only renders when the account has 2+ aliases.
+ * Only renders when the account has 2+ aliases, unless `alwaysShow` is true
+ * (in which case it renders as a static "From: <email>" label for accounts
+ * with one or zero aliases).
  * Uses a custom popover instead of native <select> to avoid OS chrome.
  */
 export function FromSelector({
@@ -26,11 +39,26 @@ export function FromSelector({
   selected,
   onChange,
   fallbackDisplayName,
+  accountEmail,
+  alwaysShow = false,
 }: FromSelectorProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
-  if (aliases.length < 2) return null;
+  if (aliases.length < 2) {
+    if (!alwaysShow) return null;
+    // Static display — confirms which account this is sending from.
+    const display = aliases[0]?.email ?? accountEmail;
+    if (!display) return null;
+    return (
+      <div className="flex items-center gap-2 py-1.5 border-b border-gray-200 dark:border-gray-700/50">
+        <label className="w-10 text-sm text-gray-500 dark:text-gray-400 flex-shrink-0">From</label>
+        <span className="min-w-0 text-sm text-gray-900 dark:text-gray-100 truncate pl-1.5">
+          {display}
+        </span>
+      </div>
+    );
+  }
 
   const selectedBare = selected ? extractEmail(selected).toLowerCase() : "";
   const currentAlias =

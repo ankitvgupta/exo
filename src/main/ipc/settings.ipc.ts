@@ -69,7 +69,6 @@ function getStore(): Store<{ config: Config }> {
           showExoBranding: true,
           autoDraft: {
             enabled: true,
-            priorities: ["high", "medium", "low"],
           },
           // posthog intentionally omitted from defaults — getConfig() applies
           // a version-aware default so pre-existing installs (configVersion < 2)
@@ -92,12 +91,10 @@ export function getConfig(): Config {
     getStore().set("config", config);
   }
 
-  // One-time migration: include "low" in autoDraft priorities for existing users
-  // Gated on configVersion so it only runs once — users can later remove "low" if desired
+  // configVersion 1 baseline — pre-existing per-priority autoDraft configs are
+  // no longer meaningful (issue #143: collapsed to binary Priority/Other) but we
+  // keep the version bump so subsequent migrations key off the same scheme.
   if ((config.configVersion ?? 0) < 1) {
-    if (config.autoDraft?.priorities && !config.autoDraft.priorities.includes("low")) {
-      config.autoDraft.priorities.push("low");
-    }
     config.configVersion = 1;
     getStore().set("config", config);
   }

@@ -65,7 +65,6 @@ CREATE TABLE IF NOT EXISTS analyses (
   email_id TEXT PRIMARY KEY REFERENCES emails(id),
   needs_reply INTEGER NOT NULL,
   reason TEXT NOT NULL,
-  priority TEXT,
   analyzed_at INTEGER NOT NULL
 );
 
