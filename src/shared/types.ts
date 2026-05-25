@@ -394,6 +394,11 @@ export const ConfigSchema = z.object({
     })
     .optional(),
   keyboardBindings: z.enum(["superhuman", "gmail"]).default("superhuman"),
+  // Persists the last-selected inbox view across restarts.
+  //   string id  → that specific account
+  //   null       → unified "All Inboxes" view
+  //   undefined  → first run; renderer falls back to primary account
+  lastSelectedAccountId: z.string().nullable().optional(),
   openclaw: z
     .object({
       enabled: z.boolean().default(false),

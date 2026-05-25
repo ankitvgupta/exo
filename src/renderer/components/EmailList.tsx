@@ -70,6 +70,11 @@ function EmailListImpl() {
   const unsnoozedReturnTimes = useAppStore((s) => s.unsnoozedReturnTimes);
   const selectedThreadId = useAppStore((s) => s.selectedThreadId);
   const splits = useAppStore((s) => s.splits);
+  const accounts = useAppStore((s) => s.accounts);
+  // Actions are read once via getState() — they're stable function refs so we
+  // don't want a no-selector useAppStore() call subscribing this component to
+  // every store change (the perf regression that caused the original switch
+  // beachball — see PR #149 for context).
   const {
     setSelectedEmailId,
     setSelectedThreadId,
@@ -95,6 +100,19 @@ function EmailListImpl() {
   // chrome (header / split tabs) with the new account immediately, and
   // updates the thread list in a separate concurrent pass.
   const threads = useDeferredValue(_sft.threads);
+
+  // In unified ("All Inboxes") mode we fan out per-account loaders + listeners.
+  // The list of account IDs to load is recomputed each render but its identity
+  // is stable enough — useEffects below depend on accountIdsKey (a join), not
+  // the array itself, to avoid re-firing on every render.
+  const isUnifiedView = currentAccountId === null;
+  const targetAccountIds = useMemo(
+    () => (isUnifiedView ? accounts.map((a) => a.id) : currentAccountId ? [currentAccountId] : []),
+    [isUnifiedView, accounts, currentAccountId],
+  );
+  // Sort before joining so the key doesn't churn just because accounts were
+  // reordered (e.g. primary flag toggled, new account inserted).
+  const accountIdsKey = [...targetAccountIds].sort().join(",");
 
   const isArchiveReadyView = currentSplitId === "__archive-ready__";
   const isDraftsView = currentSplitId === "__drafts__";
@@ -146,62 +164,79 @@ function EmailListImpl() {
     [openCompose, setSelectedEmailId, setSelectedThreadId, setSelectedDraftId, setViewMode],
   );
 
-  // Load snoozed emails on mount / account switch.
-  // Also processes any snoozes that expired while the app was closed.
+  // Load snoozed emails on mount / account switch. Fans out across accounts
+  // in unified mode. Also processes any snoozes that expired while the app
+  // was closed.
   useEffect(() => {
-    if (!currentAccountId) return;
-    window.api.snooze
-      .list(currentAccountId)
-      .then((response: { success: boolean; data?: SnoozedEmail[]; expired?: SnoozedEmail[] }) => {
-        if (response.success && response.data) {
-          setSnoozedThreads(response.data);
+    if (targetAccountIds.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      const responses = await Promise.all(
+        targetAccountIds.map((aid) =>
+          window.api.snooze
+            .list(aid)
+            .then((r: { success: boolean; data?: SnoozedEmail[]; expired?: SnoozedEmail[] }) => r)
+            .catch(() => ({ success: false }) as { success: boolean }),
+        ),
+      );
+      if (cancelled) return;
+      const merged: SnoozedEmail[] = [];
+      const expired: SnoozedEmail[] = [];
+      for (const response of responses) {
+        const r = response as {
+          success: boolean;
+          data?: SnoozedEmail[];
+          expired?: SnoozedEmail[];
+        };
+        if (r.success && r.data) merged.push(...r.data);
+        if (r.expired) expired.push(...r.expired);
+      }
+      setSnoozedThreads(merged);
+      if (expired.length > 0) {
+        const store = useAppStore.getState();
+        for (const email of expired) {
+          store.handleThreadUnsnoozed(email.threadId, email.snoozeUntil);
         }
-        // Process snoozes that expired while the app was closed —
-        // adds them to recentlyUnsnoozedThreadIds so they sort correctly
-        if (response.expired && response.expired.length > 0) {
-          const store = useAppStore.getState();
-          for (const email of response.expired) {
-            store.handleThreadUnsnoozed(email.threadId, email.snoozeUntil);
-          }
-        }
-      });
-    // setSnoozedThreads is read once via useAppStore.getState() above — it's
-    // a stable function ref, so listing it as a dep would only mislead a
-    // future reader into thinking the effect can re-run because of it.
-  }, [currentAccountId]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [accountIdsKey, setSnoozedThreads]);
 
-  // Listen for snooze events from main process, filtered by current account.
-  // Read the live account id from the store inside each callback (not a ref
-  // mirroring the deferred local var) so events for the new account aren't
-  // dropped during the 1-frame useDeferredValue lag right after a switch.
+  // Listen for snooze events from main process. In single-account mode we
+  // accept only the active account; in unified mode we accept any account
+  // present in the current view (targetAccountIds). Uses refs so we don't
+  // re-register listeners on every account switch. Ref is updated in a
+  // useEffect (not during render) so concurrent renders + StrictMode don't
+  // leave the ref pointing at a discarded set.
   //
   // Idempotency note: window.api.snooze.on{Unsnoozed,Snoozed,ManuallyUnsnoozed}
   // are ipcRenderer.on-style additive registrations. The [] deps array means
   // this effect runs once per mount, and the cleanup calls removeAllListeners
-  // before re-mount — so we never accumulate duplicates in normal use. If
-  // EmailList is ever placed under a Suspense retry or StrictMode dev double-
-  // invoke, the cleanup runs first and re-registration is safe. Don't switch
-  // these to addEventListener-without-cleanup or to a non-empty deps array
-  // without updating removeAllListeners accordingly.
+  // before re-mount — so we never accumulate duplicates in normal use.
+  const targetAccountIdsRef = useRef<Set<string>>(new Set(targetAccountIds));
+  useEffect(() => {
+    targetAccountIdsRef.current = new Set(targetAccountIds);
+  }, [accountIdsKey, targetAccountIds]);
+  const acceptAccount = (aid: string) => targetAccountIdsRef.current.has(aid);
+
   useEffect(() => {
     window.api.snooze.onUnsnoozed((data: { emails: SnoozedEmail[] }) => {
-      const liveId = useAppStore.getState().currentAccountId;
       for (const email of data.emails) {
-        if (email.accountId === liveId) {
+        if (acceptAccount(email.accountId)) {
           useAppStore.getState().handleThreadUnsnoozed(email.threadId, email.snoozeUntil);
         }
       }
     });
     window.api.snooze.onSnoozed((data: { snoozedEmail: SnoozedEmail }) => {
-      const liveId = useAppStore.getState().currentAccountId;
-      if (data.snoozedEmail.accountId === liveId) {
+      if (acceptAccount(data.snoozedEmail.accountId)) {
         useAppStore.getState().addSnoozedThread(data.snoozedEmail);
       }
     });
     window.api.snooze.onManuallyUnsnoozed(
       (data: { threadId: string; accountId: string; snoozeUntil: number }) => {
-        const liveId = useAppStore.getState().currentAccountId;
-        if (data.accountId === liveId) {
+        if (acceptAccount(data.accountId)) {
           useAppStore.getState().handleThreadUnsnoozed(data.threadId, data.snoozeUntil);
         }
       },
@@ -211,33 +246,45 @@ function EmailListImpl() {
     };
   }, []);
 
-  // Load archive-ready threads on mount / account switch
+  // Load archive-ready threads on mount / account switch. Fans out across
+  // accounts in unified mode.
   useEffect(() => {
-    if (!currentAccountId) return;
-    window.api.archiveReady
-      .getThreads(currentAccountId)
-      .then((result: { success: boolean; data?: Array<{ threadId: string; reason: string }> }) => {
-        if (result.success && result.data) {
-          const items = result.data.map((t: { threadId: string; reason: string }) => ({
-            threadId: t.threadId,
-            reason: t.reason,
-          }));
-          setArchiveReadyThreads(items);
-        }
-      });
-    // setArchiveReadyThreads is a stable getState() ref — see comment on
-    // the snooze effect above.
-  }, [currentAccountId]);
+    if (targetAccountIds.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      const responses = await Promise.all(
+        targetAccountIds.map((aid) =>
+          window.api.archiveReady
+            .getThreads(aid)
+            .then(
+              (r: { success: boolean; data?: Array<{ threadId: string; reason: string }> }) => r,
+            )
+            .catch(
+              () =>
+                ({ success: false }) as {
+                  success: boolean;
+                  data?: Array<{ threadId: string; reason: string }>;
+                },
+            ),
+        ),
+      );
+      if (cancelled) return;
+      const merged: Array<{ threadId: string; reason: string }> = [];
+      for (const r of responses) {
+        if (r.success && r.data) merged.push(...r.data);
+      }
+      setArchiveReadyThreads(merged);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [accountIdsKey, setArchiveReadyThreads]);
 
-  // Listen for new archive-ready results from background prefetch.
-  // Read live account id from the store in the callback (same reasoning as
-  // the snooze listeners above — avoids dropping events for the new account
-  // during the useDeferredValue lag right after an account switch).
+  // Listen for new archive-ready results from background prefetch
   useEffect(() => {
     window.api.archiveReady.onResult(
       (data: { threadId: string; accountId: string; isReady: boolean; reason: string }) => {
-        const liveId = useAppStore.getState().currentAccountId;
-        if (data.accountId !== liveId) return;
+        if (!acceptAccount(data.accountId)) return;
         if (data.isReady) {
           // Add single thread to the set
           useAppStore.setState((state) => {
@@ -292,46 +339,63 @@ function EmailListImpl() {
 
   const handleArchiveAll = useCallback(() => {
     // Use the *displayed* threads (deferred, with `excludeExclusive` already
-    // applied by useSplitFilteredThreads) and the matching deferred
-    // currentAccountId. They're rendered together so they always reflect
-    // the same account snapshot — archiving exactly what the user sees,
-    // attributed to the same account.
+    // applied by useSplitFilteredThreads). They're rendered together so they
+    // always reflect the same snapshot — archiving exactly what the user sees.
     //
     // Don't substitute live values here: an earlier attempt rebuilt the
     // set from `state.emails` + `state.archiveReadyThreadIds` to dodge the
     // 1-frame useDeferredValue lag, but that bypassed `excludeExclusive`
     // and would have silently archived threads that live in an exclusive
     // split and aren't visible in the Archive Ready view.
-    if (!currentAccountId || threads.length === 0) return;
+    //
+    // In unified mode currentAccountId is null and that's fine — each
+    // thread carries its own accountId for per-account undo grouping below.
+    if (threads.length === 0) return;
 
-    const archiveReadyThreadIds = threads.map((t) => t.threadId);
-    const allEmailIds: string[] = [];
-    const allEmails: DashboardEmail[] = [];
+    // Group threads by their owning account so each undo entry stays scoped
+    // to a single account (the undo IPC path is per-account).
     const { emails: currentEmails } = useAppStore.getState();
+    const byAccount = new Map<string, { threads: EmailThread[]; emails: DashboardEmail[] }>();
     for (const thread of threads) {
-      const threadEmails = currentEmails.filter((e) => e.threadId === thread.threadId);
-      for (const email of threadEmails) {
-        allEmailIds.push(email.id);
-        allEmails.push(email);
+      const aid = thread.latestEmail.accountId;
+      if (!aid) continue;
+      const entry = byAccount.get(aid) ?? { threads: [], emails: [] };
+      entry.threads.push(thread);
+      for (const email of currentEmails.filter((e) => e.threadId === thread.threadId)) {
+        entry.emails.push(email);
       }
+      byAccount.set(aid, entry);
     }
 
+    if (byAccount.size === 0) return;
+
+    const allEmailIds = Array.from(byAccount.values()).flatMap((g) => g.emails.map((e) => e.id));
     removeEmails(allEmailIds);
     setCurrentSplitId("__priority__");
 
-    addUndoAction({
-      id: `archive-all-${Date.now()}`,
-      type: "archive",
-      threadCount: threads.length,
-      accountId: currentAccountId,
-      emails: allEmails,
-      scheduledAt: Date.now(),
-      delayMs: 5000,
-      archiveReadyThreadIds,
-    });
-  }, [currentAccountId, threads, removeEmails, setCurrentSplitId, addUndoAction]);
+    let i = 0;
+    for (const [accountId, group] of byAccount) {
+      addUndoAction({
+        id: `archive-all-${Date.now()}-${i++}`,
+        type: "archive",
+        threadCount: group.threads.length,
+        accountId,
+        emails: group.emails,
+        scheduledAt: Date.now(),
+        delayMs: 5000,
+        archiveReadyThreadIds: group.threads.map((t) => t.threadId),
+      });
+    }
+  }, [threads, removeEmails, setCurrentSplitId, addUndoAction]);
 
-  const currentProgress = currentAccountId ? syncProgress[currentAccountId] : null;
+  // In unified mode (currentAccountId === null) surface the first account
+  // that's still mid-initial-sync, so the progress banner doesn't go invisible
+  // when the user is in "All Inboxes" view during a fresh background sync.
+  const currentProgress = currentAccountId
+    ? syncProgress[currentAccountId]
+    : isUnifiedView
+      ? (Object.values(syncProgress).find((p) => p && p.fetched < p.total) ?? null)
+      : null;
   const isInitialSyncing = currentProgress && currentProgress.fetched < currentProgress.total;
 
   const isPrefetching = prefetchProgress.status === "running";
