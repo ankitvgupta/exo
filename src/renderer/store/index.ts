@@ -881,6 +881,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   setSyncStatus: (accountId, status) =>
     set((state) => {
+      // Skip no-op transitions. The main process flips syncing/idle for
+      // every periodic sync tick + every sync.now call across every
+      // account, so over a long session this fires hundreds of times per
+      // minute. Without this guard, each emit replaces the syncStatuses
+      // Map reference and notifies every subscriber.
+      if (state.syncStatuses.get(accountId) === status) return state;
       const newStatuses = new Map(state.syncStatuses);
       newStatuses.set(accountId, status);
       return { syncStatuses: newStatuses };

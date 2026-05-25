@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback, useMemo } from "react";
+import React, { useEffect, useRef, useCallback, useMemo, useDeferredValue, memo } from "react";
 import type { InboxDensity, SnoozedEmail, DashboardEmail, LocalDraft } from "../../shared/types";
 import { useAppStore, useSplitFilteredThreads, type EmailThread } from "../store";
 import { EmailRow } from "./EmailRow";
@@ -27,41 +27,68 @@ const densityLabels: Record<InboxDensity, string> = {
   compact: "Compact",
 };
 
-export function EmailList() {
-  const {
-    selectedEmailId: _selectedEmailId,
-    setSelectedEmailId,
-    setSelectedThreadId,
-    setViewMode,
-    isLoading,
-    prefetchProgress,
-    syncProgress,
-    inboxDensity,
-    setInboxDensity,
-    snoozedThreads,
-    setSnoozedThreads,
-    currentAccountId,
-    selectedThreadIds,
-    toggleThreadSelected,
-    setThreadsSelected,
-    clearSelectedThreads,
-    selectAllThreads,
-    currentSplitId,
-    setCurrentSplitId,
-    setArchiveReadyThreads,
-    removeEmails,
-    addUndoAction,
-    selectedDraftId,
-    setSelectedDraftId,
-    removeRecentlyUnsnoozedThread,
-    markThreadAsRead,
-  } = useAppStore();
-  const openCompose = useAppStore((s) => s.openCompose);
+// Memoize so parent (App) re-renders don't cascade into the (heavy)
+// EmailList subtree. EmailList takes no props; its memo always short-
+// circuits when called from a re-rendering parent. It still re-renders
+// on its own subscriptions (selectors below), but those are scoped to
+// fields that actually change in response to user actions.
+export const EmailList = memo(EmailListImpl);
+function EmailListImpl() {
+  // Per-field selectors instead of `useAppStore()` (no-selector). With no
+  // selector the hook returns the entire state object, whose reference
+  // changes on every `set()`; this caused EmailList to re-render on every
+  // unrelated store update (sync status flips, prefetch progress, etc.).
+  // Under bursts (the IPC event flood that follows switching to an account
+  // with a large inbox + active background sync) that produced 1000+
+  // EmailList re-renders in succession, blocking the renderer for ~9s.
+  // Actions are stable function references — read once via getState().
+  const isLoading = useAppStore((s) => s.isLoading);
+  const prefetchProgress = useAppStore((s) => s.prefetchProgress);
+  const syncProgress = useAppStore((s) => s.syncProgress);
+  const inboxDensity = useAppStore((s) => s.inboxDensity);
+  const snoozedThreads = useAppStore((s) => s.snoozedThreads);
+  // Defer currentAccountId in EmailList so the deferred threads array (below)
+  // and the local id stay consistent during the 1-frame deferred window. The
+  // store-side id updates synchronously — anything that needs the live id
+  // (incoming IPC event filters, see callbacks below) reads it via
+  // `useAppStore.getState()` at call time. Without this deferral the urgent
+  // re-render fires all account-scoped useEffects + IPC responses while the
+  // 700+ item virtualizer is mid-commit, which is what produced the original
+  // ~9s blocking window.
+  const _liveAccountId = useAppStore((s) => s.currentAccountId);
+  const currentAccountId = useDeferredValue(_liveAccountId);
+  const selectedThreadIds = useAppStore((s) => s.selectedThreadIds);
+  const currentSplitId = useAppStore((s) => s.currentSplitId);
+  const selectedDraftId = useAppStore((s) => s.selectedDraftId);
   const allLocalDrafts = useAppStore((s) => s.localDrafts);
   const unsnoozedReturnTimes = useAppStore((s) => s.unsnoozedReturnTimes);
   const selectedThreadId = useAppStore((s) => s.selectedThreadId);
   const splits = useAppStore((s) => s.splits);
-  const { threads } = useSplitFilteredThreads();
+  const {
+    setSelectedEmailId,
+    setSelectedThreadId,
+    setViewMode,
+    setInboxDensity,
+    setSnoozedThreads,
+    toggleThreadSelected,
+    setThreadsSelected,
+    clearSelectedThreads,
+    selectAllThreads,
+    setCurrentSplitId,
+    setArchiveReadyThreads,
+    removeEmails,
+    addUndoAction,
+    setSelectedDraftId,
+    removeRecentlyUnsnoozedThread,
+    markThreadAsRead,
+    openCompose,
+  } = useAppStore.getState();
+  const _sft = useSplitFilteredThreads();
+  // useDeferredValue marks `threads` as non-urgent so the (heavy) render
+  // of 700+ items doesn't block the click handler. React renders the
+  // chrome (header / split tabs) with the new account immediately, and
+  // updates the thread list in a separate concurrent pass.
+  const threads = useDeferredValue(_sft.threads);
 
   const isArchiveReadyView = currentSplitId === "__archive-ready__";
   const isDraftsView = currentSplitId === "__drafts__";
@@ -135,27 +162,28 @@ export function EmailList() {
   }, [currentAccountId, setSnoozedThreads]);
 
   // Listen for snooze events from main process, filtered by current account.
-  // Uses useAppStore.getState() inside callbacks so we don't need action refs
-  // in the deps array — this prevents listener re-registration races.
-  const currentAccountRef = useRef(currentAccountId);
-  currentAccountRef.current = currentAccountId;
-
+  // Read the live account id from the store inside each callback (not a ref
+  // mirroring the deferred local var) so events for the new account aren't
+  // dropped during the 1-frame useDeferredValue lag right after a switch.
   useEffect(() => {
     window.api.snooze.onUnsnoozed((data: { emails: SnoozedEmail[] }) => {
+      const liveId = useAppStore.getState().currentAccountId;
       for (const email of data.emails) {
-        if (email.accountId === currentAccountRef.current) {
+        if (email.accountId === liveId) {
           useAppStore.getState().handleThreadUnsnoozed(email.threadId, email.snoozeUntil);
         }
       }
     });
     window.api.snooze.onSnoozed((data: { snoozedEmail: SnoozedEmail }) => {
-      if (data.snoozedEmail.accountId === currentAccountRef.current) {
+      const liveId = useAppStore.getState().currentAccountId;
+      if (data.snoozedEmail.accountId === liveId) {
         useAppStore.getState().addSnoozedThread(data.snoozedEmail);
       }
     });
     window.api.snooze.onManuallyUnsnoozed(
       (data: { threadId: string; accountId: string; snoozeUntil: number }) => {
-        if (data.accountId === currentAccountRef.current) {
+        const liveId = useAppStore.getState().currentAccountId;
+        if (data.accountId === liveId) {
           useAppStore.getState().handleThreadUnsnoozed(data.threadId, data.snoozeUntil);
         }
       },
@@ -181,14 +209,15 @@ export function EmailList() {
       });
   }, [currentAccountId, setArchiveReadyThreads]);
 
-  // Listen for new archive-ready results from background prefetch
-  const currentAccountRef2 = useRef(currentAccountId);
-  currentAccountRef2.current = currentAccountId;
-
+  // Listen for new archive-ready results from background prefetch.
+  // Read live account id from the store in the callback (same reasoning as
+  // the snooze listeners above — avoids dropping events for the new account
+  // during the useDeferredValue lag right after an account switch).
   useEffect(() => {
     window.api.archiveReady.onResult(
       (data: { threadId: string; accountId: string; isReady: boolean; reason: string }) => {
-        if (data.accountId !== currentAccountRef2.current) return;
+        const liveId = useAppStore.getState().currentAccountId;
+        if (data.accountId !== liveId) return;
         if (data.isReady) {
           // Add single thread to the set
           useAppStore.setState((state) => {
