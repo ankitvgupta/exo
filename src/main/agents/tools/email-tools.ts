@@ -154,7 +154,6 @@ const listEmails: ToolDefinition<{ accountId: string }> = {
       date: e.date,
       snippet: e.snippet,
       isUnread: e.isUnread,
-      priority: e.analysis?.priority,
       needsReply: e.analysis?.needsReply,
       hasDraft: !!e.draft,
     }));

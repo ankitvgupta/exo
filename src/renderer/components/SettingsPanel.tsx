@@ -2007,9 +2007,9 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                     </button>
                   </div>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                    Each email is categorized as SKIP (no reply), or HIGH / MEDIUM / LOW priority.
-                    Customize the rules below to control how emails are triaged. The required output
-                    format is handled automatically.
+                    Each email is categorized as PRIORITY (needs a reply) or OTHER. Customize the
+                    rules below to control how emails are triaged. The required output format is
+                    handled automatically.
                   </p>
                   <textarea
                     value={analysisPrompt}
@@ -2544,17 +2544,6 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                                 .split(" ")[0]
                             }
                           </span>
-                          <span
-                            className={`flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium ${
-                              item.priority === "high"
-                                ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
-                                : item.priority === "medium"
-                                  ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
-                                  : "bg-gray-100 text-gray-600 dark:bg-gray-600 dark:text-gray-300"
-                            }`}
-                          >
-                            {item.priority}
-                          </span>
                         </div>
                       ))}
                     </div>
@@ -2566,7 +2555,8 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                 <p className="font-medium mb-2">How it works:</p>
                 <ul className="list-disc list-inside space-y-1">
                   <li>
-                    <strong>Analysis:</strong> Determines if emails need a reply and their priority
+                    <strong>Analysis:</strong> Determines if emails are Priority (need a reply) or
+                    Other
                   </li>
                   <li>
                     <strong>Sender Profiles:</strong> Looks up sender information for all inbox

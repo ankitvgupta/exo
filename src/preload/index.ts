@@ -37,13 +37,11 @@ const api = {
     overridePriority: (
       emailId: string,
       newNeedsReply: boolean,
-      newPriority: string | null,
       reason?: string,
     ): Promise<unknown> =>
       ipcRenderer.invoke("analysis:override-priority", {
         emailId,
         newNeedsReply,
-        newPriority,
         reason,
       }),
   },

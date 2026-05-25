@@ -107,20 +107,11 @@ function getSuggestedActions(
 
   const analysis = email.analysis;
   if (analysis?.needsReply && !email.draft) {
-    // High-priority email with no draft — suggest drafting
-    if (analysis.priority === "high") {
-      suggestions.push({
-        id: "suggest-urgent-reply",
-        label: "Draft an urgent reply to this email",
-        icon: "M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z",
-      });
-    } else {
-      suggestions.push({
-        id: "suggest-reply",
-        label: "Draft a reply",
-        icon: "M3 10l9-7 9 7M3 10v10a1 1 0 001 1h16a1 1 0 001-1V10",
-      });
-    }
+    suggestions.push({
+      id: "suggest-reply",
+      label: "Draft a reply",
+      icon: "M3 10l9-7 9 7M3 10v10a1 1 0 001 1h16a1 1 0 001-1V10",
+    });
   }
 
   if (analysis && !analysis.needsReply) {

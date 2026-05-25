@@ -1,6 +1,6 @@
 import { memo } from "react";
 import type { InboxDensity, SnoozedEmail } from "../../shared/types";
-import type { EmailThread } from "../store";
+import { useAppStore, type EmailThread } from "../store";
 import { formatSnoozeTime } from "./SnoozeMenu";
 
 interface EmailRowProps {
@@ -77,37 +77,33 @@ function decodeHtmlEntities(text: string): string {
   return textarea.value;
 }
 
-// Get priority label info
-function getPriorityLabel(thread: EmailThread): { text: string; className: string } | null {
+// Get the row's status pill. Returns null when no pill should render.
+//
+// Pills only show in non-priority tabs (the Priority tab is implicitly all
+// priority emails, so the pill would just be visual noise there). When the tab
+// is mixed (All / custom splits / Drafts / Snoozed / Archive Ready / Other),
+// the pill helps the user spot priority emails vs. completed drafts.
+function getPriorityLabel(
+  thread: EmailThread,
+  inPriorityTab: boolean,
+): { text: string; className: string } | null {
+  if (inPriorityTab) return null;
+
   if (thread.draft?.status === "created") {
     return {
       text: "Done",
       className: "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300",
     };
   }
-  if (!thread.analysis) {
-    return null; // Unanalyzed - no label
-  }
-  // Note: the store's categorization uses effectiveUserReplied (with a grace period)
-  // while we check userReplied directly. During the ~3 min grace window, the badge
-  // may show "Skip" while the thread still sits in Priority. This is acceptable:
-  // the user just replied so "Skip" is the correct eventual state.
-  if (!thread.analysis.needsReply || thread.userReplied) {
+
+  if (thread.analysis?.needsReply && !thread.userReplied) {
     return {
-      text: "Skip",
-      className: "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300",
+      text: "Priority",
+      className: "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300",
     };
   }
-  const priority = thread.analysis.priority || "medium";
-  const colors: Record<string, string> = {
-    high: "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300",
-    medium: "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300",
-    low: "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400",
-  };
-  return {
-    text: priority.charAt(0).toUpperCase() + priority.slice(1),
-    className: colors[priority] || colors.medium,
-  };
+
+  return null;
 }
 
 // Memoized so that j/k navigation only re-renders the two rows whose
@@ -131,7 +127,8 @@ export const EmailRow = memo(
       : formatRelativeDate(thread.latestReceivedEmail.date);
     const rawSnippet = thread.latestEmail.snippet || "";
     const snippet = decodeHtmlEntities(rawSnippet);
-    const priorityLabel = getPriorityLabel(thread);
+    const currentSplitId = useAppStore((state) => state.currentSplitId);
+    const priorityLabel = getPriorityLabel(thread, currentSplitId === "__priority__");
     // Fallback to "default" if stored density is unrecognized (e.g. removed "comfortable")
     const ds = densityStyles[density] ?? densityStyles.default;
 

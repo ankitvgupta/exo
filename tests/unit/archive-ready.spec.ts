@@ -226,7 +226,6 @@ test.describe("formatThreadForAnalysis", () => {
         analysis: {
           needsReply: true,
           reason: "Direct question",
-          priority: "high",
           analyzedAt: Date.now(),
         },
       }),

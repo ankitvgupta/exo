@@ -89,11 +89,11 @@ test.describe("Real-Gmail Layer 9a — cached .dev-data", () => {
     await page.waitForSelector("text=Exo", { timeout: 180_000 });
 
     // Switch to the "All" inbox sub-tab. The default sub-tab is
-    // "Priority", which filters by analysis.priority — empty on a
-    // fresh .dev-data/ where no PrefetchService analyses have run yet
-    // (and Layer 9 tests set EXO_DISABLE_PREFETCH=true, so they never
-    // will). Using "All" makes thread visibility independent of the
-    // analysis pipeline.
+    // "Priority", which only shows analyzed threads that need a reply —
+    // empty on a fresh .dev-data/ where no PrefetchService analyses
+    // have run yet (and Layer 9 tests set EXO_DISABLE_PREFETCH=true, so
+    // they never will). Using "All" makes thread visibility independent
+    // of the analysis pipeline.
     const allTab = page.locator('button:has-text("All")').first();
     if (await allTab.isVisible({ timeout: 5_000 }).catch(() => false)) {
       await allTab.click();

@@ -15,7 +15,6 @@
     },
     "analysis": {
       "needs_reply": true,
-      "priority": "medium",
       "reason": "Scheduling request from a customer"
     }
   },

@@ -86,7 +86,7 @@ export function SplitTabs() {
 
     const inboxCount = threads.filter(isNonExclusive).length;
     map.set(null, inboxCount); // "All" tab
-    // "Priority" tab: only emails with a priority (needsReply + done)
+    // "Priority" tab: emails classified as Priority (needsReply + done)
     const priorityThreads = [...needsReply, ...done].filter(isNonExclusive);
     const priorityCount = priorityThreads.length;
     map.set("__priority__", priorityCount);
