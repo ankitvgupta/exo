@@ -28,6 +28,7 @@ import type {
 export type SettingsTab =
   | "general"
   | "accounts"
+  | "blocked"
   | "calendar"
   | "splits"
   | "signatures"
@@ -144,6 +145,7 @@ export type UndoSendItem = {
   recipients: string; // Display string e.g. "john@example.com"
   scheduledAt: number; // Timestamp when added
   delayMs: number; // Delay before actual send
+  archiveThreadId?: string; // If set, archive this thread after the actual send completes
   // Context for reopening the compose UI on undo
   composeContext?: {
     mode: ComposeMode;
@@ -162,7 +164,7 @@ export type UndoSendItem = {
 // Undo archive/delete queue item
 export type UndoActionItem = {
   id: string;
-  type: "archive" | "trash" | "mark-unread" | "star" | "unstar" | "snooze";
+  type: "archive" | "trash" | "mark-unread" | "star" | "unstar" | "snooze" | "block";
   threadCount: number;
   accountId: string;
   emails: DashboardEmail[];
@@ -176,6 +178,11 @@ export type UndoActionItem = {
   archiveReadyThreadIds?: string[];
   // For snooze undo: thread IDs to unsnooze
   snoozedThreadIds?: string[];
+  // For block: the bare sender email that was blocked. The block IPC is
+  // deferred (commitAction in UndoActionToast calls emails:block-sender when
+  // the timer elapses), and undo within the window simply restores the
+  // emails to view — nothing server-side has happened yet.
+  blockedSender?: string;
 };
 
 interface AppState {
@@ -276,6 +283,9 @@ interface AppState {
   // Undo send state
   undoSendDelaySeconds: number;
   undoSendQueue: UndoSendItem[];
+
+  // Send & Archive — when true, the thread is archived after a successful send
+  sendAndArchive: boolean;
 
   // Draft-edit learned notifications
   draftEditLearned: {
@@ -471,6 +481,9 @@ interface AppState {
   addUndoSend: (item: UndoSendItem) => void;
   removeUndoSend: (id: string) => void;
 
+  // Send & Archive action
+  setSendAndArchive: (enabled: boolean) => void;
+
   // Undo archive/delete actions
   addUndoAction: (item: UndoActionItem) => void;
   removeUndoAction: (id: string) => void;
@@ -638,6 +651,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   // Undo send state
   undoSendDelaySeconds: 5,
   undoSendQueue: [],
+
+  // Send & Archive
+  sendAndArchive: false,
 
   // Undo archive/delete state
   undoActionQueue: [],
@@ -1180,6 +1196,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   // Undo send actions
   setUndoSendDelay: (seconds) => set({ undoSendDelaySeconds: seconds }),
+  setSendAndArchive: (enabled) => set({ sendAndArchive: enabled }),
   addUndoSend: (item) => set((state) => ({ undoSendQueue: [...state.undoSendQueue, item] })),
   removeUndoSend: (id) =>
     set((state) => ({ undoSendQueue: state.undoSendQueue.filter((i) => i.id !== id) })),
@@ -1191,14 +1208,19 @@ export const useAppStore = create<AppState>((set, get) => ({
   // trash) or different accounts remain separate items.
   addUndoAction: (item) =>
     set((state) => {
-      const existing = state.undoActionQueue.find(
-        (i) =>
-          i.type === item.type &&
-          i.accountId === item.accountId &&
-          // Don't merge into an item whose timer has already elapsed —
-          // it is executing or about to execute; treat the new press as a fresh action.
-          i.scheduledAt + i.delayMs > Date.now(),
-      );
+      // Block actions never merge — each toast is sender-specific and the undo
+      // path needs the exact senderEmail. Keep them as separate items.
+      const existing =
+        item.type === "block"
+          ? undefined
+          : state.undoActionQueue.find(
+              (i) =>
+                i.type === item.type &&
+                i.accountId === item.accountId &&
+                // Don't merge into an item whose timer has already elapsed —
+                // it is executing or about to execute; treat the new press as a fresh action.
+                i.scheduledAt + i.delayMs > Date.now(),
+            );
       if (existing) {
         const merged: UndoActionItem = {
           ...existing,

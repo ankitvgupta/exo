@@ -21,6 +21,7 @@ import {
   LLM_PROVIDERS,
   type LlmProvider,
   DEFAULT_OLLAMA_MODEL,
+  type BlockedSender,
 } from "../../shared/types";
 import { useAppStore, type Account, type SettingsTab } from "../store";
 import { reconfigurePostHog, trackEvent } from "../services/posthog";
@@ -53,6 +54,8 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
     setKeyboardBindings,
     undoSendDelaySeconds,
     setUndoSendDelay,
+    sendAndArchive,
+    setSendAndArchive,
     currentAccountId,
     highlightMemoryIds,
   } = useAppStore();
@@ -384,6 +387,11 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
   const handleUndoSendDelayChange = async (seconds: number) => {
     setUndoSendDelay(seconds);
     await window.api.settings.set({ undoSendDelay: seconds });
+  };
+
+  const handleSendAndArchiveToggle = async (enabled: boolean) => {
+    setSendAndArchive(enabled);
+    await window.api.settings.set({ sendAndArchive: enabled });
   };
 
   const handleKeyboardBindingsChange = async (bindings: "superhuman" | "gmail") => {
@@ -742,6 +750,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
         </div>
         <button
           onClick={onClose}
+          aria-label="Close settings"
           className="titlebar-no-drag p-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -757,7 +766,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
 
       {/* Tabs */}
       <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
-        <div className="flex space-x-1 p-2">
+        <div className="flex space-x-1 p-2 overflow-x-auto whitespace-nowrap">
           <button
             onClick={() => setActiveTab("general")}
             data-active={activeTab === "general" ? "true" : undefined}
@@ -779,6 +788,17 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
             }`}
           >
             Accounts
+          </button>
+          <button
+            onClick={() => setActiveTab("blocked")}
+            data-active={activeTab === "blocked" ? "true" : undefined}
+            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+              activeTab === "blocked"
+                ? "bg-blue-100 dark:bg-blue-900/60 text-blue-800 dark:text-blue-300"
+                : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+            }`}
+          >
+            Blocked
           </button>
           <button
             onClick={() => setActiveTab("calendar")}
@@ -922,7 +942,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-6">
         {activeTab === "general" && (
-          <div className="max-w-3xl space-y-6">
+          <div className="max-w-3xl mx-auto space-y-6">
             <div>
               <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
                 General Settings
@@ -1080,6 +1100,36 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                 </div>
               </div>
 
+              {/* Send & Archive */}
+              <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-600 mb-6">
+                <div className="flex items-center justify-between">
+                  <div className="pr-4">
+                    <h3 className="font-semibold text-gray-900 dark:text-gray-100">
+                      Send &amp; Archive
+                    </h3>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                      When replying, sending also archives the conversation. New emails and forwards
+                      are unaffected.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => handleSendAndArchiveToggle(!sendAndArchive)}
+                    aria-label="Toggle Send and Archive"
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors flex-shrink-0 ${
+                      sendAndArchive
+                        ? "bg-blue-600 dark:bg-blue-500"
+                        : "bg-gray-200 dark:bg-gray-700"
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        sendAndArchive ? "translate-x-6" : "translate-x-1"
+                      }`}
+                    />
+                  </button>
+                </div>
+              </div>
+
               {/* Default Mail App */}
               <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-600 mb-6">
                 <div className="flex items-center justify-between">
@@ -1093,7 +1143,11 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                     </p>
                   </div>
                   <button
-                    disabled={isDefaultMailAppLoading}
+                    role="switch"
+                    aria-checked={isDefaultMailApp}
+                    aria-label="Set as default mail app"
+                    aria-disabled={isDefaultMailAppLoading}
+                    aria-busy={isDefaultMailAppLoading}
                     onClick={async () => {
                       if (isDefaultMailAppLoading) return;
                       setIsDefaultMailAppLoading(true);
@@ -1213,6 +1267,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                                 }));
                               }
                             }}
+                            aria-label={`Provider for ${label}`}
                             className="px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-500 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                           >
                             <option value="anthropic">Anthropic</option>
@@ -1233,6 +1288,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                                   setModelConfig((prev) => ({ ...prev, [key]: tier as ModelTier }));
                                 }
                               }}
+                              aria-label={`Model tier for ${label}`}
                               className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-500 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                             >
                               {MODEL_TIERS.map((tier) => (
@@ -1249,6 +1305,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                                 setOllamaModels((prev) => ({ ...prev, [key]: e.target.value }))
                               }
                               placeholder={DEFAULT_OLLAMA_MODEL}
+                              aria-label={`Ollama model for ${label}`}
                               className="w-48 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-500 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                             />
                           )}
@@ -1405,6 +1462,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                   <button
                     role="switch"
                     aria-checked={allowPrereleaseUpdates}
+                    aria-label="Pre-release updates"
                     onClick={() => setAllowPrereleaseUpdates(!allowPrereleaseUpdates)}
                     className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
                       allowPrereleaseUpdates
@@ -1434,6 +1492,9 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                     </p>
                   </div>
                   <button
+                    role="switch"
+                    aria-checked={enableSenderLookup}
+                    aria-label="Enable sender lookup"
                     onClick={() => setEnableSenderLookup(!enableSenderLookup)}
                     className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
                       enableSenderLookup
@@ -1473,6 +1534,9 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                     </p>
                   </div>
                   <button
+                    role="switch"
+                    aria-checked={syncDraftsToGmail}
+                    aria-label="Sync drafts to Gmail"
                     onClick={() => setSyncDraftsToGmail(!syncDraftsToGmail)}
                     className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
                       syncDraftsToGmail
@@ -1490,7 +1554,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
               </div>
 
               {/* Troubleshooting */}
-              <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-600">
+              <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-600 mb-6">
                 <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-1">
                   Troubleshooting
                 </h3>
@@ -1538,7 +1602,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
         )}
 
         {activeTab === "accounts" && (
-          <div className="max-w-3xl space-y-6">
+          <div className="max-w-3xl mx-auto space-y-6">
             <div>
               <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
                 Connected Accounts
@@ -1652,8 +1716,14 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
           </div>
         )}
 
+        {activeTab === "blocked" && (
+          <div className="max-w-3xl mx-auto space-y-6">
+            <BlockedSendersSection />
+          </div>
+        )}
+
         {activeTab === "calendar" && (
-          <div className="max-w-3xl space-y-6">
+          <div className="max-w-3xl mx-auto space-y-6">
             <div>
               <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
                 Calendar Visibility
@@ -1731,19 +1801,19 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
         )}
 
         {activeTab === "splits" && (
-          <div className="max-w-3xl">
+          <div className="max-w-3xl mx-auto">
             <SplitConfigEditor />
           </div>
         )}
 
         {activeTab === "snippets" && (
-          <div className="max-w-3xl">
+          <div className="max-w-3xl mx-auto">
             <SnippetsEditor />
           </div>
         )}
 
         {activeTab === "signatures" && (
-          <div className="max-w-3xl space-y-6">
+          <div className="max-w-3xl mx-auto space-y-6">
             <div>
               <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
                 Email Signatures
@@ -1914,6 +1984,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                             accountId: e.target.value || undefined,
                           })
                         }
+                        aria-label="Signature account"
                         className="w-full p-3 border border-gray-300 dark:border-gray-500 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-gray-100"
                       >
                         <option value="">All accounts (global)</option>
@@ -1976,7 +2047,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
         )}
 
         {activeTab === "prompts" && (
-          <div className="max-w-3xl space-y-6">
+          <div className="max-w-3xl mx-auto space-y-6">
             {isLoading ? (
               <p className="text-gray-500 dark:text-gray-400">Loading settings...</p>
             ) : (
@@ -2150,7 +2221,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
         )}
 
         {activeTab === "style" && (
-          <div className="max-w-3xl space-y-6">
+          <div className="max-w-3xl mx-auto space-y-6">
             <div>
               <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
                 Writing Style
@@ -2227,7 +2298,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
         )}
 
         {activeTab === "assistant" && (
-          <div className="max-w-3xl space-y-6">
+          <div className="max-w-3xl mx-auto space-y-6">
             <div>
               <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
                 Executive Assistant Integration
@@ -2334,7 +2405,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
         )}
 
         {activeTab === "queue" && (
-          <div className="max-w-3xl space-y-6">
+          <div className="max-w-3xl mx-auto space-y-6">
             <div>
               <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
                 Background Processing Queue
@@ -2575,7 +2646,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
         )}
 
         {activeTab === "agents" && (
-          <div className="space-y-6">
+          <div className="max-w-3xl mx-auto space-y-6">
             <div>
               <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">
                 Agent Settings
@@ -3280,7 +3351,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
         {activeTab === "extensions" && <ExtensionsTab />}
 
         {activeTab === "analytics" && (
-          <div className="max-w-3xl space-y-6">
+          <div className="max-w-3xl mx-auto space-y-6">
             <div>
               <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">
                 Analytics
@@ -3603,6 +3674,109 @@ function UsageCostSection() {
           <p className="text-sm text-gray-400 dark:text-gray-500">No calls recorded yet.</p>
         )}
       </div>
+    </div>
+  );
+}
+
+// =============================================================================
+// Blocked senders settings section
+// =============================================================================
+
+function BlockedSendersSection() {
+  const queryClient = useQueryClient();
+  const accounts = useAppStore((s) => s.accounts);
+
+  const { data: blocked, isLoading } = useQuery({
+    queryKey: ["blocked-senders"],
+    queryFn: async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result = (await (window as any).api.emails.listBlockedSenders()) as {
+        success: boolean;
+        data?: BlockedSender[];
+        error?: string;
+      };
+      if (!result.success) throw new Error(result.error);
+      return result.data ?? [];
+    },
+  });
+
+  const [unblocking, setUnblocking] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const accountEmailById = new Map(accounts.map((a) => [a.id, a.email]));
+
+  const handleUnblock = async (senderEmail: string, accountId: string) => {
+    const key = `${accountId}:${senderEmail}`;
+    setUnblocking(key);
+    setError(null);
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result = (await (window as any).api.emails.unblockSender(senderEmail, accountId)) as {
+        success: boolean;
+        error?: string;
+      };
+      if (!result.success) {
+        setError(result.error ?? "Failed to unblock sender");
+        return;
+      }
+      queryClient.invalidateQueries({ queryKey: ["blocked-senders"] });
+    } finally {
+      setUnblocking(null);
+    }
+  };
+
+  return (
+    <div>
+      <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
+        Blocked Senders
+      </h2>
+      <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+        Senders here are routed to Trash by a Gmail filter, so the block applies in Gmail Web and on
+        mobile too. Unblock to delete the filter and restore future delivery.
+      </p>
+
+      {error && (
+        <div className="mb-3 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded px-3 py-2">
+          {error}
+        </div>
+      )}
+
+      {isLoading ? (
+        <p className="text-sm text-gray-500 dark:text-gray-400">Loading…</p>
+      ) : blocked && blocked.length > 0 ? (
+        <ul className="divide-y divide-gray-200 dark:divide-gray-700 border border-gray-200 dark:border-gray-700 rounded">
+          {blocked.map((row) => {
+            const key = `${row.accountId}:${row.senderEmail}`;
+            const accountEmail = accountEmailById.get(row.accountId) ?? row.accountId;
+            return (
+              <li key={key} className="flex items-center justify-between px-3 py-2 text-sm">
+                <div className="min-w-0">
+                  <p className="font-medium text-gray-900 dark:text-gray-100 truncate">
+                    {row.senderEmail}
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                    Blocked {new Date(row.blockedAt).toLocaleDateString()} · {accountEmail}
+                    {row.gmailFilterId ? "" : " · (no Gmail filter — local only)"}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleUnblock(row.senderEmail, row.accountId)}
+                  disabled={unblocking === key}
+                  className="ml-3 px-3 py-1 text-sm text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded disabled:opacity-50"
+                >
+                  {unblocking === key ? "Unblocking…" : "Unblock"}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <p className="text-sm text-gray-500 dark:text-gray-400">
+          You haven't blocked anyone. Click the block icon in any email header (or use the Sender
+          panel) to start.
+        </p>
+      )}
     </div>
   );
 }

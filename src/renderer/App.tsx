@@ -594,6 +594,37 @@ async function prefetchEmailBodies(emailIds: string[]): Promise<void> {
   }
 }
 
+/**
+ * Bottom-left toast that surfaces transient errors set via `useAppStore.setError`.
+ * Auto-dismisses after 8s. Currently consumed by the block-sender flow (silent
+ * failure was flagged by agentic-verify); other call sites still log to console
+ * only, but can opt in by calling `setError` themselves.
+ */
+function GlobalErrorToast() {
+  const error = useAppStore((s) => s.error);
+  const setError = useAppStore((s) => s.setError);
+
+  useEffect(() => {
+    if (!error) return;
+    const t = setTimeout(() => setError(null), 8000);
+    return () => clearTimeout(t);
+  }, [error, setError]);
+
+  if (!error) return null;
+  return (
+    <div className="bg-red-600 text-white rounded-lg shadow-lg flex items-center justify-between px-4 py-3 min-w-[280px] max-w-md">
+      <span className="text-sm">{error}</span>
+      <button
+        onClick={() => setError(null)}
+        className="ml-4 text-sm font-medium text-red-100 hover:text-white flex-shrink-0"
+        aria-label="Dismiss"
+      >
+        ×
+      </button>
+    </div>
+  );
+}
+
 export default function App() {
   const [needsSetup, setNeedsSetup] = useState<boolean | null>(null);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
@@ -663,6 +694,7 @@ export default function App() {
   const setInboxDensity = useAppStore((s) => s.setInboxDensity);
   const setKeyboardBindings = useAppStore((s) => s.setKeyboardBindings);
   const setUndoSendDelay = useAppStore((s) => s.setUndoSendDelay);
+  const setSendAndArchive = useAppStore((s) => s.setSendAndArchive);
   const setSentEmails = useAppStore((s) => s.setSentEmails);
   const addSentEmails = useAppStore((s) => s.addSentEmails);
   const setSplits = useAppStore((s) => s.setSplits);
@@ -705,6 +737,7 @@ export default function App() {
         data?: {
           inboxDensity?: InboxDensity;
           undoSendDelay?: number;
+          sendAndArchive?: boolean;
           keyboardBindings?: "superhuman" | "gmail";
           posthog?: { enabled: boolean; sessionReplay?: boolean };
         };
@@ -719,13 +752,16 @@ export default function App() {
           if (result.data.undoSendDelay !== undefined) {
             setUndoSendDelay(result.data.undoSendDelay);
           }
+          if (result.data.sendAndArchive !== undefined) {
+            setSendAndArchive(result.data.sendAndArchive);
+          }
           // Initialize PostHog analytics — API key is baked in at build time,
-          // user can only toggle enabled/sessionReplay in settings
+          // user can only toggle enabled/sessionReplay in settings.
+          // getConfig() guarantees posthog is set (legacy installs → off,
+          // fresh installs → on), so the `?? false` is just a defensive fallback.
           const phConfig = result.data.posthog;
           const apiKey = import.meta.env.VITE_POSTHOG_API_KEY;
           const host = import.meta.env.VITE_POSTHOG_HOST || "https://us.i.posthog.com";
-          // Default to disabled for existing users upgrading (no persisted config).
-          // New users opt in during onboarding (SetupWizard defaults to enabled).
           const enabled = phConfig?.enabled ?? false;
           if (apiKey) {
             initPostHog({
@@ -754,6 +790,7 @@ export default function App() {
     setInboxDensity,
     setKeyboardBindings,
     setUndoSendDelay,
+    setSendAndArchive,
   ]);
 
   // Toggle dark class on document.documentElement when resolvedTheme changes
@@ -1736,6 +1773,7 @@ export default function App() {
             onClick={openSearch}
             className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors flex items-center gap-1"
             title="Search (/)"
+            aria-label="Search"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
@@ -1886,6 +1924,7 @@ export default function App() {
             onClick={() => setShowSettings(true)}
             className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors focus:outline-none"
             title="Settings"
+            aria-label="Settings"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
@@ -1907,6 +1946,7 @@ export default function App() {
             disabled={isFetching || isSyncing}
             className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-50"
             title="Refresh"
+            aria-label="Refresh"
           >
             <svg
               className={`w-5 h-5 ${isFetching || isSyncing ? "animate-spin" : ""}`}
@@ -2013,6 +2053,7 @@ export default function App() {
               onClick={() => removeExtensionAuthRequired(extId)}
               className="p-1 text-amber-600 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-200 transition-colors"
               title="Dismiss"
+              aria-label={`Dismiss ${displayName} authentication notice`}
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
@@ -2071,6 +2112,7 @@ export default function App() {
               onClick={() => removeAgentAuthRequired(providerId)}
               className="p-1 text-amber-600 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-200 transition-colors"
               title="Dismiss"
+              aria-label={`Dismiss ${displayName} authentication notice`}
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
@@ -2156,6 +2198,7 @@ export default function App() {
         <UndoActionToast />
         <DraftEditLearnedToast />
         <AnalysisOverrideLearnedToast />
+        <GlobalErrorToast />
       </div>
 
       {/* Global Snooze Menu Overlay */}

@@ -410,6 +410,7 @@ export const ConfigSchema = z.object({
   theme: z.enum(["light", "dark", "system"]).default("system"),
   inboxDensity: z.enum(["default", "compact"]).default("compact"),
   undoSendDelay: z.number().min(0).max(30).default(5), // seconds; 0 = disabled
+  sendAndArchive: z.boolean().default(false),
   signatures: z.array(SignatureSchema).optional(),
   showExoBranding: z.boolean().default(true),
   stylePrompt: z.string().optional(),
@@ -425,10 +426,14 @@ export const ConfigSchema = z.object({
   mcpServers: z.record(z.string(), McpServerConfigSchema).optional(),
   cliTools: z.array(CliToolConfigSchema).optional(),
   extraPathDirs: z.array(z.string()).optional(),
+  // Defaults intentionally not declared here: ConfigSchema is only used for
+  // type inference + validation. Runtime defaults are applied in getConfig()
+  // because they depend on configVersion (legacy installs opt out, fresh
+  // installs opt in).
   posthog: z
     .object({
-      enabled: z.boolean().default(false),
-      sessionReplay: z.boolean().default(false),
+      enabled: z.boolean(),
+      sessionReplay: z.boolean(),
     })
     .optional(),
   keyboardBindings: z.enum(["superhuman", "gmail"]).default("superhuman"),
@@ -901,6 +906,14 @@ export type ScheduledMessage = {
 export type ScheduledMessageStats = {
   scheduled: number;
   total: number;
+};
+
+// Blocked sender (mirrors a Gmail filter that routes a sender to Spam)
+export type BlockedSender = {
+  senderEmail: string;
+  accountId: string;
+  gmailFilterId: string | null;
+  blockedAt: number;
 };
 
 // App state for Zustand

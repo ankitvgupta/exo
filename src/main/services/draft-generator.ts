@@ -1,7 +1,6 @@
 import { createMessage } from "./llm-service";
 import type { GmailClient } from "./gmail-client";
 import { CalendaringAgent } from "./calendaring-agent";
-import { getEnrichmentBySender } from "../extensions/enrichment-store";
 import { quoteDisplayName } from "../utils/address-formatting";
 import {
   DEFAULT_DRAFT_PROMPT,
@@ -17,6 +16,25 @@ import { UNTRUSTED_DATA_INSTRUCTION, wrapUntrustedEmail } from "../../shared/pro
 import { createLogger } from "./logger";
 
 const log = createLogger("draft-generator");
+
+// Lazy-imported to avoid pulling in ../extensions/enrichment-store → ../db
+// → electron at module load. The eval / unit runner imports DraftGenerator
+// outside Electron context; touching the enrichment cache before sender
+// lookup is actually invoked would crash with
+// `'electron' does not provide an export named 'BrowserWindow'`.
+// Mirrors the pattern in email-analyzer.ts.
+import type * as EnrichmentStoreModule from "../extensions/enrichment-store";
+type GetEnrichmentBySenderFn = typeof EnrichmentStoreModule.getEnrichmentBySender;
+let _getEnrichmentBySender: GetEnrichmentBySenderFn | null = null;
+async function getEnrichmentBySenderLazy(
+  ...args: Parameters<GetEnrichmentBySenderFn>
+): Promise<ReturnType<GetEnrichmentBySenderFn>> {
+  if (!_getEnrichmentBySender) {
+    const mod = await import("../extensions/enrichment-store");
+    _getEnrichmentBySender = mod.getEnrichmentBySender;
+  }
+  return _getEnrichmentBySender(...args);
+}
 
 /**
  * Extract reply-all CC recipients from an email's To/CC fields,
@@ -84,7 +102,7 @@ export class DraftGenerator {
     const enableSenderLookup = options?.enableSenderLookup ?? true;
     if (enableSenderLookup) {
       const senderEmail = this.extractSenderEmail(email.from);
-      const cached = getEnrichmentBySender(senderEmail, "web-search");
+      const cached = await getEnrichmentBySenderLazy(senderEmail, "web-search");
       if (cached?.data) {
         const profile = cached.data as { summary: string; name: string; email: string };
         if (profile.summary) {
@@ -172,7 +190,7 @@ ${wrapUntrustedEmail(`From: ${email.from}\nTo: ${email.to}\nSubject: ${email.sub
     if (enableSenderLookup) {
       for (const recipient of to) {
         const recipientEmail = this.extractSenderEmail(recipient);
-        const cached = getEnrichmentBySender(recipientEmail, "web-search");
+        const cached = await getEnrichmentBySenderLazy(recipientEmail, "web-search");
         if (cached?.data) {
           const profile = cached.data as { summary: string; name: string; email: string };
           if (profile.summary) {
@@ -228,7 +246,7 @@ ${instructions}`,
     const enableSenderLookup = options?.enableSenderLookup ?? true;
     if (enableSenderLookup) {
       const senderEmail = this.extractSenderEmail(email.from);
-      const cached = getEnrichmentBySender(senderEmail, "web-search");
+      const cached = await getEnrichmentBySenderLazy(senderEmail, "web-search");
       if (cached?.data) {
         const profile = cached.data as { summary: string; name: string; email: string };
         if (profile.summary) {

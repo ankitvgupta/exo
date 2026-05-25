@@ -185,6 +185,21 @@ const api = {
       pageToken?: string,
     ): Promise<unknown> =>
       ipcRenderer.invoke("emails:search-remote", { query, accountId, maxResults, pageToken }),
+
+    // Block sender — creates a server-side Gmail filter so the block
+    // propagates to mobile/web Gmail, plus moves existing messages to Spam.
+    blockSender: (senderEmail: string, accountId: string): Promise<unknown> =>
+      ipcRenderer.invoke("emails:block-sender", { senderEmail, accountId }),
+
+    unblockSender: (
+      senderEmail: string,
+      accountId: string,
+      restoreEmailIds?: string[],
+    ): Promise<unknown> =>
+      ipcRenderer.invoke("emails:unblock-sender", { senderEmail, accountId, restoreEmailIds }),
+
+    listBlockedSenders: (accountId?: string): Promise<unknown> =>
+      ipcRenderer.invoke("emails:list-blocked-senders", { accountId }),
   },
 
   // Style operations

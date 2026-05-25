@@ -33,7 +33,7 @@ import { THREAD_NAV_EVENT } from "../hooks/useKeyboardShortcuts";
 import type { ComposeFormState } from "../hooks/useComposeForm";
 import { ComposeToolbar } from "./ComposeToolbar";
 import { FromSelector } from "./FromSelector";
-import { trackEvent } from "../services/posthog";
+import { trackEvent, captureException } from "../services/posthog";
 import { draftBodyToHtml } from "../../shared/draft-utils";
 import { AnalysisPrioritySection } from "./AnalysisPrioritySection";
 
@@ -699,6 +699,7 @@ function ThreadMessage({
   onReply,
   onReplyAll,
   onForward,
+  onBlockSender,
   currentUserEmail,
   accountId,
   threadEmails,
@@ -711,6 +712,7 @@ function ThreadMessage({
   onReply: () => void;
   onReplyAll: () => void;
   onForward: () => void;
+  onBlockSender?: (senderEmail: string) => void;
   currentUserEmail?: string;
   accountId?: string;
   threadEmails: DashboardEmail[];
@@ -873,12 +875,12 @@ function ThreadMessage({
               }`}
               title="Reply"
             >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M3 10l6-6m0 0v12m0-12h12a2 2 0 012 2v8a2 2 0 01-2 2H9"
+                  strokeWidth={1.5}
+                  d="M3 10h10a8 8 0 018 8v2M3 10l6 6M3 10l6-6"
                 />
               </svg>
             </span>
@@ -895,18 +897,12 @@ function ThreadMessage({
               }`}
               title="Reply All"
             >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M7 10h8a8 8 0 018 8v2M7 10l6 6m-6-6l6-6"
-                />
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M3 14l4-4-4-4"
+                  strokeWidth={1.5}
+                  d="M7 17l-5-5 5-5M12 17l-5-5 5-5M22 18v-2a4 4 0 00-4-4H7"
                 />
               </svg>
             </span>
@@ -923,15 +919,44 @@ function ThreadMessage({
               }`}
               title="Forward"
             >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                  strokeWidth={2}
+                  strokeWidth={1.5}
                   d="M14 5l7 7m0 0l-7 7m7-7H3"
                 />
               </svg>
             </span>
+            {/* Block sender — only show when there is a real sender email
+                (not on outbound messages where senderEmail is the user). */}
+            {onBlockSender && senderEmail && !isFromMe && senderEmail.includes("@") && (
+              <span
+                role="button"
+                aria-label="Block sender"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onBlockSender(senderEmail);
+                }}
+                className={`p-1 rounded transition-colors ${
+                  useWhiteCard
+                    ? "text-gray-400 hover:text-red-600 hover:bg-red-50"
+                    : "text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
+                }`}
+                title={`Block ${senderEmail}`}
+              >
+                {/* "no-entry" / ban circle — matches Gmail's block visual */}
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <circle cx="12" cy="12" r="9" strokeWidth={2} />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M5.6 5.6l12.8 12.8"
+                  />
+                </svg>
+              </span>
+            )}
           </span>
         )}
       </button>
@@ -1085,6 +1110,7 @@ function InlineReply({
   onBccChange,
   restoredDraft,
   draftEmailId,
+  watchedDraftEmailId,
   onDiscardDraft,
   nameMap: externalNameMap,
 }: {
@@ -1102,6 +1128,10 @@ function InlineReply({
   restoredDraft?: RestoredDraft | null;
   /** Email ID that owns the AI-generated draft (for refine/revert). */
   draftEmailId?: string;
+  /** Email ID to watch in the store for externally-saved drafts (e.g. agent regenerate).
+   *  Unlike draftEmailId, this is set even when the draft has status="edited" so that
+   *  the agent's update overrides the user's edits. */
+  watchedDraftEmailId?: string;
   /** Callback to discard the AI draft entirely. */
   onDiscardDraft?: () => void;
   /** Map of lowercase email → display name for rendering name chips */
@@ -1268,6 +1298,53 @@ function InlineReply({
   // the latest editor value)
   const [editorInitialContent, setEditorInitialContent] = useState(restoredDraft?.bodyHtml || "");
 
+  // Watch the store for externally-saved drafts on the watched email (e.g. the agent
+  // regenerating via the right pane). When the draft's createdAt changes, push the new
+  // content into the editor. Without this, the agent updates the DB + Gmail but the
+  // inline reply keeps showing the previous body. Mirrors the watcher in ComposeNewEmail.
+  //
+  // A ref tracks the last-seen createdAt so we never accidentally fire on a
+  // mount-time undefined→defined transition (e.g. watchedDraftEmailId resolves
+  // after mount). Refs also keep the latest form callbacks reachable without
+  // declaring every form method in the deps array; we intentionally only react
+  // to createdAt changes (the signal that an external save happened).
+  const externalDraft = useAppStore((s) =>
+    watchedDraftEmailId ? s.emails.find((e) => e.id === watchedDraftEmailId)?.draft : undefined,
+  );
+  const externalDraftCreatedAt = externalDraft?.createdAt;
+  const lastSeenDraftCreatedAtRef = useRef(externalDraftCreatedAt);
+  useEffect(() => {
+    if (!externalDraft?.body) return;
+    if (externalDraftCreatedAt === lastSeenDraftCreatedAtRef.current) return;
+    // First sight of a draft (lastSeen undefined): if the editor already shows this
+    // body — initialized via restoredDraft on mount — just record createdAt and skip
+    // the push so we don't clobber any in-progress edits with the same content.
+    if (lastSeenDraftCreatedAtRef.current === undefined && form.bodyText === externalDraft.body) {
+      lastSeenDraftCreatedAtRef.current = externalDraftCreatedAt;
+      return;
+    }
+    lastSeenDraftCreatedAtRef.current = externalDraftCreatedAt;
+    const newHtml = draftBodyToHtml(externalDraft.body);
+    setEditorInitialContent(newHtml);
+    form.handleEditorChange(newHtml, externalDraft.body);
+    onContentChange?.({ bodyHtml: newHtml, bodyText: externalDraft.body });
+    // Clear any pre-refine snapshot — otherwise the "Revert" button would
+    // silently replace the freshly regenerated body with the old pre-refine one.
+    setPreRefineContent(null);
+    if (externalDraft.to && JSON.stringify(externalDraft.to) !== JSON.stringify(form.to)) {
+      form.setTo(externalDraft.to);
+    }
+    if (externalDraft.cc && JSON.stringify(externalDraft.cc) !== JSON.stringify(form.cc)) {
+      form.setCc(externalDraft.cc);
+    }
+    if (externalDraft.bcc && JSON.stringify(externalDraft.bcc) !== JSON.stringify(form.bcc)) {
+      form.setBcc(externalDraft.bcc);
+    }
+    // Deps intentionally limited to createdAt — the signal that an external save
+    // happened. Other values (form, onContentChange, externalDraft) are read from
+    // the latest render closure when the effect fires.
+  }, [externalDraftCreatedAt]);
+
   const handleRefine = useCallback(async () => {
     if (!refineCritique.trim() || !draftEmailId || isRefining) return;
     setIsRefining(true);
@@ -1376,7 +1453,10 @@ function InlineReply({
   // Send with optimistic update support
   const handleSend = useCallback(async () => {
     const sendOptions = form.buildSendOptions();
-    const { undoSendDelaySeconds, addUndoSend } = useAppStore.getState();
+    const { undoSendDelaySeconds, addUndoSend, sendAndArchive } = useAppStore.getState();
+    // Archive only applies to replies — not forwards or new compose
+    const shouldArchive =
+      sendAndArchive && (composeMode === "reply" || composeMode === "reply-all");
 
     if (!form.canSend || form.isSending) return;
 
@@ -1388,6 +1468,7 @@ function InlineReply({
         recipients: form.to.join(", "),
         scheduledAt: Date.now(),
         delayMs: undoSendDelaySeconds * 1000,
+        archiveThreadId: shouldArchive ? replyInfo.threadId : undefined,
         composeContext: {
           mode: composeMode,
           replyToEmailId,
@@ -1445,7 +1526,38 @@ function InlineReply({
             : undefined,
       });
     }
-  }, [form, composeMode, replyToEmailId, replyInfo, isForward, onSend]);
+    // Archive on any successful send (including offline-queued where data may be
+    // absent), matching UndoSendToast's behavior. Skipped on failure.
+    if (
+      shouldArchive &&
+      replyInfo.threadId &&
+      response &&
+      response !== "undo-queued" &&
+      response.success
+    ) {
+      // Optimistically remove the thread from the local store. The IPC handler
+      // only broadcasts sync:emails-removed in the online-success path, so we
+      // can't rely on it for demo mode, offline mode, or the queued path.
+      // Use removeEmailsAndAdvance (not removeEmails) when the archived thread
+      // is currently selected — otherwise split view keeps the now-stale
+      // selection and shows a blank detail pane.
+      const threadId = replyInfo.threadId;
+      const state = useAppStore.getState();
+      const threadEmailIds = state.emails
+        .filter((e) => e.threadId === threadId && e.accountId === accountId)
+        .map((e) => e.id);
+      if (threadEmailIds.length > 0) {
+        if (state.selectedThreadId === threadId) {
+          state.removeEmailsAndAdvance(threadEmailIds, null, null);
+        } else {
+          state.removeEmails(threadEmailIds);
+        }
+      }
+      window.api.emails
+        .archiveThread(threadId, accountId)
+        .catch((err: unknown) => console.error("[Send & Archive] archive failed", err));
+    }
+  }, [form, composeMode, replyToEmailId, replyInfo, isForward, onSend, accountId]);
 
   const handleScheduleSend = useCallback(
     async (scheduledAt: number) => {
@@ -1663,6 +1775,7 @@ function InlineReply({
                   aliases={form.sendAsAliases}
                   selected={form.from}
                   onChange={form.setFrom}
+                  fallbackDisplayName={form.accountDisplayName}
                 />
               </div>
             )}
@@ -2051,7 +2164,7 @@ function NewEmailCompose({
         <span className="text-gray-900 dark:text-gray-100 font-medium text-sm">New Message</span>
         <button
           onClick={onDiscard ?? (() => onCancel(getFormState()))}
-          className="ml-auto p-1.5 text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 rounded transition-colors"
+          className="ml-auto p-1.5 text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 rounded transition-colors"
           title="Discard draft"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2092,7 +2205,7 @@ function NewEmailCompose({
             </div>
             <button
               onClick={() => form.setShowCcBcc(!form.showCcBcc)}
-              className="ml-2 flex-shrink-0 p-1 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+              className="ml-2 flex-shrink-0 p-1 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
               data-testid="compose-cc-bcc-toggle"
               title={form.showCcBcc ? "Hide Cc/Bcc/From" : "Show Cc/Bcc/From"}
             >
@@ -2149,6 +2262,7 @@ function NewEmailCompose({
                 aliases={form.sendAsAliases}
                 selected={form.from}
                 onChange={form.setFrom}
+                fallbackDisplayName={form.accountDisplayName}
               />
             </>
           )}
@@ -2227,8 +2341,24 @@ class EmailDetailErrorBoundary extends React.Component<
     return { hasError: true };
   }
 
-  componentDidCatch(error: Error) {
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     console.error("[EmailDetail] Render crash caught by error boundary:", error.message);
+    // Never let exception-reporting throw out of the error handler itself —
+    // React doesn't gracefully handle escapes from componentDidCatch.
+    try {
+      const { selectedEmailId, selectedThreadId, currentAccountId, currentSplitId } =
+        useAppStore.getState();
+      captureException(error, {
+        component: "EmailDetailErrorBoundary",
+        componentStack: errorInfo.componentStack,
+        selectedEmailId,
+        selectedThreadId,
+        currentAccountId,
+        currentSplitId,
+      });
+    } catch (reportErr) {
+      console.error("[EmailDetail] Failed to report error to PostHog:", reportErr);
+    }
     // Clear selection state so the user can recover by clicking another email
     useAppStore.setState({
       isInlineReplyOpen: false,
@@ -3169,7 +3299,12 @@ function EmailDetailInner({ isFullView = false }: EmailDetailProps) {
   );
 
   const handleBackToSplit = () => {
-    setViewMode("split");
+    useAppStore.setState({
+      viewMode: "split",
+      selectedEmailId: null,
+      selectedThreadId: null,
+      focusedThreadEmailId: null,
+    });
   };
 
   const isStarred = threadEmails.some((e) => e.labelIds?.includes("STARRED"));
@@ -3241,6 +3376,46 @@ function EmailDetailInner({ isFullView = false }: EmailDetailProps) {
       emails: [...threadEmails],
       scheduledAt: Date.now(),
       delayMs: 5000,
+    });
+  };
+
+  // Block sender: deferred commit, same shape as archive/trash. The IPC
+  // (create Gmail filter + trash existing messages) only runs when
+  // the undo toast's timer elapses — undo just restores the emails to
+  // view and the server-side work never happens.
+  const handleBlockSender = (rawSenderEmail: string) => {
+    if (!currentAccountId || !selectedThreadId) return;
+    const senderEmail = rawSenderEmail.trim().toLowerCase();
+    if (!senderEmail.includes("@")) return;
+
+    const emailIds = threadEmails.map((e) => e.id);
+
+    // Auto-advance: same flow as handleArchive.
+    const currentIndex = currentThreads.findIndex((t) => t.threadId === selectedThreadId);
+    const remainingThreads = currentThreads.filter((t) => t.threadId !== selectedThreadId);
+    if (remainingThreads.length > 0) {
+      const nextIndex = Math.min(Math.max(currentIndex, 0), remainingThreads.length - 1);
+      const nextThread = remainingThreads[nextIndex];
+      if (nextThread) markThreadAsRead(nextThread.threadId);
+      removeEmailsAndAdvance(
+        emailIds,
+        nextThread?.threadId ?? null,
+        nextThread?.latestEmail.id ?? null,
+      );
+    } else {
+      removeEmailsAndAdvance(emailIds, null, null);
+      if (isFullView) setViewMode("split");
+    }
+
+    addUndoAction({
+      id: `block-${senderEmail}-${Date.now()}`,
+      type: "block",
+      threadCount: 1,
+      accountId: currentAccountId,
+      emails: [...threadEmails],
+      scheduledAt: Date.now(),
+      delayMs: 5000,
+      blockedSender: senderEmail,
     });
   };
 
@@ -3448,13 +3623,7 @@ function EmailDetailInner({ isFullView = false }: EmailDetailProps) {
                       strokeLinecap="round"
                       strokeLinejoin="round"
                       strokeWidth={1.5}
-                      d="M7 10h8a8 8 0 018 8v2M7 10l6 6m-6-6l6-6"
-                    />
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={1.5}
-                      d="M3 14l4-4-4-4"
+                      d="M7 17l-5-5 5-5M12 17l-5-5 5-5M22 18v-2a4 4 0 00-4-4H7"
                     />
                   </svg>
                 </button>
@@ -3573,6 +3742,7 @@ function EmailDetailInner({ isFullView = false }: EmailDetailProps) {
                 onReply={() => openCompose("reply", email.id)}
                 onReplyAll={() => openCompose("reply-all", email.id)}
                 onForward={() => openCompose("forward", email.id)}
+                onBlockSender={handleBlockSender}
                 currentUserEmail={currentUserEmail}
                 accountId={currentAccountId ?? undefined}
                 threadEmails={threadEmails}
@@ -3634,6 +3804,7 @@ function EmailDetailInner({ isFullView = false }: EmailDetailProps) {
                         ? draftEmail.id
                         : undefined
                     }
+                    watchedDraftEmailId={draftEmail?.id}
                     onDiscardDraft={handleDiscardDraft}
                     nameMap={nameMap}
                   />
