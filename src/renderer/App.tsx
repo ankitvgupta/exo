@@ -1630,16 +1630,11 @@ export default function App() {
         .catch(console.error);
     }
 
-    // Deliberately NOT calling `window.api.sync.now(accountId)` here. It
-    // looks non-blocking from the renderer (it's an async IPC), but on the
-    // main process it runs `getHistoryChanges` synchronously enough to
-    // block the Electron main event loop for 7-9s when the account's
-    // history ID is stale (paginating empty history pages adds up).
-    // That's the macOS beachball users were seeing immediately after a
-    // switch — the renderer was responsive but the OS couldn't deliver
-    // input events while the main process was busy. The periodic 30s
-    // background sync interval covers the "see new emails" need without
-    // tying it to a user click.
+    // Trigger background sync to pick up any new emails (non-blocking).
+    // Safe to call on every click: getHistoryChanges yields to the event
+    // loop between Gmail History API pages so a stale account walking
+    // many empty pages no longer monopolises the main thread.
+    window.api.sync.now(accountId).catch(console.error);
   };
 
   const handleCancelScheduled = async (id: string) => {
