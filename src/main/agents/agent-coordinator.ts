@@ -64,8 +64,20 @@ export class AgentCoordinator {
     getInboxEmails: (accountId?: string) => db.getInboxEmails(accountId),
     getAllEmails: (accountId?: string) => db.getAllEmails(accountId),
     searchEmails: (query: string, options?: db.SearchOptions) => db.searchEmails(query, options),
-    saveAnalysis: (emailId: string, needsReply: boolean, reason: string, priority?: string) =>
-      db.saveAnalysis(emailId, needsReply, reason, priority),
+    saveAnalysis: (emailId: string, needsReply: boolean, reason: string, priority?: string) => {
+      const cleanup = db.saveAnalysis(emailId, needsReply, reason, priority);
+      // If reclassified as skip, fire-and-forget Gmail draft cleanup
+      if (cleanup) {
+        for (const c of cleanup) {
+          if (c.gmailDraftId && c.accountId) {
+            import("../services/gmail-draft-sync").then(({ deleteGmailDraftById }) =>
+              deleteGmailDraftById(c.accountId!, c.gmailDraftId!).catch(() => {}),
+            );
+          }
+        }
+      }
+      return cleanup;
+    },
     saveDraft: (
       emailId: string,
       draftBody: string,

@@ -16,11 +16,14 @@ import {
   getSendAsAliases,
   getSendAsAliasFetchedAt,
   upsertSendAsAliases,
+  deleteThreadDrafts,
+  getThreadDraftBody,
 } from "../db";
 import { networkMonitor } from "../services/network-monitor";
 import { outboxService } from "../services/outbox-service";
 import { prefetchService } from "../services/prefetch-service";
 import { isNetworkError } from "../services/network-errors";
+import { deleteGmailDraftById } from "../services/gmail-draft-sync";
 import { learnFromDraftEdit } from "../services/draft-edit-learner";
 import type {
   IpcResponse,
@@ -302,11 +305,21 @@ export function registerComposeIpc(): void {
         await new Promise((resolve) => setTimeout(resolve, 500));
         // Still trigger draft-edit learning in demo mode so we can test it
         if (options.threadId && !options.isForward) {
+          const draftSnapshot = getThreadDraftBody(options.threadId, options.accountId);
+          const demoCleanups = deleteThreadDrafts(options.threadId, options.accountId);
+          // Cancel in-flight agents (agent drafts now run in demo mode)
+          for (const cleanup of demoCleanups) {
+            if (cleanup.agentTaskId) {
+              const { agentCoordinator } = await import("../agents/agent-coordinator");
+              agentCoordinator.cancel(cleanup.agentTaskId);
+            }
+          }
           learnFromDraftEdit({
             threadId: options.threadId,
             accountId: options.accountId,
             sentBodyHtml: options.bodyHtml || "",
             sentBodyText: options.bodyText,
+            draftSnapshot: draftSnapshot ?? undefined,
           })
             .then((result) => {
               if (result && (result.promoted.length > 0 || result.draftMemoriesCreated > 0)) {
@@ -356,20 +369,45 @@ export function registerComposeIpc(): void {
           return { success: true, data: result };
         }
 
+        // Snapshot draft body BEFORE send so it's available for learning even if
+        // the draft is deleted (e.g. user archives the thread immediately after send).
+        const draftSnapshot =
+          options.threadId && !options.isForward
+            ? getThreadDraftBody(options.threadId, options.accountId)
+            : null;
+
         const result = await client.sendMessage(options);
 
-        // After sending a reply, mark the thread as read and re-queue analysis
-        // Skip for forwards — forwarding doesn't mean the user addressed the original conversation
+        // After sending a reply, clean up thread drafts and re-queue analysis.
+        // Skip for forwards — forwarding doesn't mean the user addressed the original conversation.
         if (options.threadId && !options.isForward) {
           triggerThreadReanalysis(options.threadId, options.accountId);
           // Fire-and-forget: mark thread read so Gmail shows it as read
           markThreadAsReadAfterSend(client, options.threadId, options.accountId);
+
+          // Clean up the AI draft now that the reply has been sent.
+          // Must happen after snapshotting the draft body (for learning) but before
+          // returning to the renderer — prevents a race where the user archives the
+          // thread immediately and deleteThreadDrafts tries to delete the Gmail draft
+          // that was already consumed or is no longer relevant.
+          const draftCleanups = deleteThreadDrafts(options.threadId, options.accountId);
+          for (const cleanup of draftCleanups) {
+            if (cleanup.gmailDraftId) {
+              deleteGmailDraftById(options.accountId, cleanup.gmailDraftId).catch(() => {});
+            }
+            if (cleanup.agentTaskId) {
+              const { agentCoordinator } = await import("../agents/agent-coordinator");
+              agentCoordinator.cancel(cleanup.agentTaskId);
+            }
+          }
+
           // Fire-and-forget: learn from draft edits (compare AI draft vs what was sent)
           learnFromDraftEdit({
             threadId: options.threadId,
             accountId: options.accountId,
             sentBodyHtml: options.bodyHtml || "",
             sentBodyText: options.bodyText,
+            draftSnapshot: draftSnapshot ?? undefined,
           })
             .then((result) => {
               if (result && (result.promoted.length > 0 || result.draftMemoriesCreated > 0)) {
