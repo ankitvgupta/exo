@@ -264,11 +264,21 @@ export function AgentCommandPalette({ isOpen, onClose }: AgentCommandPaletteProp
       const effectiveProviderIds = selectedAgentIds;
       const effectivePrompt = prompt;
 
-      // Build context — include email metadata only when an email is selected
+      // Build context — include email metadata only when an email is selected.
+      // In unified ("All Inboxes") mode currentAccountId is null; prefer the
+      // selected email's account, else fall back to primary so the agent
+      // always has a concrete account scope.
+      const fallbackAccountId =
+        currentAccountId ??
+        selectedEmail?.accountId ??
+        accounts.find((a) => a.isPrimary)?.id ??
+        accounts[0]?.id ??
+        "";
+      const fallbackAccount = accounts.find((a) => a.id === fallbackAccountId);
       const context: AgentContext = {
-        accountId: currentAccountId ?? "",
-        userEmail: currentAccount?.email ?? "",
-        userName: currentAccount?.displayName,
+        accountId: fallbackAccountId,
+        userEmail: fallbackAccount?.email ?? currentAccount?.email ?? "",
+        userName: fallbackAccount?.displayName ?? currentAccount?.displayName,
       };
 
       // The task key is the emailId when an email is selected, draft key for

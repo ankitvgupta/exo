@@ -686,8 +686,14 @@ export function ComposeEditor({
   const snippets = useAppStore((s) => s.snippets);
   const currentAccountId = useAppStore((s) => s.currentAccountId);
   const accounts = useAppStore((s) => s.accounts);
-  const accountSnippets = snippets.filter((s) => s.accountId === currentAccountId);
-  const currentAccountRecord = accounts.find((a) => a.id === currentAccountId);
+  // In unified ("All Inboxes") mode currentAccountId is null. Fall back to
+  // the primary account so snippets and the sender display name resolve to
+  // something sensible — the actual send account is controlled by the
+  // enclosing compose form via its own accountId prop / FromSelector.
+  const composeAccountId =
+    currentAccountId ?? accounts.find((a) => a.isPrimary)?.id ?? accounts[0]?.id ?? null;
+  const accountSnippets = snippets.filter((s) => s.accountId === composeAccountId);
+  const currentAccountRecord = accounts.find((a) => a.id === composeAccountId);
   const senderName =
     currentAccountRecord?.displayName || currentAccountRecord?.email?.split("@")[0];
 
