@@ -63,7 +63,13 @@ export type ComposeState = {
   restoredDraft?: RestoredDraft;
 } | null;
 
-// Thread representation - a group of emails with the same threadId
+// Thread representation - a group of emails with the same threadId.
+//
+// KEEP IN SYNC: EmailRow's memo comparator (src/renderer/components/EmailRow.tsx)
+// does field-level equality on this type to skip re-renders when only the
+// thread *object identity* changed (groupByThread rebuilds these on every
+// emails mutation). If you add a field here that EmailRow renders, add the
+// same field to the comparator — otherwise rows will silently go stale.
 export type EmailThread = {
   threadId: string;
   emails: DashboardEmail[];

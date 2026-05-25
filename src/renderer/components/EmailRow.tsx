@@ -347,6 +347,11 @@ export const EmailRow = memo(
     // every unrelated state update — the dominant cost of switching to an
     // account with a large inbox (e.g. ~20 rows × ~50 EmailList renders ×
     // ~10ms each ≈ 9s blocking the renderer).
+    //
+    // KEEP IN SYNC: if you add a field to `EmailThread` (src/renderer/store)
+    // that the EmailRow JSX below reads, add the same field to this
+    // comparator — otherwise rows will silently render stale data. The same
+    // applies if EmailRow's JSX starts rendering a previously-ignored field.
     const pt = prev.thread;
     const nt = next.thread;
     return (

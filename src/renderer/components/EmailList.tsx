@@ -159,7 +159,10 @@ function EmailListImpl() {
           }
         }
       });
-  }, [currentAccountId, setSnoozedThreads]);
+    // setSnoozedThreads is read once via useAppStore.getState() above — it's
+    // a stable function ref, so listing it as a dep would only mislead a
+    // future reader into thinking the effect can re-run because of it.
+  }, [currentAccountId]);
 
   // Listen for snooze events from main process, filtered by current account.
   // Read the live account id from the store inside each callback (not a ref
@@ -207,7 +210,9 @@ function EmailListImpl() {
           setArchiveReadyThreads(items);
         }
       });
-  }, [currentAccountId, setArchiveReadyThreads]);
+    // setArchiveReadyThreads is a stable getState() ref — see comment on
+    // the snooze effect above.
+  }, [currentAccountId]);
 
   // Listen for new archive-ready results from background prefetch.
   // Read live account id from the store in the callback (same reasoning as
