@@ -291,34 +291,26 @@ function EmailListImpl() {
   }, [recentlyRepliedThreadIds]);
 
   const handleArchiveAll = useCallback(() => {
-    // Read the live account id + threads at click time so we don't act on
-    // the deferred snapshot. `currentAccountId` and `threads` in the render
-    // scope are useDeferredValue-wrapped — for the ~1 frame after an
-    // account switch they reflect the OLD account, but `currentSplitId`
-    // (which gates the Archive All button) is NOT deferred. Without this
-    // guard, a click in that window would archive the old account's
-    // threads while attributing the undo action to whatever the deferred
-    // value happened to be.
-    const liveState = useAppStore.getState();
-    const liveAccountId = liveState.currentAccountId;
-    if (!liveAccountId) return;
-    // Recompute the archive-ready threads against live data. This is the
-    // same filter `useSplitFilteredThreads` would produce for the live
-    // account; we keep this local to avoid coupling to that hook's shape.
-    const currentEmails = liveState.emails;
-    const liveArchiveReadyIds = liveState.archiveReadyThreadIds;
-    const liveThreadIds = new Set<string>();
-    for (const e of currentEmails) {
-      if (e.accountId !== liveAccountId) continue;
-      if (liveArchiveReadyIds.has(e.threadId)) liveThreadIds.add(e.threadId);
-    }
-    if (liveThreadIds.size === 0) return;
+    // Use the *displayed* threads (deferred, with `excludeExclusive` already
+    // applied by useSplitFilteredThreads) and the matching deferred
+    // currentAccountId. They're rendered together so they always reflect
+    // the same account snapshot — archiving exactly what the user sees,
+    // attributed to the same account.
+    //
+    // Don't substitute live values here: an earlier attempt rebuilt the
+    // set from `state.emails` + `state.archiveReadyThreadIds` to dodge the
+    // 1-frame useDeferredValue lag, but that bypassed `excludeExclusive`
+    // and would have silently archived threads that live in an exclusive
+    // split and aren't visible in the Archive Ready view.
+    if (!currentAccountId || threads.length === 0) return;
 
-    const archiveReadyThreadIds = Array.from(liveThreadIds);
+    const archiveReadyThreadIds = threads.map((t) => t.threadId);
     const allEmailIds: string[] = [];
     const allEmails: DashboardEmail[] = [];
-    for (const email of currentEmails) {
-      if (liveThreadIds.has(email.threadId)) {
+    const { emails: currentEmails } = useAppStore.getState();
+    for (const thread of threads) {
+      const threadEmails = currentEmails.filter((e) => e.threadId === thread.threadId);
+      for (const email of threadEmails) {
         allEmailIds.push(email.id);
         allEmails.push(email);
       }
@@ -330,14 +322,14 @@ function EmailListImpl() {
     addUndoAction({
       id: `archive-all-${Date.now()}`,
       type: "archive",
-      threadCount: liveThreadIds.size,
-      accountId: liveAccountId,
+      threadCount: threads.length,
+      accountId: currentAccountId,
       emails: allEmails,
       scheduledAt: Date.now(),
       delayMs: 5000,
       archiveReadyThreadIds,
     });
-  }, [removeEmails, setCurrentSplitId, addUndoAction]);
+  }, [currentAccountId, threads, removeEmails, setCurrentSplitId, addUndoAction]);
 
   const currentProgress = currentAccountId ? syncProgress[currentAccountId] : null;
   const isInitialSyncing = currentProgress && currentProgress.fetched < currentProgress.total;
