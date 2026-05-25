@@ -55,6 +55,12 @@ function EmailListImpl() {
   // re-render fires all account-scoped useEffects + IPC responses while the
   // 700+ item virtualizer is mid-commit, which is what produced the original
   // ~9s blocking window.
+  //
+  // Expected tradeoff: `SplitTabs` (and `useKeyboardShortcuts`) read the live
+  // account id + live threads from the store, so for ~1 frame after an account
+  // switch the split tab counts/keyboard-target reflect the new account while
+  // the visible thread list still shows the old. This self-resolves on the
+  // next frame and is the price of unblocking the click.
   const _liveAccountId = useAppStore((s) => s.currentAccountId);
   const currentAccountId = useDeferredValue(_liveAccountId);
   const selectedThreadIds = useAppStore((s) => s.selectedThreadIds);
@@ -264,13 +270,15 @@ function EmailListImpl() {
   // When a thread is added to recentlyRepliedThreadIds, schedule its removal
   // after 3 minutes so the thread naturally moves to its correct category.
   const recentlyRepliedThreadIds = useAppStore((s) => s.recentlyRepliedThreadIds);
-  const removeRecentlyRepliedThread = useAppStore((s) => s.removeRecentlyRepliedThread);
   useEffect(() => {
     if (recentlyRepliedThreadIds.size === 0) return;
 
     const timers: ReturnType<typeof setTimeout>[] = [];
     const now = Date.now();
     const GRACE_MS = 3 * 60 * 1000;
+    // Read the action via getState() for consistency with the rest of this
+    // component (every other store action above is obtained the same way).
+    const removeRecentlyRepliedThread = useAppStore.getState().removeRecentlyRepliedThread;
 
     for (const [threadId, repliedAt] of recentlyRepliedThreadIds) {
       const remaining = Math.max(0, GRACE_MS - (now - repliedAt));
@@ -471,6 +479,12 @@ function EmailListImpl() {
     isSnoozedView,
     snoozedThreads,
     currentSplit,
+    // currentSplitId is read inside (the `=== "__other__"` branch). Previously
+    // `threads` was always recomputed synchronously alongside currentSplitId, so
+    // this was masked — but with `useDeferredValue(_sft.threads)` there's a
+    // 1-frame window where currentSplitId has changed but threads hasn't, and
+    // without this dep the memo returns the cached (wrong-split) draft list.
+    currentSplitId,
   ]);
 
   // Calculate initial scroll offset so the virtualizer renders the correct
