@@ -74,9 +74,11 @@ async function exaSearch(query) {
 }
 
 // Mirrors callOllamaNative in src/main/services/llm-service.ts — the native
-// /api/chat endpoint with think:false. The Anthropic-compat endpoint is
-// 3-5x slower in practice because models emit thinking blocks by default
-// there, which `think: false` here suppresses.
+// /api/chat endpoint. Defaults to `think: true` so that reasoning-trained
+// models (kimi-k2.6:cloud, gpt-oss, etc.) route their CoT into a separate
+// thinking block instead of dumping it into message.content. This is the
+// prod default after PR #160 — without it, kimi-k2.6 would inline ~3-4 KB
+// of "Wait... Actually..." reasoning into the JSON output and break parsing.
 async function ollamaChat(prompt, maxTokens) {
   const res = await fetch("https://ollama.com/api/chat", {
     method: "POST",
@@ -87,7 +89,7 @@ async function ollamaChat(prompt, maxTokens) {
     body: JSON.stringify({
       model: OLLAMA_MODEL,
       stream: false,
-      think: false,
+      think: true,
       messages: [{ role: "user", content: prompt }],
       options: { num_predict: maxTokens },
     }),
