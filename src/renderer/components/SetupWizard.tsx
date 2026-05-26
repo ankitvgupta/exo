@@ -27,9 +27,12 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
   const [googleClientId, setGoogleClientId] = useState("");
   const [googleClientSecret, setGoogleClientSecret] = useState("");
 
-  // API key inputs — user may provide Anthropic, Ollama Cloud, or both.
+  // API key inputs. Anthropic and Ollama Cloud are LLM providers — at least
+  // one is required. Exa is an optional search backend for sender lookup;
+  // pairing it with Ollama unlocks sender lookup without an Anthropic key.
   const [apiKey, setApiKey] = useState("");
   const [ollamaApiKey, setOllamaApiKey] = useState("");
+  const [exaApiKey, setExaApiKey] = useState("");
 
   // Extension auth state
   const [extensionAuths, setExtensionAuths] = useState<ExtensionAuthInfo[]>([]);
@@ -110,11 +113,15 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
   const handleSaveApiKey = async () => {
     const trimmedAnthropic = apiKey.trim();
     const trimmedOllama = ollamaApiKey.trim();
+    const trimmedExa = exaApiKey.trim();
     const hasAnthropic = trimmedAnthropic.length > 0;
     const hasOllama = trimmedOllama.length > 0;
+    const hasExa = trimmedExa.length > 0;
 
     if (!hasAnthropic && !hasOllama) {
-      setError("Please enter at least one API key (Anthropic or Ollama Cloud)");
+      setError(
+        "Please enter an Anthropic or Ollama Cloud key (Exa alone is not enough — it needs an LLM to parse search results)",
+      );
       return;
     }
 
@@ -141,11 +148,18 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
           return;
         }
       }
+      // Exa key is not validated here — there's no free no-side-effect endpoint;
+      // any /search call costs a credit. A bad key surfaces fast at first lookup
+      // with a clear error message.
 
-      // Build the settings write. Only flip featureProviders to ollama-cloud
-      // when the user provided ONLY an Ollama key — providing both keys keeps
-      // schema defaults (all anthropic, sender lookup enabled) so nothing
-      // silently reroutes. The user can per-feature route in Settings later.
+      // Build the settings write. Two LLM-routing branches:
+      //   1. User provided Anthropic (with or without Ollama): keep schema
+      //      defaults (anthropic for all features). User can per-feature route
+      //      to Ollama later in Settings.
+      //   2. User provided ONLY Ollama (no Anthropic): all LLM features must
+      //      route to Ollama. Sender lookup is special — it needs either
+      //      Anthropic web_search OR an Exa key + an LLM. With Exa, route the
+      //      parsing LLM to Ollama; without, disable sender lookup entirely.
       const settings: Parameters<typeof window.api.settings.set>[0] = {};
       if (hasAnthropic) {
         settings.anthropicApiKey = trimmedAnthropic;
@@ -156,21 +170,31 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
           defaultModel: DEFAULT_OLLAMA_MODEL,
         };
         if (!hasAnthropic) {
-          // Sender lookup uses Anthropic's web_search tool (Anthropic-only).
-          // Pin to anthropic and disable since the user has no Anthropic key.
-          settings.enableSenderLookup = false;
           settings.featureProviders = {
             analysis: "ollama-cloud",
             drafts: "ollama-cloud",
             refinement: "ollama-cloud",
             calendaring: "ollama-cloud",
             archiveReady: "ollama-cloud",
-            senderLookup: "anthropic",
+            // Exa unlocks sender lookup on the Ollama-only path. Without it,
+            // pin to anthropic (so the saved value is valid) but disable the
+            // feature since there's no working search backend.
+            senderLookup: hasExa ? "ollama-cloud" : "anthropic",
             agentDrafter: "ollama-cloud",
             agentChat: "ollama-cloud",
             styleInference: "ollama-cloud",
           };
+          if (!hasExa) {
+            settings.enableSenderLookup = false;
+          }
         }
+      }
+      if (hasExa) {
+        // Providing an Exa key is an explicit choice to use the Exa search
+        // backend over Claude's bundled web_search. Flip the provider to "exa"
+        // so it actually takes effect — otherwise the saved key sits unused.
+        settings.exaApiKey = trimmedExa;
+        settings.senderLookupProvider = "exa";
       }
 
       const result = (await window.api.settings.set(settings)) as IpcResponse<void>;
@@ -403,8 +427,9 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
               </h2>
               <p className="text-gray-600 dark:text-gray-400 mb-6">
                 Exo uses AI to analyze your emails, generate drafts, and look up sender information.
-                Provide a key for Anthropic, Ollama Cloud, or both — you can configure per-feature
-                routing later in Settings.
+                At least one LLM provider (Anthropic or Ollama Cloud) is required; Exa is an
+                optional search backend that lets sender lookup work without Anthropic. Everything
+                here can be reconfigured later in Settings.
               </p>
 
               <div className="space-y-5 mb-6">
@@ -446,7 +471,8 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                     </a>
                   </div>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                    Open-source models. If only Ollama is provided, sender lookup will be disabled.
+                    Open-source models. If only Ollama is provided, sender lookup is disabled unless
+                    you also add an Exa key below.
                   </p>
                   <input
                     type="password"
@@ -454,6 +480,37 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                     onChange={(e) => setOllamaApiKey(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && !isLoading && handleSaveApiKey()}
                     placeholder="ollama-cloud-..."
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div className="border border-gray-200 dark:border-gray-600 rounded-lg p-4">
+                  <div className="flex items-baseline justify-between mb-2">
+                    <h3 className="font-medium text-gray-900 dark:text-gray-100">
+                      Exa{" "}
+                      <span className="text-xs font-normal text-gray-500 dark:text-gray-400">
+                        (optional)
+                      </span>
+                    </h3>
+                    <a
+                      href="https://dashboard.exa.ai/api-keys"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-blue-600 dark:text-blue-400 underline hover:no-underline"
+                    >
+                      dashboard.exa.ai
+                    </a>
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                    Search backend for sender lookup. With Exa, sender lookup works without
+                    Anthropic — the parsing step uses whichever LLM you configured above.
+                  </p>
+                  <input
+                    type="password"
+                    value={exaApiKey}
+                    onChange={(e) => setExaApiKey(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && !isLoading && handleSaveApiKey()}
+                    placeholder="exa-..."
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>

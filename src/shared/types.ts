@@ -356,6 +356,15 @@ export const LLM_PROVIDERS = ["anthropic", "ollama-cloud"] as const;
 export const LlmProviderSchema = z.enum(["anthropic", "ollama-cloud"]);
 export type LlmProvider = z.infer<typeof LlmProviderSchema>;
 
+// Search backends for sender lookup. "anthropic" uses Claude's built-in
+// web_search tool (search + extraction in one LLM call). "exa" hits Exa's
+// /search REST endpoint and then sends the results to the configured
+// senderLookup LLM for extraction — which means the parsing LLM can be
+// any provider (Anthropic or Ollama Cloud), unlike the bundled path.
+export const SENDER_LOOKUP_PROVIDERS = ["anthropic", "exa"] as const;
+export const SenderLookupProviderSchema = z.enum(["anthropic", "exa"]);
+export type SenderLookupProvider = z.infer<typeof SenderLookupProviderSchema>;
+
 /**
  * Default Ollama Cloud model when none is configured.
  *
@@ -394,6 +403,12 @@ export const ConfigSchema = z.object({
   autoDraft: AutoDraftConfigSchema.optional(),
   agentDrafterPrompt: z.string().optional(),
   enableSenderLookup: z.boolean().default(true),
+  // Search backend for sender lookup. Default "anthropic" (Claude web_search
+  // tool) preserves existing behavior; users can switch to Exa to use a
+  // dedicated search API + a configurable parsing model (which can be Ollama).
+  senderLookupProvider: SenderLookupProviderSchema.default("anthropic"),
+  // Exa API key. Only consulted when senderLookupProvider === "exa".
+  exaApiKey: z.string().optional(),
   syncDraftsToGmail: z.boolean().default(false),
   theme: z.enum(["light", "dark", "system"]).default("system"),
   inboxDensity: z.enum(["default", "compact"]).default("compact"),

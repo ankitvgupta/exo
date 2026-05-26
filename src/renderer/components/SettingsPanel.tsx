@@ -20,6 +20,8 @@ import {
   type CliToolConfig,
   LLM_PROVIDERS,
   type LlmProvider,
+  SENDER_LOOKUP_PROVIDERS,
+  type SenderLookupProvider,
   DEFAULT_OLLAMA_MODEL,
   type BlockedSender,
 } from "../../shared/types";
@@ -91,6 +93,9 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
 
   // General settings state
   const [enableSenderLookup, setEnableSenderLookup] = useState(true);
+  const [senderLookupProvider, setSenderLookupProvider] =
+    useState<SenderLookupProvider>("anthropic");
+  const [exaApiKey, setExaApiKey] = useState("");
   const [syncDraftsToGmail, setSyncDraftsToGmail] = useState(false);
   const [modelConfig, setModelConfig] = useState<ModelConfig>(DEFAULT_MODEL_CONFIG);
   const [featureProviders, setFeatureProviders] = useState<Record<string, LlmProvider>>({});
@@ -238,6 +243,8 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
   useEffect(() => {
     if (generalConfig) {
       setEnableSenderLookup(generalConfig.enableSenderLookup ?? true);
+      setSenderLookupProvider(generalConfig.senderLookupProvider ?? "anthropic");
+      setExaApiKey(generalConfig.exaApiKey ?? "");
       setSyncDraftsToGmail(generalConfig.syncDraftsToGmail ?? false);
       setModelConfig({ ...DEFAULT_MODEL_CONFIG, ...generalConfig.modelConfig });
       setFeatureProviders(generalConfig.featureProviders ?? {});
@@ -404,6 +411,8 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
     try {
       await window.api.settings.set({
         enableSenderLookup,
+        senderLookupProvider,
+        exaApiKey: exaApiKey || undefined,
         syncDraftsToGmail,
         modelConfig,
         featureProviders,
@@ -1191,6 +1200,87 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                 )}
               </div>
 
+              {/* Sender Lookup */}
+              <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-600 mb-6">
+                <div className="mb-3">
+                  <h3 className="font-semibold text-gray-900 dark:text-gray-100">
+                    Sender Lookup Search
+                  </h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                    Which search backend to use when looking up info about email senders. The model
+                    used to parse the results is set below under <em>Sender Lookup</em> in AI
+                    Models.
+                  </p>
+                </div>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3">
+                    <label
+                      htmlFor="sender-lookup-provider"
+                      className="text-sm font-medium text-gray-700 dark:text-gray-300 w-24"
+                    >
+                      Backend
+                    </label>
+                    <select
+                      id="sender-lookup-provider"
+                      value={senderLookupProvider}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if ((SENDER_LOOKUP_PROVIDERS as readonly string[]).includes(v)) {
+                          setSenderLookupProvider(v as SenderLookupProvider);
+                          // Switching away from Exa hides the Ollama Cloud option
+                          // in the senderLookup model dropdown — reset to anthropic
+                          // so a stale "ollama-cloud" value isn't silently persisted
+                          // and then re-activated when the user switches back to Exa.
+                          if (v !== "exa" && featureProviders.senderLookup === "ollama-cloud") {
+                            setFeatureProviders((prev) => ({
+                              ...prev,
+                              senderLookup: "anthropic",
+                            }));
+                          }
+                        }
+                      }}
+                      className="flex-1 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-500 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="anthropic">
+                        Anthropic (Claude web_search — single call, no extra key)
+                      </option>
+                      <option value="exa">Exa (search API + configurable parsing model)</option>
+                    </select>
+                  </div>
+                  {senderLookupProvider === "exa" && (
+                    <div className="flex items-center gap-3">
+                      <label
+                        htmlFor="exa-api-key"
+                        className="text-sm font-medium text-gray-700 dark:text-gray-300 w-24"
+                      >
+                        Exa API key
+                      </label>
+                      <input
+                        id="exa-api-key"
+                        type="password"
+                        value={exaApiKey}
+                        onChange={(e) => setExaApiKey(e.target.value)}
+                        placeholder="Get one at dashboard.exa.ai"
+                        className="flex-1 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-500 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                  )}
+                  {senderLookupProvider === "exa" && !exaApiKey && anthropicApiKey && (
+                    <p className="text-xs text-amber-600 dark:text-amber-400">
+                      No Exa key configured — sender lookups will fall back to Anthropic web_search
+                      until you add one.
+                    </p>
+                  )}
+                  {senderLookupProvider === "exa" && !exaApiKey && !anthropicApiKey && (
+                    <p className="text-xs text-amber-600 dark:text-amber-400">
+                      No Exa key configured. You also haven&apos;t set an Anthropic key, so there is
+                      no fallback — sender lookup will be skipped until you add an Exa key above (or
+                      an Anthropic key under AI Provider).
+                    </p>
+                  )}
+                </div>
+              </div>
+
               {/* AI Models */}
               <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-600 mb-6">
                 <div className="mb-3">
@@ -1271,11 +1361,12 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                             className="px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-500 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                           >
                             <option value="anthropic">Anthropic</option>
-                            {/* senderLookup hardcodes Anthropic's web_search_20250305
-                                tool — there's no Ollama equivalent. Hide the option
-                                rather than letting users save a route that can't be
-                                honored at call time. */}
-                            {key !== "senderLookup" && (
+                            {/* For senderLookup, the Ollama option is only honored when
+                                the search backend is Exa — the Anthropic backend bundles
+                                search + parse into one web_search tool call, which doesn't
+                                exist on Ollama. Hide it on the Anthropic backend to avoid
+                                saving a route that can't be honored at call time. */}
+                            {(key !== "senderLookup" || senderLookupProvider === "exa") && (
                               <option value="ollama-cloud">Ollama Cloud</option>
                             )}
                           </select>
