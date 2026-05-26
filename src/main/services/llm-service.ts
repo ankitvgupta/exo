@@ -92,7 +92,9 @@ export interface CreateOptions {
   provider?: LlmProvider;
   /**
    * Ollama thinking mode (only honored when provider === "ollama-cloud").
-   * `false` → no thinking, fastest. `true` → standard thinking.
+   * `false` → disable thinking (fastest; safe for non-reasoning models).
+   * `true` → standard thinking (default).
+   * `"low"` | `"medium"` | `"high"` → budget-constrained thinking effort.
    * `"max"` → maximum thinking effort on capable models (deepseek-v4-pro etc.).
    * Default: `true`. Reasoning-trained models (kimi-k2.6, gpt-oss, etc.) emit
    * chain-of-thought regardless of this flag; setting it to `true` makes Ollama
