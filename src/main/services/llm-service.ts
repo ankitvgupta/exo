@@ -90,6 +90,15 @@ export interface CreateOptions {
   timeoutMs?: number;
   /** LLM provider to use. Defaults to "anthropic". */
   provider?: LlmProvider;
+  /**
+   * Ollama thinking mode (only honored when provider === "ollama-cloud").
+   * `false` → no thinking, fastest. `true` → standard thinking.
+   * `"max"` → maximum thinking effort on capable models (deepseek-v4-pro etc.).
+   * Default: `false` — benchmarked faster AND more accurate than thinking for
+   * email analysis on kimi-k2.6 (3.1s vs 8.4s p50, 82% vs 76% agreement with
+   * Claude Sonnet baseline). Ignored for Anthropic.
+   */
+  think?: boolean | "low" | "medium" | "high" | "max";
 }
 
 // --- Anthropic client (api.anthropic.com) ---
@@ -385,6 +394,176 @@ function adjustParamsForOllama(
   return next;
 }
 
+// --- Native Ollama path (callOllamaNative) ---
+//
+// For non-agent features (analysis, drafts, etc.) we bypass the Anthropic SDK
+// and hit Ollama's native /api/chat directly. The native endpoint accepts a
+// `think` param that the Anthropic-compat /v1/messages endpoint does not —
+// without it we're stuck at default thinking depth, which is slower AND less
+// accurate than no-thinking for analysis (3.1s vs 8.4s p50, 82% vs 76%
+// agreement with Claude per scripts/compare-analysis-models.mjs benchmark).
+//
+// Synthesizes an Anthropic-style Message so downstream callers (which extract
+// `.content[0].text`) don't need to change.
+//
+// The agent sidebar still goes through the Anthropic-compat endpoint because
+// it's driven by the Claude Code subprocess which only speaks Anthropic
+// protocol — we can't intercept its outgoing fetches without a proxy.
+
+/** Flatten Anthropic-style system param (string | TextBlockParam[]) to plain text. */
+function flattenSystemPrompt(system: MessageCreateParamsNonStreaming["system"]): string {
+  if (!system) return "";
+  if (typeof system === "string") return system;
+  return system
+    .map((block) => (typeof block === "string" ? block : block.type === "text" ? block.text : ""))
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+/** Flatten Anthropic-style message content (string | block[]) to plain text. */
+function flattenMessageContent(content: unknown): string {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
+  return content
+    .map((block) => {
+      if (typeof block === "string") return block;
+      if (block && typeof block === "object" && "type" in block && block.type === "text") {
+        return (block as { text: string }).text ?? "";
+      }
+      return "";
+    })
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+interface OllamaChatResponse {
+  model?: string;
+  message?: { role?: string; content?: string; thinking?: string };
+  prompt_eval_count?: number;
+  eval_count?: number;
+  done?: boolean;
+}
+
+/**
+ * Synthesize an Anthropic-style Message from an Ollama /api/chat response so
+ * downstream callers don't need to know which path was taken.
+ */
+function synthesizeAnthropicMessage(
+  ollamaResponse: OllamaChatResponse,
+  requestedModel: string,
+): Message {
+  const text = ollamaResponse.message?.content ?? "";
+  const thinking = ollamaResponse.message?.thinking ?? "";
+  const inputTokens = ollamaResponse.prompt_eval_count ?? 0;
+  const outputTokens = ollamaResponse.eval_count ?? 0;
+
+  const content: Message["content"] = [];
+  if (thinking) {
+    // Anthropic's thinking block shape — included so callers that look for
+    // thinking text find it. Most downstream code just looks for type:"text".
+    content.push({
+      type: "thinking",
+      thinking,
+      signature: "",
+    } as unknown as Message["content"][number]);
+  }
+  content.push({ type: "text", text, citations: null } as unknown as Message["content"][number]);
+
+  return {
+    id: `ollama-native-${randomUUID()}`,
+    type: "message",
+    role: "assistant",
+    model: ollamaResponse.model ?? requestedModel,
+    content,
+    stop_reason: "end_turn",
+    stop_sequence: null,
+    usage: {
+      input_tokens: inputTokens,
+      output_tokens: outputTokens,
+      cache_creation_input_tokens: 0,
+      cache_read_input_tokens: 0,
+      server_tool_use: null,
+      service_tier: null,
+    } as Message["usage"],
+  } as Message;
+}
+
+async function callOllamaNative(
+  params: MessageCreateParamsNonStreaming,
+  think: CreateOptions["think"],
+  signal: AbortSignal | undefined,
+): Promise<Message> {
+  if (!_ollamaApiKey) {
+    throw new Error(
+      "Ollama Cloud API key not configured. Add your key in Settings → Extensions → Ollama Cloud.",
+    );
+  }
+
+  // Tools aren't currently translated for the native path. No Ollama-routed
+  // caller passes tools today (senderLookup uses Anthropic's web_search and
+  // is pinned to anthropic). Throw explicitly so a future caller adding tools
+  // sees a clear error instead of silently dropping them.
+  if (params.tools && params.tools.length > 0) {
+    throw new Error(
+      "callOllamaNative: tools not supported on native /api/chat path. Caller must route to Anthropic or extend the translation layer.",
+    );
+  }
+
+  const systemText = flattenSystemPrompt(params.system);
+  const ollamaMessages: Array<{ role: string; content: string }> = [];
+  if (systemText) ollamaMessages.push({ role: "system", content: systemText });
+  for (const msg of params.messages) {
+    ollamaMessages.push({ role: msg.role, content: flattenMessageContent(msg.content) });
+  }
+
+  const body: Record<string, unknown> = {
+    model: params.model,
+    stream: false,
+    messages: ollamaMessages,
+    options: {
+      num_predict: typeof params.max_tokens === "number" ? params.max_tokens : OLLAMA_MIN_MAX_TOKENS,
+      ...(typeof params.temperature === "number" ? { temperature: params.temperature } : {}),
+    },
+  };
+  // think: false is meaningful (turn thinking OFF) so include it unless caller
+  // omitted it entirely. Default to false for non-agent calls — benchmarked
+  // faster + more accurate (see comment above).
+  if (think !== undefined) body.think = think;
+  else body.think = false;
+
+  const res = await fetch("https://ollama.com/api/chat", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${_ollamaApiKey}`,
+    },
+    body: JSON.stringify(body),
+    signal,
+  });
+
+  if (!res.ok) {
+    const errText = await res.text().catch(() => "");
+    // Map common Ollama errors onto Anthropic SDK error shapes so our retry
+    // category detection (which uses instanceof Anthropic.APIError) still
+    // works. Use the SDK's constructors directly.
+    const status = res.status;
+    if (status === 401 || status === 403) {
+      throw new Anthropic.AuthenticationError(status, undefined, errText, undefined);
+    }
+    if (status === 429) {
+      throw new Anthropic.RateLimitError(status, undefined, errText, undefined);
+    }
+    if (status === 529 || status >= 500) {
+      // 529 maps to the "overloaded" category our retry logic handles.
+      throw new Anthropic.APIError(status, undefined, errText, undefined);
+    }
+    throw new Anthropic.APIError(status, undefined, errText, undefined);
+  }
+
+  const ollamaResponse = (await res.json()) as OllamaChatResponse;
+  return synthesizeAnthropicMessage(ollamaResponse, params.model);
+}
+
 /**
  * Create a message using the configured LLM provider with retry and cost tracking.
  */
@@ -392,7 +571,7 @@ export async function createMessage(
   params: MessageCreateParamsNonStreaming,
   options: CreateOptions,
 ): Promise<Message> {
-  const { caller, emailId, accountId, timeoutMs, provider } = options;
+  const { caller, emailId, accountId, timeoutMs, provider, think } = options;
   const isOllama = provider === "ollama-cloud";
   const model = params.model;
   const startTime = Date.now();
@@ -400,7 +579,10 @@ export async function createMessage(
   // Strip cache_control for Ollama (unsupported)
   const effectiveParams = isOllama ? adjustParamsForOllama(params) : params;
 
-  const client = getClientForProvider(provider);
+  // For Ollama we use the SDK's retry-category logic but call our native path
+  // instead of client.messages.create(). For Anthropic we use the SDK.
+  // _testOllamaClient overrides the native path in unit tests.
+  const client = isOllama ? null : getClientForProvider(provider);
   let lastError: unknown = null;
   let totalAttempts = 0;
 
@@ -419,9 +601,23 @@ export async function createMessage(
     }
 
     try {
-      const response = await client.messages.create(effectiveParams, {
-        signal: abortController?.signal,
-      });
+      let response: Message;
+      if (isOllama) {
+        // Native /api/chat path — honors `think` config. Also lets the unit
+        // test mock (set via _setOllamaClientForTesting) intercept via the
+        // injected messages.create shim, for backwards-compat with existing tests.
+        if (_ollamaClient) {
+          response = await _ollamaClient.messages.create(effectiveParams, {
+            signal: abortController?.signal,
+          });
+        } else {
+          response = await callOllamaNative(effectiveParams, think, abortController?.signal);
+        }
+      } else {
+        response = await client!.messages.create(effectiveParams, {
+          signal: abortController?.signal,
+        });
+      }
 
       // Success — record and return
       const usage = response.usage as unknown as Record<string, number>;
