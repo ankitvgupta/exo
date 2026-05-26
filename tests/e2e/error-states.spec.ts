@@ -72,8 +72,14 @@ test.describe("Error States - App Load", () => {
   });
 
   test("app title is visible", async () => {
-    // The Exo title should be in the titlebar
-    await expect(page.locator("text=Exo").first()).toBeVisible({ timeout: 5000 });
+    // The "Exo" brand renders only on macOS (hidden-inset titlebar). On other
+    // platforms there is no brand text, so assert the always-visible titlebar
+    // Settings control instead.
+    const anchor =
+      process.platform === "darwin"
+        ? page.locator("text=Exo").first()
+        : page.locator('button[aria-label="Settings"]');
+    await expect(anchor).toBeVisible({ timeout: 5000 });
   });
 });
 
@@ -343,7 +349,8 @@ test.describe("Error States - UI Resilience", () => {
       // switches to full-view mode which hides the sidebar, so a previous
       // assertion against `text=Inbox` would flake. The titlebar is always
       // visible whatever the view mode.
-      await expect(page.locator("h1").filter({ hasText: "Exo" })).toBeVisible({ timeout: 5000 });
+      // Always-visible titlebar control (the "Exo" brand h1 is macOS-only).
+      await expect(page.locator('button[aria-label="Settings"]')).toBeVisible({ timeout: 5000 });
     }
   });
 
@@ -363,7 +370,8 @@ test.describe("Error States - UI Resilience", () => {
       // App should still be alive after refresh. Verify against the always-
       // visible titlebar rather than the sidebar Inbox button, which is
       // hidden when the previous keyboard actions land the app in full view.
-      await expect(page.locator("h1").filter({ hasText: "Exo" })).toBeVisible({ timeout: 5000 });
+      // Always-visible titlebar control (the "Exo" brand h1 is macOS-only).
+      await expect(page.locator('button[aria-label="Settings"]')).toBeVisible({ timeout: 5000 });
     }
   });
 });
