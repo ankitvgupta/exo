@@ -1227,6 +1227,16 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                         const v = e.target.value;
                         if ((SENDER_LOOKUP_PROVIDERS as readonly string[]).includes(v)) {
                           setSenderLookupProvider(v as SenderLookupProvider);
+                          // Switching away from Exa hides the Ollama Cloud option
+                          // in the senderLookup model dropdown — reset to anthropic
+                          // so a stale "ollama-cloud" value isn't silently persisted
+                          // and then re-activated when the user switches back to Exa.
+                          if (v !== "exa" && featureProviders.senderLookup === "ollama-cloud") {
+                            setFeatureProviders((prev) => ({
+                              ...prev,
+                              senderLookup: "anthropic",
+                            }));
+                          }
                         }
                       }}
                       className="flex-1 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-500 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
