@@ -207,11 +207,11 @@ ${profile.summary}
       {
         model: this.model,
         max_tokens: 1024,
+        system: [{ type: "text", text: `${this.prompt}\n\n${UNTRUSTED_DATA_INSTRUCTION}` }],
         messages: [
           {
             role: "user",
-            content: `${this.prompt}
-${recipientContext}
+            content: `${recipientContext}
 ---
 Compose a new email (not a reply to an existing thread).
 

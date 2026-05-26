@@ -92,11 +92,17 @@ export interface CreateOptions {
   provider?: LlmProvider;
   /**
    * Ollama thinking mode (only honored when provider === "ollama-cloud").
-   * `false` → no thinking, fastest. `true` → standard thinking.
+   * `false` → disable thinking (fastest; safe for non-reasoning models).
+   * `true` → standard thinking (default).
+   * `"low"` | `"medium"` | `"high"` → budget-constrained thinking effort.
    * `"max"` → maximum thinking effort on capable models (deepseek-v4-pro etc.).
-   * Default: `false` — benchmarked faster AND more accurate than thinking for
-   * email analysis on kimi-k2.6 (3.1s vs 8.4s p50, 82% vs 76% agreement with
-   * Claude Sonnet baseline). Ignored for Anthropic.
+   * Default: `true`. Reasoning-trained models (kimi-k2.6, gpt-oss, etc.) emit
+   * chain-of-thought regardless of this flag; setting it to `true` makes Ollama
+   * return that reasoning in `message.thinking` instead of dumping it into
+   * `message.content`. With `false`, free-form writers (compose, refine) ship
+   * the reasoning trace as the email body, and JSON-output callers (analyzer,
+   * calendaring, archive-ready) fail JSON.parse ~66% of the time on kimi-k2.6.
+   * Ignored for Anthropic.
    */
   think?: boolean | "low" | "medium" | "high" | "max";
 }
@@ -399,9 +405,11 @@ function adjustParamsForOllama(
 // For non-agent features (analysis, drafts, etc.) we bypass the Anthropic SDK
 // and hit Ollama's native /api/chat directly. The native endpoint accepts a
 // `think` param that the Anthropic-compat /v1/messages endpoint does not —
-// without it we're stuck at default thinking depth, which is slower AND less
-// accurate than no-thinking for analysis (3.1s vs 8.4s p50, 82% vs 76%
-// agreement with Claude per scripts/compare-analysis-models.mjs benchmark).
+// we need it because reasoning-trained models (kimi-k2.6, gpt-oss) emit CoT
+// regardless of the flag, and only `think:true` makes Ollama return that CoT
+// in `message.thinking` instead of dumping it into `message.content`. With
+// `think:false`, writing callers ship the reasoning trace as the email body
+// and JSON callers fail to parse.
 //
 // Synthesizes an Anthropic-style Message so downstream callers (which extract
 // `.content[0].text`) don't need to change.
@@ -526,11 +534,14 @@ async function callOllamaNative(
       ...(typeof params.temperature === "number" ? { temperature: params.temperature } : {}),
     },
   };
-  // think: false is meaningful (turn thinking OFF) so include it unless caller
-  // omitted it entirely. Default to false for non-agent calls — benchmarked
-  // faster + more accurate (see comment above).
+  // think: false is meaningful (turn thinking OFF for non-reasoning models)
+  // so include it unless the caller omitted it entirely. Default to true:
+  // reasoning models on Ollama (kimi-k2.6, gpt-oss) emit CoT regardless of
+  // this flag, and only `true` causes the cloud to split the trace into a
+  // separate `message.thinking` field so it doesn't pollute `message.content`.
+  // See CreateOptions.think doc comment for details.
   if (think !== undefined) body.think = think;
-  else body.think = false;
+  else body.think = true;
 
   const res = await fetch("https://ollama.com/api/chat", {
     method: "POST",
