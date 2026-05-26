@@ -27,11 +27,8 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
   const [googleClientId, setGoogleClientId] = useState("");
   const [googleClientSecret, setGoogleClientSecret] = useState("");
 
-  // API key input
+  // API key inputs — user may provide Anthropic, Ollama Cloud, or both.
   const [apiKey, setApiKey] = useState("");
-  const [selectedProvider, setSelectedProvider] = useState<"anthropic" | "ollama-cloud">(
-    "anthropic",
-  );
   const [ollamaApiKey, setOllamaApiKey] = useState("");
 
   // Extension auth state
@@ -111,72 +108,58 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
   };
 
   const handleSaveApiKey = async () => {
-    if (selectedProvider === "anthropic") {
-      if (!apiKey.trim()) {
-        setError("Please enter your Anthropic API key");
-        return;
-      }
+    const trimmedAnthropic = apiKey.trim();
+    const trimmedOllama = ollamaApiKey.trim();
+    const hasAnthropic = trimmedAnthropic.length > 0;
+    const hasOllama = trimmedOllama.length > 0;
 
-      setIsLoading(true);
-      setError(null);
+    if (!hasAnthropic && !hasOllama) {
+      setError("Please enter at least one API key (Anthropic or Ollama Cloud)");
+      return;
+    }
 
-      try {
-        // Validate the key with a real API call before saving
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      // Validate each provided key independently before saving anything.
+      if (hasAnthropic) {
         const validation = (await window.api.settings.validateApiKey(
-          apiKey.trim(),
+          trimmedAnthropic,
         )) as IpcResponse<void>;
         if (!validation.success) {
-          setError(validation.error ?? "Invalid API key");
+          setError(`Anthropic key: ${validation.error ?? "invalid"}`);
           return;
         }
-
-        const result = (await window.api.settings.set({
-          anthropicApiKey: apiKey.trim(),
-        })) as IpcResponse<void>;
-        if (result.success) {
-          const authResult = (await window.api.gmail.checkAuth()) as IpcResponse<{
-            hasCredentials: boolean;
-            hasTokens: boolean;
-            hasLlmProvider: boolean;
-          }>;
-          if (authResult.success && authResult.data.hasTokens) {
-            await enterExtensionsStep();
-          } else {
-            setStep("oauth");
-          }
-        } else {
-          setError(result.error ?? "Failed to save API key");
-        }
-      } finally {
-        setIsLoading(false);
       }
-    } else {
-      // Ollama Cloud provider
-      if (!ollamaApiKey.trim()) {
-        setError("Please enter your Ollama Cloud API key");
-        return;
-      }
-
-      setIsLoading(true);
-      setError(null);
-
-      try {
+      if (hasOllama) {
         const validation = (await window.api.settings.validateOllamaKey(
-          ollamaApiKey.trim(),
+          trimmedOllama,
         )) as IpcResponse<void>;
         if (!validation.success) {
-          setError(validation.error ?? "Invalid Ollama API key");
+          setError(`Ollama Cloud key: ${validation.error ?? "invalid"}`);
           return;
         }
+      }
 
-        const result = (await window.api.settings.set({
-          ollamaCloud: { apiKey: ollamaApiKey.trim(), defaultModel: DEFAULT_OLLAMA_MODEL },
-          // Sender lookup uses Anthropic's web_search tool (Anthropic-only). Pin its
-          // provider to anthropic so it stays consistent if the user later adds an
-          // Anthropic key, and disable the feature for now since Ollama-only users
-          // would otherwise hit a silent Anthropic-client construction failure.
-          enableSenderLookup: false,
-          featureProviders: {
+      // Build the settings write. Only flip featureProviders to ollama-cloud
+      // when the user provided ONLY an Ollama key — providing both keys keeps
+      // schema defaults (all anthropic, sender lookup enabled) so nothing
+      // silently reroutes. The user can per-feature route in Settings later.
+      const settings: Parameters<typeof window.api.settings.set>[0] = {};
+      if (hasAnthropic) {
+        settings.anthropicApiKey = trimmedAnthropic;
+      }
+      if (hasOllama) {
+        settings.ollamaCloud = {
+          apiKey: trimmedOllama,
+          defaultModel: DEFAULT_OLLAMA_MODEL,
+        };
+        if (!hasAnthropic) {
+          // Sender lookup uses Anthropic's web_search tool (Anthropic-only).
+          // Pin to anthropic and disable since the user has no Anthropic key.
+          settings.enableSenderLookup = false;
+          settings.featureProviders = {
             analysis: "ollama-cloud",
             drafts: "ollama-cloud",
             refinement: "ollama-cloud",
@@ -186,25 +169,28 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
             agentDrafter: "ollama-cloud",
             agentChat: "ollama-cloud",
             styleInference: "ollama-cloud",
-          },
-        })) as IpcResponse<void>;
-        if (result.success) {
-          const authResult = (await window.api.gmail.checkAuth()) as IpcResponse<{
-            hasCredentials: boolean;
-            hasTokens: boolean;
-            hasLlmProvider: boolean;
-          }>;
-          if (authResult.success && authResult.data.hasTokens) {
-            await enterExtensionsStep();
-          } else {
-            setStep("oauth");
-          }
-        } else {
-          setError(result.error ?? "Failed to save API key");
+          };
         }
-      } finally {
-        setIsLoading(false);
       }
+
+      const result = (await window.api.settings.set(settings)) as IpcResponse<void>;
+      if (!result.success) {
+        setError(result.error ?? "Failed to save API key");
+        return;
+      }
+
+      const authResult = (await window.api.gmail.checkAuth()) as IpcResponse<{
+        hasCredentials: boolean;
+        hasTokens: boolean;
+        hasLlmProvider: boolean;
+      }>;
+      if (authResult.success && authResult.data.hasTokens) {
+        await enterExtensionsStep();
+      } else {
+        setStep("oauth");
+      }
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -417,95 +403,61 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
               </h2>
               <p className="text-gray-600 dark:text-gray-400 mb-6">
                 Exo uses AI to analyze your emails, generate drafts, and look up sender information.
-                Choose a provider and enter your API key.
+                Provide a key for Anthropic, Ollama Cloud, or both — you can configure per-feature
+                routing later in Settings.
               </p>
 
-              <div className="flex gap-2 mb-4">
-                <button
-                  className={`px-4 py-2 text-sm rounded-lg ${selectedProvider === "anthropic" ? "bg-blue-600 text-white" : "bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300"}`}
-                  onClick={() => setSelectedProvider("anthropic")}
-                >
-                  Anthropic
-                </button>
-                <button
-                  className={`px-4 py-2 text-sm rounded-lg ${selectedProvider === "ollama-cloud" ? "bg-blue-600 text-white" : "bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300"}`}
-                  onClick={() => setSelectedProvider("ollama-cloud")}
-                >
-                  Ollama Cloud
-                </button>
+              <div className="space-y-5 mb-6">
+                <div className="border border-gray-200 dark:border-gray-600 rounded-lg p-4">
+                  <div className="flex items-baseline justify-between mb-2">
+                    <h3 className="font-medium text-gray-900 dark:text-gray-100">Anthropic</h3>
+                    <a
+                      href="https://console.anthropic.com/settings/keys"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-blue-600 dark:text-blue-400 underline hover:no-underline"
+                    >
+                      console.anthropic.com
+                    </a>
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                    Required for sender lookup (web search). Default provider for all features.
+                  </p>
+                  <input
+                    type="password"
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && !isLoading && handleSaveApiKey()}
+                    placeholder="sk-ant-api03-..."
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div className="border border-gray-200 dark:border-gray-600 rounded-lg p-4">
+                  <div className="flex items-baseline justify-between mb-2">
+                    <h3 className="font-medium text-gray-900 dark:text-gray-100">Ollama Cloud</h3>
+                    <a
+                      href="https://ollama.com/settings/keys"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-blue-600 dark:text-blue-400 underline hover:no-underline"
+                    >
+                      ollama.com
+                    </a>
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                    Open-source models. If only Ollama is provided, sender lookup will be disabled.
+                  </p>
+                  <input
+                    type="password"
+                    value={ollamaApiKey}
+                    onChange={(e) => setOllamaApiKey(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && !isLoading && handleSaveApiKey()}
+                    placeholder="ollama-cloud-..."
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
               </div>
-
-              {selectedProvider === "anthropic" && (
-                <>
-                  <div className="bg-blue-50 dark:bg-blue-900/30 p-4 rounded-lg mb-6">
-                    <h3 className="font-semibold text-blue-900 dark:text-blue-200 mb-2">
-                      Get your API key:
-                    </h3>
-                    <ol className="text-sm text-blue-800 dark:text-blue-300 space-y-2 list-decimal list-inside">
-                      <li>
-                        Go to{" "}
-                        <a
-                          href="https://console.anthropic.com/settings/keys"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="underline hover:no-underline"
-                        >
-                          console.anthropic.com
-                        </a>
-                      </li>
-                      <li>Create a new API key (or use an existing one)</li>
-                      <li>Paste it below</li>
-                    </ol>
-                  </div>
-
-                  <div className="space-y-4 mb-6">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        API Key
-                      </label>
-                      <input
-                        type="password"
-                        value={apiKey}
-                        onChange={(e) => setApiKey(e.target.value)}
-                        onKeyDown={(e) => e.key === "Enter" && !isLoading && handleSaveApiKey()}
-                        placeholder="sk-ant-api03-..."
-                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
-                  </div>
-                </>
-              )}
-
-              {selectedProvider === "ollama-cloud" && (
-                <>
-                  <div className="bg-blue-50 dark:bg-blue-900/30 p-4 rounded-lg mb-6">
-                    <h3 className="font-semibold text-blue-900 dark:text-blue-200 mb-2">
-                      Get your Ollama Cloud API key:
-                    </h3>
-                    <ol className="text-sm text-blue-800 dark:text-blue-300 space-y-2 list-decimal list-inside">
-                      <li>Sign up at Ollama Cloud</li>
-                      <li>Generate an API key from your dashboard</li>
-                      <li>Paste it below</li>
-                    </ol>
-                  </div>
-
-                  <div className="space-y-4 mb-6">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        API Key
-                      </label>
-                      <input
-                        type="password"
-                        value={ollamaApiKey}
-                        onChange={(e) => setOllamaApiKey(e.target.value)}
-                        onKeyDown={(e) => e.key === "Enter" && !isLoading && handleSaveApiKey()}
-                        placeholder="ollama-cloud-..."
-                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
-                  </div>
-                </>
-              )}
 
               {error && (
                 <div className="p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg mb-4">
@@ -515,10 +467,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
 
               <button
                 onClick={handleSaveApiKey}
-                disabled={
-                  isLoading ||
-                  (selectedProvider === "anthropic" ? !apiKey.trim() : !ollamaApiKey.trim())
-                }
+                disabled={isLoading || (!apiKey.trim() && !ollamaApiKey.trim())}
                 className="w-full py-3 bg-blue-600 dark:bg-blue-500 text-white font-medium rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors disabled:opacity-50"
               >
                 {isLoading ? "Saving..." : "Continue"}
