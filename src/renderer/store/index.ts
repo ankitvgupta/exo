@@ -906,13 +906,45 @@ export const useAppStore = create<AppState>((set, get) => ({
       // is the source of truth for the unified ("All Inboxes") view, so
       // without this the removed account's threads keep rendering until the
       // app restarts.
+      const remainingEmails: DashboardEmail[] = [];
+      const removedEmailIds = new Set<string>();
+      const removedThreadIds = new Set<string>();
+      for (const e of state.emails) {
+        if (e.accountId === accountId) {
+          removedEmailIds.add(e.id);
+          if (e.threadId) removedThreadIds.add(e.threadId);
+        } else {
+          remainingEmails.push(e);
+        }
+      }
+      // Clear selection slices that pointed at the removed account's emails/
+      // threads. In unified mode currentAccountId stays null after removal,
+      // so the setCurrentAccountId selection-reset path never fires and the
+      // right pane would otherwise render a ghost thread.
+      const newSelectedThreadIds = new Set<string>();
+      for (const tid of state.selectedThreadIds) {
+        if (!removedThreadIds.has(tid)) newSelectedThreadIds.add(tid);
+      }
       return {
         accounts: newAccounts,
         currentAccountId: newCurrentId,
         syncStatuses: newSyncStatuses,
         backgroundSyncProgress: newBackgroundSyncProgress,
-        emails: state.emails.filter((e) => e.accountId !== accountId),
+        emails: remainingEmails,
         sentEmails: state.sentEmails.filter((e) => e.accountId !== accountId),
+        selectedEmailId:
+          state.selectedEmailId && removedEmailIds.has(state.selectedEmailId)
+            ? null
+            : state.selectedEmailId,
+        selectedThreadId:
+          state.selectedThreadId && removedThreadIds.has(state.selectedThreadId)
+            ? null
+            : state.selectedThreadId,
+        focusedThreadEmailId:
+          state.focusedThreadEmailId && removedEmailIds.has(state.focusedThreadEmailId)
+            ? null
+            : state.focusedThreadEmailId,
+        selectedThreadIds: newSelectedThreadIds,
       };
     }),
   setCurrentAccountId: (accountId) => {
