@@ -46,9 +46,22 @@ const MODEL_ENV_VARS = [
 ] as const;
 
 /**
- * Every var buildChildEnv sets for LLM routing. Used by buildMcpStdioEnv to
- * strip them all from MCP child processes (preventing credential leakage
- * and accidental redirection of MCP-server-internal Anthropic calls).
+ * Vars buildChildEnv sets for LLM routing that must be stripped from
+ * MCP child processes (preventing credential leakage and accidental
+ * redirection of MCP-server-internal Anthropic calls).
+ *
+ * Intentionally excludes `ANTHROPIC_API_KEY` even though buildChildEnv
+ * sets it in the Ollama branch (to the Ollama credential, to force the
+ * SDK off its Keychain OAuth fallback). MCP stdio servers inherit env
+ * from `process.env` — which holds the *user's real Anthropic API key* —
+ * so stripping that key here would break MCP servers that legitimately
+ * call api.anthropic.com. The crossover risk (Ollama credential leaking
+ * to an MCP server expecting an Anthropic key) only exists for our agent
+ * subprocess, which gets its env from buildChildEnv directly, not from
+ * this strip list. If you ever add `ANTHROPIC_API_KEY` here, also drop
+ * the re-add at the bottom of buildMcpStdioEnv — and remember Ollama-only
+ * users will then have no Anthropic credential to re-add, breaking any
+ * MCP server that calls api.anthropic.com.
  */
 const LLM_ROUTING_ENV_VARS = [
   "ANTHROPIC_BASE_URL",
