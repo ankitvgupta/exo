@@ -894,15 +894,25 @@ export const useAppStore = create<AppState>((set, get) => ({
       const newAccounts = state.accounts.filter((a) => a.id !== accountId);
       const newSyncStatuses = new Map(state.syncStatuses);
       newSyncStatuses.delete(accountId);
+      const newBackgroundSyncProgress = new Map(state.backgroundSyncProgress);
+      newBackgroundSyncProgress.delete(accountId);
       // If removing current account, switch to primary or first
       let newCurrentId = state.currentAccountId;
       if (state.currentAccountId === accountId) {
         newCurrentId = newAccounts.find((a) => a.isPrimary)?.id || newAccounts[0]?.id || null;
       }
+      // Drop in-memory emails/sent emails for the removed account. The DB
+      // cleanup in main happens in removeAccount(accountId), but state.emails
+      // is the source of truth for the unified ("All Inboxes") view, so
+      // without this the removed account's threads keep rendering until the
+      // app restarts.
       return {
         accounts: newAccounts,
         currentAccountId: newCurrentId,
         syncStatuses: newSyncStatuses,
+        backgroundSyncProgress: newBackgroundSyncProgress,
+        emails: state.emails.filter((e) => e.accountId !== accountId),
+        sentEmails: state.sentEmails.filter((e) => e.accountId !== accountId),
       };
     }),
   setCurrentAccountId: (accountId) => {
