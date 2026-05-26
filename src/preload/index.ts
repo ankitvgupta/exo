@@ -1,16 +1,12 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
+import { getPlatformInfo } from "../shared/platform";
 const { contextBridge, ipcRenderer } = require("electron");
-
-const platform = process.platform;
 
 // Expose a limited API to the renderer
 const api = {
-  platform: {
-    platform,
-    isMac: platform === "darwin",
-    modifierKey: platform === "darwin" ? "Cmd" : "Ctrl",
-    modifierSymbol: platform === "darwin" ? "\u2318" : "Ctrl+",
-  },
+  // Single source of truth for platform info (see src/shared/platform.ts) so the
+  // exposed object stays in sync with PlatformInfo at compile time.
+  platform: getPlatformInfo(process.platform),
 
   // Temporary debug logger — renderer → main process stdout
   _debugLog: (msg: string): void => {

@@ -7,6 +7,11 @@ export function buildFilesystemSandbox(
   denyRead: string[];
   allowRead?: string[];
 } {
+  // Without HOME we can't construct the user-relative deny paths (~/.ssh,
+  // ~/.aws, browser profiles, etc.), so the list is empty and the agent is
+  // effectively unsandboxed for reads. This only happens when HOME is unset
+  // (e.g. some stripped containers) — normal desktop/CI runs always set it.
+  // Returned explicitly so the trade-off is visible to operators.
   if (!homeDir) return { denyRead: [] };
 
   if (platform === "darwin") {

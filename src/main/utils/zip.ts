@@ -7,7 +7,12 @@ export async function zipDirectory(sourceDir: string, destinationPath: string): 
     const archive = archiver("zip", { zlib: { level: 9 } });
 
     output.on("close", resolve);
-    output.on("error", reject);
+    output.on("error", (err) => {
+      // Abort the archiver so it stops processing entries in the background
+      // after the promise has already rejected (e.g. disk full / permissions).
+      archive.abort();
+      reject(err);
+    });
     archive.on("error", reject);
 
     archive.pipe(output);
