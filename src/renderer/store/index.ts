@@ -696,17 +696,6 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   setEmails: (emails) => {
     set((state) => {
-      // [ETRACE] log every setEmails REPLACE so we can catch the "2 emails" bug.
-      // This is a full-store replace — losing emails here = losing emails in the inbox.
-      const byAccount: Record<string, number> = {};
-      for (const e of emails)
-        byAccount[e.accountId ?? "?"] = (byAccount[e.accountId ?? "?"] ?? 0) + 1;
-      console.log("[ETRACE] setEmails REPLACE", {
-        incoming: emails.length,
-        byAccount,
-        priorStateCount: state.emails.length,
-        stack: new Error().stack?.split("\n").slice(1, 4).join(" | "),
-      });
       // Suppress emails pending in the undo action queue (archive/trash).
       // Any path that replaces the store (DB reload, fetch) could resurrect
       // emails the user just archived/trashed optimistically.
@@ -722,13 +711,6 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
       const filtered = pendingIds.size > 0 ? emails.filter((e) => !pendingIds.has(e.id)) : emails;
       const patched = applyOptimisticReads(filtered);
-      if (patched.length < 10) {
-        console.warn("[ETRACE] setEmails resulted in TINY store", {
-          patchedCount: patched.length,
-          incoming: emails.length,
-          pendingIdsCount: pendingIds.size,
-        });
-      }
       if (
         state.viewMode === "full" &&
         state.selectedEmailId &&
@@ -785,16 +767,6 @@ export const useAppStore = create<AppState>((set, get) => ({
     }),
   addEmails: (newEmails) => {
     set((state) => {
-      // [ETRACE]
-      const byAccount: Record<string, number> = {};
-      for (const e of newEmails)
-        byAccount[e.accountId ?? "?"] = (byAccount[e.accountId ?? "?"] ?? 0) + 1;
-      console.log("[ETRACE] addEmails MERGE", {
-        incoming: newEmails.length,
-        byAccount,
-        priorStateCount: state.emails.length,
-        stack: new Error().stack?.split("\n").slice(1, 4).join(" | "),
-      });
       // Suppress emails pending in the undo action queue (archive/trash).
       // Without this, any path that adds emails (DB reload, sync) could
       // resurrect emails the user just archived/trashed optimistically.
@@ -840,12 +812,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   removeEmails: (emailIds) =>
     set((state) => {
-      // [ETRACE]
-      console.log("[ETRACE] removeEmails", {
-        removeCount: emailIds.length,
-        priorStateCount: state.emails.length,
-        stack: new Error().stack?.split("\n").slice(1, 4).join(" | "),
-      });
       const idsToRemove = new Set(emailIds);
       const emails = state.emails.filter((e) => !idsToRemove.has(e.id));
       // If removing the currently selected email while in full view, reset to
@@ -2033,22 +1999,6 @@ export function useThreadedEmails() {
     // Within needsReply, preserve the chronological order produced by groupByThread.
     const threads = [...unanalyzed, ...needsReply, ...done, ...skipped];
 
-    // [ETRACE] warn when the result looks suspiciously small despite a populated store
-    if (emails.length > 50 && allThreads.length < 10) {
-      console.warn("[ETRACE] useThreadedEmails TINY RESULT despite many emails", {
-        emailsTotal: emails.length,
-        accountEmailsForCurrent: accountEmails.length,
-        currentAccountId,
-        allThreadsAfterInboxFilter: allThreads.length,
-        snoozedThreadsCount: snoozedThreadIds.size,
-        activeThreads: activeThreads.length,
-        unanalyzed: unanalyzed.length,
-        needsReply: needsReply.length,
-        done: done.length,
-        skipped: skipped.length,
-      });
-    }
-
     return {
       threads,
       chronologicalThreads: activeThreads, // sorted by latestReceivedDate desc (from groupByThread)
@@ -2248,17 +2198,6 @@ export function useSplitFilteredThreads() {
 
       const skipped = excludeExclusive(baseResult.skipped);
       const unanalyzed = excludeExclusive(baseResult.unanalyzed);
-      // [ETRACE] warn when "Other" tab shrinks dramatically — the user's reported
-      // bug surfaces here ("2 emails on Other"). chronologicalThreads is the
-      // pre-filter input, otherThreads is the post-filter output.
-      if (baseResult.chronologicalThreads.length > 20 && otherThreads.length < 10) {
-        console.warn("[ETRACE] Other tab TINY RESULT", {
-          chronologicalThreadsIn: baseResult.chronologicalThreads.length,
-          priorityFiltered: priorityThreadIds.size,
-          exclusiveSplits: exclusiveSplits.length,
-          otherThreadsOut: otherThreads.length,
-        });
-      }
       return {
         threads: otherThreads,
         needsReply: [],

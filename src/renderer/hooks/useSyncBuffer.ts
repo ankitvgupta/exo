@@ -85,24 +85,11 @@ export function markNavigationActive(): void {
 // --- Buffer API (called from IPC event listeners) ---
 
 export function bufferAddEmails(emails: DashboardEmail[]): void {
-  // [ETRACE]
-  const byAccount: Record<string, number> = {};
-  for (const e of emails) byAccount[e.accountId ?? "?"] = (byAccount[e.accountId ?? "?"] ?? 0) + 1;
-  console.log("[ETRACE] bufferAddEmails", {
-    incoming: emails.length,
-    byAccount,
-    pendingAddsBefore: pendingAdds.length,
-  });
   for (const e of emails) pendingAdds.push(e);
   scheduleFlush();
 }
 
 export function bufferRemoveEmails(emailIds: string[]): void {
-  // [ETRACE]
-  console.log("[ETRACE] bufferRemoveEmails", {
-    incoming: emailIds.length,
-    pendingRemoveIdsBefore: pendingRemoveIds.length,
-  });
   for (const id of emailIds) pendingRemoveIds.push(id);
   scheduleFlush();
 }
@@ -158,14 +145,6 @@ function flush(): void {
   const adds = pendingAdds;
   const removeIds = pendingRemoveIds;
   const updates = pendingUpdates;
-
-  // [ETRACE] log every flush — this is the only place sync events become store updates.
-  console.log("[ETRACE] sync-buffer flush", {
-    adds: adds.length,
-    removes: removeIds.length,
-    updates: updates.size,
-    storeBefore: useAppStore.getState().emails.length,
-  });
 
   pendingAdds = [];
   pendingRemoveIds = [];
@@ -283,12 +262,6 @@ function flush(): void {
         };
       }
     }
-
-    // [ETRACE] log result of flush — store state after applying this batch
-    console.log("[ETRACE] sync-buffer flush COMPLETE", {
-      storeAfter: emails.length,
-      delta: emails.length - state.emails.length,
-    });
 
     return { emails };
   });
