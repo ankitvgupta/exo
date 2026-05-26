@@ -947,6 +947,13 @@ export const useAppStore = create<AppState>((set, get) => ({
       for (const tid of state.selectedThreadIds) {
         if (!removedThreadIds.has(tid)) newSelectedThreadIds.add(tid);
       }
+      // lastSelectedThreadId is the shift-click range anchor. If the anchor
+      // belonged to the removed account, a subsequent shift-click would
+      // anchor against a thread that no longer exists.
+      const newLastSelectedThreadId =
+        state.lastSelectedThreadId && removedThreadIds.has(state.lastSelectedThreadId)
+          ? null
+          : state.lastSelectedThreadId;
       return {
         accounts: newAccounts,
         currentAccountId: newCurrentId,
@@ -968,6 +975,7 @@ export const useAppStore = create<AppState>((set, get) => ({
             ? null
             : state.focusedThreadEmailId,
         selectedThreadIds: newSelectedThreadIds,
+        lastSelectedThreadId: newLastSelectedThreadId,
         selectedDraftId:
           state.selectedDraftId && removedDraftIds.has(state.selectedDraftId)
             ? null
