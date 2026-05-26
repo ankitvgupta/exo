@@ -1,6 +1,4 @@
 import { type z } from "zod";
-import path from "path";
-import { spawn as cpSpawn } from "child_process";
 import {
   query,
   tool as sdkTool,
@@ -8,7 +6,6 @@ import {
   type SDKMessage,
   type Query,
   type McpServerConfig,
-  type SpawnOptions as SdkSpawnOptions,
 } from "@anthropic-ai/claude-agent-sdk";
 import type {
   AgentProvider,
@@ -49,9 +46,22 @@ const MODEL_ENV_VARS = [
 ] as const;
 
 /**
- * Every var buildChildEnv sets for LLM routing. Used by buildMcpStdioEnv to
- * strip them all from MCP child processes (preventing credential leakage
- * and accidental redirection of MCP-server-internal Anthropic calls).
+ * Vars buildChildEnv sets for LLM routing that must be stripped from
+ * MCP child processes (preventing credential leakage and accidental
+ * redirection of MCP-server-internal Anthropic calls).
+ *
+ * Intentionally excludes `ANTHROPIC_API_KEY` even though buildChildEnv
+ * sets it in the Ollama branch (to the Ollama credential, to force the
+ * SDK off its Keychain OAuth fallback). MCP stdio servers inherit env
+ * from `process.env` — which holds the *user's real Anthropic API key* —
+ * so stripping that key here would break MCP servers that legitimately
+ * call api.anthropic.com. The crossover risk (Ollama credential leaking
+ * to an MCP server expecting an Anthropic key) only exists for our agent
+ * subprocess, which gets its env from buildChildEnv directly, not from
+ * this strip list. If you ever add `ANTHROPIC_API_KEY` here, also drop
+ * the re-add at the bottom of buildMcpStdioEnv — and remember Ollama-only
+ * users will then have no Anthropic credential to re-add, breaking any
+ * MCP server that calls api.anthropic.com.
  */
 const LLM_ROUTING_ENV_VARS = [
   "ANTHROPIC_BASE_URL",
@@ -201,10 +211,24 @@ export class ClaudeAgentProvider implements AgentProvider {
     });
     mcpServerMap["mail-app-tools"] = mcpServer;
 
+    const resolvedModel = modelOverride ?? this.frameworkConfig.model;
+    const childEnv = this.buildChildEnv();
+    // For strings ≤8 chars the first-4/last-4 slices would overlap and reveal
+    // the whole secret. Anthropic/Ollama tokens are ≥50 chars in practice, but
+    // gate defensively in case redact() is ever reused for shorter values.
+    const redact = (v: string | undefined): string => {
+      if (!v) return "(unset)";
+      if (v.length <= 8) return `(redacted, len=${v.length})`;
+      return `${v.slice(0, 4)}…${v.slice(-4)} (len=${v.length})`;
+    };
+    log.info(
+      `[ClaudeAgent:route] model=${resolvedModel} base_url=${childEnv.ANTHROPIC_BASE_URL ?? "(unset)"} auth_token=${redact(childEnv.ANTHROPIC_AUTH_TOKEN)} api_key=${redact(childEnv.ANTHROPIC_API_KEY)} ollama_enabled=${!!this.frameworkConfig.ollamaCloud?.enabled} default_sonnet=${childEnv.ANTHROPIC_DEFAULT_SONNET_MODEL ?? "(unset)"}`,
+    );
+
     const q = query({
       prompt,
       options: {
-        model: modelOverride ?? this.frameworkConfig.model,
+        model: resolvedModel,
         systemPrompt,
         abortController,
         mcpServers: mcpServerMap,
@@ -232,24 +256,16 @@ export class ClaudeAgentProvider implements AgentProvider {
         settingSources: [],
         // Don't persist sessions for SDK calls from within the app
         persistSession: false,
-        env: this.buildChildEnv(),
-        // In packaged Electron apps, import.meta.url resolves inside app.asar but
-        // cli.js lives in app.asar.unpacked (native modules can't be inside asar).
-        // Without this, the SDK tries to spawn a path inside the asar archive and
-        // the child process fails with MODULE_NOT_FOUND.
-        pathToClaudeCodeExecutable: resolvedCliPath,
-        // Use Electron's built-in Node.js runtime instead of searching for `node`
-        // on the system PATH. This eliminates the requirement for users to have
-        // Node.js installed. ELECTRON_RUN_AS_NODE=1 makes the Electron binary
-        // behave as a plain Node.js runtime.
-        spawnClaudeCodeProcess: (opts: SdkSpawnOptions) => {
-          return cpSpawn(process.execPath, opts.args, {
-            cwd: opts.cwd,
-            env: { ...opts.env, ELECTRON_RUN_AS_NODE: "1" },
-            stdio: ["pipe", "pipe", "pipe"],
-            signal: opts.signal,
-          });
-        },
+        env: childEnv,
+        // We do NOT set `pathToClaudeCodeExecutable` or `spawnClaudeCodeProcess`.
+        // SDK 0.3.x replaced the separate `cli.js` subprocess with a bun-bundled
+        // `assistant.mjs` / `bridge.mjs` runtime extracted via `extractFromBunfs.js`.
+        // The bundled bun binary is self-contained, so the old workaround
+        // (overriding spawn to run via Electron's built-in node with
+        // `ELECTRON_RUN_AS_NODE=1`) is no longer needed for packaged apps
+        // without a system Node install. The `node_modules/@anthropic-ai/claude-agent-sdk/**`
+        // asarUnpack entry in package.json keeps the bun assets on a real filesystem
+        // so extraction at runtime works inside a packaged .app.
         // Capture stderr so subprocess errors are visible in logs
         stderr: (data: string) => {
           log.info(`[ClaudeAgent:stderr] ${data.trimEnd()}`);
@@ -423,7 +439,11 @@ export class ClaudeAgentProvider implements AgentProvider {
       // Point Claude Agent SDK at Ollama Cloud's Anthropic-compatible endpoint
       env.ANTHROPIC_BASE_URL = "https://ollama.com";
       env.ANTHROPIC_AUTH_TOKEN = ollama.apiKey;
-      delete env.ANTHROPIC_API_KEY;
+      // Setting ANTHROPIC_API_KEY explicitly forces the SDK to skip its
+      // Keychain OAuth fallback. Without this, Claude Code finds the
+      // "Claude Code-credentials" entry in macOS Keychain and uses an
+      // OAuth flow hardcoded to api.anthropic.com, ignoring our BASE_URL.
+      env.ANTHROPIC_API_KEY = ollama.apiKey;
       // Remap every model env var Claude Code might consult. Without this,
       // Claude Code subtasks (title gen, compaction, sub-agents) silently fall
       // back to hardcoded Anthropic model names which 404 on Ollama Cloud.
@@ -443,33 +463,21 @@ export class ClaudeAgentProvider implements AgentProvider {
     // Prevent cli.js from detecting a "nested session" if CLAUDECODE leaks into
     // the Electron process env (e.g. when launched from a Claude Code terminal).
     delete env.CLAUDECODE;
+
+    // Disable all Claude Code SDK telemetry / error reporting / non-essential
+    // network calls. Without these, every agent run fans out 5+ requests to
+    // api.anthropic.com (event_logging/batch) and 1 to datadoghq.com (error
+    // logs) regardless of inference destination — wasted bandwidth, latency,
+    // and a potential privacy concern when the user has explicitly routed
+    // inference to a third-party endpoint (Ollama Cloud).
+    env.DISABLE_TELEMETRY = "1";
+    env.DISABLE_ERROR_REPORTING = "1";
+    env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = "1";
+    env.DO_NOT_TRACK = "1";
+
     return env;
   }
 }
-
-/**
- * Resolve the CLI path for the Claude Agent SDK.
- *
- * In packaged Electron apps, the SDK is in `app.asar.unpacked/node_modules/`
- * (because it contains native binaries that can't be inside an asar archive).
- * The SDK's own resolution uses `import.meta.url` which points inside `app.asar`,
- * so we need to explicitly resolve the path to the unpacked location.
- *
- * In dev mode, `require.resolve` returns the normal filesystem path which works fine.
- */
-const resolvedCliPath = (() => {
-  // require.resolve finds the SDK's package.json entry point (sdk.mjs).
-  // cli.js sits alongside it in the same directory.
-  const sdkEntry = require.resolve("@anthropic-ai/claude-agent-sdk");
-  const sdkDir = path.dirname(sdkEntry);
-  let cliPath = path.join(sdkDir, "cli.js");
-
-  // In packaged apps, the path contains "app.asar" but the actual file is in
-  // "app.asar.unpacked". Replace the asar reference so Node can find the file.
-  cliPath = cliPath.replace(/app\.asar([/\\])/, "app.asar.unpacked$1");
-
-  return cliPath;
-})();
 
 /**
  * Convert an AgentToolSpec into an SdkMcpToolDefinition with result tracking.
