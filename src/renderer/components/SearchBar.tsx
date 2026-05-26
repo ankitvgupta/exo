@@ -48,6 +48,16 @@ function decodeHtmlEntities(text: string): string {
   return textarea.value;
 }
 
+function mergeUniqueById(lists: DashboardEmail[][]): DashboardEmail[] {
+  const seen = new Map<string, DashboardEmail>();
+  for (const list of lists) {
+    for (const email of list) {
+      if (!seen.has(email.id)) seen.set(email.id, email);
+    }
+  }
+  return Array.from(seen.values());
+}
+
 interface SearchBarProps {
   isOpen: boolean;
   onClose: () => void;
@@ -145,16 +155,6 @@ export function SearchBar({ isOpen, onClose }: SearchBarProps) {
     // setActiveSearch closes the modal, sets remoteSearchStatus: 'searching'.
     setActiveSearch(query, []);
 
-    const mergeUniqueById = (lists: DashboardEmail[][]): DashboardEmail[] => {
-      const seen = new Map<string, DashboardEmail>();
-      for (const list of lists) {
-        for (const email of list) {
-          if (!seen.has(email.id)) seen.set(email.id, email);
-        }
-      }
-      return Array.from(seen.values());
-    };
-
     // Fire local search across every target account in parallel
     Promise.all(
       targetAccountIds.map((accountId) =>
@@ -166,10 +166,14 @@ export function SearchBar({ isOpen, onClose }: SearchBarProps) {
             return [];
           }),
       ),
-    ).then((perAccount) => {
-      if (useAppStore.getState().activeSearchQuery !== query) return;
-      useAppStore.getState().setActiveSearchResults(mergeUniqueById(perAccount));
-    });
+    )
+      .then((perAccount) => {
+        if (useAppStore.getState().activeSearchQuery !== query) return;
+        useAppStore.getState().setActiveSearchResults(mergeUniqueById(perAccount));
+      })
+      .catch((error: unknown) => {
+        console.error("Local search result processing failed:", error);
+      });
 
     // Fire remote search (slow) across every target account in parallel.
     // Pagination is per-account, so when fanning out across multiple accounts
@@ -207,21 +211,28 @@ export function SearchBar({ isOpen, onClose }: SearchBarProps) {
                 }),
               ),
         ),
-      ).then((results) => {
-        if (useAppStore.getState().activeSearchQuery !== query) return;
-        const successes = results.filter((r): r is Extract<RemoteOutcome, { ok: true }> => r.ok);
-        if (successes.length === 0) {
-          const firstError = results.find((r): r is Extract<RemoteOutcome, { ok: false }> => !r.ok);
-          setRemoteSearchError(firstError ? firstError.error : "Gmail search failed");
-          return;
-        }
-        setRemoteSearchResults(mergeUniqueById(successes.map((r) => r.emails)));
-        useAppStore
-          .getState()
-          .setRemoteSearchNextPageToken(
-            targetAccountIds.length === 1 ? (successes[0].next ?? null) : null,
-          );
-      });
+      )
+        .then((results) => {
+          if (useAppStore.getState().activeSearchQuery !== query) return;
+          const successes = results.filter((r): r is Extract<RemoteOutcome, { ok: true }> => r.ok);
+          if (successes.length === 0) {
+            const firstError = results.find(
+              (r): r is Extract<RemoteOutcome, { ok: false }> => !r.ok,
+            );
+            setRemoteSearchError(firstError ? firstError.error : "Gmail search failed");
+            return;
+          }
+          setRemoteSearchResults(mergeUniqueById(successes.map((r) => r.emails)));
+          useAppStore
+            .getState()
+            .setRemoteSearchNextPageToken(
+              targetAccountIds.length === 1 ? (successes[0].next ?? null) : null,
+            );
+        })
+        .catch((error: unknown) => {
+          if (useAppStore.getState().activeSearchQuery !== query) return;
+          setRemoteSearchError(error instanceof Error ? error.message : "Gmail search failed");
+        });
     } else {
       setRemoteSearchResults([]);
     }
