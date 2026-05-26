@@ -521,7 +521,8 @@ async function callOllamaNative(
     stream: false,
     messages: ollamaMessages,
     options: {
-      num_predict: typeof params.max_tokens === "number" ? params.max_tokens : OLLAMA_MIN_MAX_TOKENS,
+      num_predict:
+        typeof params.max_tokens === "number" ? params.max_tokens : OLLAMA_MIN_MAX_TOKENS,
       ...(typeof params.temperature === "number" ? { temperature: params.temperature } : {}),
     },
   };
@@ -543,21 +544,11 @@ async function callOllamaNative(
 
   if (!res.ok) {
     const errText = await res.text().catch(() => "");
-    // Map common Ollama errors onto Anthropic SDK error shapes so our retry
-    // category detection (which uses instanceof Anthropic.APIError) still
-    // works. Use the SDK's constructors directly.
-    const status = res.status;
-    if (status === 401 || status === 403) {
-      throw new Anthropic.AuthenticationError(status, undefined, errText, undefined);
-    }
-    if (status === 429) {
-      throw new Anthropic.RateLimitError(status, undefined, errText, undefined);
-    }
-    if (status === 529 || status >= 500) {
-      // 529 maps to the "overloaded" category our retry logic handles.
-      throw new Anthropic.APIError(status, undefined, errText, undefined);
-    }
-    throw new Anthropic.APIError(status, undefined, errText, undefined);
+    // Map Ollama HTTP errors to Anthropic SDK error shapes so the retry
+    // category detection in getRetryCategory() (which uses instanceof
+    // Anthropic.APIError / AuthenticationError / RateLimitError) still works.
+    // Use APIError.generate which accepts a generic status and headers: undefined.
+    throw Anthropic.APIError.generate(res.status, undefined, errText, undefined);
   }
 
   const ollamaResponse = (await res.json()) as OllamaChatResponse;

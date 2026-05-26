@@ -699,7 +699,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       // [ETRACE] log every setEmails REPLACE so we can catch the "2 emails" bug.
       // This is a full-store replace — losing emails here = losing emails in the inbox.
       const byAccount: Record<string, number> = {};
-      for (const e of emails) byAccount[e.accountId ?? "?"] = (byAccount[e.accountId ?? "?"] ?? 0) + 1;
+      for (const e of emails)
+        byAccount[e.accountId ?? "?"] = (byAccount[e.accountId ?? "?"] ?? 0) + 1;
       console.log("[ETRACE] setEmails REPLACE", {
         incoming: emails.length,
         byAccount,
@@ -786,7 +787,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     set((state) => {
       // [ETRACE]
       const byAccount: Record<string, number> = {};
-      for (const e of newEmails) byAccount[e.accountId ?? "?"] = (byAccount[e.accountId ?? "?"] ?? 0) + 1;
+      for (const e of newEmails)
+        byAccount[e.accountId ?? "?"] = (byAccount[e.accountId ?? "?"] ?? 0) + 1;
       console.log("[ETRACE] addEmails MERGE", {
         incoming: newEmails.length,
         byAccount,
