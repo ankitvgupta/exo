@@ -35,10 +35,12 @@ test.describe("Packaged app smoke", () => {
   let page: Page;
 
   test.beforeAll(async () => {
+    const { ELECTRON_RUN_AS_NODE: _electronRunAsNode, ...baseEnv } = process.env;
     app = await electron.launch({
       executablePath: BINARY,
+      args: process.platform === "linux" ? ["--no-sandbox"] : [],
       env: {
-        ...process.env,
+        ...baseEnv,
         // Demo mode so the packaged app doesn't need OAuth / Gmail creds
         // in CI. The packaging itself is what we're verifying, not
         // real-Gmail behavior.
@@ -70,8 +72,10 @@ test.describe("Packaged app smoke", () => {
     }
   });
 
-  test("app launches within 30s and shows the Exo brand", async () => {
-    await expect(page.locator("text=Exo").first()).toBeVisible({ timeout: 30_000 });
+  test("app launches within 30s and shows the inbox shell", async () => {
+    await expect(page.getByRole("button", { name: /Inbox/ }).first()).toBeVisible({
+      timeout: 30_000,
+    });
   });
 
   test("no main-process crash in the first 10s", async () => {

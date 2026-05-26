@@ -27,6 +27,7 @@ import DOMPurify from "dompurify";
 import { useAppStore } from "../store";
 import { ContactMention } from "./MentionSuggestion";
 import type { Snippet } from "../../shared/types";
+import { modifierShortcut } from "../utils/platform";
 
 interface ComposeEditorProps {
   initialContent?: string;
@@ -480,7 +481,7 @@ function Toolbar({ editor }: { editor: Editor | null }) {
       <ToolbarButton
         onClick={() => editor.chain().focus().toggleBold().run()}
         active={editor.isActive("bold")}
-        title="Bold (Cmd+B)"
+        title={`Bold (${modifierShortcut("B")})`}
       >
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path
@@ -501,7 +502,7 @@ function Toolbar({ editor }: { editor: Editor | null }) {
       <ToolbarButton
         onClick={() => editor.chain().focus().toggleItalic().run()}
         active={editor.isActive("italic")}
-        title="Italic (Cmd+I)"
+        title={`Italic (${modifierShortcut("I")})`}
       >
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path

@@ -110,7 +110,7 @@ jobs:
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: release-assets
+          name: release-assets-macos
           path: |
             release/*.dmg
             release/*.zip
@@ -118,7 +118,71 @@ jobs:
             release/*.blockmap
           retention-days: 7
 
-  # ── Job 2: Poll notarization on Linux (cheap runner for the wait) ────────
+  # ── Job 2: Build Linux distributables on Ubuntu ──────────────────────────
+  build-linux:
+    runs-on: ubuntu-latest
+    env:
+      NODE_OPTIONS: --max-old-space-size=4096
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb libnss3 libatk-bridge2.0-0 libgtk-3-0 libxss1 libasound2t64
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Run unit tests
+        run: npm run test:unit
+
+      - name: Set version from git tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          if [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            IFS='.' read -ra PARTS <<< "$VERSION"
+            while [ ${#PARTS[@]} -lt 3 ]; do PARTS+=("0"); done
+            VERSION="${PARTS[0]}.${PARTS[1]}.${PARTS[2]}"
+          fi
+          echo "Setting package version to $VERSION"
+          npm version "$VERSION" --no-git-tag-version --allow-same-version
+
+      - name: Build
+        env:
+          MAIN_VITE_GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID_BACKUP_2 }}
+          MAIN_VITE_GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET_BACKUP_2 }}
+          VITE_POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
+          VITE_POSTHOG_HOST: ${{ secrets.POSTHOG_HOST }}
+        run: npm run build
+
+      - name: Build Linux distributables
+        run: npx electron-builder --linux AppImage deb --publish never
+        timeout-minutes: 10
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-assets-linux
+          path: |
+            release/*.AppImage
+            release/*.deb
+            release/*.yml
+            release/*.blockmap
+          retention-days: 7
+
+  # ── Job 3: Poll notarization on Linux (cheap runner for the wait) ────────
   wait-for-notarization:
     needs: build-and-sign
     runs-on: ubuntu-latest
@@ -220,7 +284,7 @@ jobs:
         if: always()
         run: rm -f /tmp/apikey.p8
 
-  # ── Job 3: Staple notarization ticket on macOS ───────────────────────────
+  # ── Job 4: Staple notarization ticket on macOS ───────────────────────────
   staple:
     needs: [build-and-sign, wait-for-notarization]
     runs-on: macos-latest
@@ -228,7 +292,7 @@ jobs:
       - name: Download build artifacts
         uses: actions/download-artifact@v4
         with:
-          name: release-assets
+          name: release-assets-macos
           path: release
 
       - name: Staple notarization ticket to DMG
@@ -249,11 +313,12 @@ jobs:
             release/*.blockmap
           retention-days: 7
 
-  # ── Job 4: Upload release assets (cheap Linux runner) ────────────────────
+  # ── Job 5: Upload release assets (cheap Linux runner) ────────────────────
   release:
-    needs: [build-and-sign, staple]
+    needs: [build-and-sign, build-linux, staple]
     if: |
       needs.build-and-sign.result == 'success' &&
+      needs.build-linux.result == 'success' &&
       needs.staple.result == 'success' &&
       startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
@@ -262,6 +327,12 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: release-assets-stapled
+          path: release
+
+      - name: Download Linux artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: release-assets-linux
           path: release
 
       - name: Upload assets to release

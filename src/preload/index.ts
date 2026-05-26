@@ -1,8 +1,17 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 const { contextBridge, ipcRenderer } = require("electron");
 
+const platform = process.platform;
+
 // Expose a limited API to the renderer
 const api = {
+  platform: {
+    platform,
+    isMac: platform === "darwin",
+    modifierKey: platform === "darwin" ? "Cmd" : "Ctrl",
+    modifierSymbol: platform === "darwin" ? "\u2318" : "Ctrl+",
+  },
+
   // Temporary debug logger — renderer → main process stdout
   _debugLog: (msg: string): void => {
     ipcRenderer.send("debug:log", msg);
@@ -1132,6 +1141,8 @@ const api = {
       ipcRenderer.invoke("settings:get-call-history", { limit }),
   },
 };
+
+export type ElectronAPI = typeof api;
 
 // Expose API to renderer
 contextBridge.exposeInMainWorld("api", api);

@@ -28,6 +28,14 @@ function getInitialBackgroundColor(): string {
 }
 
 export function createWindow(): BrowserWindow {
+  const platformWindowOptions =
+    process.platform === "darwin"
+      ? ({
+          titleBarStyle: "hiddenInset",
+          trafficLightPosition: { x: 15, y: 15 },
+        } as const)
+      : {};
+
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
@@ -35,8 +43,7 @@ export function createWindow(): BrowserWindow {
     minHeight: 600,
     show: false,
     autoHideMenuBar: true,
-    titleBarStyle: "hiddenInset",
-    trafficLightPosition: { x: 15, y: 15 },
+    ...platformWindowOptions,
     backgroundColor: getInitialBackgroundColor(),
     icon: getIconPath(),
     // Prevent Chromium from throttling timers in hidden windows during tests.

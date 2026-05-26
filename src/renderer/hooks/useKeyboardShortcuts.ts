@@ -5,6 +5,7 @@ import { markNavigationActive } from "./useSyncBuffer";
 import { mergeAndThreadSearchResults } from "../utils/searchResults";
 import { draftMatchesSplit } from "../utils/split-conditions";
 import { trackEvent } from "../services/posthog";
+import { modifierShortcut } from "../utils/platform";
 
 declare global {
   interface Window {
@@ -1186,7 +1187,7 @@ export function getKeyboardShortcuts(bindings: "superhuman" | "gmail") {
         : []),
       { key: "x", description: "Select / deselect thread" },
       { key: "Shift+J/K", description: "Extend selection down/up" },
-      { key: "Cmd+A", description: "Select all threads" },
+      { key: modifierShortcut("A"), description: "Select all threads" },
     ],
     compose: [
       { key: "c", description: "Compose new email" },
@@ -1196,13 +1197,13 @@ export function getKeyboardShortcuts(bindings: "superhuman" | "gmail") {
     ],
     search: [
       { key: "/", description: "Open search" },
-      { key: "Cmd+F", description: "Find in page" },
-      { key: "Cmd+K", description: "Command palette" },
-      { key: "Cmd+J", description: "Agent action palette" },
+      { key: modifierShortcut("F"), description: "Find in page" },
+      { key: modifierShortcut("K"), description: "Command palette" },
+      { key: modifierShortcut("J"), description: "Agent action palette" },
     ],
     other: [
       { key: "b", description: "Switch sidebar tab" },
-      { key: "Cmd+,", description: "Settings" },
+      { key: modifierShortcut(","), description: "Settings" },
       { key: "?", description: "Show shortcuts" },
     ],
   };
