@@ -24,7 +24,7 @@
  * traces in the report until we have a calibration suite.
  */
 
-import { createMessage } from "../../../src/main/services/anthropic-service";
+import { createMessage } from "../../../src/main/services/llm-service";
 
 const JUDGE_MODEL = "claude-opus-4-7";
 

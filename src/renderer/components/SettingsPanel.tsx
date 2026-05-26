@@ -18,6 +18,9 @@ import {
   type ModelConfig,
   type ModelTier,
   type CliToolConfig,
+  LLM_PROVIDERS,
+  type LlmProvider,
+  DEFAULT_OLLAMA_MODEL,
   type BlockedSender,
 } from "../../shared/types";
 import { useAppStore, type Account, type SettingsTab } from "../store";
@@ -90,6 +93,8 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
   const [enableSenderLookup, setEnableSenderLookup] = useState(true);
   const [syncDraftsToGmail, setSyncDraftsToGmail] = useState(false);
   const [modelConfig, setModelConfig] = useState<ModelConfig>(DEFAULT_MODEL_CONFIG);
+  const [featureProviders, setFeatureProviders] = useState<Record<string, LlmProvider>>({});
+  const [ollamaModels, setOllamaModels] = useState<Record<string, string>>({});
   const [isSavingGeneral, setIsSavingGeneral] = useState(false);
   const [isExportingLogs, setIsExportingLogs] = useState(false);
   const [exportLogsError, setExportLogsError] = useState<string | null>(null);
@@ -235,6 +240,11 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
       setEnableSenderLookup(generalConfig.enableSenderLookup ?? true);
       setSyncDraftsToGmail(generalConfig.syncDraftsToGmail ?? false);
       setModelConfig({ ...DEFAULT_MODEL_CONFIG, ...generalConfig.modelConfig });
+      setFeatureProviders(generalConfig.featureProviders ?? {});
+      const ollamaFeatureModels = generalConfig.ollamaCloud?.featureModels;
+      if (ollamaFeatureModels) {
+        setOllamaModels(ollamaFeatureModels);
+      }
       setGithubToken(generalConfig.githubToken ?? "");
       setAllowPrereleaseUpdates(generalConfig.allowPrereleaseUpdates ?? false);
       setAnthropicApiKey(generalConfig.anthropicApiKey ?? "");
@@ -396,6 +406,14 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
         enableSenderLookup,
         syncDraftsToGmail,
         modelConfig,
+        featureProviders,
+        // Only send featureModels here — apiKey and defaultModel are owned by the
+        // ExtensionsTab. Spreading the cached ollamaCloud here can carry a stale
+        // empty apiKey from before the user saved one in ExtensionsTab; the backend
+        // deep-merge uses `incoming.apiKey ?? existing` so an empty string would
+        // overwrite the freshly-saved key. By omitting apiKey/defaultModel, the
+        // deep-merge falls through to the existing values for those fields.
+        ollamaCloud: { featureModels: ollamaModels },
         githubToken: githubToken || undefined,
         allowPrereleaseUpdates,
       });
@@ -1224,36 +1242,77 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                       label: "Agent Chat",
                       description: "Interactive agent sidebar conversations",
                     },
-                  ].map(({ key, label, description }) => (
-                    <div
-                      key={key}
-                      className="flex items-center justify-between py-2 border-b border-gray-100 dark:border-gray-700 last:border-0"
-                    >
-                      <div className="flex-1 min-w-0 mr-4">
-                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                          {label}
-                        </p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">{description}</p>
-                      </div>
-                      <select
-                        value={modelConfig[key]}
-                        onChange={(e) => {
-                          const tier = e.target.value;
-                          if ((MODEL_TIERS as readonly string[]).includes(tier)) {
-                            setModelConfig((prev) => ({ ...prev, [key]: tier as ModelTier }));
-                          }
-                        }}
-                        aria-label={`Model tier for ${label}`}
-                        className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-500 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  ].map(({ key, label, description }) => {
+                    const provider = featureProviders[key] ?? "anthropic";
+                    return (
+                      <div
+                        key={key}
+                        className="flex items-center justify-between py-2 border-b border-gray-100 dark:border-gray-700 last:border-0"
                       >
-                        {MODEL_TIERS.map((tier) => (
-                          <option key={tier} value={tier}>
-                            {MODEL_TIER_LABELS[tier]}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  ))}
+                        <div className="flex-1 min-w-0 mr-4">
+                          <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                            {label}
+                          </p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">{description}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <select
+                            value={provider}
+                            onChange={(e) => {
+                              const p = e.target.value;
+                              if ((LLM_PROVIDERS as readonly string[]).includes(p)) {
+                                setFeatureProviders((prev) => ({
+                                  ...prev,
+                                  [key]: p as LlmProvider,
+                                }));
+                              }
+                            }}
+                            aria-label={`Provider for ${label}`}
+                            className="px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-500 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          >
+                            <option value="anthropic">Anthropic</option>
+                            {/* senderLookup hardcodes Anthropic's web_search_20250305
+                                tool — there's no Ollama equivalent. Hide the option
+                                rather than letting users save a route that can't be
+                                honored at call time. */}
+                            {key !== "senderLookup" && (
+                              <option value="ollama-cloud">Ollama Cloud</option>
+                            )}
+                          </select>
+                          {provider === "anthropic" ? (
+                            <select
+                              value={modelConfig[key]}
+                              onChange={(e) => {
+                                const tier = e.target.value;
+                                if ((MODEL_TIERS as readonly string[]).includes(tier)) {
+                                  setModelConfig((prev) => ({ ...prev, [key]: tier as ModelTier }));
+                                }
+                              }}
+                              aria-label={`Model tier for ${label}`}
+                              className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-500 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            >
+                              {MODEL_TIERS.map((tier) => (
+                                <option key={tier} value={tier}>
+                                  {MODEL_TIER_LABELS[tier]}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <input
+                              type="text"
+                              value={ollamaModels[key] ?? DEFAULT_OLLAMA_MODEL}
+                              onChange={(e) =>
+                                setOllamaModels((prev) => ({ ...prev, [key]: e.target.value }))
+                              }
+                              placeholder={DEFAULT_OLLAMA_MODEL}
+                              aria-label={`Ollama model for ${label}`}
+                              className="w-48 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-500 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            />
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 

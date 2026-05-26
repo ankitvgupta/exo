@@ -1,7 +1,7 @@
 import { ipcMain, BrowserWindow } from "electron";
 import { EmailAnalyzer } from "../services/email-analyzer";
 import { getEmail, saveAnalysis, getInboxEmails, getAccounts } from "../db";
-import { getConfig, getModelIdForFeature } from "./settings.ipc";
+import { getConfig, getFeatureModelConfig } from "./settings.ipc";
 import type { IpcResponse, DashboardEmail, Email } from "../../shared/types";
 import { DEMO_INBOX_EMAILS, DEMO_EXPECTED_ANALYSIS } from "../demo/fake-inbox";
 import {
@@ -39,7 +39,8 @@ let analyzer: EmailAnalyzer | null = null;
 function getAnalyzer(): EmailAnalyzer {
   if (!analyzer) {
     const config = getConfig();
-    analyzer = new EmailAnalyzer(getModelIdForFeature("analysis"), config.analysisPrompt);
+    const { model, provider } = getFeatureModelConfig("analysis");
+    analyzer = new EmailAnalyzer(model, config.analysisPrompt, provider);
   }
   return analyzer;
 }

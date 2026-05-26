@@ -156,6 +156,7 @@ export type NetFetchProxyFn = (
 export interface AgentFrameworkConfig {
   model: string;
   anthropicApiKey?: string;
+  ollamaCloud?: { enabled: boolean; apiKey: string; model: string };
   providers?: Record<string, ProviderSettings>;
   browserConfig?: {
     enabled: boolean;

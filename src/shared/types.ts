@@ -326,6 +326,10 @@ export const ModelConfigSchema = z.object({
   senderLookup: ModelTierSchema.default("haiku"),
   agentDrafter: ModelTierSchema.default("sonnet"),
   agentChat: ModelTierSchema.default("opus"),
+  // styleInference defaults to opus because the task (analyzing 100 sent
+  // emails to extract a writing style) benefits from a more capable model
+  // and runs rarely (once per recipient profile build, then cached).
+  styleInference: ModelTierSchema.default("opus"),
 });
 
 export type ModelConfig = z.infer<typeof ModelConfigSchema>;
@@ -339,12 +343,39 @@ export const DEFAULT_MODEL_CONFIG: ModelConfig = {
   senderLookup: "haiku",
   agentDrafter: "sonnet",
   agentChat: "opus",
+  styleInference: "opus",
 };
 
 /** Resolve a model tier to its concrete model ID string. */
 export function resolveModelId(tier: ModelTier): string {
   return MODEL_TIER_IDS[tier];
 }
+
+// LLM Provider types — supports routing features to different backends
+export const LLM_PROVIDERS = ["anthropic", "ollama-cloud"] as const;
+export const LlmProviderSchema = z.enum(["anthropic", "ollama-cloud"]);
+export type LlmProvider = z.infer<typeof LlmProviderSchema>;
+
+/**
+ * Default Ollama Cloud model when none is configured.
+ *
+ * kimi-k2.6:cloud is Moonshot's latest. Chosen over deepseek-v4-pro:cloud
+ * because deepseek's compat-layer thinking depth is capped at default-level
+ * (no way to invoke "max" through Ollama's Anthropic-compat endpoint —
+ * filed upstream at ollama/ollama#15952), which made the agent feel
+ * underpowered. kimi-k2.6 doesn't need a thinking knob to perform well.
+ *
+ * Note: cloud models may occasionally return overloaded_error during peak
+ * traffic — llm-service.ts retry logic catches this via Anthropic.APIError
+ * status 529 (rate_limit category) and backs off automatically.
+ */
+export const DEFAULT_OLLAMA_MODEL = "kimi-k2.6:cloud";
+
+export const OllamaCloudConfigSchema = z.object({
+  apiKey: z.string().default(""),
+  defaultModel: z.string().default(DEFAULT_OLLAMA_MODEL),
+  featureModels: z.record(z.string(), z.string()).optional(),
+});
 
 // Config schema
 export const ConfigSchema = z.object({
@@ -406,10 +437,49 @@ export const ConfigSchema = z.object({
       gatewayToken: z.string().default(""),
     })
     .optional(),
+  ollamaCloud: OllamaCloudConfigSchema.optional(),
+  featureProviders: z.record(z.string(), LlmProviderSchema).optional(),
   configVersion: z.number().optional(),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;
+
+/**
+ * Resolve the Ollama Cloud config the agent framework should use, or `undefined`
+ * if Ollama isn't configured for the agent. Two independent conditions must hold:
+ *  1. The user has actually configured an Ollama API key.
+ *  2. featureProviders.agentChat === "ollama-cloud" (per-feature opt-in — having
+ *     a key alone isn't enough, the user may want agent on Anthropic while routing
+ *     other features to Ollama).
+ *
+ * Both `agent-coordinator.spawnWorker` (initial config at boot) and
+ * `settings:set` (config changes at runtime) call this so the rules stay in sync.
+ */
+export function resolveAgentOllamaConfig(
+  cfg: Pick<Config, "ollamaCloud" | "featureProviders">,
+): { enabled: true; apiKey: string; model: string } | undefined {
+  const oc = cfg.ollamaCloud;
+  // The agent worker is a single shared subprocess pointed at one URL via env
+  // vars at spawn time. Both agentChat (sidebar chat) and agentDrafter (auto-
+  // draft background tasks) flow through it. We can't satisfy two different
+  // destinations simultaneously, so require BOTH features to opt into Ollama
+  // before routing the worker there. Mismatched configs default to Anthropic
+  // — better than silently sending Claude model names to ollama.com (404) or
+  // Ollama model names to api.anthropic.com (invalid_model).
+  const agentChatProvider = cfg.featureProviders?.agentChat ?? "anthropic";
+  const agentDrafterProvider = cfg.featureProviders?.agentDrafter ?? "anthropic";
+  const bothOllama =
+    agentChatProvider === "ollama-cloud" && agentDrafterProvider === "ollama-cloud";
+  if (!oc?.apiKey || !bothOllama) return undefined;
+  return {
+    enabled: true,
+    apiKey: oc.apiKey,
+    // Use agentDrafter's per-feature model since the coordinator's `model` field
+    // is also derived from agentDrafter — keeps the env-var remap and the
+    // explicit query() model param in sync.
+    model: oc.featureModels?.agentDrafter ?? oc.defaultModel ?? DEFAULT_OLLAMA_MODEL,
+  };
+}
 
 // Dashboard-specific types
 

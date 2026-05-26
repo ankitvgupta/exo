@@ -342,6 +342,18 @@ export const NUMBERED_MIGRATIONS: Migration[] = [
       `);
     },
   },
+  {
+    version: 7,
+    name: "add_llm_calls_provider_column",
+    up: (db) => {
+      // Track which LLM backend handled each call. Defaults to "anthropic"
+      // for existing rows.
+      const cols = db.prepare("PRAGMA table_info(llm_calls)").all() as Array<{ name: string }>;
+      if (cols.length > 0 && !cols.some((c) => c.name === "provider")) {
+        db.exec(`ALTER TABLE llm_calls ADD COLUMN provider TEXT DEFAULT 'anthropic'`);
+      }
+    },
+  },
 ];
 
 function runNumberedMigrations(db: DatabaseInstance): void {

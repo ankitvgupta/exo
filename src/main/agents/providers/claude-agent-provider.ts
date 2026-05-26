@@ -29,6 +29,37 @@ import { createLogger } from "../../services/logger";
 const log = createLogger("claude-agent");
 
 /**
+ * Every env var Claude Code's CLI consults for model selection — discovered
+ * by grepping node_modules/@anthropic-ai/claude-agent-sdk/cli.js for
+ * `ANTHROPIC_[A-Z_]*MODEL` and `CLAUDE_CODE_[A-Z_]*MODEL`. If we miss any,
+ * Claude Code falls back to a hardcoded Anthropic model name (e.g.
+ * `claude-sonnet-4-5-20250929`) for that subtask, which 404s when the
+ * request hits ollama.com. Shared between buildChildEnv (sets these) and
+ * buildMcpStdioEnv (strips these) so a new var added to one stays in
+ * lockstep with the other.
+ */
+const MODEL_ENV_VARS = [
+  "ANTHROPIC_MODEL",
+  "ANTHROPIC_CUSTOM_MODEL",
+  "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+  "ANTHROPIC_DEFAULT_SONNET_MODEL",
+  "ANTHROPIC_DEFAULT_OPUS_MODEL",
+  "ANTHROPIC_SMALL_FAST_MODEL", // used for title gen, compaction, etc.
+  "CLAUDE_CODE_SUBAGENT_MODEL",
+] as const;
+
+/**
+ * Every var buildChildEnv sets for LLM routing. Used by buildMcpStdioEnv to
+ * strip them all from MCP child processes (preventing credential leakage
+ * and accidental redirection of MCP-server-internal Anthropic calls).
+ */
+const LLM_ROUTING_ENV_VARS = [
+  "ANTHROPIC_BASE_URL",
+  "ANTHROPIC_AUTH_TOKEN",
+  ...MODEL_ENV_VARS,
+] as const;
+
+/**
  * Claude Agent Provider - Uses the Claude Agent SDK to run an agent that
  * can call tools defined by the mail client. Tools are registered as an
  * in-process MCP server using the SDK's `createSdkMcpServer`.
@@ -131,7 +162,13 @@ export class ClaudeAgentProvider implements AgentProvider {
         // stdio transport — command + args + env
         // Always inherit system env (PATH, etc.) so child processes work.
         // User env vars override base env intentionally (e.g. PATH for custom tool locations).
-        const baseEnv = this.buildChildEnv();
+        // IMPORTANT: do NOT use buildChildEnv() here — that adds LLM-routing vars
+        // (ANTHROPIC_BASE_URL, ANTHROPIC_AUTH_TOKEN, ANTHROPIC_DEFAULT_*_MODEL) intended
+        // only for the Claude Code subprocess. MCP servers are arbitrary user packages;
+        // leaking the Ollama auth token to them is a credential exposure, and any MCP
+        // server that itself calls the Anthropic SDK would silently get redirected to
+        // Ollama with an invalid model name.
+        const baseEnv = this.buildMcpStdioEnv();
         let env: Record<string, string>;
         if (serverConfig.env) {
           const filtered = Object.fromEntries(
@@ -346,9 +383,33 @@ export class ClaudeAgentProvider implements AgentProvider {
   }
 
   /**
-   * Build the child process env for the SDK.
-   * If an API key is configured, include it. Otherwise, delete ANTHROPIC_API_KEY
-   * from the env entirely so Claude Code falls through to its stored OAuth.
+   * Build env for stdio MCP child processes. Inherits system env (PATH, etc.)
+   * but strips all LLM-routing vars — those are for the Claude Code subprocess
+   * only. MCP servers are arbitrary user packages: we don't want to leak our
+   * Ollama auth token, and we don't want any MCP server that itself calls
+   * Anthropic to be silently redirected to Ollama with an invalid model name.
+   */
+  private buildMcpStdioEnv(): Record<string, string> {
+    const env: Record<string, string> = {};
+    for (const [key, value] of Object.entries(process.env)) {
+      if (value !== undefined) env[key] = value;
+    }
+    // Strip every var buildChildEnv sets for LLM routing.
+    for (const k of LLM_ROUTING_ENV_VARS) delete env[k];
+    // Pass through the user's Anthropic key (if any) so MCP servers that genuinely
+    // use Anthropic still work. This matches the pre-Ollama behavior.
+    if (this.frameworkConfig.anthropicApiKey) {
+      env.ANTHROPIC_API_KEY = this.frameworkConfig.anthropicApiKey;
+    }
+    delete env.CLAUDECODE;
+    return env;
+  }
+
+  /**
+   * Build the child process env for the Claude Code SDK subprocess.
+   * When Ollama Cloud is configured, sets ANTHROPIC_BASE_URL and AUTH_TOKEN
+   * so the spawned CLI process routes to Ollama. Otherwise, sets ANTHROPIC_API_KEY
+   * for Anthropic, or clears it to fall through to Claude Code's stored OAuth.
    */
   private buildChildEnv(): Record<string, string> {
     // Filter out undefined values — Node's child_process coerces undefined to "undefined"
@@ -356,11 +417,29 @@ export class ClaudeAgentProvider implements AgentProvider {
     for (const [key, value] of Object.entries(process.env)) {
       if (value !== undefined) env[key] = value;
     }
-    if (this.frameworkConfig.anthropicApiKey) {
+
+    const ollama = this.frameworkConfig.ollamaCloud;
+    if (ollama?.enabled && ollama.apiKey) {
+      // Point Claude Agent SDK at Ollama Cloud's Anthropic-compatible endpoint
+      env.ANTHROPIC_BASE_URL = "https://ollama.com";
+      env.ANTHROPIC_AUTH_TOKEN = ollama.apiKey;
+      delete env.ANTHROPIC_API_KEY;
+      // Remap every model env var Claude Code might consult. Without this,
+      // Claude Code subtasks (title gen, compaction, sub-agents) silently fall
+      // back to hardcoded Anthropic model names which 404 on Ollama Cloud.
+      for (const k of MODEL_ENV_VARS) env[k] = ollama.model;
+    } else if (this.frameworkConfig.anthropicApiKey) {
       env.ANTHROPIC_API_KEY = this.frameworkConfig.anthropicApiKey;
+      delete env.ANTHROPIC_BASE_URL;
+      delete env.ANTHROPIC_AUTH_TOKEN;
+      for (const k of MODEL_ENV_VARS) delete env[k];
     } else {
       delete env.ANTHROPIC_API_KEY;
+      delete env.ANTHROPIC_BASE_URL;
+      delete env.ANTHROPIC_AUTH_TOKEN;
+      for (const k of MODEL_ENV_VARS) delete env[k];
     }
+
     // Prevent cli.js from detecting a "nested session" if CLAUDECODE leaks into
     // the Electron process env (e.g. when launched from a Claude Code terminal).
     delete env.CLAUDECODE;

@@ -17,7 +17,8 @@
  * Analysis memories are injected into the analysis prompt (not the draft prompt).
  */
 import { randomUUID } from "crypto";
-import { createMessage } from "./anthropic-service";
+import { createMessage } from "./llm-service";
+import { getFeatureModelConfig } from "../ipc/settings.ipc";
 import {
   getDraftMemories,
   saveDraftMemory,
@@ -289,11 +290,17 @@ async function analyzeOverride(override: AnalysisOverride): Promise<AnalysisObse
     return null;
   }
 
+  // Honor the user's provider choice for analysis. When routed to Ollama, we
+  // use the configured Ollama model — the hardcoded Claude model below would
+  // be invalid there. (For Anthropic the hardcoded model wins as before.)
+  const { provider, model: ollamaModel } = getFeatureModelConfig("analysis");
+  const isOllama = provider === "ollama-cloud";
+
   const overrideDesc = formatOverrideDescription(override);
 
   const response = await createMessage(
     {
-      model: "claude-sonnet-4-20250514",
+      model: isOllama ? ollamaModel : "claude-sonnet-4-20250514",
       max_tokens: 2048,
       messages: [
         {
@@ -338,6 +345,7 @@ Respond with ONLY the JSON array.`,
     },
     {
       caller: "analysis-edit-learner-analyze",
+      provider,
       emailId: override.emailId,
       accountId: override.accountId,
     },
@@ -387,9 +395,12 @@ async function matchAnalysisDraftMemories(
     return observations.map((_, i) => ({ observationIndex: i, matchedDraftMemoryId: null }));
   }
 
+  const { provider, model: ollamaModel } = getFeatureModelConfig("analysis");
+  const isOllama = provider === "ollama-cloud";
+
   const response = await createMessage(
     {
-      model: "claude-sonnet-4-5-20250929",
+      model: isOllama ? ollamaModel : "claude-sonnet-4-5-20250929",
       max_tokens: 1024,
       messages: [
         {
@@ -407,10 +418,14 @@ Respond with ONLY a JSON array: [{"observationIndex": 0, "matchedDraftMemoryId":
         },
       ],
     },
-    { caller: "analysis-edit-learner-match" },
+    { caller: "analysis-edit-learner-match", provider },
   );
 
-  const text = response.content[0]?.type === "text" ? response.content[0].text : "";
+  // Find the first text block — Ollama-routed thinking models emit a
+  // `thinking` block before the `text` block, so content[0] would be the
+  // wrong type and we'd silently parse "" → degraded match results.
+  const textBlock = response.content.find((b) => b.type === "text");
+  const text = textBlock?.type === "text" ? textBlock.text : "";
   const parsed = parseJsonArray<{
     observationIndex: number;
     matchedDraftMemoryId: string | null;
@@ -443,9 +458,12 @@ async function classifyScope(
     return { scope: "person", scopeValue: senderEmail.toLowerCase() };
   }
 
+  const { provider, model: ollamaModel } = getFeatureModelConfig("analysis");
+  const isOllama = provider === "ollama-cloud";
+
   const response = await createMessage(
     {
-      model: "claude-haiku-4-5-20251001",
+      model: isOllama ? ollamaModel : "claude-haiku-4-5-20251001",
       max_tokens: 256,
       messages: [
         {
@@ -469,10 +487,14 @@ For global: scopeValue = null`,
         },
       ],
     },
-    { caller: "analysis-edit-learner-classify-scope" },
+    { caller: "analysis-edit-learner-classify-scope", provider },
   );
 
-  const text = response.content[0]?.type === "text" ? response.content[0].text : "";
+  // Find the first text block — Ollama-routed thinking models emit a
+  // `thinking` block before the `text` block, so content[0] would be the
+  // wrong type and we'd silently parse "" → degraded match results.
+  const textBlock = response.content.find((b) => b.type === "text");
+  const text = textBlock?.type === "text" ? textBlock.text : "";
   try {
     const jsonStart = text.indexOf("{");
     const jsonEnd = text.lastIndexOf("}");
