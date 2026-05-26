@@ -8,6 +8,7 @@ import {
   type ModelConfig,
   type ModelTier,
   type LlmProvider,
+  type SenderLookupProvider,
   DEFAULT_ANALYSIS_PROMPT,
   DEFAULT_DRAFT_PROMPT,
   DEFAULT_ARCHIVE_READY_PROMPT,
@@ -61,6 +62,7 @@ function getStore(): Store<{ config: Config }> {
           analysisPrompt: DEFAULT_ANALYSIS_PROMPT,
           draftPrompt: DEFAULT_DRAFT_PROMPT,
           enableSenderLookup: true,
+          senderLookupProvider: "anthropic" as const,
           syncDraftsToGmail: false,
           theme: "system" as const,
           inboxDensity: "compact" as const,
@@ -149,6 +151,28 @@ export function getModelConfig(): ModelConfig {
 export function getModelIdForFeature(feature: keyof ModelConfig): string {
   const mc = getModelConfig();
   return resolveModelId(mc[feature]);
+}
+
+/**
+ * Resolve which search backend sender lookup should use, plus the Exa key,
+ * plus whether an Anthropic API key is configured. The Anthropic flag lets
+ * the extension know whether the Anthropic web_search fallback is even an
+ * option — relevant on the Ollama+Exa-only path where there's no Anthropic
+ * key at all, and silently falling back would just produce an AuthError.
+ */
+export function getSenderLookupConfig(): {
+  provider: SenderLookupProvider;
+  exaApiKey: string;
+  anthropicConfigured: boolean;
+} {
+  const config = getConfig();
+  return {
+    provider: config.senderLookupProvider ?? "anthropic",
+    exaApiKey: config.exaApiKey ?? "",
+    // process.env fallback covers dev (.env) and packaged builds where the
+    // SDK reads ANTHROPIC_API_KEY directly. Same lookup the LLM service uses.
+    anthropicConfigured: Boolean(config.anthropicApiKey || process.env.ANTHROPIC_API_KEY),
+  };
 }
 
 /** Resolve provider + model for a feature, supporting Ollama Cloud routing. */
