@@ -213,8 +213,14 @@ export class ClaudeAgentProvider implements AgentProvider {
 
     const resolvedModel = modelOverride ?? this.frameworkConfig.model;
     const childEnv = this.buildChildEnv();
-    const redact = (v: string | undefined): string =>
-      v ? `${v.slice(0, 4)}…${v.slice(-4)} (len=${v.length})` : "(unset)";
+    // For strings ≤8 chars the first-4/last-4 slices would overlap and reveal
+    // the whole secret. Anthropic/Ollama tokens are ≥50 chars in practice, but
+    // gate defensively in case redact() is ever reused for shorter values.
+    const redact = (v: string | undefined): string => {
+      if (!v) return "(unset)";
+      if (v.length <= 8) return `(redacted, len=${v.length})`;
+      return `${v.slice(0, 4)}…${v.slice(-4)} (len=${v.length})`;
+    };
     log.info(
       `[ClaudeAgent:route] model=${resolvedModel} base_url=${childEnv.ANTHROPIC_BASE_URL ?? "(unset)"} auth_token=${redact(childEnv.ANTHROPIC_AUTH_TOKEN)} api_key=${redact(childEnv.ANTHROPIC_API_KEY)} ollama_enabled=${!!this.frameworkConfig.ollamaCloud?.enabled} default_sonnet=${childEnv.ANTHROPIC_DEFAULT_SONNET_MODEL ?? "(unset)"}`,
     );
@@ -251,6 +257,15 @@ export class ClaudeAgentProvider implements AgentProvider {
         // Don't persist sessions for SDK calls from within the app
         persistSession: false,
         env: childEnv,
+        // We do NOT set `pathToClaudeCodeExecutable` or `spawnClaudeCodeProcess`.
+        // SDK 0.3.x replaced the separate `cli.js` subprocess with a bun-bundled
+        // `assistant.mjs` / `bridge.mjs` runtime extracted via `extractFromBunfs.js`.
+        // The bundled bun binary is self-contained, so the old workaround
+        // (overriding spawn to run via Electron's built-in node with
+        // `ELECTRON_RUN_AS_NODE=1`) is no longer needed for packaged apps
+        // without a system Node install. The `node_modules/@anthropic-ai/claude-agent-sdk/**`
+        // asarUnpack entry in package.json keeps the bun assets on a real filesystem
+        // so extraction at runtime works inside a packaged .app.
         // Capture stderr so subprocess errors are visible in logs
         stderr: (data: string) => {
           log.info(`[ClaudeAgent:stderr] ${data.trimEnd()}`);
