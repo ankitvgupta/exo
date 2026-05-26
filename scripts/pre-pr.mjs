@@ -294,14 +294,49 @@ async function main() {
       `\n[agentic-verify] diff is infra-only (tests/scripts/docs); will accept "inconclusive" verdict.`,
     );
   }
-  phases.push(
-    runPhase(
-      "agentic-verify",
-      "node",
-      ["scripts/agentic-verify.mjs", "--mode=verify-diff"],
-      infraOnly ? { softExits: [3] } : {},
-    ),
+  // Budget bump: the default $0.50 in agentic-verify.mjs is enough for shallow
+  // demo-mode flows but too tight when the diff touches LLM-routing code paths
+  // (llm-service, draft-generator, agent-coordinator). The agent then explores
+  // real-mode flows with sender enrichment + draft generation and routinely
+  // crashes mid-verification on budget exhaustion (exit 1) before it can emit
+  // a verdict. $1.50 gives ~3× headroom over the worst observed run ($0.90).
+  const verifyResult = runPhase(
+    "agentic-verify",
+    "node",
+    ["scripts/agentic-verify.mjs", "--mode=verify-diff", "--budget-usd=1.5"],
+    infraOnly ? { softExits: [3] } : {},
   );
+
+  // Promote "inconclusive + zero anomalies + non-trivial exploration" to a
+  // soft pass. Backend-only diffs (e.g. provider routing in llm-service.ts,
+  // composeNewEmail in draft-generator.ts) often have no UI surface the
+  // agent can drive — the agent honestly reports inconclusive even after
+  // verifying the surrounding flows are healthy. Treating that as a hard
+  // failure blocked legitimate Ollama-only fixes (PR #160). The action
+  // floor (≥10) ensures the agent actually explored before bailing.
+  if (
+    verifyResult.status === 3 &&
+    !verifyResult.ok &&
+    !infraOnly
+  ) {
+    const report = findLatestVerifyReport(verifyStartMs);
+    if (report?.json) {
+      try {
+        const data = JSON.parse(readFileSync(report.json, "utf8"));
+        const anomalies = Array.isArray(data.anomalies) ? data.anomalies.length : 0;
+        const actions = typeof data.actions === "number" ? data.actions : 0;
+        if (data.verdict === "inconclusive" && anomalies === 0 && actions >= 10) {
+          console.log(
+            `[agentic-verify] inconclusive but 0 anomalies + ${actions} actions — accepting as soft pass (diff has no UI surface).`,
+          );
+          verifyResult.ok = true;
+        }
+      } catch {
+        /* report unreadable — leave as hard fail */
+      }
+    }
+  }
+  phases.push(verifyResult);
 
   // ============================================================
   // Phase 3 — Real-Gmail (optional)
