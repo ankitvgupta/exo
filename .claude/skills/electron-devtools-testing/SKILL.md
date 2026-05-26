@@ -105,6 +105,7 @@ import { writeFileSync } from "fs";
 const PORT = process.env.CDP_PORT;
 const list = await (await fetch(`http://127.0.0.1:${PORT}/json/list`)).json();
 const page = list.find(p => p.type === "page");
+if (!page) throw new Error(`No page target on port ${PORT} yet — /json/version can succeed before the renderer registers; retry in a moment`);
 const ws = new WebSocket(page.webSocketDebuggerUrl);
 let id = 0; const pending = new Map();
 ws.addEventListener("message", e => { const m = JSON.parse(e.data); if (m.id && pending.has(m.id)) { pending.get(m.id)(m); pending.delete(m.id); } });
