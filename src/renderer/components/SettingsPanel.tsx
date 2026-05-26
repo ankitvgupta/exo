@@ -1257,8 +1257,8 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                   )}
                   {senderLookupProvider === "exa" && !exaApiKey && (
                     <p className="text-xs text-amber-600 dark:text-amber-400">
-                      No Exa key configured — sender lookups will fall back to Anthropic
-                      web_search until you add one.
+                      No Exa key configured — sender lookups will fall back to Anthropic web_search
+                      until you add one.
                     </p>
                   )}
                 </div>

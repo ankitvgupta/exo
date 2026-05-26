@@ -62,6 +62,7 @@ function getStore(): Store<{ config: Config }> {
           analysisPrompt: DEFAULT_ANALYSIS_PROMPT,
           draftPrompt: DEFAULT_DRAFT_PROMPT,
           enableSenderLookup: true,
+          senderLookupProvider: "anthropic" as const,
           syncDraftsToGmail: false,
           theme: "system" as const,
           inboxDensity: "compact" as const,

@@ -4,11 +4,7 @@ import type {
   EnrichmentProvider,
   EnrichmentData,
 } from "../../../shared/extension-types";
-import type {
-  DashboardEmail,
-  LlmProvider,
-  SenderLookupProvider,
-} from "../../../shared/types";
+import type { DashboardEmail, LlmProvider, SenderLookupProvider } from "../../../shared/types";
 
 export interface WebSearchProviderDeps {
   /** Model id to use when sender lookup runs via Anthropic's bundled web_search tool. */
