@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback, useMemo } from "react";
+import React, { useEffect, useRef, useCallback, useMemo, useDeferredValue, memo } from "react";
 import type { InboxDensity, SnoozedEmail, DashboardEmail, LocalDraft } from "../../shared/types";
 import { useAppStore, useSplitFilteredThreads, type EmailThread } from "../store";
 import { EmailRow } from "./EmailRow";
@@ -27,42 +27,79 @@ const densityLabels: Record<InboxDensity, string> = {
   compact: "Compact",
 };
 
-export function EmailList() {
-  const {
-    selectedEmailId: _selectedEmailId,
-    setSelectedEmailId,
-    setSelectedThreadId,
-    setViewMode,
-    isLoading,
-    prefetchProgress,
-    syncProgress,
-    inboxDensity,
-    setInboxDensity,
-    snoozedThreads,
-    setSnoozedThreads,
-    currentAccountId,
-    selectedThreadIds,
-    toggleThreadSelected,
-    setThreadsSelected,
-    clearSelectedThreads,
-    selectAllThreads,
-    currentSplitId,
-    setCurrentSplitId,
-    setArchiveReadyThreads,
-    removeEmails,
-    addUndoAction,
-    selectedDraftId,
-    setSelectedDraftId,
-    removeRecentlyUnsnoozedThread,
-    markThreadAsRead,
-  } = useAppStore();
-  const openCompose = useAppStore((s) => s.openCompose);
+// Memoize so parent (App) re-renders don't cascade into the (heavy)
+// EmailList subtree. EmailList takes no props; its memo always short-
+// circuits when called from a re-rendering parent. It still re-renders
+// on its own subscriptions (selectors below), but those are scoped to
+// fields that actually change in response to user actions.
+export const EmailList = memo(EmailListImpl);
+function EmailListImpl() {
+  // Per-field selectors instead of `useAppStore()` (no-selector). With no
+  // selector the hook returns the entire state object, whose reference
+  // changes on every `set()`; this caused EmailList to re-render on every
+  // unrelated store update (sync status flips, prefetch progress, etc.).
+  // Under bursts (the IPC event flood that follows switching to an account
+  // with a large inbox + active background sync) that produced 1000+
+  // EmailList re-renders in succession, blocking the renderer for ~9s.
+  // Actions are stable function references — read once via getState().
+  const isLoading = useAppStore((s) => s.isLoading);
+  const prefetchProgress = useAppStore((s) => s.prefetchProgress);
+  const syncProgress = useAppStore((s) => s.syncProgress);
+  const inboxDensity = useAppStore((s) => s.inboxDensity);
+  const snoozedThreads = useAppStore((s) => s.snoozedThreads);
+  // Defer currentAccountId in EmailList so the deferred threads array (below)
+  // and the local id stay consistent during the 1-frame deferred window. The
+  // store-side id updates synchronously — anything that needs the live id
+  // (incoming IPC event filters, see callbacks below) reads it via
+  // `useAppStore.getState()` at call time. Without this deferral the urgent
+  // re-render fires all account-scoped useEffects + IPC responses while the
+  // 700+ item virtualizer is mid-commit, which is what produced the original
+  // ~9s blocking window.
+  //
+  // Expected tradeoff: `SplitTabs` (and `useKeyboardShortcuts`) read the live
+  // account id + live threads from the store, so for ~1 frame after an account
+  // switch the split tab counts/keyboard-target reflect the new account while
+  // the visible thread list still shows the old. This self-resolves on the
+  // next frame and is the price of unblocking the click.
+  const _liveAccountId = useAppStore((s) => s.currentAccountId);
+  const currentAccountId = useDeferredValue(_liveAccountId);
+  const selectedThreadIds = useAppStore((s) => s.selectedThreadIds);
+  const currentSplitId = useAppStore((s) => s.currentSplitId);
+  const selectedDraftId = useAppStore((s) => s.selectedDraftId);
   const allLocalDrafts = useAppStore((s) => s.localDrafts);
   const unsnoozedReturnTimes = useAppStore((s) => s.unsnoozedReturnTimes);
   const selectedThreadId = useAppStore((s) => s.selectedThreadId);
   const splits = useAppStore((s) => s.splits);
   const accounts = useAppStore((s) => s.accounts);
-  const { threads } = useSplitFilteredThreads();
+  // Actions are read once via getState() — they're stable function refs so we
+  // don't want a no-selector useAppStore() call subscribing this component to
+  // every store change (the perf regression that caused the original switch
+  // beachball — see PR #149 for context).
+  const {
+    setSelectedEmailId,
+    setSelectedThreadId,
+    setViewMode,
+    setInboxDensity,
+    setSnoozedThreads,
+    toggleThreadSelected,
+    setThreadsSelected,
+    clearSelectedThreads,
+    selectAllThreads,
+    setCurrentSplitId,
+    setArchiveReadyThreads,
+    removeEmails,
+    addUndoAction,
+    setSelectedDraftId,
+    removeRecentlyUnsnoozedThread,
+    markThreadAsRead,
+    openCompose,
+  } = useAppStore.getState();
+  const _sft = useSplitFilteredThreads();
+  // useDeferredValue marks `threads` as non-urgent so the (heavy) render
+  // of 700+ items doesn't block the click handler. React renders the
+  // chrome (header / split tabs) with the new account immediately, and
+  // updates the thread list in a separate concurrent pass.
+  const threads = useDeferredValue(_sft.threads);
 
   // In unified ("All Inboxes") mode we fan out per-account loaders + listeners.
   // The list of account IDs to load is recomputed each render but its identity
@@ -173,6 +210,11 @@ export function EmailList() {
   // re-register listeners on every account switch. Ref is updated in a
   // useEffect (not during render) so concurrent renders + StrictMode don't
   // leave the ref pointing at a discarded set.
+  //
+  // Idempotency note: window.api.snooze.on{Unsnoozed,Snoozed,ManuallyUnsnoozed}
+  // are ipcRenderer.on-style additive registrations. The [] deps array means
+  // this effect runs once per mount, and the cleanup calls removeAllListeners
+  // before re-mount — so we never accumulate duplicates in normal use.
   const targetAccountIdsRef = useRef<Set<string>>(new Set(targetAccountIds));
   useEffect(() => {
     targetAccountIdsRef.current = new Set(targetAccountIds);
@@ -275,13 +317,15 @@ export function EmailList() {
   // When a thread is added to recentlyRepliedThreadIds, schedule its removal
   // after 3 minutes so the thread naturally moves to its correct category.
   const recentlyRepliedThreadIds = useAppStore((s) => s.recentlyRepliedThreadIds);
-  const removeRecentlyRepliedThread = useAppStore((s) => s.removeRecentlyRepliedThread);
   useEffect(() => {
     if (recentlyRepliedThreadIds.size === 0) return;
 
     const timers: ReturnType<typeof setTimeout>[] = [];
     const now = Date.now();
     const GRACE_MS = 3 * 60 * 1000;
+    // Read the action via getState() for consistency with the rest of this
+    // component (every other store action above is obtained the same way).
+    const removeRecentlyRepliedThread = useAppStore.getState().removeRecentlyRepliedThread;
 
     for (const [threadId, repliedAt] of recentlyRepliedThreadIds) {
       const remaining = Math.max(0, GRACE_MS - (now - repliedAt));
@@ -294,6 +338,18 @@ export function EmailList() {
   }, [recentlyRepliedThreadIds]);
 
   const handleArchiveAll = useCallback(() => {
+    // Use the *displayed* threads (deferred, with `excludeExclusive` already
+    // applied by useSplitFilteredThreads). They're rendered together so they
+    // always reflect the same snapshot — archiving exactly what the user sees.
+    //
+    // Don't substitute live values here: an earlier attempt rebuilt the
+    // set from `state.emails` + `state.archiveReadyThreadIds` to dodge the
+    // 1-frame useDeferredValue lag, but that bypassed `excludeExclusive`
+    // and would have silently archived threads that live in an exclusive
+    // split and aren't visible in the Archive Ready view.
+    //
+    // In unified mode currentAccountId is null and that's fine — each
+    // thread carries its own accountId for per-account undo grouping below.
     if (threads.length === 0) return;
 
     // Group threads by their owning account so each undo entry stays scoped
@@ -479,6 +535,12 @@ export function EmailList() {
     isSnoozedView,
     snoozedThreads,
     currentSplit,
+    // currentSplitId is read inside (the `=== "__other__"` branch). Previously
+    // `threads` was always recomputed synchronously alongside currentSplitId, so
+    // this was masked — but with `useDeferredValue(_sft.threads)` there's a
+    // 1-frame window where currentSplitId has changed but threads hasn't, and
+    // without this dep the memo returns the cached (wrong-split) draft list.
+    currentSplitId,
   ]);
 
   // Calculate initial scroll offset so the virtualizer renders the correct

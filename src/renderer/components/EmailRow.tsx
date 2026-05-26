@@ -326,14 +326,51 @@ export const EmailRow = memo(
       </div>
     );
   },
-  (prev, next) =>
-    prev.thread === next.thread &&
-    prev.isSelected === next.isSelected &&
-    prev.isChecked === next.isChecked &&
-    prev.isMultiSelectActive === next.isMultiSelectActive &&
-    prev.density === next.density &&
-    prev.snoozeInfo === next.snoozeInfo &&
-    prev.returnTime === next.returnTime,
+  (prev, next) => {
+    if (
+      prev.isSelected !== next.isSelected ||
+      prev.isChecked !== next.isChecked ||
+      prev.isMultiSelectActive !== next.isMultiSelectActive ||
+      prev.density !== next.density ||
+      prev.snoozeInfo !== next.snoozeInfo ||
+      prev.returnTime !== next.returnTime
+    ) {
+      return false;
+    }
+    if (prev.thread === next.thread) return true;
+    // Thread object identity changes on every store mutation that touches
+    // `emails` because groupByThread rebuilds the objects. Comparing the
+    // rendered fields directly lets us skip re-rendering visible rows on
+    // every unrelated state update — the dominant cost of switching to an
+    // account with a large inbox (e.g. ~20 rows × ~50 EmailList renders ×
+    // ~10ms each ≈ 9s blocking the renderer).
+    //
+    // KEEP IN SYNC: if you add a field to `EmailThread` (src/renderer/store)
+    // that the EmailRow JSX below reads, add the same field to this
+    // comparator — otherwise rows will silently render stale data. The same
+    // applies if EmailRow's JSX starts rendering a previously-ignored field.
+    const pt = prev.thread;
+    const nt = next.thread;
+    return (
+      pt.threadId === nt.threadId &&
+      pt.isUnread === nt.isUnread &&
+      pt.userReplied === nt.userReplied &&
+      pt.displaySender === nt.displaySender &&
+      pt.subject === nt.subject &&
+      pt.latestReceivedDate === nt.latestReceivedDate &&
+      pt.hasMultipleEmails === nt.hasMultipleEmails &&
+      // Thread-count badge reads `thread.emails.length` directly — a thread
+      // going 2→3 emails wouldn't change `hasMultipleEmails`, so we'd skip
+      // the render and the badge would lie.
+      pt.emails.length === nt.emails.length &&
+      pt.latestEmail.id === nt.latestEmail.id &&
+      pt.latestEmail.snippet === nt.latestEmail.snippet &&
+      pt.latestReceivedEmail.id === nt.latestReceivedEmail.id &&
+      pt.latestReceivedEmail.date === nt.latestReceivedEmail.date &&
+      pt.analysis === nt.analysis &&
+      pt.draft === nt.draft
+    );
+  },
   // onClick / onCheckboxChange intentionally omitted — they are stable in behavior
   // but are new arrow function references on each parent render.
 );

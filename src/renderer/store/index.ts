@@ -63,7 +63,13 @@ export type ComposeState = {
   restoredDraft?: RestoredDraft;
 } | null;
 
-// Thread representation - a group of emails with the same threadId
+// Thread representation - a group of emails with the same threadId.
+//
+// KEEP IN SYNC: EmailRow's memo comparator (src/renderer/components/EmailRow.tsx)
+// does field-level equality on this type to skip re-renders when only the
+// thread *object identity* changed (groupByThread rebuilds these on every
+// emails mutation). If you add a field here that EmailRow renders, add the
+// same field to the comparator — otherwise rows will silently go stale.
 export type EmailThread = {
   threadId: string;
   emails: DashboardEmail[];
@@ -1030,6 +1036,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   setSyncStatus: (accountId, status) =>
     set((state) => {
+      // Skip no-op transitions. The main process flips syncing/idle for
+      // every periodic sync tick + every sync.now call across every
+      // account, so over a long session this fires hundreds of times per
+      // minute. Without this guard, each emit replaces the syncStatuses
+      // Map reference and notifies every subscriber.
+      if (state.syncStatuses.get(accountId) === status) return state;
       const newStatuses = new Map(state.syncStatuses);
       newStatuses.set(accountId, status);
       return { syncStatuses: newStatuses };
