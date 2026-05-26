@@ -1,6 +1,7 @@
 import { utilityProcess, MessageChannelMain, type BrowserWindow, net } from "electron";
 import path from "path";
 import { existsSync } from "fs";
+import { fileURLToPath } from "url";
 import type {
   AgentContext,
   AgentFrameworkConfig,
@@ -20,6 +21,10 @@ import { saveDraftAndSync } from "../services/gmail-draft-sync";
 import { DEFAULT_STYLE_PROMPT } from "../../shared/types";
 import { populatePrivateProviderConfig } from "./private-providers-main";
 import { createLogger } from "../services/logger";
+
+// __dirname is undefined in ESM. After the @anthropic-ai/claude-agent-sdk
+// 0.3.x upgrade, electron-vite emits the main bundle as ESM.
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const log = createLogger("agent-coordinator");
 
