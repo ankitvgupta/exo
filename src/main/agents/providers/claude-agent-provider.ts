@@ -70,9 +70,13 @@ const resolveClaudeCodeExecutable = (() => {
         process.platform === "android"
           ? [`${base}-linux-${process.arch}-android`]
           : process.platform === "linux"
-            ? // Try musl and glibc; pick whichever the resolver finds. The SDK
-              // probes both regardless of detected libc, so we do too.
-              [`${base}-linux-${process.arch}`, `${base}-linux-${process.arch}-musl`]
+            ? // Match the SDK's K2 probe order: musl-first on a musl runtime,
+              // glibc-first on glibc. With both packages installed, the wrong
+              // ordering would land on an ELF that exec()s but fails to load
+              // its dynamic linker (musl-built binary on glibc, or vice versa).
+              isMuslRuntime()
+              ? [`${base}-linux-${process.arch}-musl`, `${base}-linux-${process.arch}`]
+              : [`${base}-linux-${process.arch}`, `${base}-linux-${process.arch}-musl`]
             : [`${base}-${process.platform}-${process.arch}`];
 
       for (const candidate of candidates) {
@@ -84,6 +88,9 @@ const resolveClaudeCodeExecutable = (() => {
           const unpacked = resolved.replace(/([\\/])app\.asar([\\/])/, "$1app.asar.unpacked$2");
           if (existsSync(unpacked)) {
             cached = unpacked;
+            // Log here (not at every run() call) so the diagnostic fires once
+            // per process when the path is first computed.
+            log.info(`[ClaudeAgent:executable] ${unpacked}`);
             return unpacked;
           }
         } catch {
@@ -95,9 +102,39 @@ const resolveClaudeCodeExecutable = (() => {
     }
 
     cached = null;
+    log.info(`[ClaudeAgent:executable] (SDK default)`);
     return undefined;
   };
 })();
+
+/**
+ * Mirror of the SDK's bx() musl detection. process.report.getReport() exposes
+ * `header.glibcVersionRuntime` only when the process is linked against glibc;
+ * its absence is the cheapest available signal that we're on musl (Alpine,
+ * Wolfi). Kept in lockstep with resolveClaudeCodeExecutable's K2 mirror so we
+ * land on the same binary the SDK would have chosen.
+ */
+function isMuslRuntime(): boolean {
+  if (process.platform !== "linux") return false;
+  if (typeof process.report?.getReport !== "function") return false;
+  // Isolate getReport() failures (hardened sandboxes, Node internals bugs) so
+  // a musl-detection error doesn't propagate to the outer resolver's catch
+  // and force the SDK-default fallback — better to assume glibc order than
+  // to drop the whole override.
+  let report: unknown;
+  try {
+    report = process.report.getReport();
+  } catch {
+    return false;
+  }
+  // Node's ProcessReport type declares `header: object`, so narrow at the boundary.
+  if (typeof report !== "object" || report === null) return false;
+  if (!("header" in report)) return false;
+  const header = report.header;
+  if (typeof header !== "object" || header === null) return false;
+  // Present on glibc, absent on musl.
+  return !("glibcVersionRuntime" in header);
+}
 
 /**
  * Every env var Claude Code's CLI consults for model selection — discovered
@@ -303,8 +340,9 @@ export class ClaudeAgentProvider implements AgentProvider {
     // own resolver returns a path inside `app.asar` under packaged Electron,
     // which fails execve() with ENOTDIR (asar is a file, not a directory).
     // Resolve to the unpacked path ourselves and override the SDK's lookup.
+    // resolveClaudeCodeExecutable memoizes; the diagnostic log fires inside
+    // it on the first call rather than per run() invocation.
     const claudeCodeExecutable = resolveClaudeCodeExecutable();
-    log.info(`[ClaudeAgent:executable] ${claudeCodeExecutable ?? "(SDK default)"}`);
 
     const q = query({
       prompt,
