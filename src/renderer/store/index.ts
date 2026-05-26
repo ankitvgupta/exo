@@ -2043,7 +2043,7 @@ export function useThreadedEmails() {
         snoozedThreadsCount: snoozedThreadIds.size,
         activeThreads: activeThreads.length,
         unanalyzed: unanalyzed.length,
-        needsReply: sortedNeedsReply.length,
+        needsReply: needsReply.length,
         done: done.length,
         skipped: skipped.length,
       });
