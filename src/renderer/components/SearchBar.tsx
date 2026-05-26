@@ -209,13 +209,9 @@ export function SearchBar({ isOpen, onClose }: SearchBarProps) {
         ),
       ).then((results) => {
         if (useAppStore.getState().activeSearchQuery !== query) return;
-        const successes = results.filter(
-          (r): r is Extract<RemoteOutcome, { ok: true }> => r.ok,
-        );
+        const successes = results.filter((r): r is Extract<RemoteOutcome, { ok: true }> => r.ok);
         if (successes.length === 0) {
-          const firstError = results.find(
-            (r): r is Extract<RemoteOutcome, { ok: false }> => !r.ok,
-          );
+          const firstError = results.find((r): r is Extract<RemoteOutcome, { ok: false }> => !r.ok);
           setRemoteSearchError(firstError ? firstError.error : "Gmail search failed");
           return;
         }
@@ -223,7 +219,7 @@ export function SearchBar({ isOpen, onClose }: SearchBarProps) {
         useAppStore
           .getState()
           .setRemoteSearchNextPageToken(
-            targetAccountIds.length === 1 ? successes[0].next ?? null : null,
+            targetAccountIds.length === 1 ? (successes[0].next ?? null) : null,
           );
       });
     } else {
