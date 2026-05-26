@@ -901,14 +901,19 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (state.currentAccountId === accountId) {
         newCurrentId = newAccounts.find((a) => a.isPrimary)?.id || newAccounts[0]?.id || null;
       }
-      // Drop in-memory emails/sent emails for the removed account. The DB
-      // cleanup in main happens in removeAccount(accountId), but state.emails
-      // is the source of truth for the unified ("All Inboxes") view, so
-      // without this the removed account's threads keep rendering until the
-      // app restarts.
+      // Drop in-memory emails/sent emails/local drafts for the removed
+      // account. The DB cleanup in main happens in removeAccount(accountId),
+      // but state.emails / state.sentEmails / state.localDrafts are the
+      // source of truth for what the UI renders, so without this the removed
+      // account's threads keep rendering until the app restarts.
       const remainingEmails: DashboardEmail[] = [];
+      const remainingSentEmails: DashboardEmail[] = [];
       const removedEmailIds = new Set<string>();
       const removedThreadIds = new Set<string>();
+      // Walk both emails and sentEmails: a sent-only thread (outgoing
+      // message with no reply yet) only exists in sentEmails, so building
+      // the removed id sets from state.emails alone would leave its
+      // selection pointers stale.
       for (const e of state.emails) {
         if (e.accountId === accountId) {
           removedEmailIds.add(e.id);
@@ -917,10 +922,27 @@ export const useAppStore = create<AppState>((set, get) => ({
           remainingEmails.push(e);
         }
       }
+      for (const e of state.sentEmails) {
+        if (e.accountId === accountId) {
+          removedEmailIds.add(e.id);
+          if (e.threadId) removedThreadIds.add(e.threadId);
+        } else {
+          remainingSentEmails.push(e);
+        }
+      }
+      const remainingLocalDrafts: LocalDraft[] = [];
+      const removedDraftIds = new Set<string>();
+      for (const d of state.localDrafts) {
+        if (d.accountId === accountId) {
+          removedDraftIds.add(d.id);
+        } else {
+          remainingLocalDrafts.push(d);
+        }
+      }
       // Clear selection slices that pointed at the removed account's emails/
-      // threads. In unified mode currentAccountId stays null after removal,
-      // so the setCurrentAccountId selection-reset path never fires and the
-      // right pane would otherwise render a ghost thread.
+      // threads/drafts. In unified mode currentAccountId stays null after
+      // removal, so the setCurrentAccountId selection-reset path never fires
+      // and the right pane would otherwise render a ghost thread or draft.
       const newSelectedThreadIds = new Set<string>();
       for (const tid of state.selectedThreadIds) {
         if (!removedThreadIds.has(tid)) newSelectedThreadIds.add(tid);
@@ -931,7 +953,8 @@ export const useAppStore = create<AppState>((set, get) => ({
         syncStatuses: newSyncStatuses,
         backgroundSyncProgress: newBackgroundSyncProgress,
         emails: remainingEmails,
-        sentEmails: state.sentEmails.filter((e) => e.accountId !== accountId),
+        sentEmails: remainingSentEmails,
+        localDrafts: remainingLocalDrafts,
         selectedEmailId:
           state.selectedEmailId && removedEmailIds.has(state.selectedEmailId)
             ? null
@@ -945,6 +968,10 @@ export const useAppStore = create<AppState>((set, get) => ({
             ? null
             : state.focusedThreadEmailId,
         selectedThreadIds: newSelectedThreadIds,
+        selectedDraftId:
+          state.selectedDraftId && removedDraftIds.has(state.selectedDraftId)
+            ? null
+            : state.selectedDraftId,
       };
     }),
   setCurrentAccountId: (accountId) => {
