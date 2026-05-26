@@ -1265,10 +1265,17 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                       />
                     </div>
                   )}
-                  {senderLookupProvider === "exa" && !exaApiKey && (
+                  {senderLookupProvider === "exa" && !exaApiKey && anthropicApiKey && (
                     <p className="text-xs text-amber-600 dark:text-amber-400">
                       No Exa key configured — sender lookups will fall back to Anthropic web_search
                       until you add one.
+                    </p>
+                  )}
+                  {senderLookupProvider === "exa" && !exaApiKey && !anthropicApiKey && (
+                    <p className="text-xs text-amber-600 dark:text-amber-400">
+                      No Exa key configured. You also haven&apos;t set an Anthropic key, so there is
+                      no fallback — sender lookup will be skipped until you add an Exa key above (or
+                      an Anthropic key under AI Provider).
                     </p>
                   )}
                 </div>

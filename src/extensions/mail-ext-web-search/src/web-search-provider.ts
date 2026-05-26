@@ -9,8 +9,18 @@ import type { DashboardEmail, LlmProvider, SenderLookupProvider } from "../../..
 export interface WebSearchProviderDeps {
   /** Model id to use when sender lookup runs via Anthropic's bundled web_search tool. */
   getModelId: () => string;
-  /** Which search backend to use, plus the Exa API key if relevant. */
-  getSearchConfig: () => { provider: SenderLookupProvider; exaApiKey: string };
+  /**
+   * Which search backend to use, plus the Exa API key if relevant, plus
+   * whether an Anthropic API key is configured at all. The Anthropic flag
+   * lets us decide whether falling back to the bundled web_search path is a
+   * real option or would just AuthError (which the outer try/catch would
+   * swallow, leaving the user with a silently broken lookup).
+   */
+  getSearchConfig: () => {
+    provider: SenderLookupProvider;
+    exaApiKey: string;
+    anthropicConfigured: boolean;
+  };
   /**
    * Provider+model for the LLM that parses Exa search results. Allows the
    * parsing step to be routed through Ollama Cloud independently of the
@@ -462,15 +472,25 @@ export function createWebSearchProvider(
         const searchConfig = deps.getSearchConfig();
 
         // Resolve the backend. Exa is gated on an API key being present —
-        // without one we'd fail at request time, so fall back to Anthropic
-        // instead and log it. Anthropic always has a path (the user already
-        // configured an API key during setup to use the rest of the app).
+        // without one we'd fail at request time. The Anthropic fallback is
+        // only viable when an Anthropic key is configured; on the
+        // Ollama+Exa-only onboarding path there isn't one, and silently
+        // calling the Anthropic SDK would AuthError → get swallowed by the
+        // outer try/catch → leave the user with a broken sender panel and
+        // no signal. Skip the fallback in that case and log clearly.
         let useExa = searchConfig.provider === "exa";
         if (useExa && !searchConfig.exaApiKey) {
-          context.logger.warn(
-            "senderLookupProvider=exa but exaApiKey is empty; falling back to Anthropic web_search",
-          );
-          useExa = false;
+          if (searchConfig.anthropicConfigured) {
+            context.logger.warn(
+              "senderLookupProvider=exa but exaApiKey is empty; falling back to Anthropic web_search",
+            );
+            useExa = false;
+          } else {
+            context.logger.warn(
+              "senderLookupProvider=exa but exaApiKey is empty AND no Anthropic key is configured; skipping enrichment",
+            );
+            return null;
+          }
         }
 
         const jsonText = useExa

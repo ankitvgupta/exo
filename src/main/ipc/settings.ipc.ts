@@ -154,18 +154,24 @@ export function getModelIdForFeature(feature: keyof ModelConfig): string {
 }
 
 /**
- * Resolve which search backend sender lookup should use, plus the Exa key
- * if relevant. Default "anthropic" preserves the historical Claude web_search
- * path; "exa" routes through Exa's REST API + the configured senderLookup LLM.
+ * Resolve which search backend sender lookup should use, plus the Exa key,
+ * plus whether an Anthropic API key is configured. The Anthropic flag lets
+ * the extension know whether the Anthropic web_search fallback is even an
+ * option — relevant on the Ollama+Exa-only path where there's no Anthropic
+ * key at all, and silently falling back would just produce an AuthError.
  */
 export function getSenderLookupConfig(): {
   provider: SenderLookupProvider;
   exaApiKey: string;
+  anthropicConfigured: boolean;
 } {
   const config = getConfig();
   return {
     provider: config.senderLookupProvider ?? "anthropic",
     exaApiKey: config.exaApiKey ?? "",
+    // process.env fallback covers dev (.env) and packaged builds where the
+    // SDK reads ANTHROPIC_API_KEY directly. Same lookup the LLM service uses.
+    anthropicConfigured: Boolean(config.anthropicApiKey || process.env.ANTHROPIC_API_KEY),
   };
 }
 
