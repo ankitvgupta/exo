@@ -1711,7 +1711,10 @@ export default function App() {
           }
         })
         .catch(console.error);
-      // Trigger background sync to pick up any new emails (non-blocking)
+      // Trigger background sync to pick up any new emails (non-blocking).
+      // Safe to call on every click: getHistoryChanges yields to the event
+      // loop between Gmail History API pages so a stale account walking
+      // many empty pages no longer monopolises the main thread.
       window.api.sync.now(aid).catch(console.error);
     }
   };

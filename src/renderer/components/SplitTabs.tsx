@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, memo } from "react";
 import { useAppStore, useThreadedEmails, type EmailThread } from "../store";
 import { threadMatchesSplit as threadMatchesSplitShared } from "../utils/split-conditions";
 import type { InboxSplit } from "../../shared/types";
@@ -43,7 +43,12 @@ function Tab({ active, onClick, count, children }: TabProps) {
   );
 }
 
-export function SplitTabs() {
+// memo: SplitTabs takes no props, so parent-triggered renders are wasted
+// work. EmailList is the parent; under bursts (sync events, prefetch
+// progress) it re-renders frequently, and SplitTabs's counts useMemo
+// recomputes a regex test per (700 threads × N splits) on each render.
+export const SplitTabs = memo(SplitTabsImpl);
+function SplitTabsImpl() {
   const allSplits = useAppStore((state) => state.splits);
   const currentAccountId = useAppStore((state) => state.currentAccountId);
   const currentSplitId = useAppStore((state) => state.currentSplitId);

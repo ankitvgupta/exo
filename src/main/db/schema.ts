@@ -357,6 +357,9 @@ CREATE INDEX IF NOT EXISTS idx_draft_memories_last_voted ON draft_memories(last_
 CREATE INDEX IF NOT EXISTS idx_emails_thread ON emails(thread_id);
 CREATE INDEX IF NOT EXISTS idx_emails_date ON emails(date);
 CREATE INDEX IF NOT EXISTS idx_emails_account ON emails(account_id);
+-- Covering index for buildMergeCache (see db/index.ts) — keeps the per-account
+-- merge cache rebuild served from index pages instead of row lookups.
+CREATE INDEX IF NOT EXISTS idx_emails_merge_cover ON emails(account_id, thread_id, message_id, in_reply_to);
 CREATE INDEX IF NOT EXISTS idx_analyses_needs_reply ON analyses(needs_reply);
 CREATE INDEX IF NOT EXISTS idx_drafts_status ON drafts(status);
 CREATE INDEX IF NOT EXISTS idx_sent_to_address ON sent_emails(to_address);

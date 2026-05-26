@@ -63,7 +63,13 @@ export type ComposeState = {
   restoredDraft?: RestoredDraft;
 } | null;
 
-// Thread representation - a group of emails with the same threadId
+// Thread representation - a group of emails with the same threadId.
+//
+// KEEP IN SYNC: EmailRow's memo comparator (src/renderer/components/EmailRow.tsx)
+// does field-level equality on this type to skip re-renders when only the
+// thread *object identity* changed (groupByThread rebuilds these on every
+// emails mutation). If you add a field here that EmailRow renders, add the
+// same field to the comparator — otherwise rows will silently go stale.
 export type EmailThread = {
   threadId: string;
   emails: DashboardEmail[];
@@ -894,15 +900,103 @@ export const useAppStore = create<AppState>((set, get) => ({
       const newAccounts = state.accounts.filter((a) => a.id !== accountId);
       const newSyncStatuses = new Map(state.syncStatuses);
       newSyncStatuses.delete(accountId);
+      const newBackgroundSyncProgress = new Map(state.backgroundSyncProgress);
+      newBackgroundSyncProgress.delete(accountId);
       // If removing current account, switch to primary or first
       let newCurrentId = state.currentAccountId;
       if (state.currentAccountId === accountId) {
         newCurrentId = newAccounts.find((a) => a.isPrimary)?.id || newAccounts[0]?.id || null;
       }
+      // Drop in-memory emails/sent emails/local drafts for the removed
+      // account. The DB cleanup in main happens in removeAccount(accountId),
+      // but state.emails / state.sentEmails / state.localDrafts are the
+      // source of truth for what the UI renders, so without this the removed
+      // account's threads keep rendering until the app restarts.
+      const remainingEmails: DashboardEmail[] = [];
+      const remainingSentEmails: DashboardEmail[] = [];
+      const removedEmailIds = new Set<string>();
+      const removedThreadIds = new Set<string>();
+      // Walk both emails and sentEmails: a sent-only thread (outgoing
+      // message with no reply yet) only exists in sentEmails, so building
+      // the removed id sets from state.emails alone would leave its
+      // selection pointers stale.
+      for (const e of state.emails) {
+        if (e.accountId === accountId) {
+          removedEmailIds.add(e.id);
+          if (e.threadId) removedThreadIds.add(e.threadId);
+        } else {
+          remainingEmails.push(e);
+        }
+      }
+      for (const e of state.sentEmails) {
+        if (e.accountId === accountId) {
+          removedEmailIds.add(e.id);
+          if (e.threadId) removedThreadIds.add(e.threadId);
+        } else {
+          remainingSentEmails.push(e);
+        }
+      }
+      const remainingLocalDrafts: LocalDraft[] = [];
+      const removedDraftIds = new Set<string>();
+      for (const d of state.localDrafts) {
+        if (d.accountId === accountId) {
+          removedDraftIds.add(d.id);
+        } else {
+          remainingLocalDrafts.push(d);
+        }
+      }
+      // Clear selection slices that pointed at the removed account's emails/
+      // threads/drafts. In unified mode currentAccountId stays null after
+      // removal, so the setCurrentAccountId selection-reset path never fires
+      // and the right pane would otherwise render a ghost thread or draft.
+      const newSelectedThreadIds = new Set<string>();
+      for (const tid of state.selectedThreadIds) {
+        if (!removedThreadIds.has(tid)) newSelectedThreadIds.add(tid);
+      }
+      // lastSelectedThreadId is the shift-click range anchor. If the anchor
+      // belonged to the removed account, a subsequent shift-click would
+      // anchor against a thread that no longer exists.
+      const newLastSelectedThreadId =
+        state.lastSelectedThreadId && removedThreadIds.has(state.lastSelectedThreadId)
+          ? null
+          : state.lastSelectedThreadId;
+      // Drain pending undo queues for the removed account. UndoActionToast's
+      // error-recovery path on a failed batch IPC calls addEmails(failedEmails),
+      // which would re-insert this account's emails after the DB is gone.
+      // Drop both queues' entries so timers fire on a no-op and the toast
+      // never tries to restore them.
+      const newUndoActionQueue = state.undoActionQueue.filter((i) => i.accountId !== accountId);
+      const newUndoSendQueue = state.undoSendQueue.filter(
+        (i) => i.sendOptions.accountId !== accountId,
+      );
       return {
         accounts: newAccounts,
         currentAccountId: newCurrentId,
         syncStatuses: newSyncStatuses,
+        backgroundSyncProgress: newBackgroundSyncProgress,
+        emails: remainingEmails,
+        sentEmails: remainingSentEmails,
+        localDrafts: remainingLocalDrafts,
+        selectedEmailId:
+          state.selectedEmailId && removedEmailIds.has(state.selectedEmailId)
+            ? null
+            : state.selectedEmailId,
+        selectedThreadId:
+          state.selectedThreadId && removedThreadIds.has(state.selectedThreadId)
+            ? null
+            : state.selectedThreadId,
+        focusedThreadEmailId:
+          state.focusedThreadEmailId && removedEmailIds.has(state.focusedThreadEmailId)
+            ? null
+            : state.focusedThreadEmailId,
+        selectedThreadIds: newSelectedThreadIds,
+        lastSelectedThreadId: newLastSelectedThreadId,
+        selectedDraftId:
+          state.selectedDraftId && removedDraftIds.has(state.selectedDraftId)
+            ? null
+            : state.selectedDraftId,
+        undoActionQueue: newUndoActionQueue,
+        undoSendQueue: newUndoSendQueue,
       };
     }),
   setCurrentAccountId: (accountId) => {
@@ -942,6 +1036,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   setSyncStatus: (accountId, status) =>
     set((state) => {
+      // Skip no-op transitions. The main process flips syncing/idle for
+      // every periodic sync tick + every sync.now call across every
+      // account, so over a long session this fires hundreds of times per
+      // minute. Without this guard, each emit replaces the syncStatuses
+      // Map reference and notifies every subscriber.
+      if (state.syncStatuses.get(accountId) === status) return state;
       const newStatuses = new Map(state.syncStatuses);
       newStatuses.set(accountId, status);
       return { syncStatuses: newStatuses };
