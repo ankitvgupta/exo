@@ -954,6 +954,15 @@ export const useAppStore = create<AppState>((set, get) => ({
         state.lastSelectedThreadId && removedThreadIds.has(state.lastSelectedThreadId)
           ? null
           : state.lastSelectedThreadId;
+      // Drain pending undo queues for the removed account. UndoActionToast's
+      // error-recovery path on a failed batch IPC calls addEmails(failedEmails),
+      // which would re-insert this account's emails after the DB is gone.
+      // Drop both queues' entries so timers fire on a no-op and the toast
+      // never tries to restore them.
+      const newUndoActionQueue = state.undoActionQueue.filter((i) => i.accountId !== accountId);
+      const newUndoSendQueue = state.undoSendQueue.filter(
+        (i) => i.sendOptions.accountId !== accountId,
+      );
       return {
         accounts: newAccounts,
         currentAccountId: newCurrentId,
@@ -980,6 +989,8 @@ export const useAppStore = create<AppState>((set, get) => ({
           state.selectedDraftId && removedDraftIds.has(state.selectedDraftId)
             ? null
             : state.selectedDraftId,
+        undoActionQueue: newUndoActionQueue,
+        undoSendQueue: newUndoSendQueue,
       };
     }),
   setCurrentAccountId: (accountId) => {
