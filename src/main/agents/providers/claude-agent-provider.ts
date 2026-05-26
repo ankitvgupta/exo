@@ -1,3 +1,5 @@
+import { createRequire } from "node:module";
+import { existsSync } from "node:fs";
 import { type z } from "zod";
 import {
   query,
@@ -24,6 +26,78 @@ import { buildBashPreToolUseHook } from "./bash-hook";
 import { createLogger } from "../../services/logger";
 
 const log = createLogger("claude-agent");
+
+/**
+ * Resolve the platform-specific `claude` binary the SDK spawns, rewriting any
+ * `app.asar` path component to `app.asar.unpacked`.
+ *
+ * SDK 0.3.x ships the actual `claude` executable as platform-specific optional
+ * dependencies (`@anthropic-ai/claude-agent-sdk-<platform>-<arch>`). The SDK
+ * resolves it via `createRequire(sdk.mjs).resolve(...)` and spawns it as a
+ * native binary. In packaged Electron apps the resolver returns a path inside
+ * `app.asar`, but `app.asar` is a single file, not a directory — calling
+ * execve() on a path containing it fails at the kernel level with ENOTDIR.
+ * Electron's asar shim transparently rewrites I/O paths but does NOT rewrite
+ * spawn() targets, so we have to do it ourselves and pass the result via
+ * `pathToClaudeCodeExecutable` to bypass the SDK's internal resolver.
+ *
+ * Mirrors the SDK's K2() resolution (sdk.mjs): tries the appropriate platform
+ * suffixes in the same order so we land on the same binary the SDK would.
+ *
+ * Returns `undefined` when the platform package is missing (e.g. when the user
+ * installed with `--omit=optional`); the SDK then surfaces its own clearer
+ * "reinstall without --omit=optional" error.
+ */
+const resolveClaudeCodeExecutable = (() => {
+  let cached: string | null | undefined;
+  return (): string | undefined => {
+    if (cached !== undefined) return cached ?? undefined;
+
+    try {
+      // Anchor resolution at the SDK's main entry (sdk.mjs) so we walk the
+      // same node_modules tree the SDK does. The platform package is typically
+      // installed as a nested dep of the SDK, not a sibling.
+      //
+      // Don't try to resolve "<pkg>/package.json" — the SDK's exports map only
+      // exposes specific subpaths, so Node throws ERR_PACKAGE_PATH_NOT_EXPORTED
+      // for anything not listed. Resolving the package name itself goes through
+      // the `.` export and returns sdk.mjs, which gives us a stable anchor.
+      const sdkEntryPath = require.resolve("@anthropic-ai/claude-agent-sdk");
+      const sdkReq = createRequire(sdkEntryPath);
+      const ext = process.platform === "win32" ? ".exe" : "";
+      const base = "@anthropic-ai/claude-agent-sdk";
+      const candidates =
+        process.platform === "android"
+          ? [`${base}-linux-${process.arch}-android`]
+          : process.platform === "linux"
+            ? // Try musl and glibc; pick whichever the resolver finds. The SDK
+              // probes both regardless of detected libc, so we do too.
+              [`${base}-linux-${process.arch}`, `${base}-linux-${process.arch}-musl`]
+            : [`${base}-${process.platform}-${process.arch}`];
+
+      for (const candidate of candidates) {
+        try {
+          const resolved = sdkReq.resolve(`${candidate}/claude${ext}`);
+          // Path-separator-aware rewrite: matches `/app.asar/` (POSIX) and
+          // `\app.asar\` (Windows). No-op when not inside an asar archive
+          // (dev runs, tests).
+          const unpacked = resolved.replace(/([\\/])app\.asar([\\/])/, "$1app.asar.unpacked$2");
+          if (existsSync(unpacked)) {
+            cached = unpacked;
+            return unpacked;
+          }
+        } catch {
+          // candidate not installed — try the next one
+        }
+      }
+    } catch {
+      // SDK itself unresolvable — surface as no override; SDK will throw its own error
+    }
+
+    cached = null;
+    return undefined;
+  };
+})();
 
 /**
  * Every env var Claude Code's CLI consults for model selection — discovered
@@ -225,6 +299,13 @@ export class ClaudeAgentProvider implements AgentProvider {
       `[ClaudeAgent:route] model=${resolvedModel} base_url=${childEnv.ANTHROPIC_BASE_URL ?? "(unset)"} auth_token=${redact(childEnv.ANTHROPIC_AUTH_TOKEN)} api_key=${redact(childEnv.ANTHROPIC_API_KEY)} ollama_enabled=${!!this.frameworkConfig.ollamaCloud?.enabled} default_sonnet=${childEnv.ANTHROPIC_DEFAULT_SONNET_MODEL ?? "(unset)"}`,
     );
 
+    // SDK 0.3.x spawns a platform-specific native `claude` binary. The SDK's
+    // own resolver returns a path inside `app.asar` under packaged Electron,
+    // which fails execve() with ENOTDIR (asar is a file, not a directory).
+    // Resolve to the unpacked path ourselves and override the SDK's lookup.
+    const claudeCodeExecutable = resolveClaudeCodeExecutable();
+    log.info(`[ClaudeAgent:executable] ${claudeCodeExecutable ?? "(SDK default)"}`);
+
     const q = query({
       prompt,
       options: {
@@ -253,19 +334,11 @@ export class ClaudeAgentProvider implements AgentProvider {
           },
         },
         ...(bashPreToolUseHook ? { hooks: { PreToolUse: [bashPreToolUseHook] } } : {}),
+        ...(claudeCodeExecutable ? { pathToClaudeCodeExecutable: claudeCodeExecutable } : {}),
         settingSources: [],
         // Don't persist sessions for SDK calls from within the app
         persistSession: false,
         env: childEnv,
-        // We do NOT set `pathToClaudeCodeExecutable` or `spawnClaudeCodeProcess`.
-        // SDK 0.3.x replaced the separate `cli.js` subprocess with a bun-bundled
-        // `assistant.mjs` / `bridge.mjs` runtime extracted via `extractFromBunfs.js`.
-        // The bundled bun binary is self-contained, so the old workaround
-        // (overriding spawn to run via Electron's built-in node with
-        // `ELECTRON_RUN_AS_NODE=1`) is no longer needed for packaged apps
-        // without a system Node install. The `node_modules/@anthropic-ai/claude-agent-sdk/**`
-        // asarUnpack entry in package.json keeps the bun assets on a real filesystem
-        // so extraction at runtime works inside a packaged .app.
         // Capture stderr so subprocess errors are visible in logs
         stderr: (data: string) => {
           log.info(`[ClaudeAgent:stderr] ${data.trimEnd()}`);
