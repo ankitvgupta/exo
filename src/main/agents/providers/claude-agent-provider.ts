@@ -117,7 +117,16 @@ const resolveClaudeCodeExecutable = (() => {
 function isMuslRuntime(): boolean {
   if (process.platform !== "linux") return false;
   if (typeof process.report?.getReport !== "function") return false;
-  const report = process.report.getReport();
+  // Isolate getReport() failures (hardened sandboxes, Node internals bugs) so
+  // a musl-detection error doesn't propagate to the outer resolver's catch
+  // and force the SDK-default fallback — better to assume glibc order than
+  // to drop the whole override.
+  let report: unknown;
+  try {
+    report = process.report.getReport();
+  } catch {
+    return false;
+  }
   // Node's ProcessReport type declares `header: object`, so narrow at the boundary.
   if (typeof report !== "object" || report === null) return false;
   if (!("header" in report)) return false;
