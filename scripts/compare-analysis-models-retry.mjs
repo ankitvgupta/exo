@@ -20,9 +20,12 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const DB_PATH = join(__dirname, "..", ".dev-data", "data", "exo.db");
 const RESULTS_PATH = join(__dirname, "..", "analysis-benchmark-results.json");
 
-const OLLAMA_KEY =
-  process.env.OLLAMA_API_KEY ||
-  "a589a8cd79304dda84dee97199b99617.HLABcYbmAkUL40JuaXph4OED";
+const OLLAMA_KEY = process.env.OLLAMA_API_KEY;
+
+if (!OLLAMA_KEY) {
+  console.error("OLLAMA_API_KEY env var is required");
+  process.exit(1);
+}
 
 const ANALYSIS_SYSTEM_PROMPT = `Analyze this email and decide if it requires a reply from me.
 
