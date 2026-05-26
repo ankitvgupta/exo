@@ -8,6 +8,7 @@ import {
   type ModelConfig,
   type ModelTier,
   type LlmProvider,
+  type SenderLookupProvider,
   DEFAULT_ANALYSIS_PROMPT,
   DEFAULT_DRAFT_PROMPT,
   DEFAULT_ARCHIVE_READY_PROMPT,
@@ -149,6 +150,22 @@ export function getModelConfig(): ModelConfig {
 export function getModelIdForFeature(feature: keyof ModelConfig): string {
   const mc = getModelConfig();
   return resolveModelId(mc[feature]);
+}
+
+/**
+ * Resolve which search backend sender lookup should use, plus the Exa key
+ * if relevant. Default "anthropic" preserves the historical Claude web_search
+ * path; "exa" routes through Exa's REST API + the configured senderLookup LLM.
+ */
+export function getSenderLookupConfig(): {
+  provider: SenderLookupProvider;
+  exaApiKey: string;
+} {
+  const config = getConfig();
+  return {
+    provider: config.senderLookupProvider ?? "anthropic",
+    exaApiKey: config.exaApiKey ?? "",
+  };
 }
 
 /** Resolve provider + model for a feature, supporting Ollama Cloud routing. */

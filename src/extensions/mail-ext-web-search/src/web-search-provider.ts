@@ -4,7 +4,24 @@ import type {
   EnrichmentProvider,
   EnrichmentData,
 } from "../../../shared/extension-types";
-import type { DashboardEmail } from "../../../shared/types";
+import type {
+  DashboardEmail,
+  LlmProvider,
+  SenderLookupProvider,
+} from "../../../shared/types";
+
+export interface WebSearchProviderDeps {
+  /** Model id to use when sender lookup runs via Anthropic's bundled web_search tool. */
+  getModelId: () => string;
+  /** Which search backend to use, plus the Exa API key if relevant. */
+  getSearchConfig: () => { provider: SenderLookupProvider; exaApiKey: string };
+  /**
+   * Provider+model for the LLM that parses Exa search results. Allows the
+   * parsing step to be routed through Ollama Cloud independently of the
+   * search backend (the Exa search itself is a plain REST call).
+   */
+  getParsingModelConfig: () => { provider: LlmProvider; model: string };
+}
 
 // Known reminder/automated service patterns
 const REMINDER_SERVICE_PATTERNS = [
@@ -177,11 +194,197 @@ function validateProfileData(
 }
 
 /**
+ * Lookup a sender profile via Claude's bundled web_search tool. Single LLM
+ * call that searches and extracts at once. Returns the parsed JSON text.
+ */
+async function lookupViaAnthropic(
+  senderName: string,
+  realSenderEmail: string,
+  searchQuery: string,
+  modelId: string,
+): Promise<string> {
+  const response = await createMessage(
+    {
+      model: modelId,
+      max_tokens: 200, // Responses are ~100 tokens
+      tools: [
+        {
+          type: "web_search_20250305",
+          name: "web_search",
+          max_uses: 1, // 1 search is usually enough
+        },
+      ],
+      messages: [
+        {
+          role: "user",
+          content: `I received an email from "${senderName}" with email address "${realSenderEmail}".
+
+Please search the web to find information about who this person is. Look for:
+- Their professional role/title
+- Their company or organization
+- Any relevant background that would help me write a better reply
+
+Search query to start with: ${searchQuery}
+
+After searching, respond with ONLY valid JSON (no markdown):
+{
+  "name": "Full name",
+  "summary": "2-3 sentence summary of who they are",
+  "title": "Their job title if found",
+  "company": "Their company if found",
+  "linkedinUrl": "LinkedIn URL if found"
+}
+
+If you can't find specific information, return:
+{
+  "name": "${senderName}",
+  "summary": "No public information found for this person."
+}`,
+        },
+      ],
+    },
+    { caller: "web-search-sender-lookup" },
+  );
+
+  let text = "";
+  for (const block of response.content) {
+    if (block.type === "text") text += block.text;
+  }
+  return text;
+}
+
+interface ExaSearchResult {
+  title: string | null;
+  url: string;
+  text?: string;
+  publishedDate?: string;
+  author?: string;
+}
+
+interface ExaSearchResponse {
+  results: ExaSearchResult[];
+}
+
+/**
+ * Call Exa's /search endpoint with the page text included. Returns the top
+ * results so an LLM can extract structured profile data from them.
+ *
+ * Exa indexes LinkedIn URLs and titles even though the page bodies are
+ * blocked — that's enough for the LLM to pull a linkedinUrl out of the
+ * result list. Cheaper and more predictable than agentic web_search.
+ */
+async function exaSearch(apiKey: string, query: string): Promise<ExaSearchResult[]> {
+  const res = await fetch("https://api.exa.ai/search", {
+    method: "POST",
+    headers: {
+      "x-api-key": apiKey,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      query,
+      numResults: 5,
+      type: "auto",
+      contents: {
+        text: { maxCharacters: 600 },
+      },
+    }),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text().catch(() => "");
+    throw new Error(`Exa /search failed (${res.status}): ${errText.slice(0, 200)}`);
+  }
+
+  const body = (await res.json()) as ExaSearchResponse;
+  return body.results ?? [];
+}
+
+/**
+ * Lookup a sender profile via Exa + configured parsing LLM. Two-step path:
+ *   1. Exa /search returns top result URLs + snippets (~600 chars each).
+ *   2. Parsing LLM extracts structured profile JSON from those snippets.
+ *
+ * The parsing LLM uses whatever provider/model is configured for the
+ * `senderLookup` feature — including Ollama Cloud, which can't be used on the
+ * Anthropic path because that path depends on Claude's web_search tool.
+ */
+async function lookupViaExa(
+  senderName: string,
+  realSenderEmail: string,
+  searchQuery: string,
+  exaApiKey: string,
+  parsingModel: { provider: LlmProvider; model: string },
+  context: ExtensionContext,
+): Promise<string> {
+  const results = await exaSearch(exaApiKey, searchQuery);
+  context.logger.debug(`Exa returned ${results.length} results for ${realSenderEmail}`);
+
+  if (results.length === 0) {
+    return JSON.stringify({
+      name: senderName,
+      summary: "No public information found for this person.",
+    });
+  }
+
+  // Format compactly to keep the parsing prompt small. Snippets are already
+  // capped at 600 chars by Exa via maxCharacters above.
+  const formatted = results
+    .map((r, i) => {
+      const parts = [
+        `[${i + 1}] ${r.title ?? "(untitled)"}`,
+        `URL: ${r.url}`,
+        r.text ? `Snippet: ${r.text.trim()}` : "",
+      ].filter(Boolean);
+      return parts.join("\n");
+    })
+    .join("\n\n");
+
+  const response = await createMessage(
+    {
+      model: parsingModel.model,
+      max_tokens: 400,
+      messages: [
+        {
+          role: "user",
+          content: `I received an email from "${senderName}" with email address "${realSenderEmail}".
+
+Below are web search results about this person. Extract a structured profile.
+
+${formatted}
+
+Respond with ONLY valid JSON (no markdown, no commentary):
+{
+  "name": "Full name",
+  "summary": "2-3 sentence summary of who they are",
+  "title": "Their job title if found",
+  "company": "Their company if found",
+  "linkedinUrl": "LinkedIn URL if found in the results"
+}
+
+Rules:
+- If a result URL contains "linkedin.com/in/", use it as linkedinUrl.
+- Only fill title/company if the snippets clearly state them — don't guess.
+- If nothing in the results plausibly matches the person, return:
+  {"name": "${senderName}", "summary": "No public information found for this person."}`,
+        },
+      ],
+    },
+    { caller: "web-search-sender-lookup-exa", provider: parsingModel.provider },
+  );
+
+  let text = "";
+  for (const block of response.content) {
+    if (block.type === "text") text += block.text;
+  }
+  return text;
+}
+
+/**
  * Create the web search enrichment provider
  */
 export function createWebSearchProvider(
   context: ExtensionContext,
-  getModelId: () => string,
+  deps: WebSearchProviderDeps,
 ): EnrichmentProvider {
   return {
     id: "sender-lookup",
@@ -240,63 +443,33 @@ export function createWebSearchProvider(
       }
 
       try {
-        // This always uses Anthropic (via the default createMessage path) because it
-        // depends on Anthropic's web_search_20250305 tool, which is provider-specific
-        // and not available on Ollama or other providers.
         const searchQuery = buildSearchQuery(senderName, realSenderEmail);
+        const searchConfig = deps.getSearchConfig();
 
-        const response = await createMessage(
-          {
-            model: getModelId(),
-            max_tokens: 200, // Responses are ~100 tokens
-            tools: [
-              {
-                type: "web_search_20250305",
-                name: "web_search",
-                max_uses: 1, // 1 search is usually enough
-              },
-            ],
-            messages: [
-              {
-                role: "user",
-                content: `I received an email from "${senderName}" with email address "${realSenderEmail}".
-
-Please search the web to find information about who this person is. Look for:
-- Their professional role/title
-- Their company or organization
-- Any relevant background that would help me write a better reply
-
-Search query to start with: ${searchQuery}
-
-After searching, respond with ONLY valid JSON (no markdown):
-{
-  "name": "Full name",
-  "summary": "2-3 sentence summary of who they are",
-  "title": "Their job title if found",
-  "company": "Their company if found",
-  "linkedinUrl": "LinkedIn URL if found"
-}
-
-If you can't find specific information, return:
-{
-  "name": "${senderName}",
-  "summary": "No public information found for this person."
-}`,
-              },
-            ],
-          },
-          { caller: "web-search-sender-lookup" },
-        );
-
-        // Extract the text response
-        let jsonText = "";
-        for (const block of response.content) {
-          if (block.type === "text") {
-            jsonText += block.text;
-          }
+        // Resolve the backend. Exa is gated on an API key being present —
+        // without one we'd fail at request time, so fall back to Anthropic
+        // instead and log it. Anthropic always has a path (the user already
+        // configured an API key during setup to use the rest of the app).
+        let useExa = searchConfig.provider === "exa";
+        if (useExa && !searchConfig.exaApiKey) {
+          context.logger.warn(
+            "senderLookupProvider=exa but exaApiKey is empty; falling back to Anthropic web_search",
+          );
+          useExa = false;
         }
 
-        // Parse the JSON response - handle various formats Claude might return
+        const jsonText = useExa
+          ? await lookupViaExa(
+              senderName,
+              realSenderEmail,
+              searchQuery,
+              searchConfig.exaApiKey,
+              deps.getParsingModelConfig(),
+              context,
+            )
+          : await lookupViaAnthropic(senderName, realSenderEmail, searchQuery, deps.getModelId());
+
+        // Parse the JSON response - handle various formats the LLM might return
         const profileData = parseProfileResponse(jsonText, senderName, context);
 
         const profile: SenderProfileData = {
