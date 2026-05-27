@@ -124,13 +124,28 @@ export class OpenCodeAgentProvider implements AgentProvider {
   }
 
   async *run(params: AgentRunParams): AsyncGenerator<AgentEvent, AgentRunResult, void> {
-    const { taskId, prompt, context, tools, toolExecutor, signal } = params;
+    const { taskId, prompt, context, tools, toolExecutor, signal, recordSessionStart } = params;
 
     yield { type: "state", state: "running" };
 
     if (!this.frameworkConfig.opencode?.enabled) {
       yield { type: "error", message: "OpenCode provider is not enabled in Settings" };
       return { state: "failed" };
+    }
+
+    // Record one row in llm_calls stamping which harness + LLM backend +
+    // model this session uses. The OpenCode server's own LLM calls bypass
+    // our AnthropicService wrapper, so without this we'd have no record
+    // that the user ran an OpenCode-harness session at all.
+    const route = this.resolveModel();
+    if (route) {
+      recordSessionStart({
+        harness: "opencode",
+        provider: route.providerID === "ollama-cloud" ? "ollama-cloud" : "anthropic",
+        model: route.modelID,
+        accountId: context.accountId,
+        emailId: context.currentEmailId,
+      });
     }
 
     // Hook our executor into the MCP bridge. Single-flight: this overwrites any

@@ -59,10 +59,23 @@ export interface AgentRunParams {
   toolExecutor: ToolExecutorFn;
   /** Fetch a URL through the main process's Chromium networking stack (shared session/cookies). */
   netFetch: NetFetchProxyFn;
+  /** Record one row in llm_calls stamping the harness + LLM backend + model
+   *  chosen for this session. Providers should call this exactly once near
+   *  the start of run(), after they've resolved the actual model they will
+   *  use. The call is fire-and-forget; failures are logged, not thrown. */
+  recordSessionStart: AgentSessionStartFn;
   signal: AbortSignal;
   /** Per-task model override. When set, takes precedence over the framework config model. */
   modelOverride?: string;
 }
+
+export type AgentSessionStartFn = (args: {
+  harness: string;
+  provider: "anthropic" | "ollama-cloud" | "openai";
+  model: string;
+  accountId?: string;
+  emailId?: string;
+}) => void;
 
 export interface AgentResumeParams {
   taskId: string;
@@ -120,6 +133,8 @@ export interface OrchestratorDeps {
   dbProxy: DbProxyFn;
   gmailProxy: GmailProxyFn;
   netFetchProxy: NetFetchProxyFn;
+  /** Fire-and-forget — record agent-session-start row in llm_calls. */
+  recordAgentSessionStart: AgentSessionStartFn;
   config: AgentFrameworkConfig;
   /** Set the active taskId so proxy requests can be scoped for cancellation. */
   setActiveTaskId: (taskId: string | null) => void;

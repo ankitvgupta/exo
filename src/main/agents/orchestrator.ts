@@ -231,6 +231,7 @@ export class AgentOrchestrator {
               tools,
               toolExecutor,
               netFetch: this.deps.netFetchProxy,
+              recordSessionStart: this.deps.recordAgentSessionStart,
               signal: abortController.signal,
               modelOverride,
             });
