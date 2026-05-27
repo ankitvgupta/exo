@@ -78,6 +78,62 @@ test.describe("createEventMapper - text deltas", () => {
     expect(out).toEqual([{ type: "text_delta", text: "Hello" }]);
   });
 
+  test("filters out parts belonging to user messages", () => {
+    const m = createEventMapper(SESSION_ID);
+    // Server tells us a user message was created
+    const userMsg: Event = {
+      type: "message.updated",
+      properties: {
+        info: {
+          id: "msg-user-1",
+          sessionID: SESSION_ID,
+          role: "user",
+        } as Event["properties"]["info"],
+      },
+    } as Event;
+    m.next(userMsg);
+    // Then a part.updated for the user's prompt — must NOT produce a text_delta
+    const userPart: Event = {
+      type: "message.part.updated",
+      properties: {
+        part: {
+          id: "p1",
+          sessionID: SESSION_ID,
+          messageID: "msg-user-1",
+          type: "text",
+          text: "user prompt",
+        },
+        delta: "user prompt",
+      },
+    };
+    expect(m.next(userPart)).toEqual([]);
+    // An assistant message in the same session should still flow through
+    m.next({
+      type: "message.updated",
+      properties: {
+        info: {
+          id: "msg-ast-1",
+          sessionID: SESSION_ID,
+          role: "assistant",
+        } as Event["properties"]["info"],
+      },
+    } as Event);
+    const astPart: Event = {
+      type: "message.part.updated",
+      properties: {
+        part: {
+          id: "p2",
+          sessionID: SESSION_ID,
+          messageID: "msg-ast-1",
+          type: "text",
+          text: "assistant reply",
+        },
+        delta: "assistant reply",
+      },
+    };
+    expect(m.next(astPart)).toEqual([{ type: "text_delta", text: "assistant reply" }]);
+  });
+
   test("computes delta from snapshot when none provided", () => {
     const m = createEventMapper(SESSION_ID);
     const first = m.next(textPartUpdate("Hello", undefined));

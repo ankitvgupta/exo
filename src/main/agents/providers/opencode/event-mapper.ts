@@ -33,6 +33,9 @@ interface MapState {
   endedTools: Set<string>;
   /** Last text we emitted per text-part ID; used to compute deltas if OpenCode didn't supply one. */
   lastTextByPart: Map<string, string>;
+  /** messageID → role, learned from message.updated. Parts whose messageID maps to "user"
+   *  are dropped — OpenCode emits part.updated for the user's own prompt too. */
+  messageRoles: Map<string, "user" | "assistant">;
   lastError: string | null;
 }
 
@@ -42,6 +45,7 @@ export function createEventMapper(sessionId: string): EventMapper {
     startedTools: new Set(),
     endedTools: new Set(),
     lastTextByPart: new Map(),
+    messageRoles: new Map(),
     lastError: null,
   };
 
@@ -60,6 +64,16 @@ function isTerminalEvent(e: Event, sessionId: string): boolean {
 
 function mapEvent(e: Event, s: MapState): AgentEvent[] {
   switch (e.type) {
+    case "message.updated": {
+      // Record the role so part.updated events can be filtered to assistant-only.
+      // Without this, the user's own prompt arrives as a text_delta event and
+      // gets echoed into the conversation trace.
+      const info = e.properties.info;
+      if ("sessionID" in info && info.sessionID === s.sessionId) {
+        s.messageRoles.set(info.id, info.role);
+      }
+      return [];
+    }
     case "message.part.updated":
       return mapPartUpdated(e.properties.part, e.properties.delta, s);
     case "session.error": {
@@ -95,6 +109,16 @@ function mapEvent(e: Event, s: MapState): AgentEvent[] {
 function mapPartUpdated(part: Part, delta: string | undefined, s: MapState): AgentEvent[] {
   // Filter to this session only — the SSE stream is global.
   if ("sessionID" in part && part.sessionID !== s.sessionId) return [];
+
+  // Filter out parts belonging to user messages. message.updated arrives
+  // before message.part.updated for the same message, so the role is
+  // typically already in the map; if it isn't (race / missed event), treat
+  // unknown as assistant — better to over-emit than to silently drop the
+  // assistant's reply.
+  if ("messageID" in part) {
+    const role = s.messageRoles.get(part.messageID);
+    if (role === "user") return [];
+  }
 
   switch (part.type) {
     case "text": {
