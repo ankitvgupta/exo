@@ -390,6 +390,18 @@ export function registerSettingsIpc(): void {
         });
       }
 
+      // Propagate OpenCode config to the agent framework.
+      // The provider's updateConfig() will close the existing opencode server
+      // so the next run picks up new model / enable state.
+      if ("opencode" in config) {
+        agentCoordinator.updateConfig({
+          opencode: {
+            enabled: newConfig.opencode?.enabled ?? false,
+            model: newConfig.opencode?.model,
+          },
+        });
+      }
+
       // Propagate Ollama Cloud config to LLM service whenever the apiKey/defaultModel
       // changes (used by non-agent createMessage routing).
       if ("ollamaCloud" in config) {

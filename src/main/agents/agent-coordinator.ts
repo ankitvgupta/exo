@@ -280,6 +280,9 @@ export class AgentCoordinator {
           gatewayToken: appConfig.openclaw?.gatewayToken ?? "",
         },
       },
+      opencode: appConfig.opencode
+        ? { enabled: appConfig.opencode.enabled, model: appConfig.opencode.model }
+        : { enabled: false },
     };
     this.workerReady = populatePrivateProviderConfig(baseConfig).then(
       (enrichedConfig) => {

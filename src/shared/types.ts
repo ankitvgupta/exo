@@ -452,6 +452,19 @@ export const ConfigSchema = z.object({
       gatewayToken: z.string().default(""),
     })
     .optional(),
+  // OpenCode provider settings — experimental open-source agent harness
+  // alternative to the Claude Agent SDK. Disabled by default; users opt in
+  // via Settings → AI / Agents. When enabled, the worker registers an
+  // OpenCodeAgentProvider that spawns the local `opencode` binary on first run.
+  opencode: z
+    .object({
+      enabled: z.boolean().default(false),
+      // Optional override; empty = use whatever the framework's Ollama or
+      // Anthropic resolution produces. Stored as "provider/model" or just the
+      // model name — see OpenCodeAgentProvider.resolveModel().
+      model: z.string().optional(),
+    })
+    .optional(),
   ollamaCloud: OllamaCloudConfigSchema.optional(),
   featureProviders: z.record(z.string(), LlmProviderSchema).optional(),
   configVersion: z.number().optional(),

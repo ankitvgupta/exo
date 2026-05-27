@@ -157,7 +157,11 @@ export interface AgentFrameworkConfig {
   model: string;
   anthropicApiKey?: string;
   ollamaCloud?: { enabled: boolean; apiKey: string; model: string };
+  /** Per-provider settings, keyed by provider id (e.g. "openclaw-agent"). */
   providers?: Record<string, ProviderSettings>;
+  /** OpenCode-specific settings. Kept top-level (not under providers) so the
+   *  provider can read it without going through ProviderSettings's narrow shape. */
+  opencode?: { enabled: boolean; model?: string };
   browserConfig?: {
     enabled: boolean;
     chromeDebugPort: number;
