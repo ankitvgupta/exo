@@ -201,7 +201,16 @@ export class ClaudeAgentProvider implements AgentProvider {
   }
 
   async *run(params: AgentRunParams): AsyncGenerator<AgentEvent, AgentRunResult, void> {
-    const { taskId, prompt, context, tools, toolExecutor, signal, modelOverride, recordSessionStart } = params;
+    const {
+      taskId,
+      prompt,
+      context,
+      tools,
+      toolExecutor,
+      signal,
+      modelOverride,
+      recordSessionStart,
+    } = params;
 
     yield { type: "state", state: "running" };
 
