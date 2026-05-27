@@ -163,18 +163,42 @@ export class OpenCodeAgentProvider implements AgentProvider {
     }
     const { client } = handle;
 
-    // Create the session. Title is for OpenCode's session list; we use the
-    // task ID so cross-references in logs are obvious.
+    // Reuse the prior OpenCode session if this is a follow-up — that's how the
+    // model retains conversation context across turns. AgentPanel's follow-up
+    // path stashes the previous session ID in context.providerConversationIds.
+    // Falls back to creating a fresh session if no prior ID is provided OR if
+    // the prior session no longer exists on the server (e.g. server restarted
+    // between turns and lost in-memory state).
     let sessionId: string;
-    try {
-      const created = await client.session.create({ body: { title: `mail-app:${taskId}` } });
-      const id = created.data?.id;
-      if (!id) throw new Error("session.create returned no id");
-      sessionId = id;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      yield { type: "error", message: `Failed to create OpenCode session: ${message}` };
-      return { state: "failed" };
+    const priorSessionId = context.providerConversationIds?.opencode;
+    if (priorSessionId) {
+      const exists = await client.session
+        .get({ path: { id: priorSessionId } })
+        .then((r) => !!r.data?.id)
+        .catch(() => false);
+      if (exists) {
+        sessionId = priorSessionId;
+        log.info(`[OpenCodeAgent] resuming session ${sessionId} for task ${taskId}`);
+      } else {
+        log.info(
+          `[OpenCodeAgent] prior session ${priorSessionId} not found; creating new for task ${taskId}`,
+        );
+        sessionId = "";
+      }
+    } else {
+      sessionId = "";
+    }
+    if (!sessionId) {
+      try {
+        const created = await client.session.create({ body: { title: `mail-app:${taskId}` } });
+        const id = created.data?.id;
+        if (!id) throw new Error("session.create returned no id");
+        sessionId = id;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        yield { type: "error", message: `Failed to create OpenCode session: ${message}` };
+        return { state: "failed" };
+      }
     }
 
     const abortController = new AbortController();
