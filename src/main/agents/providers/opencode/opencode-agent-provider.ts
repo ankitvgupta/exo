@@ -481,37 +481,62 @@ const resolveOpencodeBinary = (() => {
   return (): string | null => {
     if (cached !== undefined) return cached;
 
-    // Anchor resolution at the SDK's own package — same trick as the Claude
-    // resolver. Doesn't depend on cwd or PATH.
     const candidates: string[] = [];
+
+    // Primary path: resolve `opencode-ai/package.json` directly. The
+    // `opencode-ai` package has no `exports` field, so `require.resolve` works
+    // in both CJS and ESM contexts — unlike `@opencode-ai/sdk`, which has
+    // exports with only an `import` condition and rejects `require.resolve`
+    // with ERR_PACKAGE_PATH_NOT_EXPORTED in CJS (verified in dev).
     try {
-      const sdkEntry = require.resolve("@opencode-ai/sdk");
-      // node_modules/@opencode-ai/sdk/... → node_modules/.bin/opencode (sibling)
-      const sdkReq = createRequire(sdkEntry);
-      try {
-        const opencodeAiPath = sdkReq.resolve("opencode-ai/package.json");
-        const opencodeAiDir = dirname(opencodeAiPath);
-        // The package.json's `bin` field points at ./bin/opencode.exe, which
-        // the postinstall script replaces with a symlink to the platform pkg.
-        candidates.push(join(opencodeAiDir, "bin", "opencode.exe"));
-      } catch {
-        // opencode-ai not resolvable from the SDK — fall through to the .bin path.
-      }
+      const opencodeAiPath = require.resolve("opencode-ai/package.json");
+      const opencodeAiDir = dirname(opencodeAiPath);
+      // package.json `bin.opencode === ./bin/opencode.exe`; the postinstall
+      // script rewrites that path to a symlink targeting the platform package.
+      candidates.push(join(opencodeAiDir, "bin", "opencode.exe"));
     } catch {
-      // SDK not resolvable — every candidate below will likely fail; that's fine.
+      // opencode-ai not installed — fall through to walk-up paths.
     }
 
-    // Walk up from our own module to find node_modules/.bin/opencode.
+    // Secondary: walk up from `__dirname` looking for node_modules/.bin/opencode.
+    // This is the path that works in the CJS worker bundle, where the
+    // `import.meta.url` branch below is undefined.
+    if (typeof __dirname === "string") {
+      let dir = __dirname;
+      for (let i = 0; i < 8 && dir !== "/" && dir !== "."; i++) {
+        candidates.push(join(dir, "node_modules", ".bin", "opencode"));
+        dir = dirname(dir);
+      }
+    }
+
+    // Tertiary: walk up from `import.meta.url` (ESM-only).
     try {
+      // Bundled CJS won't have a real import.meta — the access throws.
       const here = fileURLToPath(import.meta.url);
       let dir = dirname(here);
       for (let i = 0; i < 8 && dir !== "/" && dir !== "."; i++) {
-        const cand = join(dir, "node_modules", ".bin", "opencode");
-        candidates.push(cand);
+        candidates.push(join(dir, "node_modules", ".bin", "opencode"));
         dir = dirname(dir);
       }
     } catch {
       // import.meta unavailable in CJS bundles — skip.
+    }
+
+    // Last-resort: if we can resolve the SDK entry, walk node_modules from there.
+    // require.resolve on @opencode-ai/sdk itself fails in CJS (no `require` export
+    // condition), but inside a Node 22+ ESM context it works; we keep this branch
+    // for completeness so the ESM main process also resolves cleanly.
+    try {
+      const sdkEntry = require.resolve("@opencode-ai/sdk");
+      const sdkReq = createRequire(sdkEntry);
+      try {
+        const opencodeAiPath = sdkReq.resolve("opencode-ai/package.json");
+        candidates.push(join(dirname(opencodeAiPath), "bin", "opencode.exe"));
+      } catch {
+        // ignore
+      }
+    } catch {
+      // ignore
     }
 
     for (const cand of candidates) {
