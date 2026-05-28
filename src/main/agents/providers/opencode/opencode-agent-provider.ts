@@ -889,9 +889,15 @@ function buildSystemPrompt(context: AgentContext): string {
 function buildDisabledBuiltins(): Record<string, boolean> {
   // The keys must match real built-in tool IDs that OpenCode exposes (per
   // `tool.ids` at server start: invalid/question/bash/read/glob/grep/edit/write/
-  // task/webfetch/todowrite/websearch/skill/apply_patch). Setting an unknown
-  // key has no effect — earlier versions of this list included "invalid",
-  // which is a server-internal sentinel and not a tool the model would call.
+  // task/webfetch/todowrite/websearch/skill/apply_patch).
+  //
+  // Disable everything that can touch the filesystem, execute code, or load
+  // unsanctioned code paths. Email bodies are external untrusted input and
+  // prompt injection is a live attack surface — leaving any of these enabled
+  // would let a crafted email body trigger file writes, shell commands, or
+  // sub-agent spawning on the user's machine. Keep enabled: webfetch +
+  // websearch (matches the Claude provider's WebSearch surface for sender
+  // lookup), question (clarification), and the invalid sentinel (no-op).
   return {
     write: false,
     edit: false,
@@ -899,5 +905,9 @@ function buildDisabledBuiltins(): Record<string, boolean> {
     glob: false,
     grep: false,
     bash: false,
+    apply_patch: false,
+    task: false,
+    todowrite: false,
+    skill: false,
   };
 }
