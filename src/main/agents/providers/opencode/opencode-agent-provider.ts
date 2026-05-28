@@ -231,6 +231,15 @@ export class OpenCodeAgentProvider implements AgentProvider {
     }
 
     const abortController = new AbortController();
+    // Pre-aborted signal short-circuit: addEventListener after the event has
+    // already fired is a no-op, so without this guard a run started with an
+    // already-cancelled signal would complete to "completed" instead of
+    // honoring the cancellation. Mirrors the SDK guard pattern.
+    if (signal.aborted) {
+      this.activeRuns.delete(taskId);
+      yield { type: "state", state: "cancelled" };
+      return { state: "cancelled", providerTaskId: sessionId };
+    }
     const onParentAbort = () => abortController.abort();
     signal.addEventListener("abort", onParentAbort, { once: true });
 
@@ -316,10 +325,13 @@ export class OpenCodeAgentProvider implements AgentProvider {
 
         if (mapper.isTerminal(ev)) {
           if (ev.type === "session.error") {
-            const lastErr = mapper.lastError() ?? "Session error";
+            // The mapper has already yielded a `type: "error"` event with the
+            // error message; do NOT also yield `type: "state", state: "failed"`
+            // here — that would surface the same error twice in the UI. The
+            // state transition is communicated via the AgentRunResult return
+            // value alone (matches the Claude provider's pattern).
             cleanup();
             streamClose?.();
-            yield { type: "state", state: "failed", message: lastErr };
             return { state: "failed", providerTaskId: sessionId };
           }
           // session.idle — success path
@@ -443,6 +455,16 @@ export class OpenCodeAgentProvider implements AgentProvider {
       // server if it completes after this point.
       this.serverStartPromise = null;
     }
+
+    // Also tear down the MCP bridge so its 127.0.0.1 listener doesn't
+    // linger after OpenCode is disabled. The next ensureServer() will
+    // call bridge.start() again, which is idempotent: if already running
+    // it returns the existing URL; if closed it rebinds on a fresh port.
+    void this.bridge.close().catch((err) => {
+      log.warn(
+        `[OpenCodeAgent] bridge.close() failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    });
   }
 
   /**
