@@ -191,7 +191,14 @@ export class McpBridge {
       await this.transport.close();
       this.transport = null;
     }
-    this.server = null;
+    if (this.server) {
+      // McpServer can hold open handles / internal listeners across the
+      // transport it was connected to. close() is best-effort: some SDK
+      // versions expose it, others don't (it's optional in the type).
+      // Without this, every Settings change leaks an McpServer instance.
+      await this.server.close?.();
+      this.server = null;
+    }
     this.url = null;
     this.toolExecutor = null;
   }

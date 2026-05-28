@@ -124,7 +124,16 @@ export class OpenCodeAgentProvider implements AgentProvider {
   }
 
   async *run(params: AgentRunParams): AsyncGenerator<AgentEvent, AgentRunResult, void> {
-    const { taskId, prompt, context, tools, toolExecutor, signal, recordSessionStart } = params;
+    const {
+      taskId,
+      prompt,
+      context,
+      tools,
+      toolExecutor,
+      signal,
+      modelOverride,
+      recordSessionStart,
+    } = params;
 
     yield { type: "state", state: "running" };
 
@@ -133,11 +142,20 @@ export class OpenCodeAgentProvider implements AgentProvider {
       return { state: "failed" };
     }
 
+    // Resolve the model honoring (in priority order):
+    //   1. per-task `modelOverride` from AgentRunParams (sub-agent + orchestrator overrides)
+    //   2. `opencode.model` from Settings ("Model override" textbox)
+    //   3. framework default (Ollama Cloud / Anthropic config)
+    // Caveat: runtime overrides only work for models registered in the
+    // OpenCode server's provider config, which is fixed at server-start
+    // time from settings. A runtime override that selects a model NOT in
+    // the server's registry surfaces OpenCode's reject error to the user.
+    const route = this.resolveRoute(modelOverride);
+
     // Record one row in llm_calls stamping which harness + LLM backend +
     // model this session uses. The OpenCode server's own LLM calls bypass
     // our AnthropicService wrapper, so without this we'd have no record
     // that the user ran an OpenCode-harness session at all.
-    const route = this.resolveModel();
     if (route) {
       recordSessionStart({
         harness: "opencode",
@@ -241,6 +259,10 @@ export class OpenCodeAgentProvider implements AgentProvider {
       return { state: "failed" };
     }
 
+    // Declared here (outside the try) so the catch can also distinguish
+    // promptAsync rejection from user cancellation.
+    let promptError: string | null = null;
+
     try {
       // Build the prompt body. We pass the system message and disable any
       // built-in tools that don't make sense for an email assistant (filesystem
@@ -248,7 +270,7 @@ export class OpenCodeAgentProvider implements AgentProvider {
       const promptPromise = client.session.promptAsync({
         path: { id: sessionId },
         body: {
-          model: this.resolveModel(),
+          model: route,
           system: buildSystemPrompt(context),
           tools: buildDisabledBuiltins(),
           parts: [{ type: "text", text: prompt }],
@@ -258,9 +280,14 @@ export class OpenCodeAgentProvider implements AgentProvider {
       // Run prompt + stream consumption concurrently. We DON'T await the
       // prompt here — promptAsync returns after the server accepts the
       // request; the real work surfaces via SSE events.
+      //
+      // Capture the error so the run loop can distinguish "user cancelled"
+      // (signal aborted from outside) from "promptAsync rejected" (server
+      // crashed, model invalid, etc.). Without this, both surface as
+      // `state: cancelled` and the user has no idea their prompt failed.
       promptPromise.catch((err: unknown) => {
-        const message = err instanceof Error ? err.message : String(err);
-        log.error(`[OpenCodeAgent] promptAsync failed: ${message}`);
+        promptError = err instanceof Error ? err.message : String(err);
+        log.error(`[OpenCodeAgent] promptAsync failed: ${promptError}`);
         abortController.abort();
       });
 
@@ -293,6 +320,12 @@ export class OpenCodeAgentProvider implements AgentProvider {
 
       if (abortController.signal.aborted) {
         cleanup();
+        // Distinguish "promptAsync rejected" from "user cancelled". Both abort
+        // the controller, but only the former should surface as `error`.
+        if (promptError) {
+          yield { type: "error", message: `OpenCode prompt failed: ${promptError}` };
+          return { state: "failed", providerTaskId: sessionId };
+        }
         yield { type: "state", state: "cancelled" };
         return { state: "cancelled", providerTaskId: sessionId };
       }
@@ -328,6 +361,12 @@ export class OpenCodeAgentProvider implements AgentProvider {
       cleanup();
       streamClose?.();
       if (abortController.signal.aborted) {
+        // Same distinction as the success-path branch above — surface
+        // promptAsync failures as errors, never as cancellations.
+        if (promptError) {
+          yield { type: "error", message: `OpenCode prompt failed: ${promptError}` };
+          return { state: "failed", providerTaskId: sessionId };
+        }
         yield { type: "state", state: "cancelled" };
         return { state: "cancelled", providerTaskId: sessionId };
       }
@@ -372,6 +411,13 @@ export class OpenCodeAgentProvider implements AgentProvider {
     if (this.serverHandle) {
       this.serverHandle.close();
       this.serverHandle = null;
+      this.serverStartPromise = null;
+    } else if (this.serverStartPromise) {
+      // In-flight startup — drop the promise so the next ensureServer() call
+      // re-issues with the new config. Without this, the in-flight startup
+      // completes and seeds `this.serverHandle` with the stale config, and
+      // every subsequent run() reuses the stale server until the next
+      // updateConfig() that finds serverHandle non-null.
       this.serverStartPromise = null;
     }
   }
@@ -459,6 +505,21 @@ export class OpenCodeAgentProvider implements AgentProvider {
 
     const ollama = this.frameworkConfig.ollamaCloud;
     if (ollama?.enabled && ollama.apiKey) {
+      // Register the base Ollama default plus any settings-level override
+      // model so OpenCode accepts session.prompt requests that ask for it.
+      // Per-run modelOverride that picks a model NOT in this list will surface
+      // OpenCode's "model not found" error — that's the documented v1 limit.
+      const settingsOverride = parseModelSelector(this.frameworkConfig.opencode?.model);
+      const registeredModels: Record<string, { id: string; name: string; tool_call: boolean }> = {
+        [ollama.model]: { id: ollama.model, name: ollama.model, tool_call: true },
+      };
+      if (settingsOverride && settingsOverride.providerID === "ollama-cloud") {
+        registeredModels[settingsOverride.modelID] = {
+          id: settingsOverride.modelID,
+          name: settingsOverride.modelID,
+          tool_call: true,
+        };
+      }
       cfg.provider = {
         "ollama-cloud": {
           name: "Ollama Cloud",
@@ -467,16 +528,13 @@ export class OpenCodeAgentProvider implements AgentProvider {
             baseURL: "https://ollama.com/v1",
             apiKey: ollama.apiKey,
           },
-          models: {
-            [ollama.model]: {
-              id: ollama.model,
-              name: ollama.model,
-              tool_call: true,
-            },
-          },
+          models: registeredModels,
         },
       };
     } else if (this.frameworkConfig.anthropicApiKey) {
+      // OpenCode's bundled Anthropic provider catalog handles known Claude
+      // model IDs — we just need to supply the credential. Settings-level
+      // model override is honored by resolveRoute() per-call.
       cfg.provider = {
         anthropic: {
           options: {
@@ -489,22 +547,71 @@ export class OpenCodeAgentProvider implements AgentProvider {
     return cfg;
   }
 
-  /** `{providerID, modelID}` shape required by SessionPromptData.body.model. */
-  private resolveModel(): { providerID: string; modelID: string } | undefined {
+  /**
+   * Resolve the route for a single run, honoring (in priority order):
+   *   1. per-task `modelOverride` from AgentRunParams
+   *   2. `opencode.model` from Settings ("Model override" textbox)
+   *   3. framework default (Ollama Cloud / Anthropic config)
+   *
+   * Accepts either a bare model ID (paired with the active provider) or
+   * the explicit `provider/model` form (e.g. `ollama-cloud/qwen3:32b`).
+   *
+   * Returns the `{providerID, modelID}` shape required by SessionPromptData.body.model.
+   */
+  private resolveRoute(
+    runtimeOverride: string | undefined,
+  ): { providerID: string; modelID: string } | undefined {
     const ollama = this.frameworkConfig.ollamaCloud;
-    if (ollama?.enabled && ollama.apiKey) {
+    const activeProvider: "ollama-cloud" | "anthropic" | null =
+      ollama?.enabled && ollama.apiKey
+        ? "ollama-cloud"
+        : this.frameworkConfig.anthropicApiKey
+          ? "anthropic"
+          : null;
+
+    // Priority 1+2: parsed override (runtime beats settings).
+    const override =
+      parseModelSelector(runtimeOverride) ??
+      parseModelSelector(this.frameworkConfig.opencode?.model);
+    if (override) return override;
+
+    // Bare-name override (no slash): pair with the active provider.
+    const bare = runtimeOverride?.trim() || this.frameworkConfig.opencode?.model?.trim();
+    if (bare && !bare.includes("/") && activeProvider) {
+      return { providerID: activeProvider, modelID: bare };
+    }
+
+    // Fall through to framework default.
+    if (activeProvider === "ollama-cloud" && ollama) {
       return { providerID: "ollama-cloud", modelID: ollama.model };
     }
-    if (this.frameworkConfig.anthropicApiKey) {
-      // Use the framework's configured model name, falling back to a sensible
-      // default. The Claude SDK provider uses getModelIdForFeature() upstream;
-      // by the time we reach this code that's already been baked into
-      // frameworkConfig.model.
-      const modelId = this.frameworkConfig.model || "claude-sonnet-4-6";
-      return { providerID: "anthropic", modelID: modelId };
+    if (activeProvider === "anthropic") {
+      return {
+        providerID: "anthropic",
+        modelID: this.frameworkConfig.model || "claude-sonnet-4-6",
+      };
     }
     return undefined;
   }
+}
+
+/**
+ * Parse a "provider/model" selector string (e.g. "ollama-cloud/qwen3:32b").
+ * Returns undefined for bare model names (no slash), empty/undefined input,
+ * or malformed strings — callers handle bare names by pairing with the
+ * active provider separately.
+ */
+function parseModelSelector(
+  s: string | undefined,
+): { providerID: string; modelID: string } | undefined {
+  if (!s) return undefined;
+  const trimmed = s.trim();
+  const slash = trimmed.indexOf("/");
+  if (slash <= 0 || slash === trimmed.length - 1) return undefined;
+  return {
+    providerID: trimmed.slice(0, slash),
+    modelID: trimmed.slice(slash + 1),
+  };
 }
 
 /**
