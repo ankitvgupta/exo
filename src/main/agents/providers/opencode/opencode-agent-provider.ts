@@ -405,6 +405,16 @@ export class OpenCodeAgentProvider implements AgentProvider {
 
   updateConfig(config: Partial<AgentFrameworkConfig>): void {
     this.frameworkConfig = { ...this.frameworkConfig, ...config };
+    // Only restart the server if a field that actually feeds into
+    // buildOpencodeConfig() / resolveRoute() changed. The orchestrator
+    // broadcasts updateConfig() to every provider on ANY config change
+    // (browser config, mcpServers, cliTools, openclaw settings, etc.), and
+    // killing the server on unrelated changes wastes startup work and
+    // crashes any in-flight OpenCode runs.
+    const opencodeRelevant = ["opencode", "ollamaCloud", "anthropicApiKey"] as const;
+    const touched = opencodeRelevant.some((k) => k in config);
+    if (!touched) return;
+
     // If the server is already running, restart on next run so config changes
     // (model, provider routing) take effect. Cheap: opencode serve cold-start
     // is sub-second on macOS.
