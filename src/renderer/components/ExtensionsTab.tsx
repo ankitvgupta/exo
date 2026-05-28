@@ -62,6 +62,10 @@ export function ExtensionsTab() {
   } | null>(null);
   const [openclawTesting, setOpenclawTesting] = useState(false);
 
+  // OpenCode agent provider settings — experimental alternative agent harness
+  const [opencodeEnabled, setOpencodeEnabled] = useState(false);
+  const [opencodeModel, setOpencodeModel] = useState("");
+
   const loadExtensions = useCallback(async () => {
     try {
       const [installedResult, allResult] = await Promise.all([
@@ -221,6 +225,11 @@ export function ExtensionsTab() {
         setOpenclawEnabled(Boolean(oc.enabled));
         setOpenclawGatewayUrl(String(oc.gatewayUrl ?? ""));
         setOpenclawGatewayToken(String(oc.gatewayToken ?? ""));
+      }
+      const opencodeCfg = config.opencode as Record<string, unknown> | undefined;
+      if (opencodeCfg) {
+        setOpencodeEnabled(Boolean(opencodeCfg.enabled));
+        setOpencodeModel(String(opencodeCfg.model ?? ""));
       }
     })();
   }, []);
@@ -773,6 +782,79 @@ export function ExtensionsTab() {
                     : (openclawTestResult.error ?? "Connection failed")}
                 </span>
               )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* OpenCode agent provider — experimental open-source agent harness */}
+      <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600 p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100">
+              OpenCode Agent (experimental)
+            </h4>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+              Multi-provider open-source agent harness. When enabled, select &quot;OpenCode&quot; in
+              the agent picker to run your task through it instead of Claude. Reuses your Ollama
+              Cloud or Anthropic credentials.
+            </p>
+          </div>
+          <label className="relative inline-flex items-center cursor-pointer">
+            <input
+              type="checkbox"
+              className="sr-only peer"
+              checked={opencodeEnabled}
+              onChange={async (e) => {
+                const val = e.target.checked;
+                setOpencodeEnabled(val);
+                await window.api.settings.set({
+                  opencode: {
+                    enabled: val,
+                    model: opencodeModel || undefined,
+                  },
+                });
+              }}
+            />
+            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-500 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:after:border-gray-600 peer-checked:bg-blue-600" />
+          </label>
+        </div>
+
+        {opencodeEnabled && (
+          <div className="space-y-3 mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Model override{" "}
+                <span className="text-gray-400 font-normal">
+                  (optional — blank uses Ollama Cloud or Anthropic config)
+                </span>
+              </label>
+              <input
+                type="text"
+                className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400"
+                placeholder="ollama-cloud/qwen3:32b"
+                value={opencodeModel}
+                onChange={(e) => setOpencodeModel(e.target.value)}
+              />
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 dark:bg-blue-500 rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors"
+                onClick={async () => {
+                  await window.api.settings.set({
+                    opencode: {
+                      enabled: opencodeEnabled,
+                      model: opencodeModel || undefined,
+                    },
+                  });
+                }}
+              >
+                Save
+              </button>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Routes via the same Ollama Cloud / Anthropic config you already have. Tool calls
+                still execute inside Exo with the same permission gate.
+              </p>
             </div>
           </div>
         )}

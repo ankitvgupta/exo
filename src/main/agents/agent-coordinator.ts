@@ -20,6 +20,7 @@ import { generateDraftForEmail, generateForwardForEmail } from "../services/draf
 import { saveDraftAndSync } from "../services/gmail-draft-sync";
 import { DEFAULT_STYLE_PROMPT } from "../../shared/types";
 import { populatePrivateProviderConfig } from "./private-providers-main";
+import { recordAgentSessionStart } from "../services/llm-service";
 import { createLogger } from "../services/logger";
 
 // __dirname is undefined in ESM. After the @anthropic-ai/claude-agent-sdk
@@ -167,6 +168,11 @@ export class AgentCoordinator {
       cc?: string[],
       bcc?: string[],
     ) => generateForwardForEmail({ emailId, accountId, instructions, to, cc, bcc }),
+    // Logged once per provider.run(): stamps which harness and LLM backend were
+    // chosen for the session. The only visibility into OpenCode-driven sessions,
+    // since their actual LLM calls happen inside the spawned opencode server.
+    recordAgentSessionStart: (args: Parameters<typeof recordAgentSessionStart>[0]) =>
+      recordAgentSessionStart(args),
   } as const;
 
   /**
@@ -280,6 +286,9 @@ export class AgentCoordinator {
           gatewayToken: appConfig.openclaw?.gatewayToken ?? "",
         },
       },
+      opencode: appConfig.opencode
+        ? { enabled: appConfig.opencode.enabled, model: appConfig.opencode.model }
+        : { enabled: false },
     };
     this.workerReady = populatePrivateProviderConfig(baseConfig).then(
       (enrichedConfig) => {
