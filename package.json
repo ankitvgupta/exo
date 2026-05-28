@@ -159,8 +159,8 @@
     ],
     "publish": {
       "provider": "github",
-      "owner": "ankitvgupta",
-      "repo": "mail-app",
+      "owner": "mickn",
+      "repo": "exo",
       "private": true
     },
     "directories": {

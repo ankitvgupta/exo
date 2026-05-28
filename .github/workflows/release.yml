@@ -4,6 +4,16 @@ on:
   push:
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release tag to build and publish, e.g. v0.14.1 or v0.14.1-beta.1'
+        required: true
+        type: string
+      prerelease:
+        description: 'Mark this GitHub Release as a prerelease'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -35,10 +45,20 @@ jobs:
       - name: Run unit tests
         run: npm run test:unit
 
-      - name: Set version from git tag
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Set version from release tag
+        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+        env:
+          DISPATCH_VERSION: ${{ inputs.version }}
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
+          TAG="$GITHUB_REF_NAME"
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            TAG="$DISPATCH_VERSION"
+          fi
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-\.][0-9A-Za-z.-]+)?$ ]]; then
+            echo "ERROR: Release tag must look like v0.14.1 or v0.14.1-beta.1; got $TAG"
+            exit 1
+          fi
+          VERSION="${TAG#v}"
           # For stable tags (exactly X.Y.Z with no suffix), zero-pad to 3 parts
           if [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             IFS='.' read -ra PARTS <<< "$VERSION"
@@ -255,7 +275,7 @@ jobs:
     if: |
       needs.build-and-sign.result == 'success' &&
       needs.staple.result == 'success' &&
-      startsWith(github.ref, 'refs/tags/v')
+      (startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     steps:
       - name: Download stapled artifacts
@@ -267,18 +287,28 @@ jobs:
       - name: Upload assets to release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DISPATCH_VERSION: ${{ inputs.version }}
+          DISPATCH_PRERELEASE: ${{ inputs.prerelease }}
         run: |
+          TAG="$GITHUB_REF_NAME"
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            TAG="$DISPATCH_VERSION"
+          fi
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-\.][0-9A-Za-z.-]+)?$ ]]; then
+            echo "ERROR: Release tag must look like v0.14.1 or v0.14.1-beta.1; got $TAG"
+            exit 1
+          fi
           # Detect pre-release tags (e.g. v1.2.3-beta.1, v1.2.3-rc.1)
           PRERELEASE_FLAG=""
           LATEST_FLAG=""
-          if [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-.+ ]]; then
+          if [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-.+ ]] || [ "$DISPATCH_PRERELEASE" = "true" ]; then
             PRERELEASE_FLAG="--prerelease"
             LATEST_FLAG="--latest=false"
           fi
-          gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" 2>/dev/null || \
-            gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes $PRERELEASE_FLAG $LATEST_FLAG
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" 2>/dev/null || \
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "$TAG" --generate-notes $PRERELEASE_FLAG $LATEST_FLAG
           # Ensure flags are set even if the release already existed
           if [[ -n "$PRERELEASE_FLAG" ]]; then
-            gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --prerelease --latest=false
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --prerelease --latest=false
           fi
-          gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" release/* --clobber
+          gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" release/* --clobber
