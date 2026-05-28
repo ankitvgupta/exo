@@ -235,8 +235,10 @@ export class OpenCodeAgentProvider implements AgentProvider {
     // already fired is a no-op, so without this guard a run started with an
     // already-cancelled signal would complete to "completed" instead of
     // honoring the cancellation. Mirrors the SDK guard pattern.
+    //
+    // Note: activeRuns hasn't been populated yet — that happens below after
+    // the listener is wired. So there's nothing to delete here.
     if (signal.aborted) {
-      this.activeRuns.delete(taskId);
       yield { type: "state", state: "cancelled" };
       return { state: "cancelled", providerTaskId: sessionId };
     }
@@ -423,7 +425,17 @@ export class OpenCodeAgentProvider implements AgentProvider {
     // node_modules/.bin/opencode in dev; in a packaged app the same package
     // lives inside app.asar.unpacked. We don't actually run it here — just
     // check it can be found — to keep isAvailable() cheap.
-    return resolveOpencodeBinary() !== null;
+    if (resolveOpencodeBinary() === null) return false;
+    // Credential gate: also require at least one LLM provider to be
+    // configured. Without this, a user who enabled OpenCode but hasn't set
+    // up an Anthropic key or Ollama Cloud would see the provider in the
+    // picker, submit a run, and get an opaque "no model available" error
+    // from the spawned OpenCode binary. Matching resolveRoute's notion of
+    // "active provider": Ollama (enabled + apiKey) OR Anthropic key.
+    const ollama = this.frameworkConfig.ollamaCloud;
+    const hasOllama = !!(ollama?.enabled && ollama.apiKey);
+    const hasAnthropic = !!this.frameworkConfig.anthropicApiKey;
+    return hasOllama || hasAnthropic;
   }
 
   updateConfig(config: Partial<AgentFrameworkConfig>): void {
@@ -875,6 +887,11 @@ function buildSystemPrompt(context: AgentContext): string {
  * `question` (matches AskUserQuestion), `task` (sub-agents).
  */
 function buildDisabledBuiltins(): Record<string, boolean> {
+  // The keys must match real built-in tool IDs that OpenCode exposes (per
+  // `tool.ids` at server start: invalid/question/bash/read/glob/grep/edit/write/
+  // task/webfetch/todowrite/websearch/skill/apply_patch). Setting an unknown
+  // key has no effect — earlier versions of this list included "invalid",
+  // which is a server-internal sentinel and not a tool the model would call.
   return {
     write: false,
     edit: false,
@@ -882,6 +899,5 @@ function buildDisabledBuiltins(): Record<string, boolean> {
     glob: false,
     grep: false,
     bash: false,
-    invalid: false,
   };
 }
