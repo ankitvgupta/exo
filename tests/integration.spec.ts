@@ -16,10 +16,14 @@ test.describe("Exo Integration Tests", () => {
 
   test.beforeAll(async () => {
     // Launch the Electron app in test mode
+    const { ELECTRON_RUN_AS_NODE: _electronRunAsNode, ...baseEnv } = process.env;
     electronApp = await electron.launch({
-      args: [path.join(__dirname, "../out/main/index.js")],
+      args: [
+        path.join(__dirname, "../out/main/index.js"),
+        ...(process.platform === "linux" ? ["--no-sandbox"] : []),
+      ],
       env: {
-        ...process.env,
+        ...baseEnv,
         NODE_ENV: "test",
         EXO_TEST_MODE: "true",
       },
@@ -66,9 +70,11 @@ test.describe("Exo Integration Tests", () => {
   });
 
   test("app launches and shows main window", async () => {
-    // Verify the app title or header is visible
-    const title = await page.locator("text=Exo").first();
-    await expect(title).toBeVisible({ timeout: 10000 });
+    // The "Exo" brand is macOS-only; assert an always-visible titlebar control
+    // (Settings) to confirm the main window rendered on any platform.
+    await expect(page.locator('button[aria-label="Settings"]').first()).toBeVisible({
+      timeout: 10000,
+    });
   });
 
   test("shows setup wizard when not authenticated", async () => {

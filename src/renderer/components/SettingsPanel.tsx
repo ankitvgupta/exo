@@ -31,6 +31,7 @@ import { SplitConfigEditor } from "./SplitConfigEditor";
 import { SnippetsEditor } from "./SnippetsEditor";
 import { MemoriesTab } from "./MemoriesTab";
 import { ExtensionsTab } from "./ExtensionsTab";
+import { getRendererPlatform } from "../utils/platform";
 
 interface SettingsPanelProps {
   onClose: () => void;
@@ -752,9 +753,11 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
       className="h-screen flex flex-col bg-gray-100 dark:bg-gray-900"
     >
       {/* Titlebar */}
-      <div className="titlebar-drag h-12 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between px-4">
+      <div
+        className={`${getRendererPlatform().isMac ? "titlebar-drag" : ""} h-12 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between px-4`}
+      >
         <div className="flex items-center space-x-4">
-          <div className="w-20" /> {/* Space for traffic lights */}
+          {getRendererPlatform().isMac && <div className="w-20" />} {/* Space for traffic lights */}
           <h1 className="text-lg font-semibold text-gray-800 dark:text-gray-200">Settings</h1>
         </div>
         <button

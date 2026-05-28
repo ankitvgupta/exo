@@ -5,6 +5,7 @@ import { useAppStore } from "../store";
 import type { ScopedAgentEvent, AgentTaskState, AgentTaskInfo } from "../../shared/agent-types";
 import { AgentConfirmationDialog } from "./AgentConfirmationDialog";
 import { trackEvent } from "../services/posthog";
+import { modifierShortcut } from "../utils/platform";
 
 function StatusChip({ status }: { status: AgentTaskState }) {
   const config: Record<AgentTaskState, { label: string; classes: string }> = {
@@ -847,7 +848,7 @@ export const AgentTabContent = memo(function AgentTabContent({ emailId }: { emai
   if (!task) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-sm text-gray-400 dark:text-gray-500 p-4 gap-3">
-        <span>No active agent task. Press Cmd+J to start.</span>
+        <span>No active agent task. Press {modifierShortcut("J")} to start.</span>
         {hasPendingDraft && (
           <button
             onClick={handleRegenerate}

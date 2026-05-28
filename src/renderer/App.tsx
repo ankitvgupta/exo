@@ -58,6 +58,7 @@ import type {
 } from "../shared/types";
 import type { ScopedAgentEvent, AgentProviderConfig } from "../shared/agent-types";
 import { mergeAndThreadSearchResults } from "./utils/searchResults";
+import { getRendererPlatform } from "./utils/platform";
 import type { EmailThread } from "./store";
 
 function decodeHtmlEntities(text: string): string {
@@ -1744,10 +1745,16 @@ export default function App() {
       <OfflineBanner />
 
       {/* Titlebar */}
-      <div className="titlebar-drag h-12 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between px-4">
+      <div
+        className={`${getRendererPlatform().isMac ? "titlebar-drag" : ""} h-12 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between px-4`}
+      >
         <div className="flex items-center space-x-4">
-          <div className="w-20" /> {/* Space for traffic lights */}
-          <h1 className="text-lg font-semibold text-gray-800 dark:text-gray-200">Exo</h1>
+          {getRendererPlatform().isMac && (
+            <>
+              <div className="w-20" /> {/* Space for traffic lights */}
+              <h1 className="text-lg font-semibold text-gray-800 dark:text-gray-200">Exo</h1>
+            </>
+          )}
           {/* Account Selector */}
           {accounts.length > 0 && (
             <div className="titlebar-no-drag relative">

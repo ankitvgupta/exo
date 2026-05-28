@@ -23,10 +23,14 @@ export async function launchElectronApp(
 ): Promise<{ app: ElectronApplication; page: Page }> {
   const { workerIndex = 0, extraEnv = {}, waitAfterLoad } = options;
 
+  const { ELECTRON_RUN_AS_NODE: _electronRunAsNode, ...baseEnv } = process.env;
   const app = await electron.launch({
-    args: [path.join(__dirname, "../../out/main/index.js")],
+    args: [
+      path.join(__dirname, "../../out/main/index.js"),
+      ...(process.platform === "linux" ? ["--no-sandbox"] : []),
+    ],
     env: {
-      ...process.env,
+      ...baseEnv,
       NODE_ENV: "test",
       EXO_DEMO_MODE: "true",
       TEST_WORKER_INDEX: String(workerIndex),
@@ -36,7 +40,12 @@ export async function launchElectronApp(
 
   const window = await app.firstWindow();
   await window.waitForLoadState("domcontentloaded");
-  await window.waitForSelector("text=Exo", { timeout: 15000 });
+  // Wait for the inbox shell to render. Use a platform-agnostic anchor — the
+  // "Exo" titlebar brand is only rendered on macOS.
+  await window
+    .getByRole("button", { name: /Inbox/ })
+    .first()
+    .waitFor({ state: "visible", timeout: 15000 });
 
   // The app defaults to the Priority tab. Switch to "All" so tests see every
   // email in the demo inbox (most tests search for specific emails by name).

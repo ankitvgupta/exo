@@ -35,8 +35,8 @@ test.describe("Image Loading in Emails", () => {
   });
 
   test("images load in HTML emails", async () => {
-    // Wait for app and emails to load
-    await page.waitForSelector("text=Exo", { timeout: 15000 });
+    // Wait for app and emails to load. (The "Exo" titlebar brand is macOS-only,
+    // so anchor on a known demo sender row instead.)
     await page
       .locator("button")
       .filter({ hasText: /Garry|HR Team|Product Team/ })

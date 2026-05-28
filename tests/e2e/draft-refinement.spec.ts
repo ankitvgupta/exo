@@ -204,8 +204,9 @@ test.describe("Draft Generation - Multiple Emails", () => {
     await page.keyboard.press("j");
     await page.waitForTimeout(500);
 
-    // The subject should change (or the detail view should update)
-    const newSubject = await page.locator("h1").first().textContent();
+    // Some content should be rendered. (Previously h1.first() — which matched
+    // the macOS-only titlebar brand; read a list row instead.)
+    const newSubject = await page.locator("[data-thread-id]").first().textContent();
     expect(newSubject).toBeTruthy();
   });
 });

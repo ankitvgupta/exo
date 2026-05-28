@@ -1,8 +1,13 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
+import { getPlatformInfo } from "../shared/platform";
 const { contextBridge, ipcRenderer } = require("electron");
 
 // Expose a limited API to the renderer
 const api = {
+  // Single source of truth for platform info (see src/shared/platform.ts) so the
+  // exposed object stays in sync with PlatformInfo at compile time.
+  platform: getPlatformInfo(process.platform),
+
   // Temporary debug logger — renderer → main process stdout
   _debugLog: (msg: string): void => {
     ipcRenderer.send("debug:log", msg);
@@ -1134,6 +1139,8 @@ const api = {
       ipcRenderer.invoke("settings:get-call-history", { limit }),
   },
 };
+
+export type ElectronAPI = typeof api;
 
 // Expose API to renderer
 contextBridge.exposeInMainWorld("api", api);
