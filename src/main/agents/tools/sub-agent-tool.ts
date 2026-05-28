@@ -103,12 +103,12 @@ export function createSubAgentTool(
           throw new Error("Sub-agent tools do not support nested tool execution");
         },
         netFetch,
-        // Sub-agent invocations are recorded as separate session-start rows
-        // by the sub-agent provider just like top-level runs — same code path.
-        recordSessionStart: () => {
-          // No-op for nested invocations; the parent already logged.
-          // (If we ever want per-subagent rows, swap this for the deps callback.)
-        },
+        // Intentional no-op for nested invocations: the parent run's own
+        // session-start row already covers the orchestration session, and
+        // adding per-subagent rows would muddy session counts in queries
+        // like `caller='agent-session-start:opencode'`. Swap this for the
+        // real callback if per-subagent records become useful later.
+        recordSessionStart: () => {},
         signal,
       });
 

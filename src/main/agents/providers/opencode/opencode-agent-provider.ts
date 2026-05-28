@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
+import { dirname, join, delimiter as pathDelimiter } from "node:path";
 import type { Config, Event } from "@opencode-ai/sdk";
 // Type-only namespace import lets us reference the SDK's function types
 // (typeof OcSdk.createOpencodeServer) without emitting a runtime `require()`,
@@ -118,6 +118,17 @@ export class OpenCodeAgentProvider implements AgentProvider {
   private bridge = new McpBridge();
   private activeRuns = new Map<string, ActiveRun>();
   private serverStartPromise: Promise<ServerHandle> | null = null;
+  /**
+   * Monotonic generation counter bumped whenever updateConfig() invalidates
+   * the server config. ensureServer() captures the value at the start of its
+   * IIFE and re-checks it before seeding `serverHandle` — if it changed
+   * mid-flight, the in-flight startup tears down its own server instead of
+   * publishing a stale handle. Without this, an updateConfig() that fires
+   * during the ~30s server-start window completes after the IIFE has captured
+   * the old config, the IIFE wins the race, and all subsequent runs reuse
+   * the stale server until the next updateConfig().
+   */
+  private configGeneration = 0;
 
   constructor(frameworkConfig: AgentFrameworkConfig) {
     this.frameworkConfig = frameworkConfig;
@@ -415,19 +426,21 @@ export class OpenCodeAgentProvider implements AgentProvider {
     const touched = opencodeRelevant.some((k) => k in config);
     if (!touched) return;
 
-    // If the server is already running, restart on next run so config changes
-    // (model, provider routing) take effect. Cheap: opencode serve cold-start
-    // is sub-second on macOS.
+    // Bump first so any in-flight ensureServer() IIFE sees the new generation
+    // before it would otherwise commit its stale handle. Dropping the promise
+    // reference alone isn't enough — the IIFE keeps running and assigns
+    // `this.serverHandle = handle` on completion.
+    this.configGeneration += 1;
+
     if (this.serverHandle) {
       this.serverHandle.close();
       this.serverHandle = null;
       this.serverStartPromise = null;
     } else if (this.serverStartPromise) {
-      // In-flight startup — drop the promise so the next ensureServer() call
-      // re-issues with the new config. Without this, the in-flight startup
-      // completes and seeds `this.serverHandle` with the stale config, and
-      // every subsequent run() reuses the stale server until the next
-      // updateConfig() that finds serverHandle non-null.
+      // In-flight startup — drop the promise reference so the next
+      // ensureServer() call re-issues with the new config. The IIFE's
+      // generation check (see ensureServer) handles cleanup of its own
+      // server if it completes after this point.
       this.serverStartPromise = null;
     }
   }
@@ -441,6 +454,11 @@ export class OpenCodeAgentProvider implements AgentProvider {
     if (this.serverHandle) return Promise.resolve(this.serverHandle);
     if (this.serverStartPromise) return this.serverStartPromise;
 
+    // Capture the generation at IIFE start. If updateConfig() bumps it before
+    // we publish the handle, our config is stale — tear down our own server
+    // and let the next ensureServer() restart from scratch.
+    const startGeneration = this.configGeneration;
+
     this.serverStartPromise = (async () => {
       const bridgeUrl = await this.bridge.start(tools);
       const ocConfig = this.buildOpencodeConfig(bridgeUrl);
@@ -453,8 +471,8 @@ export class OpenCodeAgentProvider implements AgentProvider {
       if (binPath) {
         const binDir = dirname(binPath);
         const currentPath = process.env.PATH ?? "";
-        if (!currentPath.split(":").includes(binDir)) {
-          process.env.PATH = `${binDir}:${currentPath}`;
+        if (!currentPath.split(pathDelimiter).includes(binDir)) {
+          process.env.PATH = `${binDir}${pathDelimiter}${currentPath}`;
         }
       }
 
@@ -465,6 +483,19 @@ export class OpenCodeAgentProvider implements AgentProvider {
         timeout: 30_000,
         config: ocConfig,
       });
+
+      // Generation check: if updateConfig() fired while we were starting up,
+      // this server was built with stale config. Close it and signal the
+      // caller to re-issue ensureServer() — it'll find serverHandle null
+      // and start fresh with the new config.
+      if (this.configGeneration !== startGeneration) {
+        try {
+          server.close();
+        } catch {
+          // Best-effort cleanup; the OpenCode binary already exited if close failed.
+        }
+        throw new Error("OpenCode server config changed mid-startup — restarting");
+      }
 
       const client = sdk.createOpencodeClient({ baseUrl: server.url });
 
@@ -509,8 +540,11 @@ export class OpenCodeAgentProvider implements AgentProvider {
       // permission system would double-prompt the user.
       permission: { edit: "allow", bash: "allow", webfetch: "allow" },
       // Disable any provider OpenCode would auto-load that we don't have keys
-      // for, to keep startup quiet.
-      disabled_providers: ["github-copilot", "openrouter", "google", "groq", "deepseek"],
+      // for, to keep startup quiet. We also disable the *inactive* of the two
+      // providers we support (anthropic / ollama-cloud) — whichever isn't
+      // configured for this session — so OpenCode doesn't emit credential
+      // warnings for it. The list is built dynamically below.
+      disabled_providers: this.computeDisabledProviders(),
     };
 
     const ollama = this.frameworkConfig.ollamaCloud;
@@ -555,6 +589,22 @@ export class OpenCodeAgentProvider implements AgentProvider {
     }
 
     return cfg;
+  }
+
+  /**
+   * Build the `disabled_providers` list for OpenCode's startup. Includes
+   * everything we never use plus the inactive of the two we do — whichever
+   * isn't configured for this session — so OpenCode doesn't emit credential
+   * warnings for the unused one.
+   */
+  private computeDisabledProviders(): string[] {
+    const base = ["github-copilot", "openrouter", "google", "groq", "deepseek"];
+    const ollama = this.frameworkConfig.ollamaCloud;
+    const ollamaActive = !!(ollama?.enabled && ollama.apiKey);
+    const anthropicActive = !!this.frameworkConfig.anthropicApiKey;
+    if (ollamaActive && !anthropicActive) base.push("anthropic");
+    if (anthropicActive && !ollamaActive) base.push("ollama");
+    return base;
   }
 
   /**
