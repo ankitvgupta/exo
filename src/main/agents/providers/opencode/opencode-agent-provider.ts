@@ -621,38 +621,59 @@ export class OpenCodeAgentProvider implements AgentProvider {
   private resolveRoute(
     runtimeOverride: string | undefined,
   ): { providerID: string; modelID: string } | undefined {
-    const ollama = this.frameworkConfig.ollamaCloud;
-    const activeProvider: "ollama-cloud" | "anthropic" | null =
-      ollama?.enabled && ollama.apiKey
-        ? "ollama-cloud"
-        : this.frameworkConfig.anthropicApiKey
-          ? "anthropic"
-          : null;
-
-    // Priority 1+2: parsed override (runtime beats settings).
-    const override =
-      parseModelSelector(runtimeOverride) ??
-      parseModelSelector(this.frameworkConfig.opencode?.model);
-    if (override) return override;
-
-    // Bare-name override (no slash): pair with the active provider.
-    const bare = runtimeOverride?.trim() || this.frameworkConfig.opencode?.model?.trim();
-    if (bare && !bare.includes("/") && activeProvider) {
-      return { providerID: activeProvider, modelID: bare };
-    }
-
-    // Fall through to framework default.
-    if (activeProvider === "ollama-cloud" && ollama) {
-      return { providerID: "ollama-cloud", modelID: ollama.model };
-    }
-    if (activeProvider === "anthropic") {
-      return {
-        providerID: "anthropic",
-        modelID: this.frameworkConfig.model || "claude-sonnet-4-6",
-      };
-    }
-    return undefined;
+    return resolveRoute(this.frameworkConfig, runtimeOverride);
   }
+}
+
+/**
+ * Pure-function version of OpenCodeAgentProvider.resolveRoute so the priority
+ * logic (runtime > settings > framework default, with bare-name and parsed
+ * `provider/model` forms supported at each tier) can be unit tested without
+ * spinning up an instance. Exported for tests only.
+ *
+ * The previous implementation collapsed both inputs into a single ?? chain on
+ * the parsed form first, which broke priority when runtime was bare and
+ * settings was parsed — settings would win even though runtime should have.
+ * This version resolves each source end-to-end (parsed OR bare → route)
+ * before falling to the next.
+ */
+export function resolveRoute(
+  config: AgentFrameworkConfig,
+  runtimeOverride: string | undefined,
+): { providerID: string; modelID: string } | undefined {
+  const ollama = config.ollamaCloud;
+  const activeProvider: "ollama-cloud" | "anthropic" | null =
+    ollama?.enabled && ollama.apiKey ? "ollama-cloud" : config.anthropicApiKey ? "anthropic" : null;
+
+  const resolveSelector = (
+    s: string | undefined,
+  ): { providerID: string; modelID: string } | undefined => {
+    const trimmed = s?.trim();
+    if (!trimmed) return undefined;
+    const parsed = parseModelSelector(trimmed);
+    if (parsed) return parsed;
+    // Bare-name selector (no slash) — pair with the active provider.
+    if (activeProvider) return { providerID: activeProvider, modelID: trimmed };
+    return undefined;
+  };
+
+  const runtimeRoute = resolveSelector(runtimeOverride);
+  if (runtimeRoute) return runtimeRoute;
+
+  const settingsRoute = resolveSelector(config.opencode?.model);
+  if (settingsRoute) return settingsRoute;
+
+  // Fall through to framework default.
+  if (activeProvider === "ollama-cloud" && ollama) {
+    return { providerID: "ollama-cloud", modelID: ollama.model };
+  }
+  if (activeProvider === "anthropic") {
+    return {
+      providerID: "anthropic",
+      modelID: config.model || "claude-sonnet-4-6",
+    };
+  }
+  return undefined;
 }
 
 /**
