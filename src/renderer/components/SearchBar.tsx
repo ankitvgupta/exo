@@ -72,6 +72,8 @@ export function SearchBar({ isOpen, onClose }: SearchBarProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const {
     setSelectedEmailId,
+    setSelectedThreadId,
+    setSelectedDraftId,
     currentAccountId,
     accounts,
     setActiveSearch,
@@ -84,6 +86,17 @@ export function SearchBar({ isOpen, onClose }: SearchBarProps) {
 
   // The "search all mail" affordance is at index === results.length
   const searchAllMailIndex = results.length;
+
+  const openQuickResult = useCallback(
+    (result: SearchResult) => {
+      setSelectedDraftId(null);
+      setSelectedThreadId(result.threadId);
+      setSelectedEmailId(result.id);
+      setViewMode("full");
+      onClose();
+    },
+    [onClose, setSelectedDraftId, setSelectedEmailId, setSelectedThreadId, setViewMode],
+  );
 
   // Focus input when opened
   useEffect(() => {
@@ -274,9 +287,7 @@ export function SearchBar({ isOpen, onClose }: SearchBarProps) {
             results[selectedIndex]
           ) {
             // User explicitly navigated to a result, select it
-            setSelectedEmailId(results[selectedIndex].id);
-            setViewMode("full");
-            onClose();
+            openQuickResult(results[selectedIndex]);
           } else {
             // Either: no navigation, or selected "search all mail" row, or just pressed Enter
             if (query.trim()) {
@@ -291,18 +302,14 @@ export function SearchBar({ isOpen, onClose }: SearchBarProps) {
       selectedIndex,
       hasNavigated,
       searchAllMailIndex,
-      setSelectedEmailId,
-      setViewMode,
-      onClose,
       query,
       performFullSearch,
+      openQuickResult,
     ],
   );
 
   const handleResultClick = (result: SearchResult) => {
-    setSelectedEmailId(result.id);
-    setViewMode("full");
-    onClose();
+    openQuickResult(result);
   };
 
   // Format date for display
