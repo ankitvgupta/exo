@@ -231,11 +231,8 @@ test.describe("Search - Result Navigation", () => {
     // Press down arrow to select second result
     await page.keyboard.press("ArrowDown");
     await page.waitForTimeout(100);
-
-    // The selection should move (indicated by bg-blue-50 class)
-    const selectedItem = page.locator(".bg-blue-50");
-    await selectedItem.isVisible().catch(() => false);
-    // Selection might be on first or second item depending on implementation
+    // Selection (indicated by bg-blue-50 class) might be on first or second
+    // item depending on implementation — no stable assertion here.
 
     // Close
     await page.keyboard.press("Escape");
@@ -265,11 +262,7 @@ test.describe("Search - Result Navigation", () => {
       // Press Enter to select
       await page.keyboard.press("Enter");
       await page.waitForTimeout(300);
-
-      // Search modal should close after selection
-      const searchModal = page.locator("input[placeholder*='Search']");
-      await searchModal.isVisible().catch(() => false);
-      // Modal should close after selecting a result
+      // Modal should close after selecting a result (no stable assertion here).
     }
   });
 
@@ -364,13 +357,8 @@ test.describe("Search - Search Operators", () => {
     // Wait for results
     await page.waitForTimeout(500);
 
-    // Should show result from alice (demo data)
-    const aliceResult = page.locator("text=alice");
-    await aliceResult
-      .first()
-      .isVisible()
-      .catch(() => false);
-    // Note: demo mode does simple string matching, so this might work differently
+    // Note: demo mode does simple string matching, so a result from alice
+    // might appear differently — no stable assertion here.
 
     // Close
     await page.keyboard.press("Escape");
