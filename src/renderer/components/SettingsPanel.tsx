@@ -1392,9 +1392,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
                           ) : (
                             <OllamaModelSelect
                               value={ollamaModels[key] ?? DEFAULT_OLLAMA_MODEL}
-                              onChange={(v) =>
-                                setOllamaModels((prev) => ({ ...prev, [key]: v }))
-                              }
+                              onChange={(v) => setOllamaModels((prev) => ({ ...prev, [key]: v }))}
                               ariaLabel={`Ollama model for ${label}`}
                               selectClassName="w-48 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-500 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                               inputClassName="w-48 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-500 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
