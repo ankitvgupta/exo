@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { COMMON_OLLAMA_MODELS, DEFAULT_OLLAMA_MODEL } from "../../shared/types";
 
 /** Sentinel <option> value that switches the field into free-text entry. */
@@ -31,6 +31,15 @@ export function OllamaModelSelect({
   // reflects what's actually stored. Sticky once set, so typing a known id
   // mid-edit doesn't yank the input out from under the user.
   const [custom, setCustom] = useState(!isKnown && value.length > 0);
+
+  // If `value` is externally reset to a curated model (e.g. a settings reload)
+  // while custom mode is on, drop back to the dropdown — otherwise the select
+  // would show "Custom…" with a curated id in the text box, the opposite of
+  // what's stored. Only fires when `value` actually changes, so it never
+  // interferes with editing an unknown id.
+  useEffect(() => {
+    if (isKnown) setCustom(false);
+  }, [value, isKnown]);
 
   const inCustomMode = custom || (!isKnown && value.length > 0);
 

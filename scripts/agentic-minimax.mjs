@@ -22,24 +22,11 @@
  */
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { existsSync, readFileSync } from "node:fs";
+import { loadEnv } from "./lib/load-env.mjs";
 import { z } from "zod";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-function loadEnv(path) {
-  if (!existsSync(path)) return;
-  for (const line of readFileSync(path, "utf8").split("\n")) {
-    const t = line.trim();
-    if (!t || t.startsWith("#")) continue;
-    const eq = t.indexOf("=");
-    if (eq === -1) continue;
-    const key = t.slice(0, eq);
-    let val = t.slice(eq + 1);
-    if (val.startsWith('"') && val.endsWith('"')) val = val.slice(1, -1);
-    if (!(key in process.env)) process.env[key] = val;
-  }
-}
 loadEnv(join(__dirname, "..", ".env"));
 loadEnv(join(__dirname, "..", ".env.local"));
 
@@ -145,10 +132,14 @@ function makeTools(state) {
       description: "Search the mailbox. Returns matching messages (id, from, subject, date), newest first.",
       shape: { query: z.string() },
       run: (a) => {
-        const q = a.query.toLowerCase();
+        // Query-driven: a message matches if its subject or sender contains any
+        // term from the query. Newest first.
+        const terms = a.query.toLowerCase().split(/\s+/).filter(Boolean);
         const hits = Object.entries(MAILBOX)
-          .filter(([, m]) => (m.subject + " " + m.from).toLowerCase().includes("acme") ||
-            (m.subject + " " + m.from).toLowerCase().includes(q.split(" ")[0]))
+          .filter(([, m]) => {
+            const hay = (m.subject + " " + m.from).toLowerCase();
+            return terms.some((t) => hay.includes(t));
+          })
           .map(([id, m]) => ({ id, from: m.from, subject: m.subject, date: m.date }))
           .sort((x, y) => (x.date < y.date ? 1 : -1));
         return record("search_emails", a, { results: hits });
