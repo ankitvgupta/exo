@@ -544,8 +544,8 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
 
               <div className="bg-yellow-50 dark:bg-yellow-900/30 p-4 rounded-lg mb-6">
                 <p className="text-sm text-yellow-800 dark:text-yellow-300">
-                  We&apos;ll request access to view and edit your emails and view your calendar
-                  events.
+                  We&apos;ll request access to view and edit your emails, view your calendar events,
+                  and create calendar invites you review first.
                 </p>
               </div>
 

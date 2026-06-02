@@ -43,6 +43,7 @@ import { getOnboardingClient, clearOnboardingClient } from "./onboarding.ipc";
 import { calendarSyncService } from "../services/calendar-sync";
 import type { IpcResponse, DashboardEmail } from "../../shared/types";
 import { createLogger } from "../services/logger";
+import { markDemoCalendarReauthenticated } from "../runtime-flags";
 
 const log = createLogger("sync-ipc");
 
@@ -273,6 +274,12 @@ export function registerSyncIpc(): void {
     "auth:reauth",
     async (_, { accountId }: { accountId: string }): Promise<IpcResponse<void>> => {
       try {
+        if (useFakeData) {
+          markDemoCalendarReauthenticated();
+          log.info(`[Auth] Demo re-authenticated account ${accountId}`);
+          return { success: true, data: undefined };
+        }
+
         if (pendingReauthClient) {
           return { success: false, error: "Another re-authentication is already in progress" };
         }

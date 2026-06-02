@@ -1,6 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import type { DashboardEmail } from "../../../../shared/types";
+import { validateCalendarInviteDraft } from "../../../../shared/calendar-invite";
+import type {
+  CalendarInviteCalendarOption,
+  CalendarInviteDraft,
+  DashboardEmail,
+} from "../../../../shared/types";
 import type { ExtensionEnrichmentResult } from "../../../../shared/extension-types";
+import { useAppStore } from "../../../../renderer/store";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -36,8 +42,36 @@ interface GetEventsResponse {
 
 interface CalendarApi {
   getEvents: (d: string) => Promise<GetEventsResponse>;
+  getInviteOptions: () => Promise<InviteOptionsResponse>;
+  extractInvite: (emailId: string) => Promise<ExtractInviteResponse>;
+  createInvite: (accountId: string, draft: CalendarInviteDraft) => Promise<CreateInviteResponse>;
   onEventsUpdated: (callback: () => void) => () => void;
 }
+
+interface InviteOptionsResponse {
+  success: boolean;
+  calendars?: CalendarInviteCalendarOption[];
+  hasWriteAccess?: boolean;
+  requiresReauth?: boolean;
+  error?: string;
+}
+
+interface ExtractInviteResponse {
+  success: boolean;
+  draft?: CalendarInviteDraft;
+  error?: string;
+}
+
+interface CreateInviteResponse {
+  success: boolean;
+  event?: CalendarEvent;
+  error?: string;
+  validationErrors?: string[];
+  requiresReauth?: boolean;
+}
+
+type InviteStatus = "idle" | "extracting" | "ready" | "creating";
+type ReauthResponse = { success: boolean; error?: string };
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -100,6 +134,96 @@ function formatHourLabel(hour: number): string {
 function toFractionalHour(isoStr: string): number {
   const d = new Date(isoStr);
   return d.getHours() + d.getMinutes() / 60;
+}
+
+function blankInviteDraft(timezone: string): CalendarInviteDraft {
+  return {
+    title: "",
+    start: "",
+    end: "",
+    timezone,
+    guests: [],
+    conference: { type: "googleMeet" },
+    location: "",
+    description: "",
+    calendarId: "",
+    confidence: 0,
+    warnings: [],
+  };
+}
+
+function toDateInput(isoStr: string): string {
+  if (!isoStr) return "";
+  const d = new Date(isoStr);
+  if (!Number.isFinite(d.getTime())) return "";
+  return toDateString(d);
+}
+
+function toTimeInput(isoStr: string): string {
+  if (!isoStr) return "";
+  const d = new Date(isoStr);
+  if (!Number.isFinite(d.getTime())) return "";
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+function combineDateAndTime(dateStr: string, timeStr: string): string {
+  if (!dateStr || !timeStr) return "";
+  return new Date(`${dateStr}T${timeStr}:00`).toISOString();
+}
+
+function addMinutes(isoStr: string, minutes: number): string {
+  const d = new Date(isoStr);
+  if (!Number.isFinite(d.getTime())) return "";
+  return new Date(d.getTime() + minutes * 60_000).toISOString();
+}
+
+function guestsToInput(guests: string[]): string {
+  return guests.join(", ");
+}
+
+function inputToGuests(value: string): string[] {
+  return Array.from(
+    new Set(
+      value
+        .split(/[,\n]/)
+        .map((guest) => guest.trim())
+        .filter(Boolean),
+    ),
+  );
+}
+
+function calendarKey(option: CalendarInviteCalendarOption): string {
+  return `${option.accountId}::${option.calendarId}`;
+}
+
+function preferredCalendarOption(
+  calendars: CalendarInviteCalendarOption[],
+  accountId: string,
+  calendarId: string,
+): CalendarInviteCalendarOption | undefined {
+  const preferredKey = accountId && calendarId ? `${accountId}::${calendarId}` : "";
+  return (
+    calendars.find((calendar) => preferredKey && calendarKey(calendar) === preferredKey) ??
+    calendars.find((calendar) => calendar.writable && calendar.primary) ??
+    calendars.find((calendar) => calendar.writable) ??
+    calendars[0]
+  );
+}
+
+function toReauthResponse(value: unknown): ReauthResponse {
+  if (!value || typeof value !== "object") {
+    return { success: false, error: "Unexpected re-authentication response" };
+  }
+
+  const response = value as Record<string, unknown>;
+  return {
+    success: response.success === true,
+    error: typeof response.error === "string" ? response.error : undefined,
+  };
+}
+
+function isConferenceType(value: string): value is CalendarInviteDraft["conference"]["type"] {
+  return value === "googleMeet" || value === "link" || value === "phone" || value === "none";
 }
 
 // ---------------------------------------------------------------------------
@@ -194,6 +318,9 @@ function EventBlock({ event, layoutInfo }: { event: CalendarEvent; layoutInfo: L
 
   return (
     <div
+      data-testid={
+        event.id === "calendar-invite-proposed" ? "calendar-invite-proposed-event" : undefined
+      }
       className="absolute rounded px-1.5 py-0.5 overflow-hidden cursor-default group"
       style={{
         top: `${top}px`,
@@ -370,6 +497,417 @@ function NoCalendarAccess() {
   );
 }
 
+type InviteIconName = "title" | "guests" | "time" | "video" | "location" | "notes" | "calendar";
+
+const inviteControlBaseClass =
+  "w-full h-9 rounded-md border border-gray-200 bg-white text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/15 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:placeholder:text-gray-500";
+
+const inviteControlClass = `${inviteControlBaseClass} px-3 text-[13px] leading-5`;
+const inviteCompactControlClass = `${inviteControlBaseClass} px-2 text-xs leading-5`;
+const inviteSelectClass = `${inviteControlBaseClass} px-3 pr-8 text-[13px] leading-5`;
+
+function StrokeIcon({
+  children,
+  className = "h-[18px] w-[18px]",
+}: {
+  children: React.ReactNode;
+  className?: string;
+}): React.ReactElement {
+  return (
+    <svg
+      className={className}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={1.8}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      {children}
+    </svg>
+  );
+}
+
+function InviteIcon({ name }: { name: InviteIconName }): React.ReactElement {
+  if (name === "title") {
+    return (
+      <span className="font-serif text-xl leading-none text-gray-500 dark:text-gray-400">T</span>
+    );
+  }
+  if (name === "guests") {
+    return <span className="text-xl leading-none text-gray-500 dark:text-gray-400">@</span>;
+  }
+  if (name === "time") {
+    return (
+      <StrokeIcon>
+        <circle cx="12" cy="12" r="9" />
+        <path d="M12 7v5l3 2" />
+      </StrokeIcon>
+    );
+  }
+  if (name === "video") {
+    return (
+      <StrokeIcon>
+        <path d="M15 10l5-3v10l-5-3z" />
+        <rect x="3" y="7" width="12" height="10" rx="2" />
+      </StrokeIcon>
+    );
+  }
+  if (name === "location") {
+    return (
+      <StrokeIcon>
+        <path d="M12 21s7-5.2 7-11a7 7 0 10-14 0c0 5.8 7 11 7 11z" />
+        <circle cx="12" cy="10" r="2.5" />
+      </StrokeIcon>
+    );
+  }
+  if (name === "notes") {
+    return (
+      <StrokeIcon>
+        <path d="M6 3h9l3 3v15H6z" />
+        <path d="M14 3v4h4" />
+        <path d="M9 12h6" />
+        <path d="M9 16h6" />
+      </StrokeIcon>
+    );
+  }
+  return (
+    <StrokeIcon>
+      <path d="M8 3v4" />
+      <path d="M16 3v4" />
+      <rect x="4" y="5" width="16" height="16" rx="2" />
+      <path d="M4 10h16" />
+    </StrokeIcon>
+  );
+}
+
+function ChevronDownIcon({ className = "h-4 w-4" }: { className?: string }): React.ReactElement {
+  return (
+    <StrokeIcon className={className}>
+      <path d="M6 9l6 6 6-6" />
+    </StrokeIcon>
+  );
+}
+
+function LockIcon(): React.ReactElement {
+  return (
+    <StrokeIcon className="h-4 w-4">
+      <rect x="5" y="10" width="14" height="10" rx="2" />
+      <path d="M8 10V7a4 4 0 018 0v3" />
+    </StrokeIcon>
+  );
+}
+
+function InviteField({
+  icon,
+  children,
+}: {
+  icon: InviteIconName;
+  children: React.ReactNode;
+}): React.ReactElement {
+  return (
+    <div className="flex items-start gap-2">
+      <div className="flex h-9 w-8 flex-shrink-0 items-center justify-center text-gray-500 dark:text-gray-400">
+        <InviteIcon name={icon} />
+      </div>
+      <div className="min-w-0 flex-1">{children}</div>
+    </div>
+  );
+}
+
+function InviteEditor({
+  status,
+  draft,
+  calendars,
+  selectedAccountId,
+  validationErrors,
+  error,
+  requiresReauth,
+  reauthing,
+  onDraftChange,
+  onCalendarChange,
+  onReauth,
+}: {
+  status: InviteStatus;
+  draft: CalendarInviteDraft;
+  calendars: CalendarInviteCalendarOption[];
+  selectedAccountId: string;
+  validationErrors: string[];
+  error: string | null;
+  requiresReauth: boolean;
+  reauthing: boolean;
+  onDraftChange: React.Dispatch<React.SetStateAction<CalendarInviteDraft>>;
+  onCalendarChange: (key: string) => void;
+  onReauth: () => Promise<void>;
+}): React.ReactElement {
+  const startDate = toDateInput(draft.start);
+  const startTime = toTimeInput(draft.start);
+  const endTime = toTimeInput(draft.end);
+  const selectedKey =
+    selectedAccountId && draft.calendarId ? `${selectedAccountId}::${draft.calendarId}` : "";
+
+  const updateStartDate = (date: string) => {
+    onDraftChange((prev) => {
+      const nextStart = combineDateAndTime(date, toTimeInput(prev.start) || "14:00");
+      return {
+        ...prev,
+        start: nextStart,
+        end: prev.end ? combineDateAndTime(date, toTimeInput(prev.end)) : addMinutes(nextStart, 30),
+      };
+    });
+  };
+
+  const updateStartTime = (time: string) => {
+    onDraftChange((prev) => {
+      const date = toDateInput(prev.start) || todayString();
+      const nextStart = combineDateAndTime(date, time);
+      return {
+        ...prev,
+        start: nextStart,
+        end: prev.end ? prev.end : addMinutes(nextStart, 30),
+      };
+    });
+  };
+
+  const updateEndTime = (time: string) => {
+    onDraftChange((prev) => ({
+      ...prev,
+      end: combineDateAndTime(toDateInput(prev.start) || todayString(), time),
+    }));
+  };
+
+  return (
+    <div
+      data-testid="calendar-invite-editor"
+      className="border-b border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800"
+    >
+      <div className="flex items-center justify-between border-b border-gray-200 px-3 py-2.5 dark:border-gray-700">
+        <div>
+          <p className="text-sm font-semibold text-gray-950 dark:text-gray-100">New invite</p>
+          <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+            Create and review before sending
+          </p>
+        </div>
+        {status === "extracting" && (
+          <span className="text-xs font-medium text-blue-600 dark:text-blue-400">
+            Extracting...
+          </span>
+        )}
+        {status !== "extracting" && (
+          <span className="text-gray-500 dark:text-gray-400">
+            <ChevronDownIcon />
+          </span>
+        )}
+      </div>
+
+      {status === "extracting" ? (
+        <div className="space-y-3 px-3 py-3" data-testid="calendar-invite-loading">
+          {[1, 2, 3, 4, 5].map((item) => (
+            <div key={item} className="flex items-start gap-2">
+              <div className="h-9 w-8 flex-shrink-0 animate-pulse rounded-md bg-gray-100 dark:bg-gray-700/80" />
+              <div className="h-9 flex-1 animate-pulse rounded-md bg-gray-100 dark:bg-gray-700/80" />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="space-y-3 px-3 py-3">
+          {error && (
+            <div
+              data-testid="calendar-invite-error"
+              className="rounded-md border border-red-200 bg-red-50 px-2.5 py-2 text-xs text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300"
+            >
+              {error}
+            </div>
+          )}
+          {requiresReauth && (
+            <div className="rounded-md border border-amber-300 bg-amber-50/70 px-2.5 py-2 text-amber-800 dark:border-amber-800/70 dark:bg-amber-950/30 dark:text-amber-200">
+              <div className="flex items-center gap-2">
+                <LockIcon />
+                <span className="min-w-0 flex-1 text-xs font-medium">
+                  Google Calendar write permission needed
+                </span>
+              </div>
+              <button
+                type="button"
+                data-testid="calendar-invite-reauth"
+                disabled={reauthing || !selectedAccountId}
+                className="mt-2 w-full rounded-md border border-amber-300 bg-white/80 px-2.5 py-1.5 text-xs font-semibold text-blue-600 hover:bg-white hover:text-blue-700 disabled:cursor-not-allowed disabled:border-amber-200 disabled:text-gray-400 dark:border-amber-800/80 dark:bg-gray-900/40 dark:text-blue-300 dark:hover:bg-gray-900/70 dark:hover:text-blue-200 dark:disabled:text-gray-500"
+                onClick={() => {
+                  onReauth().catch(console.error);
+                }}
+              >
+                {reauthing ? "Waiting for browser..." : "Re-authenticate"}
+              </button>
+            </div>
+          )}
+
+          <InviteField icon="title">
+            <input
+              aria-label="Invite title"
+              data-testid="calendar-invite-title"
+              value={draft.title}
+              onChange={(event) =>
+                onDraftChange((prev) => ({ ...prev, title: event.target.value }))
+              }
+              placeholder="Title"
+              className={inviteControlClass}
+            />
+          </InviteField>
+
+          <InviteField icon="guests">
+            <input
+              aria-label="Invite guests"
+              data-testid="calendar-invite-guests"
+              value={guestsToInput(draft.guests)}
+              onChange={(event) =>
+                onDraftChange((prev) => ({ ...prev, guests: inputToGuests(event.target.value) }))
+              }
+              placeholder="Add guests"
+              className={inviteControlClass}
+            />
+          </InviteField>
+
+          <InviteField icon="time">
+            <div className="space-y-2">
+              <input
+                aria-label="Invite date"
+                data-testid="calendar-invite-date"
+                type="date"
+                value={startDate}
+                onChange={(event) => updateStartDate(event.target.value)}
+                className={inviteCompactControlClass}
+              />
+              <div className="flex items-center gap-2">
+                <input
+                  aria-label="Invite start time"
+                  data-testid="calendar-invite-start"
+                  type="time"
+                  value={startTime}
+                  onChange={(event) => updateStartTime(event.target.value)}
+                  className={`${inviteCompactControlClass} min-w-0 flex-1`}
+                />
+                <span className="flex-shrink-0 text-sm text-gray-400 dark:text-gray-500">-</span>
+                <input
+                  aria-label="Invite end time"
+                  data-testid="calendar-invite-end"
+                  type="time"
+                  value={endTime}
+                  onChange={(event) => updateEndTime(event.target.value)}
+                  className={`${inviteCompactControlClass} min-w-0 flex-1`}
+                />
+              </div>
+            </div>
+          </InviteField>
+
+          <InviteField icon="video">
+            <div className="space-y-2">
+              <select
+                aria-label="Invite conference"
+                value={draft.conference.type}
+                onChange={(event) =>
+                  onDraftChange((prev) => {
+                    const type = isConferenceType(event.target.value) ? event.target.value : "none";
+                    return {
+                      ...prev,
+                      conference: {
+                        type,
+                        value: prev.conference.value,
+                      },
+                    };
+                  })
+                }
+                className={inviteSelectClass}
+              >
+                <option value="googleMeet">Google Meet</option>
+                <option value="link">Link</option>
+                <option value="phone">Phone</option>
+                <option value="none">None</option>
+              </select>
+              <input
+                aria-label="Invite conference value"
+                value={draft.conference.value ?? ""}
+                onChange={(event) =>
+                  onDraftChange((prev) => ({
+                    ...prev,
+                    conference: { ...prev.conference, value: event.target.value },
+                  }))
+                }
+                placeholder="Meeting link or phone"
+                disabled={
+                  draft.conference.type === "googleMeet" || draft.conference.type === "none"
+                }
+                className={`${inviteControlClass} disabled:bg-gray-50 disabled:text-gray-400 dark:disabled:bg-gray-800/70 dark:disabled:text-gray-500`}
+              />
+            </div>
+          </InviteField>
+
+          <InviteField icon="location">
+            <input
+              aria-label="Invite location"
+              value={draft.location}
+              onChange={(event) =>
+                onDraftChange((prev) => ({ ...prev, location: event.target.value }))
+              }
+              placeholder="Location"
+              className={inviteControlClass}
+            />
+          </InviteField>
+
+          <InviteField icon="notes">
+            <textarea
+              aria-label="Invite description"
+              value={draft.description}
+              onChange={(event) =>
+                onDraftChange((prev) => ({ ...prev, description: event.target.value }))
+              }
+              placeholder="Agenda or notes"
+              rows={3}
+              className={`${inviteControlBaseClass} h-20 resize-none px-3 py-2`}
+            />
+          </InviteField>
+
+          <InviteField icon="calendar">
+            <select
+              aria-label="Invite calendar"
+              data-testid="calendar-invite-calendar"
+              value={selectedKey}
+              onChange={(event) => onCalendarChange(event.target.value)}
+              className={inviteSelectClass}
+            >
+              <option value="">Choose calendar</option>
+              {calendars.map((calendar) => (
+                <option
+                  key={calendarKey(calendar)}
+                  value={calendarKey(calendar)}
+                  disabled={!calendar.writable}
+                >
+                  {calendar.calendarName} - {calendar.accountEmail}
+                  {calendar.writable ? "" : " (read-only)"}
+                </option>
+              ))}
+            </select>
+          </InviteField>
+
+          {(draft.warnings.length > 0 || validationErrors.length > 0) && (
+            <div
+              className="space-y-1 rounded-md bg-amber-50 px-2.5 py-2 dark:bg-amber-950/30"
+              style={{ marginLeft: 40 }}
+              data-testid="calendar-invite-warnings"
+            >
+              {[...draft.warnings, ...validationErrors].map((warning) => (
+                <div key={warning} className="text-xs text-amber-700 dark:text-amber-300">
+                  {warning}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Main panel
 // ---------------------------------------------------------------------------
@@ -379,16 +917,30 @@ function getCalendarApi(): CalendarApi {
 }
 
 export function CalendarPanel({
+  email,
   enrichment,
   isLoading: enrichmentLoading,
 }: CalendarPanelProps): React.ReactElement {
   const hasCalendarAccess =
     (enrichment?.data as Record<string, unknown> | undefined)?.hasCalendarAccess === true;
+  const calendarInviteRequest = useAppStore((state) => state.calendarInviteRequest);
+  const clearCalendarInviteRequest = useAppStore((state) => state.clearCalendarInviteRequest);
 
   const [selectedDate, setSelectedDate] = useState(todayString);
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [inviteStatus, setInviteStatus] = useState<InviteStatus>("idle");
+  const [inviteDraft, setInviteDraft] = useState<CalendarInviteDraft>(() =>
+    blankInviteDraft(Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"),
+  );
+  const [inviteCalendars, setInviteCalendars] = useState<CalendarInviteCalendarOption[]>([]);
+  const [selectedInviteAccountId, setSelectedInviteAccountId] = useState("");
+  const [inviteError, setInviteError] = useState<string | null>(null);
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
+  const [requiresReauth, setRequiresReauth] = useState(false);
+  const [inviteReauthing, setInviteReauthing] = useState(false);
 
   const isToday = selectedDate === todayString();
 
@@ -409,10 +961,12 @@ export function CalendarPanel({
 
   // Fetch on mount + date change
   useEffect(() => {
-    if (hasCalendarAccess) {
+    if (hasCalendarAccess || inviteOpen) {
       fetchEvents(selectedDate);
+      return;
     }
-  }, [selectedDate, hasCalendarAccess, fetchEvents]);
+    setLoading(false);
+  }, [selectedDate, hasCalendarAccess, inviteOpen, fetchEvents]);
 
   // Subscribe to background sync updates — refetch current date when events change
   useEffect(() => {
@@ -427,16 +981,224 @@ export function CalendarPanel({
   const goNext = useCallback(() => setSelectedDate((d) => addDays(d, 1)), []);
   const goToday = useCallback(() => setSelectedDate(todayString()), []);
 
+  const selectCalendar = useCallback(
+    (key: string) => {
+      const option = inviteCalendars.find((calendar) => calendarKey(calendar) === key);
+      setSelectedInviteAccountId(option?.accountId ?? "");
+      setInviteDraft((prev) => ({
+        ...prev,
+        calendarId: option?.calendarId ?? "",
+        timezone: option?.timezone ?? prev.timezone,
+      }));
+    },
+    [inviteCalendars],
+  );
+
+  const cancelInvite = useCallback(() => {
+    setInviteOpen(false);
+    setInviteStatus("idle");
+    setInviteError(null);
+    setValidationErrors([]);
+    setInviteReauthing(false);
+    clearCalendarInviteRequest();
+  }, [clearCalendarInviteRequest]);
+
+  const startInvite = useCallback(async (emailId: string) => {
+    const api = getCalendarApi();
+    setInviteOpen(true);
+    setInviteStatus("extracting");
+    setInviteError(null);
+    setValidationErrors([]);
+    setInviteReauthing(false);
+
+    try {
+      const optionsResult = await api.getInviteOptions();
+      const calendars = optionsResult.success ? (optionsResult.calendars ?? []) : [];
+      setInviteCalendars(calendars);
+      setRequiresReauth(Boolean(optionsResult.requiresReauth));
+      if (!optionsResult.success && optionsResult.error) {
+        setInviteError(optionsResult.error);
+      }
+
+      const extractResult = await api.extractInvite(emailId);
+      const fallbackTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+      const draft = extractResult.success
+        ? (extractResult.draft ?? blankInviteDraft(fallbackTimezone))
+        : {
+            ...blankInviteDraft(fallbackTimezone),
+            warnings: ["AI extraction failed. Fill in the invite manually."],
+          };
+
+      const selected =
+        calendars.find(
+          (calendar) => calendar.writable && calendar.calendarId === draft.calendarId,
+        ) ??
+        calendars.find((calendar) => calendar.writable && calendar.primary) ??
+        calendars.find((calendar) => calendar.writable) ??
+        calendars[0];
+
+      setSelectedInviteAccountId(selected?.accountId ?? "");
+      setInviteDraft({
+        ...draft,
+        calendarId: selected?.calendarId ?? draft.calendarId,
+        timezone: selected?.timezone ?? (draft.timezone || fallbackTimezone),
+      });
+      if (draft.start) {
+        const date = toDateInput(draft.start);
+        if (date) setSelectedDate(date);
+      }
+      if (!extractResult.success && extractResult.error) {
+        setInviteError(extractResult.error);
+      }
+    } catch (err) {
+      console.error("[CalendarPanel] invite extraction failed:", err);
+      const fallbackTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+      setInviteDraft({
+        ...blankInviteDraft(fallbackTimezone),
+        warnings: ["AI extraction failed. Fill in the invite manually."],
+      });
+      setInviteError(err instanceof Error ? err.message : "Failed to extract invite");
+    } finally {
+      setInviteStatus("ready");
+    }
+  }, []);
+
+  const reauthenticateInviteCalendar = useCallback(async () => {
+    if (!selectedInviteAccountId) {
+      setInviteError("Choose a calendar account to re-authenticate.");
+      return;
+    }
+
+    setInviteReauthing(true);
+    setInviteError(null);
+
+    try {
+      const reauthResult = toReauthResponse(await window.api.auth.reauth(selectedInviteAccountId));
+      if (!reauthResult.success) {
+        setInviteError(reauthResult.error ?? "Google Calendar re-authentication failed.");
+        return;
+      }
+
+      const optionsResult = await getCalendarApi().getInviteOptions();
+      const calendars = optionsResult.success ? (optionsResult.calendars ?? []) : [];
+      setInviteCalendars(calendars);
+      setRequiresReauth(Boolean(optionsResult.requiresReauth));
+
+      if (!optionsResult.success) {
+        setInviteError(optionsResult.error ?? "Failed to reload Google Calendar permissions.");
+        return;
+      }
+
+      const selected = preferredCalendarOption(
+        calendars,
+        selectedInviteAccountId,
+        inviteDraft.calendarId,
+      );
+      setSelectedInviteAccountId(selected?.accountId ?? selectedInviteAccountId);
+      setInviteDraft((prev) => ({
+        ...prev,
+        calendarId: selected?.calendarId ?? prev.calendarId,
+        timezone: selected?.timezone ?? prev.timezone,
+      }));
+
+      await fetchEvents(selectedDate);
+    } catch (err) {
+      setInviteError(err instanceof Error ? err.message : "Google Calendar re-authentication failed.");
+    } finally {
+      setInviteReauthing(false);
+    }
+  }, [fetchEvents, inviteDraft.calendarId, selectedDate, selectedInviteAccountId]);
+
+  useEffect(() => {
+    if (!calendarInviteRequest) return;
+    if (
+      calendarInviteRequest.emailId !== email.id &&
+      calendarInviteRequest.threadId !== email.threadId
+    ) {
+      return;
+    }
+    startInvite(calendarInviteRequest.emailId).catch(console.error);
+  }, [calendarInviteRequest, email.id, email.threadId, startInvite]);
+
+  useEffect(() => {
+    if (!inviteDraft.start) return;
+    const date = toDateInput(inviteDraft.start);
+    if (date && date !== selectedDate) {
+      setSelectedDate(date);
+    }
+  }, [inviteDraft.start, selectedDate]);
+
+  useEffect(() => {
+    const handleEscape = (event: KeyboardEvent) => {
+      if (!inviteOpen || event.key !== "Escape") return;
+      event.preventDefault();
+      cancelInvite();
+    };
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [cancelInvite, inviteOpen]);
+
+  const createInvite = useCallback(async () => {
+    const errors = validateCalendarInviteDraft(inviteDraft);
+    setValidationErrors(errors);
+    if (errors.length > 0 || !selectedInviteAccountId) return;
+
+    setInviteStatus("creating");
+    setInviteError(null);
+    try {
+      const result = await getCalendarApi().createInvite(selectedInviteAccountId, inviteDraft);
+      if (!result.success) {
+        setInviteStatus("ready");
+        setInviteError(result.error ?? "Failed to create invite");
+        setValidationErrors(result.validationErrors ?? []);
+        setRequiresReauth(Boolean(result.requiresReauth));
+        return;
+      }
+
+      setInviteOpen(false);
+      setInviteStatus("idle");
+      setValidationErrors([]);
+      clearCalendarInviteRequest();
+      await fetchEvents(selectedDate);
+    } catch (err) {
+      setInviteStatus("ready");
+      setInviteError(err instanceof Error ? err.message : "Failed to create invite");
+    }
+  }, [clearCalendarInviteRequest, fetchEvents, inviteDraft, selectedDate, selectedInviteAccountId]);
+
+  const proposedEvent = useMemo<CalendarEvent | null>(() => {
+    if (!inviteOpen || !inviteDraft.start || !inviteDraft.end) return null;
+    const start = new Date(inviteDraft.start).getTime();
+    const end = new Date(inviteDraft.end).getTime();
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return null;
+    return {
+      id: "calendar-invite-proposed",
+      summary: inviteDraft.title || "(No title)",
+      start: inviteDraft.start,
+      end: inviteDraft.end,
+      isAllDay: false,
+      calendarName: "Invite draft",
+      calendarColor: "#f59e0b",
+      status: "tentative",
+      location: inviteDraft.location || undefined,
+    };
+  }, [inviteDraft, inviteOpen]);
+
+  const visibleEvents = useMemo(
+    () => (proposedEvent ? [...events, proposedEvent] : events),
+    [events, proposedEvent],
+  );
+
   // Wait for enrichment to tell us about access
-  if (enrichmentLoading) {
+  if (enrichmentLoading && !inviteOpen) {
     return <LoadingState />;
   }
 
-  if (!hasCalendarAccess) {
+  if (!hasCalendarAccess && !inviteOpen) {
     return <NoCalendarAccess />;
   }
 
-  const allDayEvents = events.filter((e) => e.isAllDay);
+  const allDayEvents = visibleEvents.filter((e) => e.isAllDay);
 
   return (
     <div className="flex flex-col h-full">
@@ -487,6 +1249,22 @@ export function CalendarPanel({
         </div>
       </div>
 
+      {inviteOpen && (
+        <InviteEditor
+          status={inviteStatus}
+          draft={inviteDraft}
+          calendars={inviteCalendars}
+          selectedAccountId={selectedInviteAccountId}
+          validationErrors={validationErrors}
+          error={inviteError}
+          requiresReauth={requiresReauth}
+          reauthing={inviteReauthing}
+          onDraftChange={setInviteDraft}
+          onCalendarChange={selectCalendar}
+          onReauth={reauthenticateInviteCalendar}
+        />
+      )}
+
       {/* All-day events */}
       <AllDayStrip events={allDayEvents} />
 
@@ -498,7 +1276,33 @@ export function CalendarPanel({
           Syncing calendars…
         </div>
       ) : (
-        <TimeGrid events={events} isToday={isToday} />
+        <TimeGrid events={visibleEvents} isToday={isToday} />
+      )}
+
+      {inviteOpen && (
+        <div className="flex flex-shrink-0 gap-2 border-t border-gray-200 bg-gray-50 p-2.5 dark:border-gray-700 dark:bg-gray-800/90">
+          <button
+            type="button"
+            onClick={cancelInvite}
+            className="flex-1 rounded-md border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-700"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            data-testid="calendar-invite-create"
+            onClick={() => {
+              createInvite().catch(console.error);
+            }}
+            disabled={
+              inviteStatus === "extracting" || inviteStatus === "creating" || requiresReauth
+            }
+            className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:bg-gray-300 disabled:text-gray-500 dark:disabled:bg-gray-700"
+            style={{ flex: "1.4 1 0" }}
+          >
+            {inviteStatus === "creating" ? "Creating..." : "Create and send"}
+          </button>
+        </div>
       )}
     </div>
   );

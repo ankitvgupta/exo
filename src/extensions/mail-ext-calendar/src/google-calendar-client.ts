@@ -8,6 +8,7 @@ import { readFile, readdir } from "fs/promises";
 import { existsSync } from "fs";
 import { join } from "path";
 import { getDataDir } from "../../../main/data-dir";
+import type { CalendarEventInsertParams } from "../../../shared/types";
 
 export interface CalendarEvent {
   id: string;
@@ -26,6 +27,10 @@ export interface CalendarInfo {
   id: string;
   name: string;
   color: string;
+  timezone?: string;
+  primary?: boolean;
+  accessRole?: string;
+  writable: boolean;
 }
 
 /** Result of an incremental or full sync for a single calendar. */
@@ -92,14 +97,41 @@ async function getOAuth2Client(accountId: string): Promise<OAuth2Client | null> 
   }
 }
 
+function tokenScopes(auth: OAuth2Client): Set<string> {
+  const scopes = auth.credentials.scope || "";
+  return new Set(scopes.split(/\s+/).filter(Boolean));
+}
+
+const CALENDAR_READ_SCOPES = new Set([
+  "https://www.googleapis.com/auth/calendar.readonly",
+  "https://www.googleapis.com/auth/calendar.events.readonly",
+  "https://www.googleapis.com/auth/calendar.events",
+  "https://www.googleapis.com/auth/calendar",
+]);
+
+const CALENDAR_WRITE_SCOPES = new Set([
+  "https://www.googleapis.com/auth/calendar.events",
+  "https://www.googleapis.com/auth/calendar",
+]);
+
 /**
- * Check if the current tokens include calendar scope.
+ * Check if the current tokens include any calendar read scope.
  */
 export async function hasCalendarScope(accountId: string): Promise<boolean> {
   const auth = await getOAuth2Client(accountId);
   if (!auth) return false;
-  const scopes = auth.credentials.scope || "";
-  return scopes.includes("calendar.readonly") || scopes.includes("calendar");
+  const scopes = tokenScopes(auth);
+  return Array.from(CALENDAR_READ_SCOPES).some((scope) => scopes.has(scope));
+}
+
+/**
+ * Check if the current tokens include Google Calendar event write scope.
+ */
+export async function hasCalendarWriteScope(accountId: string): Promise<boolean> {
+  const auth = await getOAuth2Client(accountId);
+  if (!auth) return false;
+  const scopes = tokenScopes(auth);
+  return Array.from(CALENDAR_WRITE_SCOPES).some((scope) => scopes.has(scope));
 }
 
 /**
@@ -149,6 +181,17 @@ export async function findAllCalendarAccounts(): Promise<string[]> {
   return result;
 }
 
+export async function findAllCalendarWriteAccounts(): Promise<string[]> {
+  const accounts = await findAllCalendarAccounts();
+  const writable: string[] = [];
+  for (const accountId of accounts) {
+    if (await hasCalendarWriteScope(accountId)) {
+      writable.push(accountId);
+    }
+  }
+  return writable;
+}
+
 /**
  * Find any account that has calendar scope (backwards-compatible).
  */
@@ -166,17 +209,48 @@ export async function getCalendarList(accountId: string): Promise<CalendarInfo[]
 
   const calendar = google.calendar({ version: "v3", auth });
   const response = await calendar.calendarList.list();
+  const accountHasWriteScope = await hasCalendarWriteScope(accountId);
   const result: CalendarInfo[] = [];
   for (const cal of response.data.items || []) {
     if (cal.id) {
+      const accessRole = cal.accessRole || "";
       result.push({
         id: cal.id,
         name: cal.summary || "Calendar",
         color: cal.backgroundColor || "#4285f4",
+        timezone: cal.timeZone || undefined,
+        primary: cal.primary || cal.id === "primary",
+        accessRole,
+        writable: accountHasWriteScope && (accessRole === "owner" || accessRole === "writer"),
       });
     }
   }
   return result;
+}
+
+export async function insertCalendarEvent(
+  accountId: string,
+  params: CalendarEventInsertParams,
+  calInfo: { name: string; color: string },
+): Promise<CalendarEvent> {
+  const auth = await getOAuth2Client(accountId);
+  if (!auth) {
+    throw new Error("Calendar account is not authenticated");
+  }
+
+  const calendar = google.calendar({ version: "v3", auth });
+  const response = await calendar.events.insert({
+    calendarId: params.calendarId,
+    sendUpdates: params.sendUpdates,
+    conferenceDataVersion: params.conferenceDataVersion,
+    requestBody: params.requestBody,
+  });
+
+  const event = parseCalendarEvent(response.data, calInfo);
+  if (!event) {
+    throw new Error("Google Calendar did not return a created event");
+  }
+  return event;
 }
 
 /**
