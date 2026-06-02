@@ -105,6 +105,13 @@ export interface CreateOptions {
    * Ignored for Anthropic.
    */
   think?: boolean | "low" | "medium" | "high" | "max";
+  /**
+   * Minimum max_tokens floor for Ollama Cloud calls.
+   * Defaults to 4096 to protect reasoning-model callers from exhausting the
+   * budget before emitting text. Constrained structured-output callers can set
+   * this lower to keep small JSON extraction calls responsive.
+   */
+  ollamaMaxTokensFloor?: number;
 }
 
 // --- Anthropic client (api.anthropic.com) ---
@@ -387,11 +394,14 @@ function getRetryCategory(error: unknown): string | null {
  * Adjust params for Ollama Cloud:
  * - Strip cache_control from system blocks AND from individual message content blocks
  *   (Ollama doesn't support prompt caching anywhere).
- * - Raise max_tokens to a high floor. Ollama models like minimax-m2.7:cloud emit
+ * - Preserve output_config. The native /api/chat path maps JSON schema formats
+ *   to Ollama's `format` field in callOllamaNative().
+ * - Raise max_tokens to a high floor by default. Ollama models like minimax-m2.7:cloud emit
  *   long `thinking` blocks before their `text` block; with the small max_tokens our
  *   features set for Anthropic (e.g. 256 for analysis), the thinking budget consumes
  *   everything and the text block is never produced. Cost is $0 on Ollama (subscription),
- *   so raising the ceiling is free.
+ *   so raising the ceiling is free. Some structured-output callers override the
+ *   floor when they need bounded latency more than room for long reasoning traces.
  */
 const OLLAMA_MIN_MAX_TOKENS = 4096;
 
@@ -408,6 +418,7 @@ function stripCacheControlFromBlock<T>(block: T): T {
 
 function adjustParamsForOllama(
   params: MessageCreateParamsNonStreaming,
+  maxTokensFloor = OLLAMA_MIN_MAX_TOKENS,
 ): MessageCreateParamsNonStreaming {
   let next = params;
 
@@ -429,8 +440,8 @@ function adjustParamsForOllama(
     next = { ...next, messages };
   }
 
-  if (typeof next.max_tokens === "number" && next.max_tokens < OLLAMA_MIN_MAX_TOKENS) {
-    next = { ...next, max_tokens: OLLAMA_MIN_MAX_TOKENS };
+  if (typeof next.max_tokens === "number" && next.max_tokens < maxTokensFloor) {
+    next = { ...next, max_tokens: maxTokensFloor };
   }
 
   return next;
@@ -482,10 +493,16 @@ function flattenMessageContent(content: unknown): string {
 
 interface OllamaChatResponse {
   model?: string;
-  message?: { role?: string; content?: string; thinking?: string };
+  message?: { role?: string; content?: unknown; thinking?: string };
   prompt_eval_count?: number;
   eval_count?: number;
   done?: boolean;
+}
+
+function ollamaContentToText(content: unknown): string {
+  if (typeof content === "string") return content;
+  if (content === null || content === undefined) return "";
+  return JSON.stringify(content);
 }
 
 /**
@@ -496,7 +513,7 @@ function synthesizeAnthropicMessage(
   ollamaResponse: OllamaChatResponse,
   requestedModel: string,
 ): Message {
-  const text = ollamaResponse.message?.content ?? "";
+  const text = ollamaContentToText(ollamaResponse.message?.content);
   const thinking = ollamaResponse.message?.thinking ?? "";
   const inputTokens = ollamaResponse.prompt_eval_count ?? 0;
   const outputTokens = ollamaResponse.eval_count ?? 0;
@@ -570,6 +587,10 @@ async function callOllamaNative(
       ...(typeof params.temperature === "number" ? { temperature: params.temperature } : {}),
     },
   };
+  const outputFormat = params.output_config?.format;
+  if (outputFormat?.type === "json_schema") {
+    body.format = outputFormat.schema;
+  }
   // think: false is meaningful (turn thinking OFF for non-reasoning models)
   // so include it unless the caller omitted it entirely. Default to true:
   // reasoning models on Ollama (kimi-k2.6, gpt-oss) emit CoT regardless of
@@ -609,13 +630,13 @@ export async function createMessage(
   params: MessageCreateParamsNonStreaming,
   options: CreateOptions,
 ): Promise<Message> {
-  const { caller, emailId, accountId, timeoutMs, provider, think } = options;
+  const { caller, emailId, accountId, timeoutMs, provider, think, ollamaMaxTokensFloor } = options;
   const isOllama = provider === "ollama-cloud";
   const model = params.model;
   const startTime = Date.now();
 
   // Strip cache_control for Ollama (unsupported)
-  const effectiveParams = isOllama ? adjustParamsForOllama(params) : params;
+  const effectiveParams = isOllama ? adjustParamsForOllama(params, ollamaMaxTokensFloor) : params;
 
   // For Ollama we use the SDK's retry-category logic but call our native path
   // instead of client.messages.create(). For Anthropic we use the SDK.

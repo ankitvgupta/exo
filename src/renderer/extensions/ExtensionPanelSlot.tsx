@@ -89,6 +89,7 @@ export function ExtensionPanelSlot({
   isFirst = false,
 }: ExtensionPanelSlotProps): React.ReactElement | null {
   const Component = getPanelComponent(extensionId, panelId);
+  const showTitle = !(extensionId === "calendar" && panelId === "day-view");
 
   if (!Component) {
     console.warn(`[Extensions] No component registered for panel ${extensionId}:${panelId}`);
@@ -99,11 +100,13 @@ export function ExtensionPanelSlot({
     <div
       className={`flex flex-col overflow-hidden ${!isFirst ? "border-t border-gray-200 dark:border-gray-700" : ""}`}
     >
-      <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700/50 bg-gray-50 dark:bg-gray-800/50">
-        <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-          {title}
-        </h3>
-      </div>
+      {showTitle && (
+        <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700/50 bg-gray-50 dark:bg-gray-800/50">
+          <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+            {title}
+          </h3>
+        </div>
+      )}
       <div className="flex-1 overflow-y-auto">
         <Component
           email={email}

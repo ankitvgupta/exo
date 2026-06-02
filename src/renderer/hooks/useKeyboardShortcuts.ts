@@ -135,6 +135,7 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
         clearActiveSearch,
         addUndoAction,
         markThreadAsRead,
+        startCalendarInvite,
       } = state;
 
       const mode = getKeyboardMode();
@@ -989,6 +990,14 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
           }
           break;
 
+        // Create calendar invite from selected thread.
+        case "i":
+          if (selectedEmailId && selectedThreadId) {
+            e.preventDefault();
+            startCalendarInvite(selectedEmailId, selectedThreadId);
+          }
+          break;
+
         // Star — batch-aware; single-thread star is Gmail only
         case "s":
           if (isMultiSelect) {
@@ -1176,6 +1185,7 @@ export function getKeyboardShortcuts(bindings: "superhuman" | "gmail") {
       { key: "#", description: "Delete" },
       { key: "u", description: "Mark unread" },
       ...(isGmail ? [{ key: "Shift+I", description: "Mark as read" }] : []),
+      { key: "i", description: "Create calendar invite" },
       { key: "s", description: "Star / unstar" },
       { key: "h", description: "Snooze" },
       ...(isGmail

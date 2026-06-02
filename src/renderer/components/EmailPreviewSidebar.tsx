@@ -94,6 +94,7 @@ export const EmailPreviewSidebar = memo(function EmailPreviewSidebar() {
   const setSidebarTab = useAppStore((s) => s.setSidebarTab);
   const availableTabs = useAppStore((s) => s.availableSidebarTabs);
   const setAvailableTabs = useAppStore((s) => s.setAvailableSidebarTabs);
+  const calendarInviteRequest = useAppStore((s) => s.calendarInviteRequest);
   const globalAgentTaskKey = useAppStore((s) => s.globalAgentTaskKey);
   // Draft task key for agent tab — drafts use `draft:${id}` as their task key
   const draftTaskKey = selectedDraftId ? `draft:${selectedDraftId}` : null;
@@ -202,6 +203,13 @@ export const EmailPreviewSidebar = memo(function EmailPreviewSidebar() {
       setSidebarTab(availableTabs[0]);
     }
   }, [availableTabs, sidebarTab, setSidebarTab]);
+
+  useEffect(() => {
+    if (!calendarInviteRequest) return;
+    if (sidebarTab !== "email" && availableTabs.includes("email")) {
+      setSidebarTab("email");
+    }
+  }, [availableTabs, calendarInviteRequest, sidebarTab, setSidebarTab]);
 
   // When switching emails (or returning to inbox), auto-select the agent tab
   // if the current key has an agent task/trace, or reset away if it doesn't.
