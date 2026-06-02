@@ -502,9 +502,9 @@ type InviteIconName = "title" | "guests" | "time" | "video" | "location" | "note
 const inviteControlBaseClass =
   "w-full h-9 rounded-md border border-gray-200 bg-white text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/15 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:placeholder:text-gray-500";
 
-const inviteControlClass = `${inviteControlBaseClass} px-3 text-[13px] leading-5`;
+const inviteControlClass = `${inviteControlBaseClass} px-3 text-xs leading-5`;
 const inviteCompactControlClass = `${inviteControlBaseClass} px-2 text-xs leading-5`;
-const inviteSelectClass = `${inviteControlBaseClass} px-3 pr-8 text-[13px] leading-5`;
+const inviteSelectClass = `${inviteControlBaseClass} px-3 pr-8 text-xs leading-5`;
 
 function StrokeIcon({
   children,
@@ -863,7 +863,7 @@ function InviteEditor({
               }
               placeholder="Agenda or notes"
               rows={3}
-              className={`${inviteControlBaseClass} h-20 resize-none px-3 py-2`}
+              className={`${inviteControlBaseClass} h-20 resize-none px-3 py-2 text-xs leading-5`}
             />
           </InviteField>
 

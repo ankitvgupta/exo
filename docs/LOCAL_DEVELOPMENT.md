@@ -247,9 +247,10 @@ One passing full run per PR is sufficient; iterate freely with
 
 In addition to the body marker, `pre-pr` upserts a single PR comment
 identified by `<!-- AGENTIC-VERIFY-COMMENT -->`. The comment carries
-the phase table at the top and the full agentic-verify markdown
-report inside a `<details>` block, so reviewers can see the verdict
-without expanding and read the whole transcript when they want to.
+the phase table at the top and local artifact paths for the
+agentic-verify markdown, JSON, and trace files. It does not publish
+the report contents or trace to GitHub because agentic verification
+can inspect mailbox and calendar surfaces during local runs.
 Repeated runs PATCH the same comment in place — the thread stays
 clean. Use `--no-comment` to skip it (the body marker / CI gate is
 unaffected).
@@ -267,6 +268,8 @@ in CI.
   just re-run `setup-dev-data.mjs` to rebuild from the refresh token.
 - **`.pre-pr-report.md` is gitignored.** It's a local artifact; the
   PR body holds the authoritative version once injected.
+- **Agentic traces stay local.** The PR comment links to local artifact
+  paths only; transcripts and tool outputs are not copied into GitHub.
 
 ## Plan reference
 

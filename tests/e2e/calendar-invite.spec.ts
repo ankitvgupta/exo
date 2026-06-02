@@ -40,7 +40,7 @@ test.describe("Calendar invite editor", () => {
       /Meeting to discuss partnership/,
     );
     await expect(page.getByTestId("calendar-invite-guests")).toHaveValue(
-      /david\.lieb@partnerco\.io/,
+      /casey\.prospect@example\.com/,
     );
     await expect(page.getByTestId("calendar-invite-proposed-event")).toBeVisible();
   });
