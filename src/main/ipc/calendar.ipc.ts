@@ -32,6 +32,7 @@ import {
   type CalendarInviteCalendarOption,
   type CalendarInviteDraft,
 } from "../../shared/types";
+import { isoDateMatchesCalendarDate } from "../../shared/calendar-date";
 
 const log = createLogger("calendar-ipc");
 const useDemoCalendar = isDemoOrTestMode();
@@ -95,9 +96,10 @@ function demoEventsForDate(date: string): CalendarEventResponse[] {
       htmlLink: undefined,
     },
   ];
-  return [...sample, ...demoCreatedEvents.filter((event) => event.start.startsWith(date))].sort(
-    (a, b) => a.start.localeCompare(b.start),
-  );
+  return [
+    ...sample,
+    ...demoCreatedEvents.filter((event) => isoDateMatchesCalendarDate(event.start, date)),
+  ].sort((a, b) => a.start.localeCompare(b.start));
 }
 
 function demoCalendarOptions(): CalendarInviteCalendarOption[] {

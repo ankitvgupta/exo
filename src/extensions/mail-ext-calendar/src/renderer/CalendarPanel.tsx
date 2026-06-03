@@ -7,6 +7,16 @@ import type {
 } from "../../../../shared/types";
 import type { ExtensionEnrichmentResult } from "../../../../shared/extension-types";
 import { useAppStore } from "../../../../renderer/store";
+import {
+  addDays,
+  addMinutes,
+  combineDateAndTime,
+  shouldStartInviteExtraction,
+  todayString,
+  toDateInput,
+  toTimeInput,
+  updateInviteEndTime,
+} from "../../../../shared/calendar-invite-editor";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -88,23 +98,6 @@ const MIN_EVENT_HEIGHT = 20;
 // Helpers
 // ---------------------------------------------------------------------------
 
-function toDateString(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-function todayString(): string {
-  return toDateString(new Date());
-}
-
-function addDays(dateStr: string, n: number): string {
-  const d = new Date(dateStr + "T12:00:00"); // noon avoids DST edge
-  d.setDate(d.getDate() + n);
-  return toDateString(d);
-}
-
 function formatHeaderDate(dateStr: string): string {
   const d = new Date(dateStr + "T12:00:00");
   return d.toLocaleDateString("en-US", {
@@ -150,31 +143,6 @@ function blankInviteDraft(timezone: string): CalendarInviteDraft {
     confidence: 0,
     warnings: [],
   };
-}
-
-function toDateInput(isoStr: string): string {
-  if (!isoStr) return "";
-  const d = new Date(isoStr);
-  if (!Number.isFinite(d.getTime())) return "";
-  return toDateString(d);
-}
-
-function toTimeInput(isoStr: string): string {
-  if (!isoStr) return "";
-  const d = new Date(isoStr);
-  if (!Number.isFinite(d.getTime())) return "";
-  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-}
-
-function combineDateAndTime(dateStr: string, timeStr: string): string {
-  if (!dateStr || !timeStr) return "";
-  return new Date(`${dateStr}T${timeStr}:00`).toISOString();
-}
-
-function addMinutes(isoStr: string, minutes: number): string {
-  const d = new Date(isoStr);
-  if (!Number.isFinite(d.getTime())) return "";
-  return new Date(d.getTime() + minutes * 60_000).toISOString();
 }
 
 function guestsToInput(guests: string[]): string {
@@ -671,10 +639,7 @@ function InviteEditor({
   };
 
   const updateEndTime = (time: string) => {
-    onDraftChange((prev) => ({
-      ...prev,
-      end: combineDateAndTime(toDateInput(prev.start) || todayString(), time),
-    }));
+    onDraftChange((prev) => updateInviteEndTime(prev, time));
   };
 
   return (
@@ -925,6 +890,7 @@ export function CalendarPanel({
     (enrichment?.data as Record<string, unknown> | undefined)?.hasCalendarAccess === true;
   const calendarInviteRequest = useAppStore((state) => state.calendarInviteRequest);
   const clearCalendarInviteRequest = useAppStore((state) => state.clearCalendarInviteRequest);
+  const startedInviteNonceRef = useRef<number | null>(null);
 
   const [selectedDate, setSelectedDate] = useState(todayString);
   const [events, setEvents] = useState<CalendarEvent[]>([]);
@@ -1103,22 +1069,31 @@ export function CalendarPanel({
 
       await fetchEvents(selectedDate);
     } catch (err) {
-      setInviteError(err instanceof Error ? err.message : "Google Calendar re-authentication failed.");
+      setInviteError(
+        err instanceof Error ? err.message : "Google Calendar re-authentication failed.",
+      );
     } finally {
       setInviteReauthing(false);
     }
   }, [fetchEvents, inviteDraft.calendarId, selectedDate, selectedInviteAccountId]);
 
   useEffect(() => {
-    if (!calendarInviteRequest) return;
+    if (!calendarInviteRequest) {
+      startedInviteNonceRef.current = null;
+      return;
+    }
     if (
-      calendarInviteRequest.emailId !== email.id &&
-      calendarInviteRequest.threadId !== email.threadId
+      !shouldStartInviteExtraction(
+        calendarInviteRequest,
+        email.threadId,
+        startedInviteNonceRef.current,
+      )
     ) {
       return;
     }
+    startedInviteNonceRef.current = calendarInviteRequest.nonce;
     startInvite(calendarInviteRequest.emailId).catch(console.error);
-  }, [calendarInviteRequest, email.id, email.threadId, startInvite]);
+  }, [calendarInviteRequest, email.threadId, startInvite]);
 
   useEffect(() => {
     if (!inviteDraft.start) return;
