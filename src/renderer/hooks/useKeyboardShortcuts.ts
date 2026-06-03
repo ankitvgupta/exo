@@ -118,6 +118,7 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
       } = state;
 
       const isGmail = keyboardBindings === "gmail";
+      const isSuperhuman = keyboardBindings === "superhuman";
 
       // Store actions are stable references — safe to read from getState()
       const {
@@ -842,7 +843,7 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
           break;
 
         case "Tab":
-          if (!showSettings) {
+          if (isSuperhuman && !showSettings) {
             e.preventDefault();
             cycleSplit(e.shiftKey ? "prev" : "next");
           }

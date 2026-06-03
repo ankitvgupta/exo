@@ -76,6 +76,21 @@ async function getVisibleThreadCount(page: Page): Promise<number> {
   return page.locator("div[data-thread-id]").count();
 }
 
+async function setKeyboardBindings(page: Page, bindings: "superhuman" | "gmail"): Promise<void> {
+  await page.evaluate((value) => {
+    const store = (window as unknown as {
+      __ZUSTAND_STORE__?: {
+        getState: () => {
+          setKeyboardBindings: (bindings: "superhuman" | "gmail") => void;
+        };
+      };
+    }).__ZUSTAND_STORE__;
+
+    if (!store) throw new Error("Zustand store not exposed");
+    store.getState().setKeyboardBindings(value);
+  }, bindings);
+}
+
 test.describe("Inbox Tabs - Default and Ordering", () => {
   test.describe.configure({ mode: "serial" });
   let electronApp: ElectronApplication;
@@ -146,6 +161,26 @@ test.describe("Inbox Tabs - Default and Ordering", () => {
 
     await priorityTab.click();
     await expect(priorityTab).toHaveAttribute("aria-selected", "true");
+  });
+
+  test("Tab key does not switch split tabs when Gmail keyboard shortcuts are enabled", async () => {
+    const priorityTab = page.getByRole("tab", { name: /^Priority/ }).first();
+    const otherTab = page.getByRole("tab", { name: /^Other/ }).first();
+
+    await setKeyboardBindings(page, "gmail");
+    try {
+      await priorityTab.click();
+      await expect(priorityTab).toHaveAttribute("aria-selected", "true");
+      await expect(otherTab).toHaveAttribute("aria-selected", "false");
+
+      await page.keyboard.press("Tab");
+      await expect(priorityTab).toHaveAttribute("aria-selected", "true");
+      await expect(otherTab).toHaveAttribute("aria-selected", "false");
+    } finally {
+      await setKeyboardBindings(page, "superhuman");
+      await priorityTab.click();
+      await expect(priorityTab).toHaveAttribute("aria-selected", "true");
+    }
   });
 
   test("Priority tab shows only priority emails (needsReply + done)", async () => {
