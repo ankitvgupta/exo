@@ -155,6 +155,58 @@ test.describe("Snooze Feature — Menu & Presets", () => {
   });
 });
 
+test.describe("Snooze Feature — All Inboxes", () => {
+  let electronApp: ElectronApplication;
+  let page: Page;
+
+  test.beforeAll(async ({}, testInfo) => {
+    const result = await launchElectronApp({ workerIndex: testInfo.workerIndex });
+    electronApp = result.app;
+    page = result.page;
+
+    await page.locator("[data-thread-id]").first().waitFor({ timeout: 15000 });
+  });
+
+  test.afterAll(async () => {
+    if (electronApp) {
+      await closeApp(electronApp);
+    }
+  });
+
+  test("opens snooze menu for a selected email in All Inboxes", async () => {
+    const selected = await page.evaluate(() => {
+      const store = (
+        window as unknown as {
+          __ZUSTAND_STORE__: {
+            getState: () => {
+              emails: Array<{ id: string; threadId: string; accountId?: string }>;
+            };
+            setState: (state: Record<string, unknown>) => void;
+          };
+        }
+      ).__ZUSTAND_STORE__;
+      const state = store.getState();
+      const email = state.emails.find((item) => item.accountId) ?? state.emails[0];
+
+      store.setState({
+        currentAccountId: null,
+        selectedEmailId: email.id,
+        selectedThreadId: email.threadId,
+        showSnoozeMenu: false,
+        viewMode: "split",
+      });
+
+      return { accountId: email.accountId };
+    });
+
+    expect(selected.accountId).toBeTruthy();
+
+    await page.keyboard.press("h");
+
+    await expect(page.locator("text=Later Today")).toBeVisible({ timeout: 3000 });
+  });
+});
+
 test.describe("Snooze Feature — Natural Language Input", () => {
   test.describe.configure({ mode: "serial" });
   let electronApp: ElectronApplication;
