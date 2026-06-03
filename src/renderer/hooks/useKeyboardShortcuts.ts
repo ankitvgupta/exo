@@ -755,6 +755,18 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
       };
 
       // --- Helper: navigate to next/prev split tab ---
+      const focusSplitTab = (splitId: string) => {
+        window.requestAnimationFrame(() => {
+          const tabs = document.querySelectorAll<HTMLButtonElement>("[data-split-tab-id]");
+          for (const tab of tabs) {
+            if (tab.dataset.splitTabId === splitId) {
+              tab.focus();
+              return;
+            }
+          }
+        });
+      };
+
       const cycleSplit = (direction: "next" | "prev") => {
         const ids = getOrderedSplitIds();
         const currentIdx = ids.indexOf(currentSplitId ?? ALL_SENTINEL);
@@ -762,6 +774,7 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
         const nextIdx = (currentIdx + step + ids.length) % ids.length;
         const nextId = ids[nextIdx];
         state.setCurrentSplitId(nextId === ALL_SENTINEL ? null : nextId);
+        focusSplitTab(nextId);
       };
 
       // Normal mode shortcuts (single-key, no modifiers)
@@ -825,6 +838,13 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
           if (isGmail) {
             e.preventDefault();
             cycleSplit("prev");
+          }
+          break;
+
+        case "Tab":
+          if (!showSettings) {
+            e.preventDefault();
+            cycleSplit(e.shiftKey ? "prev" : "next");
           }
           break;
 

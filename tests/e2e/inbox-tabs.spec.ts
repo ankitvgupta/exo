@@ -122,7 +122,40 @@ test.describe("Inbox Tabs - Default and Ordering", () => {
     expect(labels[labels.length - 1]).toBe("All");
   });
 
+  test("Tab key switches active split tabs in visible order", async () => {
+    const priorityTab = page.getByRole("tab", { name: /^Priority/ }).first();
+    const otherTab = page.getByRole("tab", { name: /^Other/ }).first();
+    const archiveReadyTab = page.getByRole("tab", { name: /Archive Ready/ }).first();
+
+    await priorityTab.click();
+    await expect(priorityTab).toHaveAttribute("aria-selected", "true");
+
+    await page.keyboard.press("Tab");
+    await expect(otherTab).toHaveAttribute("aria-selected", "true");
+    await expect(otherTab).toBeFocused();
+    await expect(otherTab).toHaveCSS("box-shadow", "none");
+
+    await page.keyboard.press("Tab");
+    await expect(archiveReadyTab).toHaveAttribute("aria-selected", "true");
+    await expect(archiveReadyTab).toBeFocused();
+    await expect(archiveReadyTab).toHaveCSS("box-shadow", "none");
+
+    await page.keyboard.press("Shift+Tab");
+    await expect(otherTab).toHaveAttribute("aria-selected", "true");
+    await expect(otherTab).toBeFocused();
+
+    await priorityTab.click();
+    await expect(priorityTab).toHaveAttribute("aria-selected", "true");
+  });
+
   test("Priority tab shows only priority emails (needsReply + done)", async () => {
+    const priorityTab = tabBar(page)
+      .locator("button")
+      .filter({ hasText: /^Priority/ })
+      .first();
+    await priorityTab.click();
+    await expect(priorityTab).toHaveAttribute("aria-selected", "true");
+
     // Priority should be active by default — verify we see threads. The per-row
     // pill was suppressed in the Priority tab by issue #143 (every row in this
     // tab is implicitly priority, so the pill would be noise), so this test
