@@ -4,11 +4,17 @@ import type { gmail_v1 } from "googleapis";
 // imports so unit tests can exercise the real googleapis/gaxios retry stack
 // (gmail-client.ts transitively imports Electron and can't be loaded in tests).
 
-/** HTTP status carried on a gaxios error, or null for non-HTTP errors. */
+/**
+ * HTTP status carried on a gaxios error, or null for non-HTTP errors.
+ * Checks `.status` first (always set by gaxios 7 for HTTP errors) but also
+ * accepts a numeric `.code`, matching the defensive pattern used elsewhere in
+ * gmail-client.ts (older google-api clients put the HTTP status there).
+ */
 export function httpErrorStatus(err: unknown): number | null {
   if (typeof err !== "object" || err === null) return null;
-  if (!("status" in err) || typeof err.status !== "number") return null;
-  return err.status;
+  if ("status" in err && typeof err.status === "number") return err.status;
+  if ("code" in err && typeof err.code === "number") return err.code;
+  return null;
 }
 
 function isDuplicateFilterError(err: unknown): boolean {
@@ -61,9 +67,11 @@ export async function createBlockFilter(
         // filter creates land in quick succession — e.g. blocking several
         // senders back-to-back, where each undo-toast commit fires its own
         // filters.create. gaxios only retries idempotent methods by default,
-        // so POSTs need an explicit opt-in. With gaxios's default backoff
-        // (100ms initial, 2x multiplier) the 4th retry lands ~5.6s after the
-        // first attempt, past the ~1.5s collision window seen in production.
+        // so POSTs need an explicit opt-in. gaxios 7 waits
+        // retryDelay(100ms, first retry only) + ((2^attempt − 1)/2)s between
+        // attempts → delays of 0.1s, 0.5s, 1.5s, 3.5s, so the 4th retry lands
+        // ~5.6s after the first attempt, past the ~1.5s collision window seen
+        // in production.
         retryConfig: {
           retry: 4,
           httpMethodsToRetry: ["POST"],
@@ -82,9 +90,15 @@ export async function createBlockFilter(
     // A Gmail 500 doesn't guarantee the write failed — a retried create can
     // land after an attempt that actually succeeded server-side, which Gmail
     // rejects with 400 "Filter already exists". Resolve to the existing
-    // filter's ID instead of failing the block.
+    // filter's ID instead of failing the block. If the lookup itself fails,
+    // surface the original duplicate error, not the lookup's.
     if (isDuplicateFilterError(err)) {
-      const existingId = await findBlockFilterId(gmail, senderEmail);
+      let existingId: string | null = null;
+      try {
+        existingId = await findBlockFilterId(gmail, senderEmail);
+      } catch {
+        // fall through to throw the original err
+      }
       if (existingId) return existingId;
     }
     throw err;

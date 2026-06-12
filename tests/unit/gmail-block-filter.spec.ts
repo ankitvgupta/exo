@@ -65,6 +65,25 @@ test.describe("createBlockFilter", () => {
     expect(calls).toBe(3);
   });
 
+  test("rejects with the 5xx after exhausting all retries", async () => {
+    // 1 initial attempt + 4 retries = 5 POSTs. This is the path that reaches
+    // sync.ipc.ts and triggers the "Gmail temporary server error" toast.
+    let calls = 0;
+    server.use(
+      http.post(FILTERS_URL, () => {
+        calls++;
+        return gmailError(500, "Internal error encountered.");
+      }),
+    );
+
+    const err = await createBlockFilter(gmail, "spam@example.com").then(
+      () => null,
+      (e: unknown) => e,
+    );
+    expect(httpErrorStatus(err)).toBe(500);
+    expect(calls).toBe(5);
+  });
+
   test("does not retry a non-duplicate 400", async () => {
     let calls = 0;
     server.use(
@@ -110,6 +129,15 @@ test.describe("createBlockFilter", () => {
     server.use(
       http.post(FILTERS_URL, () => gmailError(400, "Filter already exists")),
       http.get(FILTERS_URL, () => HttpResponse.json({ filter: [] })),
+    );
+
+    await expect(createBlockFilter(gmail, "spam@example.com")).rejects.toThrow(/already exists/i);
+  });
+
+  test("rethrows duplicate error (not lookup error) if the filters.list fallback fails", async () => {
+    server.use(
+      http.post(FILTERS_URL, () => gmailError(400, "Filter already exists")),
+      http.get(FILTERS_URL, () => gmailError(503, "Service unavailable")),
     );
 
     await expect(createBlockFilter(gmail, "spam@example.com")).rejects.toThrow(/already exists/i);
