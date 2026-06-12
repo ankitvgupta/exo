@@ -768,14 +768,16 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
         });
       };
 
-      const cycleSplit = (direction: "next" | "prev") => {
+      const cycleSplit = (direction: "next" | "prev", options: { focusTab?: boolean } = {}) => {
         const ids = getOrderedSplitIds();
         const currentIdx = ids.indexOf(currentSplitId ?? ALL_SENTINEL);
         const step = direction === "next" ? 1 : -1;
         const nextIdx = (currentIdx + step + ids.length) % ids.length;
         const nextId = ids[nextIdx];
         state.setCurrentSplitId(nextId === ALL_SENTINEL ? null : nextId);
-        focusSplitTab(nextId);
+        if (options.focusTab) {
+          focusSplitTab(nextId);
+        }
       };
 
       // Normal mode shortcuts (single-key, no modifiers)
@@ -845,7 +847,7 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
         case "Tab":
           if (isSuperhuman && !showSettings) {
             e.preventDefault();
-            cycleSplit(e.shiftKey ? "prev" : "next");
+            cycleSplit(e.shiftKey ? "prev" : "next", { focusTab: true });
           }
           break;
 

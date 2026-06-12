@@ -181,12 +181,21 @@ test.describe("Inbox Tabs - Default and Ordering", () => {
     await expect(priorityTab).toHaveAttribute("aria-selected", "true");
   });
 
-  test("Tab key does not switch split tabs when Gmail keyboard shortcuts are enabled", async () => {
+  test("Gmail keyboard shortcuts keep Tab as native focus traversal", async () => {
     const priorityTab = page.getByRole("tab", { name: /^Priority/ }).first();
     const otherTab = page.getByRole("tab", { name: /^Other/ }).first();
 
     await setKeyboardBindings(page, "gmail");
     try {
+      await priorityTab.click();
+      await expect(priorityTab).toHaveAttribute("aria-selected", "true");
+      await expect(otherTab).toHaveAttribute("aria-selected", "false");
+      await expect(priorityTab).toBeFocused();
+
+      await page.keyboard.press("`");
+      await expect(otherTab).toHaveAttribute("aria-selected", "true");
+      await expect(priorityTab).toBeFocused();
+
       await priorityTab.click();
       await expect(priorityTab).toHaveAttribute("aria-selected", "true");
       await expect(otherTab).toHaveAttribute("aria-selected", "false");
