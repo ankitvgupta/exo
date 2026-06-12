@@ -1174,6 +1174,9 @@ export function getKeyboardShortcuts(bindings: "superhuman" | "gmail") {
       { key: "k / ↑", description: "Move up" },
       { key: isGmail ? "o / Enter" : "Enter", description: "Open conversation" },
       { key: "Escape", description: "Back / Deselect" },
+      ...(!isGmail
+        ? [{ key: "Tab / Shift+Tab", description: "Next / previous section" }]
+        : []),
       ...(isGmail
         ? [
             { key: "n", description: "Next message in thread" },

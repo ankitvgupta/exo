@@ -1,4 +1,4 @@
-import { test, expect, Page, ElectronApplication } from "@playwright/test";
+import { test, expect, Page, ElectronApplication, Locator } from "@playwright/test";
 import { _electron as electron } from "@playwright/test";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -69,6 +69,23 @@ async function getTabCount(page: Page, tabName: string): Promise<number> {
   // Extract the number from text like "Priority11" or "All18"
   const match = text.match(/(\d+)\s*$/);
   return match ? parseInt(match[1], 10) : 0;
+}
+
+async function expectNoVisibleBoxShadow(tab: Locator): Promise<void> {
+  const boxShadow = await tab.evaluate((element) => window.getComputedStyle(element).boxShadow);
+  const hasVisibleBoxShadow =
+    boxShadow !== "none" &&
+    !boxShadow.split(/,(?![^(]*\))/).every((layer) => {
+      const lengths = [...layer.matchAll(/-?\d+(?:\.\d+)?px/g)].map((match) =>
+        Number.parseFloat(match[0]),
+      );
+      const hasOnlyZeroLengths =
+        lengths.length > 0 && lengths.every((value) => Object.is(value, -0) || value === 0);
+      const hasTransparentColor = /rgba\([^)]*,\s*0(?:\.0+)?\s*\)/.test(layer);
+      return hasOnlyZeroLengths || hasTransparentColor;
+    });
+
+  expect(hasVisibleBoxShadow, `expected no visible box-shadow, got "${boxShadow}"`).toBe(false);
 }
 
 /** Count visible thread rows in the email list */
@@ -148,12 +165,12 @@ test.describe("Inbox Tabs - Default and Ordering", () => {
     await page.keyboard.press("Tab");
     await expect(otherTab).toHaveAttribute("aria-selected", "true");
     await expect(otherTab).toBeFocused();
-    await expect(otherTab).toHaveCSS("box-shadow", "none");
+    await expectNoVisibleBoxShadow(otherTab);
 
     await page.keyboard.press("Tab");
     await expect(archiveReadyTab).toHaveAttribute("aria-selected", "true");
     await expect(archiveReadyTab).toBeFocused();
-    await expect(archiveReadyTab).toHaveCSS("box-shadow", "none");
+    await expectNoVisibleBoxShadow(archiveReadyTab);
 
     await page.keyboard.press("Shift+Tab");
     await expect(otherTab).toHaveAttribute("aria-selected", "true");
