@@ -108,6 +108,21 @@ async function setKeyboardBindings(page: Page, bindings: "superhuman" | "gmail")
   }, bindings);
 }
 
+async function getCurrentSplitId(page: Page): Promise<string | null> {
+  return page.evaluate(() => {
+    const store = (window as unknown as {
+      __ZUSTAND_STORE__?: {
+        getState: () => {
+          currentSplitId: string | null;
+        };
+      };
+    }).__ZUSTAND_STORE__;
+
+    if (!store) throw new Error("Zustand store not exposed");
+    return store.getState().currentSplitId;
+  });
+}
+
 test.describe("Inbox Tabs - Default and Ordering", () => {
   test.describe.configure({ mode: "serial" });
   let electronApp: ElectronApplication;
@@ -207,6 +222,34 @@ test.describe("Inbox Tabs - Default and Ordering", () => {
       await setKeyboardBindings(page, "superhuman");
       await priorityTab.click();
       await expect(priorityTab).toHaveAttribute("aria-selected", "true");
+    }
+  });
+
+  test("Tab key does not switch split tabs while compose controls are focused", async () => {
+    const priorityTab = page.getByRole("tab", { name: /^Priority/ }).first();
+    const otherTab = page.getByRole("tab", { name: /^Other/ }).first();
+
+    await setKeyboardBindings(page, "superhuman");
+    await priorityTab.click();
+    await expect(priorityTab).toHaveAttribute("aria-selected", "true");
+    await expect(otherTab).toHaveAttribute("aria-selected", "false");
+
+    await page.keyboard.press("c");
+    await expect(page.getByText("New Message")).toBeVisible({ timeout: 5000 });
+
+    const discardButton = page.locator("button[title='Discard draft']").first();
+    try {
+      await expect(discardButton).toBeVisible();
+      await discardButton.focus();
+      await expect(discardButton).toBeFocused();
+
+      await page.keyboard.press("Tab");
+      await expect.poll(() => getCurrentSplitId(page)).toBe("__priority__");
+    } finally {
+      if (await discardButton.isVisible().catch(() => false)) {
+        await discardButton.click();
+      }
+      await expect(page.getByText("New Message")).not.toBeVisible({ timeout: 5000 });
     }
   });
 

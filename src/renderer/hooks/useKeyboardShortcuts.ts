@@ -845,7 +845,7 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
           break;
 
         case "Tab":
-          if (isSuperhuman && !showSettings) {
+          if (isSuperhuman && !showSettings && mode === "normal") {
             e.preventDefault();
             cycleSplit(e.shiftKey ? "prev" : "next", { focusTab: true });
           }
