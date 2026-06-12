@@ -159,6 +159,7 @@ test.describe("Inbox Tabs - Default and Ordering", () => {
     const otherTab = page.getByRole("tab", { name: /^Other/ }).first();
     const archiveReadyTab = page.getByRole("tab", { name: /Archive Ready/ }).first();
 
+    await setKeyboardBindings(page, "superhuman");
     await priorityTab.click();
     await expect(priorityTab).toHaveAttribute("aria-selected", "true");
 
