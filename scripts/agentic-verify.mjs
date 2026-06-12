@@ -106,12 +106,14 @@ function flag(name, defaultValue = null) {
 
 const MODE = flag("mode", "verify-diff");
 // --data=auto|real|demo
-//   auto  : detect from the diff. Files matching DATA_REAL_PATTERNS push
-//           the run toward real-account mode; everything else is demo.
+//   auto  : real-mode-first (the default). Real mode is used unless the
+//           ENTIRE diff matches DATA_DEMO_SAFE_PATTERNS (docs/tests/
+//           scripts/config — provably non-behavioral), in which case demo
+//           is used. Any behavioral file in the diff → real.
 //   real  : force real mode (uses .dev-data/ tokens for the test account
 //           and sets EXO_DISABLE_PREFETCH so we don't burn API spend on
 //           background analysis).
-//   demo  : force demo mode (current default). Hermetic, no real Gmail.
+//   demo  : force demo mode. Hermetic, no real Gmail.
 const DATA_MODE_RAW = flag("data", "auto");
 const ACTION_BUDGET = Number(flag("action-budget", MODE === "explore" ? 100 : 40));
 const BUDGET_USD = Number(flag("budget-usd", MODE === "explore" ? 2 : 0.5));
