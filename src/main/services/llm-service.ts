@@ -305,6 +305,42 @@ function recordCall(
  * Record a streaming call's cost after it completes.
  * Use this for calls that bypass createMessage() (e.g., anthropic.messages.stream()).
  */
+/**
+ * Record the start of an agent session: a single zero-token, zero-cost row
+ * stamping which harness was selected and which LLM backend it routes to.
+ *
+ * This is the only signal we have for OpenCode-driven sessions — their
+ * actual LLM calls happen inside the spawned `opencode` server (via its
+ * bundled AI SDK adapter) and bypass createMessage()'s recording path.
+ *
+ * Caller convention: `agent-session-start:<harnessId>` (e.g. "agent-session-start:opencode")
+ * so a `SELECT ... WHERE caller LIKE 'agent-session-start:%'` returns the
+ * session log; harness, provider, and model live in dedicated columns so
+ * filtering by any of them is trivial.
+ */
+export function recordAgentSessionStart(args: {
+  harness: string;
+  provider: LlmProvider;
+  model: string;
+  accountId?: string;
+  emailId?: string;
+}): void {
+  recordCall(
+    args.model,
+    `agent-session-start:${args.harness}`,
+    args.emailId ?? null,
+    args.accountId ?? null,
+    0,
+    0,
+    0,
+    0,
+    0,
+    true,
+    null,
+    args.provider,
+  );
+}
+
 export function recordStreamingCall(
   model: string,
   caller: string,

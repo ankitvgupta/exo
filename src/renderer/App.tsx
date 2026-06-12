@@ -236,6 +236,7 @@ function SearchResultsView() {
     addEmails,
     setSelectedEmailId,
     setSelectedThreadId,
+    setSelectedDraftId,
     setViewMode,
     selectedThreadId,
     setRemoteSearchResults,
@@ -264,11 +265,12 @@ function SearchResultsView() {
     (thread: EmailThread) => {
       // Add all emails in the thread so the thread view works properly
       addEmails(thread.emails);
+      setSelectedDraftId(null);
       setSelectedEmailId(thread.latestEmail.id);
       setSelectedThreadId(thread.threadId);
       setViewMode("full");
     },
-    [addEmails, setSelectedEmailId, setSelectedThreadId, setViewMode],
+    [addEmails, setSelectedDraftId, setSelectedEmailId, setSelectedThreadId, setViewMode],
   );
 
   const retryRemoteSearch = useCallback(() => {

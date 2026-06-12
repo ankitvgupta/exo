@@ -201,9 +201,33 @@ export class ClaudeAgentProvider implements AgentProvider {
   }
 
   async *run(params: AgentRunParams): AsyncGenerator<AgentEvent, AgentRunResult, void> {
-    const { taskId, prompt, context, tools, toolExecutor, signal, modelOverride } = params;
+    const {
+      taskId,
+      prompt,
+      context,
+      tools,
+      toolExecutor,
+      signal,
+      modelOverride,
+      recordSessionStart,
+    } = params;
 
     yield { type: "state", state: "running" };
+
+    // Record one row in llm_calls stamping which harness + LLM backend +
+    // model this session uses. Mirrors OpenCodeAgentProvider; gives us a
+    // consistent session-start log across harnesses for cost / usage analysis.
+    {
+      const sessionModel = modelOverride ?? this.frameworkConfig.model;
+      const ollamaCloudEnabled = !!this.frameworkConfig.ollamaCloud?.enabled;
+      recordSessionStart({
+        harness: "claude",
+        provider: ollamaCloudEnabled ? "ollama-cloud" : "anthropic",
+        model: sessionModel,
+        accountId: context.accountId,
+        emailId: context.currentEmailId,
+      });
+    }
 
     // Shared state: MCP tool handlers push results here, the main loop
     // flushes them as tool_call_end events before yielding the next message.
