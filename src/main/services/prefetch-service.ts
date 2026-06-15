@@ -108,7 +108,6 @@ class PrefetchService {
   private seededFromDb = false;
   private processedExtensionEnrichments = new Set<string>();
   private processedArchiveReady = new Set<string>();
-  private queuedArchiveReady = new Set<string>();
 
   // Track pending sender lookups to deduplicate (senderEmail -> [emailIds])
   private pendingSenderLookups = new Map<string, string[]>();
@@ -155,21 +154,6 @@ class PrefetchService {
 The user has an executive assistant${eaConfig.name ? ` named ${eaConfig.name}` : ""} (${eaConfig.email}) who handles scheduling on their behalf.
 
 When you see emails in a thread where ${eaName} is coordinating scheduling with a third party, assess from the email content whether ${eaName} is handling the conversation. If ${eaName} is actively managing the back-and-forth (e.g., proposing times, confirming details) and the email does not require the user's personal input beyond scheduling, do NOT generate a draft. Only draft a reply if the email content directly addresses the user or requires their personal decision or expertise.`;
-  }
-
-  private archiveReadyKey(accountId: string | undefined, threadId: string): string {
-    return `${accountId ?? ""}:${threadId}`;
-  }
-
-  private enqueueArchiveReadyTask(task: PrefetchTask & { type: "archive-ready" }): boolean {
-    const threadId = task.threadId || task.emailId;
-    const key = this.archiveReadyKey(task.accountId, threadId);
-    if (this.processedArchiveReady.has(key) || this.queuedArchiveReady.has(key)) {
-      return false;
-    }
-    this.queuedArchiveReady.add(key);
-    this.queue.push(task);
-    return true;
   }
 
   private getAnalyzer(): EmailAnalyzer {
@@ -461,12 +445,10 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
     let queued = 0;
     for (const [threadId, emails] of threadMap) {
       // Skip if already analyzed for archive-readiness or in this session
-      const accountId = emails[0]?.accountId;
-      const key = this.archiveReadyKey(accountId, threadId);
+      const accountId = emails[0]?.accountId || "";
       if (
-        alreadyAnalyzed.has(key) ||
-        this.processedArchiveReady.has(key) ||
-        this.queuedArchiveReady.has(key)
+        alreadyAnalyzed.has(`${accountId}:${threadId}`) ||
+        this.processedArchiveReady.has(`${accountId}:${threadId}`)
       )
         continue;
 
@@ -475,17 +457,14 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
       const allAnalyzed = emails.every((e) => e.analysis || e.labelIds?.includes("SENT"));
       if (!allAnalyzed) continue;
 
-      if (
-        this.enqueueArchiveReadyTask({
-          emailId: emails[0].id,
-          threadId,
-          accountId,
-          type: "archive-ready",
-          priority: 90, // Run after everything else
-        })
-      ) {
-        queued++;
-      }
+      this.queue.push({
+        emailId: emails[0].id,
+        threadId,
+        accountId,
+        type: "archive-ready",
+        priority: 90, // Run after everything else
+      });
+      queued++;
     }
 
     if (queued > 0) {
@@ -504,7 +483,7 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
     for (const threadId of threadIds) {
       // Clear from processed set so it gets re-analyzed
       if (accountId) {
-        this.processedArchiveReady.delete(this.archiveReadyKey(accountId, threadId));
+        this.processedArchiveReady.delete(`${accountId}:${threadId}`);
       }
 
       // Lightweight lookup — only need a single email ID for the task, not full thread
@@ -512,17 +491,19 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
       if (!firstEmailId) continue;
 
       // Skip if already in queue for this account
-      if (
-        this.enqueueArchiveReadyTask({
-          emailId: firstEmailId,
-          threadId,
-          accountId,
-          type: "archive-ready",
-          priority: 90,
-        })
-      ) {
-        queued++;
-      }
+      const alreadyQueued = this.queue.some(
+        (t) => t.type === "archive-ready" && t.threadId === threadId && t.accountId === accountId,
+      );
+      if (alreadyQueued) continue;
+
+      this.queue.push({
+        emailId: firstEmailId,
+        threadId,
+        accountId,
+        type: "archive-ready",
+        priority: 90,
+      });
+      queued++;
     }
 
     if (queued > 0) {
@@ -833,14 +814,11 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
       // Check if the entire thread is now fully analyzed -> queue archive-ready
       // Sent emails don't need reply analysis, so exclude them from this check
       // Uses lightweight SQL check instead of loading full thread to avoid BFS overhead.
-      const archiveReadyKey = this.archiveReadyKey(email.accountId, email.threadId);
-      if (
-        !this.processedArchiveReady.has(archiveReadyKey) &&
-        !this.queuedArchiveReady.has(archiveReadyKey)
-      ) {
+      const archiveReadyKey = `${email.accountId}:${email.threadId}`;
+      if (!this.processedArchiveReady.has(archiveReadyKey)) {
         const allAnalyzed = isThreadFullyAnalyzed(email.threadId, email.accountId);
         if (allAnalyzed) {
-          this.enqueueArchiveReadyTask({
+          this.queue.push({
             emailId,
             threadId: email.threadId,
             accountId: email.accountId,
@@ -1161,23 +1139,18 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
     // Derive accountId from the queued email rather than the first thread result
     const sourceEmail = getEmail(emailId);
     const accountId = sourceEmail?.accountId;
-    const compositeKey = this.archiveReadyKey(accountId, threadId);
+    const compositeKey = `${accountId}:${threadId}`;
 
-    if (this.processedArchiveReady.has(compositeKey)) {
-      this.queuedArchiveReady.delete(compositeKey);
-      return;
-    }
+    if (this.processedArchiveReady.has(compositeKey)) return;
 
     if (!accountId) {
       this.processedArchiveReady.add(compositeKey);
-      this.queuedArchiveReady.delete(compositeKey);
       return;
     }
 
     const threadEmails = getEmailsByThread(threadId, accountId);
     if (threadEmails.length === 0) {
       this.processedArchiveReady.add(compositeKey);
-      this.queuedArchiveReady.delete(compositeKey);
       return;
     }
 
@@ -1206,8 +1179,6 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
       notify(threadId, accountId, result.archive_ready, result.reason);
     } catch (error) {
       log.error({ err: error }, `[Prefetch] Failed archive-ready analysis for thread ${threadId}`);
-    } finally {
-      this.queuedArchiveReady.delete(compositeKey);
     }
   }
 
@@ -1502,7 +1473,6 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
     this.processedDraftThreads.clear();
     this.processedExtensionEnrichments.clear();
     this.processedArchiveReady.clear();
-    this.queuedArchiveReady.clear();
     this.pendingSenderLookups.clear();
     this.agentDraftBacklog = [];
     this.agentDraftItems.clear();

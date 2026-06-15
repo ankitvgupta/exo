@@ -23,11 +23,6 @@ import {
 } from "../services/calendar-invite";
 import { createLogger } from "../services/logger";
 import {
-  isDemoOrTestMode,
-  shouldSimulateCalendarWriteReauth,
-  shouldUseLiveGoogleCalendar,
-} from "../runtime-flags";
-import {
   CalendarInviteDraftSchema,
   type CalendarInviteCalendarOption,
   type CalendarInviteDraft,
@@ -35,7 +30,7 @@ import {
 import { isoDateMatchesCalendarDate } from "../../shared/calendar-date";
 
 const log = createLogger("calendar-ipc");
-const useDemoCalendar = isDemoOrTestMode();
+const useDemoCalendar = process.env.EXO_DEMO_MODE === "true" || process.env.EXO_TEST_MODE === "true";
 
 type CalendarEventResponse = ReturnType<typeof rowsToEvents>[number];
 
@@ -103,7 +98,6 @@ function demoEventsForDate(date: string): CalendarEventResponse[] {
 }
 
 function demoCalendarOptions(): CalendarInviteCalendarOption[] {
-  const writable = !shouldSimulateCalendarWriteReauth();
   return [
     {
       accountId: "demo",
@@ -112,7 +106,7 @@ function demoCalendarOptions(): CalendarInviteCalendarOption[] {
       calendarName: "Demo Calendar",
       calendarColor: "#2563eb",
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
-      writable,
+      writable: true,
       primary: true,
     },
   ];
@@ -426,7 +420,7 @@ export function registerCalendarIpc(): void {
     broadcastCalendarUpdated();
   });
 
-  if (shouldUseLiveGoogleCalendar()) {
+  if (!useDemoCalendar) {
     // Start background calendar sync
     calendarSyncService.startSync().catch((err) => {
       log.error({ err: err }, "[Calendar IPC] Failed to start calendar sync");

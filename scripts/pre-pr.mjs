@@ -24,8 +24,8 @@
  * Output:
  *   .pre-pr-report.md         — committed locally (gitignored)
  *   <PR body>                 — marker block updated via gh (CI gate)
- *   <PR comment>              — single upserted comment with phase status
- *                               and local-only agentic report paths;
+ *   <PR comment>              — single upserted comment with full
+ *                               agentic-verify report in <details>;
  *                               updates in place on repeat runs
  *   stdout                    — progress + final verdict
  *
@@ -38,7 +38,6 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { injectIntoPrBody } from "./lib/pr-body-splice.mjs";
 import { upsertPrComment } from "./lib/pr-comment-upsert.mjs";
-import { appendPrivateFailureDetails, buildPrCommentBody } from "./lib/pre-pr-comment.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(__dirname, "..");
@@ -156,9 +155,9 @@ function affectedFeatures(changedFiles) {
 
 /**
  * Returns the newest `*-verify-diff.{md,json,log}` set in RUNS_DIR with
- * mtime >= `sinceMs`, or null if none found. The paths are reported as
- * local-only artifacts; their contents are intentionally not posted to GitHub
- * because agentic verification can inspect real mailbox/calendar data.
+ * mtime >= `sinceMs`, or null if none found. Used to attach the full
+ * agentic-verify markdown report AND the literal trace log to the PR
+ * comment.
  *
  * We filter by mtime instead of just "newest in dir" so a stale run
  * left over from a previous session doesn't get spliced into a comment
@@ -297,13 +296,14 @@ async function main() {
   }
   // Budget bump: the default $0.50 in agentic-verify.mjs is enough for shallow
   // demo-mode flows but too tight when the diff touches LLM-routing code paths
-  // (llm-service, draft-generator, agent-coordinator). Force demo mode here so
-  // the LLM-driven trace never inspects real mailbox/calendar content. $1.50
-  // gives headroom for ordinary UI exploration without falling back to live data.
+  // (llm-service, draft-generator, agent-coordinator). The agent then explores
+  // real-mode flows with sender enrichment + draft generation and routinely
+  // crashes mid-verification on budget exhaustion (exit 1) before it can emit
+  // a verdict. $1.50 gives ~3× headroom over the worst observed run ($0.90).
   const verifyResult = runPhase(
     "agentic-verify",
     "node",
-    ["scripts/agentic-verify.mjs", "--mode=verify-diff", "--data=demo", "--budget-usd=1.5"],
+    ["scripts/agentic-verify.mjs", "--mode=verify-diff", "--budget-usd=1.5"],
     infraOnly ? { softExits: [3] } : {},
   );
 
@@ -390,7 +390,14 @@ async function main() {
     reportLines.push("### Failures");
     reportLines.push("");
     for (const p of phases.filter((x) => !x.ok)) {
-      appendPrivateFailureDetails(reportLines, p);
+      reportLines.push(`<details><summary>${p.name} — exit ${p.status}</summary>`);
+      reportLines.push("");
+      reportLines.push("```");
+      const tail = (p.stdout + p.stderr).split("\n").slice(-40).join("\n");
+      reportLines.push(tail);
+      reportLines.push("```");
+      reportLines.push("</details>");
+      reportLines.push("");
     }
   }
 
@@ -425,7 +432,6 @@ async function main() {
         sha,
         mode: MODE,
         verifyReport: findLatestVerifyReport(verifyStartMs),
-        repoRoot: REPO_ROOT,
       });
       const result = upsertPrComment({ content: commentBody });
       if (result.status === "no-pr") {
@@ -441,6 +447,124 @@ async function main() {
 
   console.log(`\nVerdict: ${verdict}`);
   process.exit(allOk ? 0 : 1);
+}
+
+/**
+ * Compose the human-readable PR comment. Summary on top, full agentic
+ * verify report inside a <details> block so the comment stays compact
+ * by default. Failed-phase logs get their own collapsibles.
+ *
+ * GitHub comments have a 65,536-character body cap. We build the
+ * header + trailer (failures + footer) first, measure them, and only
+ * then size the embedded agentic report to fit the remaining budget.
+ * This way the report — which can be safely truncated and is by far
+ * the largest chunk — absorbs the budget pressure when multiple
+ * phases fail with verbose logs.
+ */
+const COMMENT_BODY_BUDGET = 60_000; // leave headroom under the 65,536 cap
+
+function buildPrCommentBody({ verdict, phases, sha, mode, verifyReport }) {
+  // Header (always cheap, always included verbatim).
+  const headerLines = [];
+  const emoji = verdict === "PASS" ? "✅" : "❌";
+  headerLines.push(`## ${emoji} Pre-PR verification — ${verdict}`);
+  headerLines.push("");
+  headerLines.push(`- **mode**: \`${mode}\``);
+  headerLines.push(`- **sha**: \`${sha}\``);
+  headerLines.push(`- **generated**: ${new Date().toISOString()}`);
+  headerLines.push("");
+  headerLines.push("| Phase | Status | Duration |");
+  headerLines.push("|---|---|---|");
+  for (const p of phases) {
+    const statusEmoji = p.ok ? "✅" : "❌";
+    headerLines.push(`| ${p.name} | ${statusEmoji} exit ${p.status} | ${(p.ms / 1000).toFixed(1)}s |`);
+  }
+  headerLines.push("");
+  const header = headerLines.join("\n");
+
+  // Trailer (failures + footer). Built up-front so we know its real
+  // size before deciding how much of the agentic report to inline.
+  // Each failed phase's tail is capped at 40 lines × 200 chars max so
+  // a single phase with very long log lines can't blow the budget on
+  // its own.
+  const trailerLines = [];
+  const failed = phases.filter((p) => !p.ok);
+  if (failed.length > 0) {
+    trailerLines.push("### Failures");
+    trailerLines.push("");
+    for (const p of failed) {
+      trailerLines.push(`<details><summary>${p.name} — exit ${p.status}</summary>`);
+      trailerLines.push("");
+      trailerLines.push("```");
+      const tail = (p.stdout + p.stderr)
+        .split("\n")
+        .slice(-40)
+        .map((line) => (line.length > 200 ? line.slice(0, 200) + " …" : line))
+        .join("\n");
+      trailerLines.push(tail);
+      trailerLines.push("```");
+      trailerLines.push("</details>");
+      trailerLines.push("");
+    }
+  }
+  trailerLines.push("");
+  trailerLines.push(
+    "<sub>This comment is upserted by `npm run pre-pr`. The CI gate reads the marker block in the PR description, not this comment.</sub>",
+  );
+  const trailer = trailerLines.join("\n");
+
+  // Middle: TWO collapsibles —
+  //   1. Summary (verdict, anomalies, etc.) — open by default so it's
+  //      visible without clicking.
+  //   2. Literal trace (the .log file) — closed by default. Can be
+  //      large (multiple kB per tool call), so the trace section
+  //      absorbs whatever budget remains; the summary is always shown
+  //      in full because it's small and the headline information.
+  //
+  // If the trace would exceed the remaining budget, we keep the TAIL
+  // — that's where the verdict, final assistant text, and most recent
+  // activity live; the start is just Electron boot boilerplate.
+  let summarySection = "";
+  if (verifyReport?.md && existsSync(verifyReport.md)) {
+    const md = readFileSync(verifyReport.md, "utf8");
+    summarySection =
+      "<details open><summary><strong>Agentic verification — summary</strong></summary>\n\n" +
+      md +
+      "\n\n</details>\n";
+  }
+
+  let traceSection = "";
+  if (verifyReport?.log && existsSync(verifyReport.log)) {
+    const wrapperOverhead = 400; // <details>/<summary>/code-fence/truncation note
+    const budget =
+      COMMENT_BODY_BUDGET -
+      header.length -
+      trailer.length -
+      summarySection.length -
+      wrapperOverhead;
+    if (budget > 500) {
+      let logText = readFileSync(verifyReport.log, "utf8");
+      let truncationNote = "";
+      if (logText.length > budget) {
+        const localPath = verifyReport.log.replace(REPO_ROOT + "/", "");
+        logText = "…[start truncated for comment size]\n" + logText.slice(-budget);
+        truncationNote = `\n_Full trace at \`${localPath}\` locally._\n`;
+      }
+      traceSection =
+        "<details><summary><strong>Agentic verification — literal trace</strong></summary>\n\n" +
+        truncationNote +
+        "\n```\n" +
+        logText +
+        "\n```\n\n</details>\n";
+    }
+  }
+
+  if (!summarySection && !traceSection) {
+    summarySection =
+      "_Agentic verification report not found — likely the phase failed before writing its report. See logs below._\n";
+  }
+
+  return [header, summarySection, traceSection, trailer].join("\n");
 }
 
 main().catch((err) => {

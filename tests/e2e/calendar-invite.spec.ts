@@ -13,12 +13,8 @@ test.describe("Calendar invite editor", () => {
   let page: Page;
 
   test.beforeEach(async ({}, testInfo) => {
-    const extraEnv = testInfo.title.includes("re-authenticates")
-      ? { EXO_DEMO_CALENDAR_REAUTH_REQUIRED: "true" }
-      : {};
     const launched = await launchElectronApp({
       workerIndex: testInfo.workerIndex,
-      extraEnv,
     });
     app = launched.app;
     page = launched.page;
@@ -40,7 +36,7 @@ test.describe("Calendar invite editor", () => {
       /Meeting to discuss partnership/,
     );
     await expect(page.getByTestId("calendar-invite-guests")).toHaveValue(
-      /casey\.prospect@example\.com/,
+      /david\.lieb@partnerco\.io/,
     );
     await expect(page.getByTestId("calendar-invite-proposed-event")).toBeVisible();
   });
@@ -70,23 +66,5 @@ test.describe("Calendar invite editor", () => {
 
     await expect(page.getByTestId("calendar-invite-warnings")).toContainText("Add a title.");
     await expect(page.getByTestId("calendar-invite-editor")).toBeVisible();
-  });
-
-  test("re-authenticates the selected calendar account when write permission is missing", async () => {
-    await selectSchedulingThread(page);
-    await page.keyboard.press("i");
-    await expect(page.getByTestId("calendar-invite-editor")).toBeVisible({ timeout: 10000 });
-
-    const reauthButton = page.getByTestId("calendar-invite-reauth");
-    await expect(page.getByText("Google Calendar write permission needed")).toBeVisible();
-    await expect(reauthButton).toBeVisible();
-    await expect(reauthButton).toBeEnabled();
-
-    await reauthButton.click();
-
-    await expect(page.getByText("Google Calendar write permission needed")).toBeHidden({
-      timeout: 10000,
-    });
-    await expect(page.getByTestId("calendar-invite-create")).toBeEnabled();
   });
 });

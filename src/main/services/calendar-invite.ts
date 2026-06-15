@@ -306,7 +306,6 @@ async function requestCalendarInviteExtraction(args: {
       accountId: args.metadata?.accountId,
       provider: args.modelConfig.provider,
       think: getCalendarInviteThinkMode(args.modelConfig),
-      ollamaMaxTokensFloor: maxTokens,
       timeoutMs: getCalendarInviteExtractionTimeoutMs(args.modelConfig.provider),
     },
   );

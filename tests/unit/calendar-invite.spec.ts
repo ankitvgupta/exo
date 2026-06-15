@@ -385,14 +385,12 @@ test.describe("calendar invite helpers", () => {
     const calls: Array<{
       maxTokens: number;
       provider: string | undefined;
-      ollamaMaxTokensFloor: number | undefined;
       think: Parameters<CalendarInviteMessageSender>[1]["think"];
     }> = [];
     const sendMessage: CalendarInviteMessageSender = async (params, options) => {
       calls.push({
         maxTokens: params.max_tokens,
         provider: options.provider,
-        ollamaMaxTokensFloor: options.ollamaMaxTokensFloor,
         think: options.think,
       });
 
@@ -450,13 +448,11 @@ test.describe("calendar invite helpers", () => {
       {
         maxTokens: getCalendarInviteExtractionMaxTokens(),
         provider: "ollama-cloud",
-        ollamaMaxTokensFloor: getCalendarInviteExtractionMaxTokens(),
         think: false,
       },
       {
         maxTokens: 4096,
         provider: "ollama-cloud",
-        ollamaMaxTokensFloor: 4096,
         think: false,
       },
     ]);
