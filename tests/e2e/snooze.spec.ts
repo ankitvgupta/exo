@@ -1,5 +1,5 @@
 import { test, expect, Page, ElectronApplication } from "@playwright/test";
-import { launchElectronApp , closeApp } from "./launch-helpers";
+import { launchElectronApp, closeApp } from "./launch-helpers";
 
 /**
  * E2E Tests for Snooze Feature
@@ -196,7 +196,7 @@ test.describe("Snooze Feature — All Inboxes", () => {
         viewMode: "split",
       });
 
-      return { accountId: email.accountId };
+      return { accountId: email.accountId, threadId: email.threadId };
     });
 
     expect(selected.accountId).toBeTruthy();
@@ -204,6 +204,29 @@ test.describe("Snooze Feature — All Inboxes", () => {
     await page.keyboard.press("h");
 
     await expect(page.locator("text=Later Today")).toBeVisible({ timeout: 3000 });
+
+    await page.locator("button:has-text('Tomorrow')").first().click();
+    await expect(page.locator("text=Later Today")).not.toBeVisible({ timeout: 5000 });
+
+    const undoAccountId = await page.evaluate((threadId) => {
+      const store = (
+        window as unknown as {
+          __ZUSTAND_STORE__: {
+            getState: () => {
+              undoActionQueue: Array<{
+                type: string;
+                snoozedThreadAccounts?: Record<string, string>;
+              }>;
+            };
+          };
+        }
+      ).__ZUSTAND_STORE__;
+
+      const snoozeUndo = store.getState().undoActionQueue.find((item) => item.type === "snooze");
+      return snoozeUndo?.snoozedThreadAccounts?.[threadId] ?? null;
+    }, selected.threadId);
+
+    expect(undoAccountId).toBe(selected.accountId);
   });
 });
 
