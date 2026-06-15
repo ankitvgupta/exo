@@ -713,82 +713,82 @@ Nicolas`,
     id: "demo-ea-sched-001",
     threadId: "thread-ea-scheduling",
     subject: "Meeting to discuss partnership — finding a time",
-    from: "Casey Prospect <casey.prospect@example.com>",
-    to: "me@example.com",
+    from: "David Lieb <david.lieb@partnerco.io>",
+    to: "Ankit <ankit@example.com>",
     date: new Date(now - 2 * day - 4 * hour).toISOString(),
-    body: `Hi there,
+    body: `Hi Ankit,
 
 Great chatting at the conference last week! I'd love to set up a 30-minute call to discuss the partnership opportunity we talked about.
 
 Do you have any availability next week? Happy to work around your schedule.
 
 Best,
-Casey`,
+David`,
     snippet: "Great chatting at the conference! I'd love to set up a 30-minute call...",
   },
-  // User replies and CC's their assistant
+  // User replies and CC's EA Claire
   {
     id: "demo-ea-sched-002",
     threadId: "thread-ea-scheduling",
     subject: "Re: Meeting to discuss partnership — finding a time",
-    from: "me@example.com",
-    to: "Casey Prospect <casey.prospect@example.com>",
-    cc: "Demo Assistant <assistant@example.com>",
+    from: "Ankit <ankit@example.com>",
+    to: "David Lieb <david.lieb@partnerco.io>",
+    cc: "Claire <testea@ycombinator.com>",
     date: new Date(now - 2 * day - 3 * hour).toISOString(),
-    body: `Hi Casey,
+    body: `Hi David,
 
 Great meeting you too! I'd be happy to chat.
 
-I've CC'd my assistant, who can help coordinate scheduling. They have access to my calendar and will find a time that works.
+I've CC'd Claire, my assistant, who can help coordinate scheduling. She has access to my calendar and will find a time that works.
 
 Looking forward to it!
 
 Best,
-Me`,
-    snippet: "I've CC'd my assistant, who can help coordinate scheduling...",
+Ankit`,
+    snippet: "I've CC'd Claire, my assistant, who can help coordinate scheduling...",
     labelIds: ["SENT"],
   },
-  // Assistant coordinates with the prospect — user is CC'd
+  // EA Claire coordinates with David — user is CC'd
   {
     id: "demo-ea-sched-003",
     threadId: "thread-ea-scheduling",
     subject: "Re: Meeting to discuss partnership — finding a time",
-    from: "Demo Assistant <assistant@example.com>",
-    to: "Casey Prospect <casey.prospect@example.com>",
-    cc: "me@example.com",
+    from: "Claire <testea@ycombinator.com>",
+    to: "David Lieb <david.lieb@partnerco.io>",
+    cc: "Ankit <ankit@example.com>",
     date: new Date(now - 2 * day - 2 * hour).toISOString(),
-    body: `Hi Casey,
+    body: `Hi David,
 
-Thanks for your interest in connecting. I'd be happy to help find a time.
+Thanks for your interest in connecting with Ankit! I'd be happy to help find a time.
 
 Here are a few slots available next week:
 - Tuesday 2:00–2:30 PM PT
 - Wednesday 10:00–10:30 AM PT
 - Thursday 3:00–3:30 PM PT
 
-Would any of these work for you? If not, feel free to suggest alternatives and I'll check the calendar.
+Would any of these work for you? If not, feel free to suggest alternatives and I'll check against Ankit's calendar.
 
 Best,
-Assistant`,
+Claire`,
     snippet: "Here are a few slots available next week: Tuesday 2:00–2:30 PM PT...",
   },
-  // Prospect replies to assistant — user still CC'd. This is the latest email user sees.
+  // David replies to Claire — user still CC'd. This is the latest email user sees.
   {
     id: "demo-ea-sched-004",
     threadId: "thread-ea-scheduling",
     subject: "Re: Meeting to discuss partnership — finding a time",
-    from: "Casey Prospect <casey.prospect@example.com>",
-    to: "Demo Assistant <assistant@example.com>",
-    cc: "me@example.com",
+    from: "David Lieb <david.lieb@partnerco.io>",
+    to: "Claire <testea@ycombinator.com>",
+    cc: "Ankit <ankit@example.com>",
     date: new Date(now - 1 * day - 5 * hour).toISOString(),
-    body: `Hi,
+    body: `Hi Claire,
 
 Wednesday at 10am PT works perfectly! Could we do it over Zoom?
 
 Thanks for coordinating.
 
 Best,
-Casey`,
+David`,
     snippet: "Wednesday at 10am PT works perfectly! Could we do it over Zoom?",
   },
 
@@ -951,11 +951,11 @@ export const DEMO_EXPECTED_ANALYSIS: Record<string, { needsReply: boolean; reaso
   "demo-ea-sched-002": { needsReply: false, reason: "Sent by user — no reply needed" },
   "demo-ea-sched-003": {
     needsReply: false,
-    reason: "Sent by assistant coordinating scheduling — no user action needed",
+    reason: "Sent by EA Claire coordinating scheduling — no user action needed",
   },
   "demo-ea-sched-004": {
     needsReply: true,
-    reason: "Confirmed time while assistant is handling scheduling",
+    reason: "David confirmed a time — but Claire (EA) is handling scheduling, user is just CC'd",
   },
   "demo-ea-direct-001": {
     needsReply: true,

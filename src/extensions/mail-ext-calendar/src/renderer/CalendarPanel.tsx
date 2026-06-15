@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { validateCalendarInviteDraft } from "../../../../shared/calendar-invite";
+import {
+  CALENDAR_INVITE_EXTRACTION_FAILURE_WARNING,
+  validateCalendarInviteDraft,
+} from "../../../../shared/calendar-invite";
 import type {
   CalendarInviteCalendarOption,
   CalendarInviteDraft,
@@ -16,6 +19,7 @@ import {
   toDateInput,
   toTimeInput,
   updateInviteEndTime,
+  updateInviteStartDate,
 } from "../../../../shared/calendar-invite-editor";
 
 // ---------------------------------------------------------------------------
@@ -69,6 +73,10 @@ interface InviteOptionsResponse {
 interface ExtractInviteResponse {
   success: boolean;
   draft?: CalendarInviteDraft;
+  calendars?: CalendarInviteCalendarOption[];
+  hasWriteAccess?: boolean;
+  requiresReauth?: boolean;
+  hasCalendarAccess?: boolean;
   error?: string;
 }
 
@@ -170,8 +178,14 @@ function preferredCalendarOption(
   calendarId: string,
 ): CalendarInviteCalendarOption | undefined {
   const preferredKey = accountId && calendarId ? `${accountId}::${calendarId}` : "";
+  const accountCalendars = accountId
+    ? calendars.filter((calendar) => calendar.accountId === accountId)
+    : [];
   return (
     calendars.find((calendar) => preferredKey && calendarKey(calendar) === preferredKey) ??
+    accountCalendars.find((calendar) => calendar.writable && calendar.primary) ??
+    accountCalendars.find((calendar) => calendar.writable) ??
+    accountCalendars[0] ??
     calendars.find((calendar) => calendar.writable && calendar.primary) ??
     calendars.find((calendar) => calendar.writable) ??
     calendars[0]
@@ -473,6 +487,8 @@ const inviteControlBaseClass =
 const inviteControlClass = `${inviteControlBaseClass} px-3 text-xs leading-5`;
 const inviteCompactControlClass = `${inviteControlBaseClass} px-2 text-xs leading-5`;
 const inviteSelectClass = `${inviteControlBaseClass} px-3 pr-8 text-xs leading-5`;
+const inviteActionFocusClass =
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-800";
 
 function StrokeIcon({
   children,
@@ -614,16 +630,14 @@ function InviteEditor({
   const endTime = toTimeInput(draft.end);
   const selectedKey =
     selectedAccountId && draft.calendarId ? `${selectedAccountId}::${draft.calendarId}` : "";
+  const messagesId = "calendar-invite-warnings";
+  const hasMessages = draft.warnings.length > 0 || validationErrors.length > 0;
+  const describedBy = hasMessages ? messagesId : undefined;
+  const hasValidationError = (needle: string) =>
+    validationErrors.some((error) => error.toLowerCase().includes(needle));
 
   const updateStartDate = (date: string) => {
-    onDraftChange((prev) => {
-      const nextStart = combineDateAndTime(date, toTimeInput(prev.start) || "14:00");
-      return {
-        ...prev,
-        start: nextStart,
-        end: prev.end ? combineDateAndTime(date, toTimeInput(prev.end)) : addMinutes(nextStart, 30),
-      };
-    });
+    onDraftChange((prev) => updateInviteStartDate(prev, date));
   };
 
   const updateStartTime = (time: string) => {
@@ -697,7 +711,7 @@ function InviteEditor({
                 type="button"
                 data-testid="calendar-invite-reauth"
                 disabled={reauthing || !selectedAccountId}
-                className="mt-2 w-full rounded-md border border-amber-300 bg-white/80 px-2.5 py-1.5 text-xs font-semibold text-blue-600 hover:bg-white hover:text-blue-700 disabled:cursor-not-allowed disabled:border-amber-200 disabled:text-gray-400 dark:border-amber-800/80 dark:bg-gray-900/40 dark:text-blue-300 dark:hover:bg-gray-900/70 dark:hover:text-blue-200 dark:disabled:text-gray-500"
+                className={`mt-2 w-full rounded-md border border-amber-300 bg-white/80 px-2.5 py-1.5 text-xs font-semibold text-blue-600 hover:bg-white hover:text-blue-700 disabled:cursor-not-allowed disabled:border-amber-200 disabled:text-gray-400 dark:border-amber-800/80 dark:bg-gray-900/40 dark:text-blue-300 dark:hover:bg-gray-900/70 dark:hover:text-blue-200 dark:disabled:text-gray-500 ${inviteActionFocusClass}`}
                 onClick={() => {
                   onReauth().catch(console.error);
                 }}
@@ -711,6 +725,8 @@ function InviteEditor({
             <input
               aria-label="Invite title"
               data-testid="calendar-invite-title"
+              aria-invalid={hasValidationError("title")}
+              aria-describedby={describedBy}
               value={draft.title}
               onChange={(event) =>
                 onDraftChange((prev) => ({ ...prev, title: event.target.value }))
@@ -724,6 +740,8 @@ function InviteEditor({
             <input
               aria-label="Invite guests"
               data-testid="calendar-invite-guests"
+              aria-invalid={hasValidationError("guest")}
+              aria-describedby={describedBy}
               value={guestsToInput(draft.guests)}
               onChange={(event) =>
                 onDraftChange((prev) => ({ ...prev, guests: inputToGuests(event.target.value) }))
@@ -739,6 +757,8 @@ function InviteEditor({
                 aria-label="Invite date"
                 data-testid="calendar-invite-date"
                 type="date"
+                aria-invalid={hasValidationError("start") || hasValidationError("valid start")}
+                aria-describedby={describedBy}
                 value={startDate}
                 onChange={(event) => updateStartDate(event.target.value)}
                 className={inviteCompactControlClass}
@@ -748,6 +768,8 @@ function InviteEditor({
                   aria-label="Invite start time"
                   data-testid="calendar-invite-start"
                   type="time"
+                  aria-invalid={hasValidationError("start") || hasValidationError("valid start")}
+                  aria-describedby={describedBy}
                   value={startTime}
                   onChange={(event) => updateStartTime(event.target.value)}
                   className={`${inviteCompactControlClass} min-w-0 flex-1`}
@@ -757,6 +779,8 @@ function InviteEditor({
                   aria-label="Invite end time"
                   data-testid="calendar-invite-end"
                   type="time"
+                  aria-invalid={hasValidationError("end") || hasValidationError("valid end")}
+                  aria-describedby={describedBy}
                   value={endTime}
                   onChange={(event) => updateEndTime(event.target.value)}
                   className={`${inviteCompactControlClass} min-w-0 flex-1`}
@@ -836,6 +860,8 @@ function InviteEditor({
             <select
               aria-label="Invite calendar"
               data-testid="calendar-invite-calendar"
+              aria-invalid={hasValidationError("calendar")}
+              aria-describedby={describedBy}
               value={selectedKey}
               onChange={(event) => onCalendarChange(event.target.value)}
               className={inviteSelectClass}
@@ -854,8 +880,11 @@ function InviteEditor({
             </select>
           </InviteField>
 
-          {(draft.warnings.length > 0 || validationErrors.length > 0) && (
+          {hasMessages && (
             <div
+              id={messagesId}
+              role="alert"
+              aria-live="polite"
               className="space-y-1 rounded-md bg-amber-50 px-2.5 py-2 dark:bg-amber-950/30"
               style={{ marginLeft: 40 }}
               data-testid="calendar-invite-warnings"
@@ -978,30 +1007,22 @@ export function CalendarPanel({
     setInviteReauthing(false);
 
     try {
-      const optionsResult = await api.getInviteOptions();
-      const calendars = optionsResult.success ? (optionsResult.calendars ?? []) : [];
-      setInviteCalendars(calendars);
-      setRequiresReauth(Boolean(optionsResult.requiresReauth));
-      if (!optionsResult.success && optionsResult.error) {
-        setInviteError(optionsResult.error);
-      }
-
       const extractResult = await api.extractInvite(emailId);
+      const calendars = extractResult.calendars ?? [];
+      setInviteCalendars(calendars);
+      setRequiresReauth(Boolean(extractResult.requiresReauth));
+      if (!extractResult.success && extractResult.error) {
+        setInviteError(extractResult.error);
+      }
       const fallbackTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
       const draft = extractResult.success
         ? (extractResult.draft ?? blankInviteDraft(fallbackTimezone))
         : {
             ...blankInviteDraft(fallbackTimezone),
-            warnings: ["AI extraction failed. Fill in the invite manually."],
+            warnings: [CALENDAR_INVITE_EXTRACTION_FAILURE_WARNING],
           };
 
-      const selected =
-        calendars.find(
-          (calendar) => calendar.writable && calendar.calendarId === draft.calendarId,
-        ) ??
-        calendars.find((calendar) => calendar.writable && calendar.primary) ??
-        calendars.find((calendar) => calendar.writable) ??
-        calendars[0];
+      const selected = preferredCalendarOption(calendars, email.accountId ?? "", draft.calendarId);
 
       setSelectedInviteAccountId(selected?.accountId ?? "");
       setInviteDraft({
@@ -1021,13 +1042,13 @@ export function CalendarPanel({
       const fallbackTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
       setInviteDraft({
         ...blankInviteDraft(fallbackTimezone),
-        warnings: ["AI extraction failed. Fill in the invite manually."],
+        warnings: [CALENDAR_INVITE_EXTRACTION_FAILURE_WARNING],
       });
       setInviteError(err instanceof Error ? err.message : "Failed to extract invite");
     } finally {
       setInviteStatus("ready");
     }
-  }, []);
+  }, [email.accountId]);
 
   const reauthenticateInviteCalendar = useCallback(async () => {
     if (!selectedInviteAccountId) {
@@ -1134,30 +1155,34 @@ export function CalendarPanel({
       setInviteStatus("idle");
       setValidationErrors([]);
       clearCalendarInviteRequest();
-      await fetchEvents(selectedDate);
     } catch (err) {
       setInviteStatus("ready");
       setInviteError(err instanceof Error ? err.message : "Failed to create invite");
     }
-  }, [clearCalendarInviteRequest, fetchEvents, inviteDraft, selectedDate, selectedInviteAccountId]);
+  }, [clearCalendarInviteRequest, inviteDraft, selectedInviteAccountId]);
+
+  const proposedTitle = inviteDraft.title;
+  const proposedStart = inviteDraft.start;
+  const proposedEnd = inviteDraft.end;
+  const proposedLocation = inviteDraft.location;
 
   const proposedEvent = useMemo<CalendarEvent | null>(() => {
-    if (!inviteOpen || !inviteDraft.start || !inviteDraft.end) return null;
-    const start = new Date(inviteDraft.start).getTime();
-    const end = new Date(inviteDraft.end).getTime();
+    if (!inviteOpen || !proposedStart || !proposedEnd) return null;
+    const start = new Date(proposedStart).getTime();
+    const end = new Date(proposedEnd).getTime();
     if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return null;
     return {
       id: "calendar-invite-proposed",
-      summary: inviteDraft.title || "(No title)",
-      start: inviteDraft.start,
-      end: inviteDraft.end,
+      summary: proposedTitle || "(No title)",
+      start: proposedStart,
+      end: proposedEnd,
       isAllDay: false,
       calendarName: "Invite draft",
       calendarColor: "#f59e0b",
       status: "tentative",
-      location: inviteDraft.location || undefined,
+      location: proposedLocation || undefined,
     };
-  }, [inviteDraft, inviteOpen]);
+  }, [inviteOpen, proposedEnd, proposedLocation, proposedStart, proposedTitle]);
 
   const visibleEvents = useMemo(
     () => (proposedEvent ? [...events, proposedEvent] : events),

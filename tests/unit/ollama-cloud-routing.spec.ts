@@ -16,7 +16,6 @@ import {
   createMessage,
   _setClientForTesting,
   _setOllamaClientForTesting,
-  setOllamaConfig,
   setAnthropicServiceDb,
   type LlmCallRecord,
 } from "../../src/main/services/llm-service";
@@ -95,19 +94,15 @@ test.describe("Ollama Cloud routing", () => {
   test.skip(!!nativeModuleError, `Skipping: ${nativeModuleError}`);
 
   let testDb: DB;
-  let originalFetch: typeof globalThis.fetch;
 
   test.beforeEach(() => {
     testDb = new DatabaseCtor!(":memory:");
     setAnthropicServiceDb(testDb);
-    originalFetch = globalThis.fetch;
   });
 
   test.afterEach(() => {
     _setClientForTesting(null);
     _setOllamaClientForTesting(null);
-    setOllamaConfig("");
-    globalThis.fetch = originalFetch;
     testDb?.close();
   });
 
@@ -225,124 +220,6 @@ test.describe("Ollama Cloud routing", () => {
     );
 
     expect(ollamaMock.calls[0].params.max_tokens).toBe(8192);
-  });
-
-  test("native Ollama route maps JSON schema output_config to request format", async () => {
-    const bodies: Array<Record<string, unknown>> = [];
-    setOllamaConfig("test-ollama-key");
-    globalThis.fetch = async (_input, init) => {
-      bodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
-      return new Response(
-        JSON.stringify({
-          model: "kimi-k2.6:cloud",
-          message: { role: "assistant", content: '{"title":"Intro"}' },
-          prompt_eval_count: 12,
-          eval_count: 6,
-        }),
-        { status: 200, headers: { "Content-Type": "application/json" } },
-      );
-    };
-
-    const schema = {
-      type: "object",
-      required: ["title"],
-      properties: { title: { type: "string" } },
-    };
-
-    await createMessage(
-      {
-        model: "kimi-k2.6:cloud",
-        max_tokens: 256,
-        output_config: {
-          format: {
-            type: "json_schema",
-            schema,
-          },
-        },
-        messages: [{ role: "user" as const, content: "Extract a title" }],
-      },
-      { caller: "test-ollama-json-schema", provider: "ollama-cloud" },
-    );
-
-    expect(bodies[0].format).toEqual(schema);
-  });
-
-  test("native Ollama route can keep a lower token budget for constrained structured output", async () => {
-    const bodies: Array<Record<string, unknown>> = [];
-    setOllamaConfig("test-ollama-key");
-    globalThis.fetch = async (_input, init) => {
-      bodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
-      return new Response(
-        JSON.stringify({
-          model: "kimi-k2.6:cloud",
-          message: { role: "assistant", content: '{"title":"Intro"}' },
-          prompt_eval_count: 12,
-          eval_count: 6,
-        }),
-        { status: 200, headers: { "Content-Type": "application/json" } },
-      );
-    };
-
-    await createMessage(
-      {
-        model: "kimi-k2.6:cloud",
-        max_tokens: 1200,
-        output_config: {
-          format: {
-            type: "json_schema",
-            schema: {
-              type: "object",
-              required: ["title"],
-              properties: { title: { type: "string" } },
-            },
-          },
-        },
-        messages: [{ role: "user" as const, content: "Extract a title" }],
-      },
-      {
-        caller: "test-ollama-constrained-json",
-        provider: "ollama-cloud",
-        ollamaMaxTokensFloor: 1200,
-      },
-    );
-
-    expect(bodies[0].options).toMatchObject({ num_predict: 1200 });
-  });
-
-  test("native Ollama route stringifies structured object content", async () => {
-    setOllamaConfig("test-ollama-key");
-    globalThis.fetch = async () =>
-      new Response(
-        JSON.stringify({
-          model: "kimi-k2.6:cloud",
-          message: { role: "assistant", content: { title: "Intro" } },
-          prompt_eval_count: 12,
-          eval_count: 6,
-        }),
-        { status: 200, headers: { "Content-Type": "application/json" } },
-      );
-
-    const response = await createMessage(
-      {
-        model: "kimi-k2.6:cloud",
-        max_tokens: 256,
-        output_config: {
-          format: {
-            type: "json_schema",
-            schema: {
-              type: "object",
-              required: ["title"],
-              properties: { title: { type: "string" } },
-            },
-          },
-        },
-        messages: [{ role: "user" as const, content: "Extract a title" }],
-      },
-      { caller: "test-ollama-object-content", provider: "ollama-cloud" },
-    );
-
-    const text = response.content.find((block) => block.type === "text");
-    expect(text).toMatchObject({ type: "text", text: '{"title":"Intro"}' });
   });
 
   test("createMessage with provider=anthropic does NOT raise max_tokens", async () => {

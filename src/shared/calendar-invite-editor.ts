@@ -56,6 +56,32 @@ export function updateInviteEndTime(draft: CalendarInviteDraft, time: string): C
   };
 }
 
+export function updateInviteStartDate(
+  draft: CalendarInviteDraft,
+  date: string,
+): CalendarInviteDraft {
+  const nextStart = combineDateAndTime(date, toTimeInput(draft.start) || "14:00");
+  const prevStartDate = toDateInput(draft.start);
+  const prevEndDate = toDateInput(draft.end);
+  let nextEndDate = date;
+
+  if (prevStartDate && prevEndDate && prevEndDate !== prevStartDate) {
+    const deltaMs =
+      new Date(`${prevEndDate}T12:00:00`).getTime() -
+      new Date(`${prevStartDate}T12:00:00`).getTime();
+    const deltaDays = Math.round(deltaMs / 86_400_000);
+    nextEndDate = addDays(date, deltaDays);
+  }
+
+  return {
+    ...draft,
+    start: nextStart,
+    end: draft.end
+      ? combineDateAndTime(nextEndDate, toTimeInput(draft.end))
+      : addMinutes(nextStart, 30),
+  };
+}
+
 export function shouldStartInviteExtraction(
   request: CalendarInviteRequestMatch | null,
   currentThreadId: string,

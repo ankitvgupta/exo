@@ -224,6 +224,104 @@ test.describe("calendar invite helpers", () => {
     expect(systemPrompt).toContain("missing email address");
   });
 
+  test("scopes LLM calendar metadata to the source email account", async () => {
+    const emails: DashboardEmail[] = [
+      {
+        id: "email-account-b",
+        accountId: "account-b",
+        threadId: "thread-account-b",
+        from: "alex@example.com",
+        to: "demo@example.com",
+        cc: "",
+        subject: "Intro call",
+        body: "Can we meet tomorrow at 2pm ET?",
+        date: "2026-06-01T12:00:00.000Z",
+        isUnread: false,
+        isStarred: false,
+        snippet: "",
+        labels: [],
+        attachments: [],
+      },
+    ];
+    let systemPrompt = "";
+    const sendMessage: CalendarInviteMessageSender = async (params) => {
+      const systemBlock = Array.isArray(params.system) ? params.system[0] : undefined;
+      systemPrompt =
+        systemBlock && systemBlock.type === "text" && typeof systemBlock.text === "string"
+          ? systemBlock.text
+          : "";
+
+      return {
+        id: "msg-account-scope",
+        type: "message",
+        role: "assistant",
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({
+              title: "Intro call",
+              start: "2026-06-02T14:00:00-04:00",
+              end: "2026-06-02T14:30:00-04:00",
+              timezone: "America/New_York",
+              guests: ["alex@example.com"],
+              conference: { type: "googleMeet" },
+              location: "",
+              description: "",
+              calendarId: "primary",
+              confidence: 0.8,
+              warnings: [],
+            }),
+          },
+        ],
+        model: "claude-sonnet-4-20250514",
+        stop_reason: "end_turn",
+        stop_sequence: null,
+        usage: {
+          input_tokens: 200,
+          output_tokens: 120,
+          cache_creation_input_tokens: 0,
+          cache_read_input_tokens: 0,
+          server_tool_use: null,
+          service_tier: null,
+        },
+      };
+    };
+
+    await extractCalendarInviteDraftWithProvider(
+      emails,
+      [
+        {
+          accountId: "account-a",
+          accountEmail: "a@example.com",
+          calendarId: "primary",
+          calendarName: "Account A Private Calendar",
+          calendarColor: "#2563eb",
+          timezone: "America/Los_Angeles",
+          writable: true,
+          primary: true,
+        },
+        {
+          accountId: "account-b",
+          accountEmail: "b@example.com",
+          calendarId: "primary",
+          calendarName: "Account B Work Calendar",
+          calendarColor: "#16a34a",
+          timezone: "America/New_York",
+          writable: true,
+          primary: true,
+        },
+      ],
+      { provider: "anthropic", model: "claude-sonnet-4-20250514" },
+      "UTC",
+      { emailId: "email-account-b", accountId: "account-b" },
+      sendMessage,
+    );
+
+    expect(systemPrompt).toContain("Account B Work Calendar");
+    expect(systemPrompt).not.toContain("Account A Private Calendar");
+    expect(systemPrompt).toContain("Default timezone: America/New_York");
+  });
+
   test("normalizes common LLM invite variants instead of dropping extracted fields", () => {
     const draft = parseCalendarInviteDraft(
       JSON.stringify({
@@ -398,6 +496,24 @@ test.describe("calendar invite helpers", () => {
       "Add at least one guest.",
       "Choose a calendar.",
     ]);
+  });
+
+  test("validates guest email shape before final creation", () => {
+    const errors = validateCalendarInviteDraft({
+      title: "Partnership coffee chat",
+      start: "2026-06-02T14:00:00-04:00",
+      end: "2026-06-02T14:30:00-04:00",
+      timezone: "America/New_York",
+      guests: ["kat@example.com", "not an email"],
+      conference: { type: "googleMeet" },
+      location: "",
+      description: "",
+      calendarId: "primary",
+      confidence: 0.9,
+      warnings: [],
+    });
+
+    expect(errors).toEqual(["Fix invalid guest email address: not an email."]);
   });
 
   test("builds Google Calendar insert params with guest notifications and Meet payload", () => {

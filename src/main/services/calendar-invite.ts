@@ -404,9 +404,12 @@ export async function extractCalendarInviteDraftWithProvider(
   metadata?: CalendarInviteMetadata,
   sendMessage: CalendarInviteMessageSender = createMessage,
 ): Promise<CalendarInviteDraft> {
-  const defaultCalendar = chooseDefaultCalendar(calendars);
+  const scopedCalendars = metadata?.accountId
+    ? calendars.filter((calendar) => calendar.accountId === metadata.accountId)
+    : calendars;
+  const defaultCalendar = chooseDefaultCalendar(scopedCalendars);
   const defaultTimezone = chooseCalendarTimezone(
-    calendars,
+    scopedCalendars,
     defaultCalendar?.calendarId,
     defaultCalendar?.timezone ?? fallbackTimezone,
   );
@@ -415,7 +418,7 @@ export async function extractCalendarInviteDraftWithProvider(
     timezone: defaultTimezone,
   };
 
-  const calendarSummary = calendars
+  const calendarSummary = scopedCalendars
     .map((calendar) =>
       JSON.stringify({
         calendarId: calendar.calendarId,

@@ -579,6 +579,11 @@ async function main() {
     const toolCalls = [];
     const textChunks = [];
     let resultMeta = null;
+    // Per-tool-call cap so a single huge `take_snapshot` (which dumps
+    // the entire DOM) can't bloat the log file. The PR comment trims
+    // again at body-size scale; this cap keeps individual entries
+    // human-readable while preserving the bulk of the trace.
+    const TOOL_RESULT_LOG_CAP = 4000;
     let toolIndex = 0;
     const toolIdToIndex = new Map();
 
@@ -602,12 +607,6 @@ async function main() {
       return JSON.stringify(c ?? "");
     }
 
-    function summarizeToolResult(block) {
-      const text = extractToolResultText(block);
-      const kind = block.is_error ? "error" : "result";
-      return `[${kind} content omitted; ${text.length} chars]`;
-    }
-
     for await (const msg of result) {
       if (msg.type === "system" && msg.subtype === "init") {
         const cdpTools = (msg.tools ?? []).filter((t) =>
@@ -625,7 +624,7 @@ async function main() {
             log(`  input: ${formatToolInput(block.input)}`);
           } else if (block.type === "text" && block.text) {
             textChunks.push(block.text);
-            log(`text: [omitted; agent narration may include mailbox/calendar content]`);
+            log(`text: ${block.text}`);
           }
         }
       }
@@ -634,7 +633,16 @@ async function main() {
           if (block.type === "tool_result") {
             const idx = toolIdToIndex.get(block.tool_use_id) ?? "?";
             const tag = block.is_error ? "error" : "result";
-            log(`${tag}#${idx}: ${summarizeToolResult(block)}`);
+            const text = extractToolResultText(block);
+            const capped =
+              text.length > TOOL_RESULT_LOG_CAP
+                ? text.slice(0, TOOL_RESULT_LOG_CAP) +
+                  ` …[truncated, ${text.length - TOOL_RESULT_LOG_CAP} more chars]`
+                : text;
+            // Indent multi-line output so it's visually grouped with
+            // the tool call in the log.
+            const indented = capped.split("\n").map((l) => `  ${l}`).join("\n");
+            log(`${tag}#${idx}:\n${indented}`);
           }
         }
       }

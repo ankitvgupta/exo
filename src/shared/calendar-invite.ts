@@ -13,6 +13,7 @@ type InviteDefaults = {
 
 export const CALENDAR_INVITE_EXTRACTION_FAILURE_WARNING =
   "AI extraction failed. Fill in the invite manually.";
+const INVITE_GUEST_EMAIL_RE = /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/;
 
 function dedupeStrings(values: string[]): string[] {
   const seen = new Set<string>();
@@ -240,6 +241,12 @@ export function validateCalendarInviteDraft(draft: CalendarInviteDraft): string[
     }
   }
   if (draft.guests.length === 0) errors.push("Add at least one guest.");
+  const invalidGuests = dedupeStrings(draft.guests).filter(
+    (guest) => !INVITE_GUEST_EMAIL_RE.test(guest),
+  );
+  if (invalidGuests.length > 0) {
+    errors.push(`Fix invalid guest email address${invalidGuests.length === 1 ? "" : "es"}: ${invalidGuests.join(", ")}.`);
+  }
   if (!draft.calendarId.trim()) errors.push("Choose a calendar.");
   return errors;
 }

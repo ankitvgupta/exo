@@ -181,17 +181,6 @@ export async function findAllCalendarAccounts(): Promise<string[]> {
   return result;
 }
 
-export async function findAllCalendarWriteAccounts(): Promise<string[]> {
-  const accounts = await findAllCalendarAccounts();
-  const writable: string[] = [];
-  for (const accountId of accounts) {
-    if (await hasCalendarWriteScope(accountId)) {
-      writable.push(accountId);
-    }
-  }
-  return writable;
-}
-
 /**
  * Find any account that has calendar scope (backwards-compatible).
  */

@@ -124,12 +124,11 @@ async function getInviteCalendarOptions(): Promise<CalendarInviteCalendarOption[
   const accountIds = await findAllCalendarAccounts();
   const accounts = getAccounts();
   const accountEmails = new Map(accounts.map((account) => [account.id, account.email]));
-  const options: CalendarInviteCalendarOption[] = [];
 
-  for (const accountId of accountIds) {
-    const calendars = await getCalendarList(accountId);
-    for (const calendar of calendars) {
-      options.push({
+  const optionGroups = await Promise.all(
+    accountIds.map(async (accountId) => {
+      const calendars = await getCalendarList(accountId);
+      return calendars.map((calendar) => ({
         accountId,
         accountEmail: accountEmails.get(accountId) ?? accountId,
         calendarId: calendar.id,
@@ -138,11 +137,11 @@ async function getInviteCalendarOptions(): Promise<CalendarInviteCalendarOption[
         timezone: calendar.timezone,
         writable: calendar.writable,
         primary: calendar.primary,
-      });
-    }
-  }
+      }));
+    }),
+  );
 
-  return options;
+  return optionGroups.flat();
 }
 
 function createdEventToRow(
@@ -329,6 +328,7 @@ export function registerCalendarIpc(): void {
 
       const threadEmails = getEmailsByThread(email.threadId, email.accountId);
       const calendars = await getInviteCalendarOptions();
+      const hasWriteAccess = calendars.some((calendar) => calendar.writable);
       const draft = useDemoCalendar
         ? buildDemoCalendarInviteDraft(threadEmails, calendars)
         : await extractCalendarInviteDraft(threadEmails, calendars, undefined, {
@@ -336,7 +336,14 @@ export function registerCalendarIpc(): void {
             accountId: email.accountId,
           });
 
-      return { success: true, draft };
+      return {
+        success: true,
+        draft,
+        calendars,
+        hasCalendarAccess: calendars.length > 0,
+        hasWriteAccess,
+        requiresReauth: calendars.length > 0 && !hasWriteAccess,
+      };
     } catch (error) {
       log.error({ err: error }, "[Calendar IPC] Failed to extract invite");
       return { success: false, error: error instanceof Error ? error.message : "Unknown error" };

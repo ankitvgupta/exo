@@ -1,10 +1,12 @@
 import { test, expect } from "@playwright/test";
 import { isoDateMatchesCalendarDate } from "../../src/shared/calendar-date";
 import {
+  combineDateAndTime,
   shouldStartInviteExtraction,
   toDateInput,
   toTimeInput,
   updateInviteEndTime,
+  updateInviteStartDate,
 } from "../../src/shared/calendar-invite-editor";
 import type { CalendarInviteDraft } from "../../src/shared/types";
 
@@ -50,6 +52,19 @@ test.describe("calendar invite review regressions", () => {
 
     expect(toDateInput(updated.end)).toBe(toDateInput(draft.end));
     expect(toTimeInput(updated.end)).toBe("18:30");
+  });
+
+  test("updating the start date preserves a multi-day duration", () => {
+    const draft = draftWithDates(
+      combineDateAndTime("2026-06-02", "14:00"),
+      combineDateAndTime("2026-06-04", "17:00"),
+    );
+
+    const updated = updateInviteStartDate(draft, "2026-06-05");
+
+    expect(toDateInput(updated.start)).toBe("2026-06-05");
+    expect(toDateInput(updated.end)).toBe("2026-06-07");
+    expect(toTimeInput(updated.end)).toBe("17:00");
   });
 
   test("starts invite extraction once for a matching thread request nonce", () => {
