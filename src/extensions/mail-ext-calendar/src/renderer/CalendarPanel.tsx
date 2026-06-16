@@ -1087,14 +1087,19 @@ export function CalendarPanel({
       }
 
       const optionsResult = await getCalendarApi().getInviteOptions();
-      const calendars = optionsResult.success ? (optionsResult.calendars ?? []) : [];
-      setInviteCalendars(calendars);
-      setRequiresReauth(Boolean(optionsResult.requiresReauth));
 
+      // On a failed options fetch (network hiccup, token not yet active), leave
+      // the existing calendar list and re-auth state intact — wiping them would
+      // empty the dropdown AND hide the Re-authenticate button, stranding the
+      // user with no writable calendar and no way to retry but to cancel.
       if (!optionsResult.success) {
         setInviteError(optionsResult.error ?? "Failed to reload Google Calendar permissions.");
         return;
       }
+
+      const calendars = optionsResult.calendars ?? [];
+      setInviteCalendars(calendars);
+      setRequiresReauth(Boolean(optionsResult.requiresReauth));
 
       const selected = preferredCalendarOption(
         calendars,
