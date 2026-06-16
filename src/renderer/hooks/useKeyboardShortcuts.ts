@@ -757,14 +757,13 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
 
       // --- Helper: navigate to next/prev split tab ---
       const focusSplitTab = (splitId: string) => {
+        // Focus after the active-tab DOM/styling has committed for the store
+        // change. CSS.escape because custom split IDs are user-derived.
         window.requestAnimationFrame(() => {
-          const tabs = document.querySelectorAll<HTMLButtonElement>("[data-split-tab-id]");
-          for (const tab of tabs) {
-            if (tab.dataset.splitTabId === splitId) {
-              tab.focus();
-              return;
-            }
-          }
+          const tab = document.querySelector<HTMLButtonElement>(
+            `[data-split-tab-id="${CSS.escape(splitId)}"]`,
+          );
+          tab?.focus();
         });
       };
 
