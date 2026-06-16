@@ -388,20 +388,21 @@ export const DEFAULT_OLLAMA_MODEL = "glm-5.2:cloud";
 /**
  * Curated list of common Ollama Cloud models for the settings dropdown, so
  * users don't have to hand-type model ids. The first entry is the default
- * (kimi-k2.6:cloud). This is a convenience list, NOT an allowlist — new models
- * ship on Ollama Cloud regularly, so the UI also offers a "Custom…" escape
- * hatch for any other id. Ids use the ":cloud" tag to match how the app
- * addresses Ollama Cloud models (see DEFAULT_OLLAMA_MODEL); each was confirmed
- * to resolve against https://ollama.com/v1.
+ * (glm-5.2:cloud — kept in sync with DEFAULT_OLLAMA_MODEL). This is a
+ * convenience list, NOT an allowlist — new models ship on Ollama Cloud
+ * regularly, so the UI also offers a "Custom…" escape hatch for any other id.
+ * Ids use the ":cloud" tag to match how the app addresses Ollama Cloud models
+ * (see DEFAULT_OLLAMA_MODEL); each was confirmed to resolve against
+ * https://ollama.com/v1.
  */
 export const COMMON_OLLAMA_MODELS: readonly { id: string; label: string }[] = [
-  { id: "kimi-k2.6:cloud", label: "Kimi K2.6 — Moonshot (default)" },
+  { id: "glm-5.2:cloud", label: "GLM 5.2 — z.ai (default)" },
   { id: "minimax-m3:cloud", label: "MiniMax M3 — newest, agentic" },
   { id: "minimax-m2.7:cloud", label: "MiniMax M2.7" },
+  { id: "kimi-k2.6:cloud", label: "Kimi K2.6 — Moonshot" },
+  { id: "kimi-k2-thinking:cloud", label: "Kimi K2 Thinking" },
   { id: "qwen3-coder:480b-cloud", label: "Qwen3 Coder 480B" },
   { id: "deepseek-v3.2:cloud", label: "DeepSeek V3.2" },
-  { id: "glm-4.6:cloud", label: "GLM 4.6 — Zhipu" },
-  { id: "kimi-k2-thinking:cloud", label: "Kimi K2 Thinking" },
 ] as const;
 
 export const OllamaCloudConfigSchema = z.object({
