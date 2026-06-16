@@ -76,7 +76,10 @@ function getStore(): Store<{ config: Config }> {
           // a version-aware default so pre-existing installs (configVersion < 2)
           // are not silently opted in to analytics + session replay.
           keyboardBindings: "superhuman" as const,
-          configVersion: 2,
+          // Keep in sync with the latest migration version in getConfig() so a
+          // fresh install starts current and doesn't trigger a no-op migration
+          // write on first load.
+          configVersion: 3,
         },
       },
     });
