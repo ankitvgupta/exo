@@ -74,4 +74,27 @@ test.describe("calendar invite review regressions", () => {
     expect(shouldStartInviteExtraction(request, "thread-a", 42)).toBe(false);
     expect(shouldStartInviteExtraction(request, "thread-b", null)).toBe(false);
   });
+
+  test("changing the start date never blanks the end when the existing end is malformed", () => {
+    // A malformed end (no parseable time) must not silently erase the end time;
+    // it should fall back to a 30-minute duration off the new start.
+    const draft = draftWithDates(combineDateAndTime("2026-06-02", "14:00"), "not-a-date");
+
+    const updated = updateInviteStartDate(draft, "2026-06-05");
+
+    expect(updated.end).not.toBe("");
+    expect(toDateInput(updated.end)).toBe("2026-06-05");
+    expect(toTimeInput(updated.end)).toBe("14:30");
+  });
+
+  test("setting an end time before the start rolls the end to the next day", () => {
+    // start 23:30, user picks end 00:30 → the meeting crosses midnight.
+    const draft = draftWithDates(combineDateAndTime("2026-06-02", "23:30"), "");
+
+    const updated = updateInviteEndTime(draft, "00:30");
+
+    expect(toDateInput(updated.end)).toBe("2026-06-03");
+    expect(toTimeInput(updated.end)).toBe("00:30");
+    expect(updated.end > updated.start).toBe(true);
+  });
 });

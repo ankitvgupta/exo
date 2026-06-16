@@ -69,10 +69,20 @@ export function addMinutes(wallClock: string, minutes: number): string {
 }
 
 export function updateInviteEndTime(draft: CalendarInviteDraft, time: string): CalendarInviteDraft {
-  const endDate = toDateInput(draft.end) || toDateInput(draft.start) || todayString();
+  const startDate = toDateInput(draft.start) || todayString();
+  const endDate = toDateInput(draft.end) || startDate;
+  let nextEnd = combineDateAndTime(endDate, time);
+
+  // If the chosen end time lands at/before the start (e.g. start 23:30, end
+  // 00:30), the user means the next day — roll the end date forward one day.
+  // Wall-clock strings compare lexicographically, so this is a safe ordering check.
+  if (draft.start && nextEnd && nextEnd <= draft.start) {
+    nextEnd = combineDateAndTime(addDays(startDate, 1), time);
+  }
+
   return {
     ...draft,
-    end: combineDateAndTime(endDate, time),
+    end: nextEnd,
   };
 }
 
@@ -93,12 +103,16 @@ export function updateInviteStartDate(
     nextEndDate = addDays(date, deltaDays);
   }
 
+  // Guard against a malformed existing end (toTimeInput → "") silently blanking
+  // the end time when the start date changes. Fall back to a 30-minute default.
+  const endTime = toTimeInput(draft.end);
+  const nextEnd =
+    draft.end && endTime ? combineDateAndTime(nextEndDate, endTime) : addMinutes(nextStart, 30);
+
   return {
     ...draft,
     start: nextStart,
-    end: draft.end
-      ? combineDateAndTime(nextEndDate, toTimeInput(draft.end))
-      : addMinutes(nextStart, 30),
+    end: nextEnd,
   };
 }
 

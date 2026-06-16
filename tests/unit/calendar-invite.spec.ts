@@ -473,6 +473,85 @@ test.describe("calendar invite helpers", () => {
     );
   });
 
+  test("never defaults to a read-only calendar when no writable calendar exists", async () => {
+    const emails: DashboardEmail[] = [
+      {
+        id: "email-readonly",
+        accountId: "default",
+        threadId: "thread-readonly",
+        from: "alex@example.com",
+        to: "demo@example.com",
+        cc: "",
+        subject: "Intro call",
+        body: "Tuesday 3pm works.",
+        date: "2026-06-01T12:00:00.000Z",
+        isUnread: false,
+        isStarred: false,
+        snippet: "",
+        labels: [],
+        attachments: [],
+      },
+    ];
+    // Model echoes back whatever default calendarId it was given (empty here).
+    const sendMessage: CalendarInviteMessageSender = async () => ({
+      id: "msg-readonly",
+      type: "message",
+      role: "assistant",
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            title: "Intro call",
+            start: "2026-06-02T15:00:00",
+            end: "2026-06-02T15:30:00",
+            timezone: "America/New_York",
+            guests: ["alex@example.com"],
+            conference: { type: "googleMeet" },
+            location: "",
+            description: "",
+            calendarId: "",
+            confidence: 0.8,
+            warnings: [],
+          }),
+        },
+      ],
+      model: "claude-sonnet-4-20250514",
+      stop_reason: "end_turn",
+      stop_sequence: null,
+      usage: {
+        input_tokens: 100,
+        output_tokens: 80,
+        cache_creation_input_tokens: 0,
+        cache_read_input_tokens: 0,
+        server_tool_use: null,
+        service_tier: null,
+      },
+    });
+
+    const draft = await extractCalendarInviteDraftWithProvider(
+      emails,
+      [
+        {
+          accountId: "default",
+          accountEmail: "demo@example.com",
+          calendarId: "shared-readonly",
+          calendarName: "Shared (read-only)",
+          calendarColor: "#999999",
+          timezone: "America/New_York",
+          writable: false,
+          primary: true,
+        },
+      ],
+      { provider: "anthropic", model: "claude-sonnet-4-20250514" },
+      "America/New_York",
+      { emailId: "email-readonly", accountId: "default" },
+      sendMessage,
+    );
+
+    // No writable calendar → no default is chosen; validation will block on it.
+    expect(draft.calendarId).toBe("");
+  });
+
   test("validates required fields before final creation", () => {
     const errors = validateCalendarInviteDraft({
       title: "",
