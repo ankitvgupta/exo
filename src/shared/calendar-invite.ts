@@ -1,4 +1,5 @@
 import { stripJsonFences } from "./strip-json-fences";
+import { normalizeToCalendarWallClock } from "./calendar-timezone";
 import {
   CalendarInviteDraftSchema,
   type CalendarEventInsertParams,
@@ -9,6 +10,10 @@ import {
 type InviteDefaults = {
   calendarId: string;
   timezone: string;
+  // The timezone the user is physically in. A bare wall-clock time from the
+  // email (no stated zone) is interpreted here before being expressed in the
+  // calendar's `timezone`. Defaults to `timezone` when unknown.
+  userTimezone?: string;
 };
 
 export const CALENDAR_INVITE_EXTRACTION_FAILURE_WARNING =
@@ -191,12 +196,14 @@ export function parseCalendarInviteDraft(
   }
 
   const draft = parsed.data;
+  const calendarTimezone = draft.timezone.trim() || defaults.timezone;
+  const userTimezone = defaults.userTimezone || calendarTimezone;
   return withCompletenessWarnings({
     ...draft,
     title: draft.title.trim(),
-    start: draft.start.trim(),
-    end: draft.end.trim(),
-    timezone: draft.timezone.trim() || defaults.timezone,
+    start: normalizeToCalendarWallClock(draft.start, calendarTimezone, userTimezone),
+    end: normalizeToCalendarWallClock(draft.end, calendarTimezone, userTimezone),
+    timezone: calendarTimezone,
     guests: dedupeStrings(draft.guests),
     conference: {
       type: draft.conference.type,
@@ -268,9 +275,33 @@ function descriptionWithConference(draft: CalendarInviteDraft): string | undefin
   return [description, `${label}: ${conferenceValue}`].filter(Boolean).join("\n\n");
 }
 
+/**
+ * Derive a stable Google `conferenceData.createRequest.requestId` from the
+ * draft's identifying fields. Google treats this id as an idempotency key, so a
+ * deterministic value means retrying a failed create reuses the same Meet
+ * conference instead of minting a duplicate. Callers may still override it.
+ */
+function deriveConferenceRequestId(draft: CalendarInviteDraft): string {
+  const key = [
+    draft.calendarId,
+    draft.title.trim(),
+    draft.start,
+    draft.end,
+    dedupeStrings(draft.guests).join(","),
+  ].join("|");
+  // Small, dependency-free FNV-1a hash — collision resistance is irrelevant
+  // here; we only need the same draft to map to the same id across retries.
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < key.length; i++) {
+    hash ^= key.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return `exo-${(hash >>> 0).toString(36)}`;
+}
+
 export function buildCalendarEventInsertParams(
   draft: CalendarInviteDraft,
-  requestId = `exo-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+  requestId = deriveConferenceRequestId(draft),
 ): CalendarEventInsertParams {
   const requestBody: CalendarEventInsertParams["requestBody"] = {
     summary: draft.title.trim(),

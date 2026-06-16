@@ -106,8 +106,11 @@ test.describe("calendar invite helpers", () => {
       { calendarId: "primary", timezone: "America/New_York" },
     );
 
-    expect(draft.start).toBe("2026-06-02T14:00:00-04:00");
-    expect(draft.end).toBe("2026-06-02T14:30:00-04:00");
+    // The -04:00 offset is America/New_York's summer offset and the calendar is
+    // also America/New_York, so normalizing to floating calendar wall-clock keeps
+    // the same clock time and drops the (now redundant) offset.
+    expect(draft.start).toBe("2026-06-02T14:00:00");
+    expect(draft.end).toBe("2026-06-02T14:30:00");
     expect(draft.conference.type).toBe("googleMeet");
     expect(draft.warnings).toContain("Original time was inferred from vague language.");
     expect(draft.warnings).toContain("Missing title.");
@@ -319,7 +322,7 @@ test.describe("calendar invite helpers", () => {
 
     expect(systemPrompt).toContain("Account B Work Calendar");
     expect(systemPrompt).not.toContain("Account A Private Calendar");
-    expect(systemPrompt).toContain("Default timezone: America/New_York");
+    expect(systemPrompt).toContain("Calendar timezone: America/New_York");
   });
 
   test("normalizes common LLM invite variants instead of dropping extracted fields", () => {
@@ -538,6 +541,33 @@ test.describe("calendar invite helpers", () => {
     expect(params.requestBody.conferenceData?.createRequest?.conferenceSolutionKey?.type).toBe(
       "hangoutsMeet",
     );
+  });
+
+  test("derives a stable Meet requestId so retries reuse the same conference", () => {
+    const draft = {
+      title: "Partnership coffee chat",
+      start: "2026-06-02T14:00:00",
+      end: "2026-06-02T14:30:00",
+      timezone: "America/New_York",
+      guests: ["kat@example.com", "alex@example.com"],
+      conference: { type: "googleMeet" as const },
+      location: "",
+      description: "Discuss partnership opportunity.",
+      calendarId: "primary",
+      confidence: 0.9,
+      warnings: [],
+    };
+
+    const first = buildCalendarEventInsertParams(draft);
+    const second = buildCalendarEventInsertParams(draft);
+    const firstId = first.requestBody.conferenceData?.createRequest?.requestId;
+    const secondId = second.requestBody.conferenceData?.createRequest?.requestId;
+
+    expect(firstId).toBeTruthy();
+    expect(firstId).toBe(secondId);
+    // A materially different event must not collide with the same id.
+    const other = buildCalendarEventInsertParams({ ...draft, start: "2026-06-03T14:00:00" });
+    expect(other.requestBody.conferenceData?.createRequest?.requestId).not.toBe(firstId);
   });
 
   test("preserves external conference links instead of requesting Google Meet", () => {

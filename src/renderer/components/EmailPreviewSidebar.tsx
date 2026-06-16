@@ -204,12 +204,21 @@ export const EmailPreviewSidebar = memo(function EmailPreviewSidebar() {
     }
   }, [availableTabs, sidebarTab, setSidebarTab]);
 
+  // Opening an invite is a focused, modal-like task: force the email tab once
+  // when the request first appears. The tab bar is then hidden while the invite
+  // is open (see render below), so the lock is structural — we don't keep
+  // reverting tab changes, which previously made the tabs flicker and feel
+  // broken when clicked. Guarding on the edge (was-null → now-set) means a user
+  // who later switches tabs isn't yanked back on every render.
+  const invitePending = Boolean(calendarInviteRequest);
+  const prevInvitePendingRef = useRef(false);
   useEffect(() => {
-    if (!calendarInviteRequest) return;
-    if (sidebarTab !== "email" && availableTabs.includes("email")) {
+    const justOpened = invitePending && !prevInvitePendingRef.current;
+    prevInvitePendingRef.current = invitePending;
+    if (justOpened && sidebarTab !== "email" && availableTabs.includes("email")) {
       setSidebarTab("email");
     }
-  }, [availableTabs, calendarInviteRequest, sidebarTab, setSidebarTab]);
+  }, [invitePending, availableTabs, sidebarTab, setSidebarTab]);
 
   // When switching emails (or returning to inbox), auto-select the agent tab
   // if the current key has an agent task/trace, or reset away if it doesn't.
@@ -348,8 +357,9 @@ export const EmailPreviewSidebar = memo(function EmailPreviewSidebar() {
 
   return (
     <div className="w-80 bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 flex flex-col overflow-hidden">
-      {/* Tab bar — only show when multiple tabs available */}
-      {availableTabs.length > 1 && (
+      {/* Tab bar — only show when multiple tabs available, and hidden while an
+          invite is open so the (then-locked) tabs don't read as clickable. */}
+      {availableTabs.length > 1 && !invitePending && (
         <div className="flex-shrink-0 h-10 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/80">
           <div className="flex h-full">
             {availableTabs.map((tab) => {

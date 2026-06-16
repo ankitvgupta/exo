@@ -1085,8 +1085,10 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
           }
           break;
 
-        // Switch sidebar tab
+        // Switch sidebar tab — disabled while an invite is open, which is a
+        // modal flow locked to the email tab (the tab bar is hidden too).
         case "b":
+          if (state.calendarInviteRequest) break;
           e.preventDefault();
           state.cycleSidebarTab();
           break;

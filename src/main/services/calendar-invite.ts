@@ -14,6 +14,7 @@ import type {
   LlmProvider,
 } from "../../shared/types";
 import { UNTRUSTED_DATA_INSTRUCTION, wrapUntrustedEmail } from "../../shared/prompt-safety";
+import { instantToWallClock } from "../../shared/calendar-timezone";
 import { createLogger } from "./logger";
 
 export {
@@ -117,7 +118,10 @@ function uniqueEmails(values: string[]): string[] {
   return result;
 }
 
-function defaultStartFromEmailDate(emailDate: string): { start: string; end: string } {
+function defaultStartFromEmailDate(
+  emailDate: string,
+  timezone: string,
+): { start: string; end: string } {
   const base = new Date(emailDate);
   if (!Number.isFinite(base.getTime())) {
     base.setTime(Date.now());
@@ -125,7 +129,12 @@ function defaultStartFromEmailDate(emailDate: string): { start: string; end: str
   base.setDate(base.getDate() + 7);
   base.setHours(14, 0, 0, 0);
   const end = new Date(base.getTime() + 30 * 60_000);
-  return { start: base.toISOString(), end: end.toISOString() };
+  // Draft times are floating wall-clock in the calendar timezone (see
+  // calendar-timezone.ts), not UTC instants.
+  return {
+    start: instantToWallClock(base, timezone),
+    end: instantToWallClock(end, timezone),
+  };
 }
 
 function chooseDefaultCalendar(
@@ -223,7 +232,7 @@ export function buildCalendarInviteExtractionPrompt(threadEmails: DashboardEmail
 
 function buildCalendarInviteExtractionSystemPrompt(
   calendarSummary: string,
-  defaults: { calendarId: string; timezone: string },
+  defaults: { calendarId: string; timezone: string; userTimezone: string },
   attempt: CalendarInviteExtractionAttempt,
 ): string {
   const retryInstruction =
@@ -248,7 +257,12 @@ Return ONLY valid JSON with this shape:
   "warnings": ["string"]
 }
 ${retryInstruction}
-Infer guests from the actual scheduling context, not by blindly copying every sender, To, and Cc recipient. Use Google Meet by default unless the thread clearly contains another meeting link, phone bridge, or physical location. Normalize displayed times to the selected calendar timezone when possible.
+Infer guests from the actual scheduling context, not by blindly copying every sender, To, and Cc recipient. Use Google Meet by default unless the thread clearly contains another meeting link, phone bridge, or physical location.
+
+Timezone handling for "start" and "end" — follow exactly, do not convert times yourself:
+- If the email explicitly states a timezone for the time (e.g. "2pm London time", "10am PT"), emit the datetime WITH that zone's UTC offset, e.g. "2026-06-02T14:00:00+01:00". Application code converts it; you must not.
+- If the email does NOT state a timezone, emit a floating local datetime with NO offset and NO trailing Z, e.g. "2026-06-02T14:00:00". A bare time will be interpreted in the user's timezone.
+- Never attach an offset to a time the email did not give a zone for. The presence or absence of the offset is how you tell the application whether the email specified a zone.
 
 Date and duration defaults:
 - If a weekday or month/day is provided without an explicit year, assume the same calendar year as the relevant email message date unless the thread explicitly says otherwise. Do not add a warning for this.
@@ -261,7 +275,8 @@ Available calendars:
 ${calendarSummary || "(none)"}
 
 Default calendarId: ${defaults.calendarId || "(none)"}
-Default timezone: ${defaults.timezone}
+Calendar timezone: ${defaults.timezone}
+User timezone (for bare times with no stated zone): ${defaults.userTimezone}
 
 ${UNTRUSTED_DATA_INSTRUCTION}`;
 }
@@ -269,7 +284,7 @@ ${UNTRUSTED_DATA_INSTRUCTION}`;
 async function requestCalendarInviteExtraction(args: {
   threadEmails: DashboardEmail[];
   calendarSummary: string;
-  defaults: { calendarId: string; timezone: string };
+  defaults: { calendarId: string; timezone: string; userTimezone: string };
   modelConfig: CalendarInviteModelConfig;
   metadata?: CalendarInviteMetadata;
   attempt: CalendarInviteExtractionAttempt;
@@ -313,7 +328,7 @@ async function requestCalendarInviteExtraction(args: {
 
 function parseResponseTextOrFallback(
   response: Awaited<ReturnType<CalendarInviteMessageSender>>,
-  defaults: { calendarId: string; timezone: string },
+  defaults: { calendarId: string; timezone: string; userTimezone: string },
 ): {
   draft: CalendarInviteDraft;
   textLength: number;
@@ -349,7 +364,10 @@ export function buildDemoCalendarInviteDraft(
     defaultCalendar?.calendarId,
     defaultCalendar?.timezone ?? fallbackTimezone,
   );
-  const { start, end } = defaultStartFromEmailDate(latest?.date ?? new Date().toISOString());
+  const { start, end } = defaultStartFromEmailDate(
+    latest?.date ?? new Date().toISOString(),
+    timezone,
+  );
   const currentUserEmails = new Set([
     "me@example.com",
     "demo@example.com",
@@ -415,6 +433,7 @@ export async function extractCalendarInviteDraftWithProvider(
   const defaults = {
     calendarId: defaultCalendar?.calendarId ?? "",
     timezone: defaultTimezone,
+    userTimezone: fallbackTimezone,
   };
 
   const calendarSummary = scopedCalendars
