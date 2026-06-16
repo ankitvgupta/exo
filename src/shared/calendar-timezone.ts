@@ -80,6 +80,13 @@ function timeZoneOffsetMinutes(date: Date, timeZone: string): number {
  *
  * DST is handled by computing the zone offset *at the candidate instant* and
  * correcting once — sufficient for the 30–60 minute jumps real zones use.
+ *
+ * Caveat: at a DST transition a wall clock can be nonexistent (the "spring
+ * forward" gap) or ambiguous (the "fall back" repeat), and the single
+ * correction can land an hour off in those ~1hr/year windows. This is only
+ * used to POSITION the preview block on the day grid; the instant sent to
+ * Google is the floating string + `timeZone`, which Google resolves itself,
+ * so the imprecision never reaches the created event.
  */
 export function wallClockToInstant(wallClock: string, timeZone: string): Date | null {
   const match = FLOATING_RE.exec(wallClock.trim());
