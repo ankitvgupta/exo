@@ -368,17 +368,22 @@ export type SenderLookupProvider = z.infer<typeof SenderLookupProviderSchema>;
 /**
  * Default Ollama Cloud model when none is configured.
  *
- * kimi-k2.6:cloud is Moonshot's latest. Chosen over deepseek-v4-pro:cloud
- * because deepseek's compat-layer thinking depth is capped at default-level
- * (no way to invoke "max" through Ollama's Anthropic-compat endpoint —
- * filed upstream at ollama/ollama#15952), which made the agent feel
- * underpowered. kimi-k2.6 doesn't need a thinking knob to perform well.
+ * glm-5.2:cloud (z.ai, 744B MoE, 1M context). Chosen after a 16-task
+ * agent-sidebar benchmark against kimi-k2.7-code:cloud: GLM 5.2 was
+ * consistently the faster model at parity final-answer quality (both clearly
+ * beat the prior kimi-k2.6 default). Reasoning is returned in proper
+ * `thinking` blocks on Ollama's Anthropic-compat endpoint (the agent path),
+ * so chain-of-thought does not leak into drafts; non-agent features use the
+ * native /api/chat path with think:true, which likewise keeps CoT out of
+ * parsed JSON. Note: GLM emits brief inter-turn progress text in agent loops
+ * (visible as status lines in the sidebar) — suppressible via the agent
+ * system prompt if undesired.
  *
  * Note: cloud models may occasionally return overloaded_error during peak
  * traffic — llm-service.ts retry logic catches this via Anthropic.APIError
  * status 529 (rate_limit category) and backs off automatically.
  */
-export const DEFAULT_OLLAMA_MODEL = "kimi-k2.6:cloud";
+export const DEFAULT_OLLAMA_MODEL = "glm-5.2:cloud";
 
 export const OllamaCloudConfigSchema = z.object({
   apiKey: z.string().default(""),
