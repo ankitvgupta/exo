@@ -138,6 +138,20 @@ export function getConfig(): Config {
     getStore().set("config", config);
   }
 
+  // v3 migration: GLM 5.2 replaced kimi-k2.6 as the default Ollama model. Existing
+  // installs persisted ollamaCloud.defaultModel under the old constant (SetupWizard
+  // and ExtensionsTab write DEFAULT_OLLAMA_MODEL on save), so the stored value would
+  // otherwise pin them to kimi-k2.6 forever — making the new default a no-op for
+  // anyone who already enabled Ollama. Flip the old default to the new one; leave any
+  // other (explicitly chosen) model untouched.
+  if ((config.configVersion ?? 0) < 3) {
+    if (config.ollamaCloud?.defaultModel === "kimi-k2.6:cloud") {
+      config.ollamaCloud = { ...config.ollamaCloud, defaultModel: DEFAULT_OLLAMA_MODEL };
+    }
+    config.configVersion = 3;
+    getStore().set("config", config);
+  }
+
   return config;
 }
 
