@@ -2,6 +2,7 @@ import { memo, useMemo, useEffect, useRef } from "react";
 import { useAppStore } from "../store";
 import { useExtensionPanels, ExtensionPanelSlot } from "../extensions";
 import { AgentTabContent } from "./AgentPanel";
+import { isStaleInviteRequest } from "../../shared/calendar-invite-editor";
 import type { ScopedAgentEvent } from "../../shared/agent-types";
 
 // SVG icon components for sidebar tabs
@@ -95,6 +96,7 @@ export const EmailPreviewSidebar = memo(function EmailPreviewSidebar() {
   const availableTabs = useAppStore((s) => s.availableSidebarTabs);
   const setAvailableTabs = useAppStore((s) => s.setAvailableSidebarTabs);
   const calendarInviteRequest = useAppStore((s) => s.calendarInviteRequest);
+  const clearCalendarInviteRequest = useAppStore((s) => s.clearCalendarInviteRequest);
   const globalAgentTaskKey = useAppStore((s) => s.globalAgentTaskKey);
   // Draft task key for agent tab — drafts use `draft:${id}` as their task key
   const draftTaskKey = selectedDraftId ? `draft:${selectedDraftId}` : null;
@@ -219,6 +221,18 @@ export const EmailPreviewSidebar = memo(function EmailPreviewSidebar() {
       setSidebarTab("email");
     }
   }, [invitePending, availableTabs, sidebarTab, setSidebarTab]);
+
+  // Always-mounted safety net for a stale invite lock: if the request targets a
+  // thread other than the one now selected, the user navigated away before the
+  // (possibly never-mounted) CalendarPanel could start it. Left alone, the
+  // request keeps the tab bar hidden and `b` suppressed with no reachable exit.
+  // Keying strictly on a confirmed different selected thread avoids racing
+  // CalendarPanel's legitimate same-thread start.
+  useEffect(() => {
+    if (isStaleInviteRequest(calendarInviteRequest, selectedEmail?.threadId)) {
+      clearCalendarInviteRequest();
+    }
+  }, [calendarInviteRequest, selectedEmail, clearCalendarInviteRequest]);
 
   // When switching emails (or returning to inbox), auto-select the agent tab
   // if the current key has an agent task/trace, or reset away if it doesn't.

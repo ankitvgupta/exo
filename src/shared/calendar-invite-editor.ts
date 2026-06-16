@@ -123,3 +123,18 @@ export function shouldStartInviteExtraction(
 ): boolean {
   return Boolean(request && request.threadId === currentThreadId && request.nonce !== startedNonce);
 }
+
+/**
+ * True when an invite request is stale relative to the thread the user is now
+ * viewing: it targets a different thread than `selectedThreadId`. Such a request
+ * must be cleared, or it keeps the sidebar in invite-lock (tab bar hidden, `b`
+ * suppressed) with no editor rendered and no reachable exit. `selectedThreadId`
+ * is undefined when nothing is selected; we only clear on a confirmed mismatch
+ * to avoid racing the legitimate same-thread start.
+ */
+export function isStaleInviteRequest(
+  request: CalendarInviteRequestMatch | null,
+  selectedThreadId: string | undefined,
+): boolean {
+  return Boolean(request && selectedThreadId && request.threadId !== selectedThreadId);
+}

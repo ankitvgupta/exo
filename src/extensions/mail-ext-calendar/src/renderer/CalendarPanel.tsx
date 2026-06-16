@@ -1123,6 +1123,8 @@ export function CalendarPanel({
       startedInviteNonceRef.current = null;
       return;
     }
+    // Stale requests for a different thread are released by EmailPreviewSidebar
+    // (always mounted), so this effect only needs to start same-thread requests.
     if (
       !shouldStartInviteExtraction(
         calendarInviteRequest,

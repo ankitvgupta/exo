@@ -2,6 +2,7 @@ import { test, expect } from "@playwright/test";
 import { isoDateMatchesCalendarDate } from "../../src/shared/calendar-date";
 import {
   combineDateAndTime,
+  isStaleInviteRequest,
   shouldStartInviteExtraction,
   toDateInput,
   toTimeInput,
@@ -73,6 +74,19 @@ test.describe("calendar invite review regressions", () => {
     expect(shouldStartInviteExtraction(request, "thread-a", null)).toBe(true);
     expect(shouldStartInviteExtraction(request, "thread-a", 42)).toBe(false);
     expect(shouldStartInviteExtraction(request, "thread-b", null)).toBe(false);
+  });
+
+  test("flags an invite request as stale only when a different thread is selected", () => {
+    const request = { threadId: "thread-a", nonce: 1 };
+
+    // Navigated to a different thread → stale, must be cleared to release the lock.
+    expect(isStaleInviteRequest(request, "thread-b")).toBe(true);
+    // Still on the triggering thread → not stale (legitimate same-thread start).
+    expect(isStaleInviteRequest(request, "thread-a")).toBe(false);
+    // No selection yet → don't clear (avoid racing the startup path).
+    expect(isStaleInviteRequest(request, undefined)).toBe(false);
+    // No request → nothing to clear.
+    expect(isStaleInviteRequest(null, "thread-b")).toBe(false);
   });
 
   test("changing the start date never blanks the end when the existing end is malformed", () => {
