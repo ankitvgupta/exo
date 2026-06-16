@@ -15,7 +15,8 @@
           "id": "day-view",
           "title": "Calendar",
           "priority": 100,
-          "scope": "email"
+          "scope": "email",
+          "ownHeader": true
         }
       ],
       "settings": [

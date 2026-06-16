@@ -450,6 +450,7 @@ export const EmailPreviewSidebar = memo(function EmailPreviewSidebar() {
                 extensionId={panelData.panelInfo.extensionId}
                 panelId={panelData.panelInfo.id}
                 title={panelData.panelInfo.title}
+                ownHeader={panelData.panelInfo.ownHeader}
                 email={sidebarEmail}
                 threadEmails={threadEmails}
                 enrichment={panelData.enrichment}
