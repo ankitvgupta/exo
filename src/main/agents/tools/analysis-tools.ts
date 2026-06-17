@@ -6,7 +6,7 @@ import { htmlToPlainText } from "../../util/html-to-text";
 const analyzeEmail: ToolDefinition<{ emailId: string }> = {
   name: "analyze_email",
   description:
-    "Analyze an email to determine if it needs a reply, its priority level, and reasoning. Returns cached analysis if available.",
+    "Analyze an email to determine if it needs a reply (Priority) or not (Other), with reasoning. Returns cached analysis if available.",
   category: "analysis",
   riskLevel: ToolRiskLevel.NONE,
   inputSchema: z.object({

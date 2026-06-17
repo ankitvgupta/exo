@@ -279,6 +279,81 @@ export const NUMBERED_MIGRATIONS: Migration[] = [
       );
     },
   },
+  {
+    version: 4,
+    name: "add_blocked_senders_table",
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS blocked_senders (
+          sender_email TEXT NOT NULL,
+          account_id TEXT NOT NULL,
+          gmail_filter_id TEXT,
+          blocked_at INTEGER NOT NULL,
+          PRIMARY KEY (sender_email, account_id),
+          FOREIGN KEY (account_id) REFERENCES accounts(id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_blocked_senders_account ON blocked_senders(account_id);
+      `);
+    },
+  },
+  {
+    version: 5,
+    name: "drop_analyses_priority_column",
+    up: (db) => {
+      // Three-level priority (high/medium/low) was collapsed to a binary
+      // Priority/Other classification (issue #143). The column is unused
+      // after this release. Guard on table existence so fresh DBs (which
+      // get the final SCHEMA without the column) are a no-op here.
+      const tableExists = db
+        .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='analyses'")
+        .get();
+      if (!tableExists) return;
+      const cols = db.prepare("PRAGMA table_info(analyses)").all() as Array<{ name: string }>;
+      if (cols.some((c) => c.name === "priority")) {
+        db.exec("ALTER TABLE analyses DROP COLUMN priority");
+      }
+    },
+  },
+  {
+    version: 6,
+    name: "add_emails_merge_covering_index",
+    // buildMergeCache (db/index.ts) runs
+    //   SELECT thread_id, message_id, in_reply_to FROM emails WHERE account_id = ?
+    // every time the per-account merge cache is invalidated by saveEmail/
+    // deleteEmail. With ~8k inbox rows and the existing idx_emails_account index
+    // (which doesn't cover the SELECT columns), SQLite has to do row-by-row
+    // lookups in the main table — 190ms per rebuild, and the prefetch service
+    // can trigger 20+ rebuilds in one burst, causing 7-9s main-thread
+    // beachballs. A covering index lets the rebuild be served entirely from
+    // index pages, dropping it from ~190ms to single-digit ms.
+    //
+    // Guard on table existence: migrations run BEFORE the SCHEMA `CREATE TABLE`
+    // statements in initDatabase, so on a fresh DB the `emails` table won't
+    // exist yet. SCHEMA itself includes this index (see schema.ts), so fresh
+    // DBs are still covered — this migration only matters for existing DBs.
+    up: (db) => {
+      const tableExists = db
+        .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='emails'")
+        .get();
+      if (!tableExists) return;
+      db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_emails_merge_cover
+          ON emails(account_id, thread_id, message_id, in_reply_to);
+      `);
+    },
+  },
+  {
+    version: 7,
+    name: "add_llm_calls_provider_column",
+    up: (db) => {
+      // Track which LLM backend handled each call. Defaults to "anthropic"
+      // for existing rows.
+      const cols = db.prepare("PRAGMA table_info(llm_calls)").all() as Array<{ name: string }>;
+      if (cols.length > 0 && !cols.some((c) => c.name === "provider")) {
+        db.exec(`ALTER TABLE llm_calls ADD COLUMN provider TEXT DEFAULT 'anthropic'`);
+      }
+    },
+  },
 ];
 
 function runNumberedMigrations(db: DatabaseInstance): void {

@@ -53,6 +53,33 @@ test.describe("extractFinalJson", () => {
     expect(r.anomalies).toHaveLength(1);
     expect(r.anomalies[0].type).toBe("layout");
   });
+
+  // Regression: a live run in the managed-agents repo produced anomaly
+  // descriptions quoting API bodies — braces inside string values broke the
+  // old regex-based scanner, so a 6-anomaly "anomalies_found" verdict was
+  // silently read as inconclusive with 0 anomalies.
+  test("handles braces inside string values", () => {
+    const text =
+      `Found issues.\n` +
+      `{"verdict":"anomalies_found","summary":"x","anomalies":[` +
+      `{"type":"stuck_state","description":"dialog shows {error: 'failed'} and never closes",` +
+      `"repro":"click Send → observe {\\"error\\":\\"...\\"} toast"}],"actions_taken":12}`;
+    const r = extractFinalJson(text);
+    expect(r.verdict).toBe("anomalies_found");
+    expect(r.anomalies).toHaveLength(1);
+  });
+
+  test("handles pretty-printed (multi-line) JSON", () => {
+    const text = `prose first\n{\n  "verdict": "pass",\n  "summary": "ok",\n  "anomalies": []\n}`;
+    const r = extractFinalJson(text);
+    expect(r.verdict).toBe("pass");
+  });
+
+  test("handles JSON inside a markdown fence", () => {
+    const text = '```json\n{"verdict":"fail","summary":"x","anomalies":[]}\n```';
+    const r = extractFinalJson(text);
+    expect(r.verdict).toBe("fail");
+  });
 });
 
 test.describe("summarizeToolCalls", () => {

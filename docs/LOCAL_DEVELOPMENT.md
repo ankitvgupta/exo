@@ -245,6 +245,15 @@ The marker `SHA=` is informational only — it's NOT gated against HEAD.
 One passing full run per PR is sufficient; iterate freely with
 `--quick` and switch to full before requesting review or merging.
 
+In addition to the body marker, `pre-pr` upserts a single PR comment
+identified by `<!-- AGENTIC-VERIFY-COMMENT -->`. The comment carries
+the phase table at the top and the full agentic-verify markdown
+report inside a `<details>` block, so reviewers can see the verdict
+without expanding and read the whole transcript when they want to.
+Repeated runs PATCH the same comment in place — the thread stays
+clean. Use `--no-comment` to skip it (the body marker / CI gate is
+unaffected).
+
 No Anthropic key, no Gmail token, no third-party API key ever lives
 in CI.
 

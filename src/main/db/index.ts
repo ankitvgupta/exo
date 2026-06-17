@@ -339,7 +339,7 @@ export function getEmail(emailId: string): DashboardEmail | null {
       e.id, e.account_id as accountId, e.thread_id as threadId, e.subject, e.from_address as "from",
       e.to_address as "to", e.cc_address as "cc", e.bcc_address as "bcc", e.body, e.snippet, e.date, e.label_ids as labelIds, e.attachments as attachmentsJson,
       e.message_id as messageId, e.in_reply_to as inReplyTo,
-      a.needs_reply as needsReply, a.reason, a.priority, a.analyzed_at as analyzedAt,
+      a.needs_reply as needsReply, a.reason, a.analyzed_at as analyzedAt,
       d.draft_body as draftBody, d.gmail_draft_id as gmailDraftId, d.status as draftStatus, d.created_at as draftCreatedAt, d.agent_task_id as agentTaskId, d.to_recipients as draftTo, d.cc as draftCc, d.bcc as draftBcc, d.compose_mode as draftComposeMode
     FROM emails e
     LEFT JOIN analyses a ON e.id = a.email_id
@@ -364,7 +364,7 @@ export function getAllEmails(accountId?: string): DashboardEmail[] {
       e.id, e.account_id as accountId, e.thread_id as threadId, e.subject, e.from_address as "from",
       e.to_address as "to", e.cc_address as "cc", e.bcc_address as "bcc", '' as body, e.snippet, e.date, e.label_ids as labelIds, e.attachments as attachmentsJson,
       e.message_id as messageId, e.in_reply_to as inReplyTo,
-      a.needs_reply as needsReply, a.reason, a.priority, a.analyzed_at as analyzedAt,
+      a.needs_reply as needsReply, a.reason, a.analyzed_at as analyzedAt,
       d.draft_body as draftBody, d.gmail_draft_id as gmailDraftId, d.status as draftStatus, d.created_at as draftCreatedAt, d.agent_task_id as agentTaskId, d.to_recipients as draftTo, d.cc as draftCc, d.bcc as draftBcc, d.compose_mode as draftComposeMode
     FROM emails e
     LEFT JOIN analyses a ON e.id = a.email_id
@@ -411,7 +411,7 @@ export function getInboxEmails(accountId?: string): DashboardEmail[] {
       e.id, e.account_id as accountId, e.thread_id as threadId, e.subject, e.from_address as "from",
       e.to_address as "to", e.cc_address as "cc", e.bcc_address as "bcc", '' as body, e.snippet, e.date, e.label_ids as labelIds, e.attachments as attachmentsJson,
       e.message_id as messageId, e.in_reply_to as inReplyTo,
-      a.needs_reply as needsReply, a.reason, a.priority, a.analyzed_at as analyzedAt,
+      a.needs_reply as needsReply, a.reason, a.analyzed_at as analyzedAt,
       d.draft_body as draftBody, d.gmail_draft_id as gmailDraftId, d.status as draftStatus, d.created_at as draftCreatedAt, d.agent_task_id as agentTaskId, d.to_recipients as draftTo, d.cc as draftCc, d.bcc as draftBcc, d.compose_mode as draftComposeMode`;
   const fromJoins = `
     FROM emails e
@@ -549,7 +549,7 @@ export function getSentEmails(accountId: string): DashboardEmail[] {
       e.id, e.account_id as accountId, e.thread_id as threadId, e.subject, e.from_address as "from",
       e.to_address as "to", e.cc_address as "cc", e.bcc_address as "bcc", '' as body, e.snippet, e.date, e.label_ids as labelIds, e.attachments as attachmentsJson,
       e.message_id as messageId, e.in_reply_to as inReplyTo,
-      a.needs_reply as needsReply, a.reason, a.priority, a.analyzed_at as analyzedAt,
+      a.needs_reply as needsReply, a.reason, a.analyzed_at as analyzedAt,
       d.draft_body as draftBody, d.gmail_draft_id as gmailDraftId, d.status as draftStatus, d.created_at as draftCreatedAt, d.agent_task_id as agentTaskId, d.to_recipients as draftTo, d.cc as draftCc, d.bcc as draftBcc, d.compose_mode as draftComposeMode
     FROM emails e
     LEFT JOIN analyses a ON e.id = a.email_id
@@ -581,7 +581,7 @@ export function getEmailsByThread(threadId: string, accountId?: string): Dashboa
       e.id, e.account_id as accountId, e.thread_id as threadId, e.subject, e.from_address as "from",
       e.to_address as "to", e.cc_address as "cc", e.bcc_address as "bcc", e.body, e.snippet, e.date, e.label_ids as labelIds, e.attachments as attachmentsJson,
       e.message_id as messageId, e.in_reply_to as inReplyTo,
-      a.needs_reply as needsReply, a.reason, a.priority, a.analyzed_at as analyzedAt,
+      a.needs_reply as needsReply, a.reason, a.analyzed_at as analyzedAt,
       d.draft_body as draftBody, d.gmail_draft_id as gmailDraftId, d.status as draftStatus, d.created_at as draftCreatedAt, d.agent_task_id as agentTaskId, d.to_recipients as draftTo, d.cc as draftCc, d.bcc as draftBcc, d.compose_mode as draftComposeMode
     FROM emails e
     LEFT JOIN analyses a ON e.id = a.email_id
@@ -614,7 +614,7 @@ export function getEmailsByIds(ids: string[]): DashboardEmail[] {
       e.id, e.account_id as accountId, e.thread_id as threadId, e.subject, e.from_address as "from",
       e.to_address as "to", e.cc_address as "cc", e.bcc_address as "bcc", e.body, e.snippet, e.date, e.label_ids as labelIds, e.attachments as attachmentsJson,
       e.message_id as messageId, e.in_reply_to as inReplyTo,
-      a.needs_reply as needsReply, a.reason, a.priority, a.analyzed_at as analyzedAt,
+      a.needs_reply as needsReply, a.reason, a.analyzed_at as analyzedAt,
       d.draft_body as draftBody, d.gmail_draft_id as gmailDraftId, d.status as draftStatus, d.created_at as draftCreatedAt, d.agent_task_id as agentTaskId, d.to_recipients as draftTo, d.cc as draftCc, d.bcc as draftBcc, d.compose_mode as draftComposeMode
     FROM emails e
     LEFT JOIN analyses a ON e.id = a.email_id
@@ -1127,7 +1127,6 @@ function rowToDashboardEmail(row: Record<string, unknown>): DashboardEmail {
     email.analysis = {
       needsReply: Boolean(row.needsReply),
       reason: row.reason as string,
-      priority: row.priority as "high" | "medium" | "low" | undefined,
       analyzedAt: row.analyzedAt as number,
     };
   }
@@ -1182,18 +1181,13 @@ function rowToDashboardEmail(row: Record<string, unknown>): DashboardEmail {
 }
 
 // Analysis operations
-export function saveAnalysis(
-  emailId: string,
-  needsReply: boolean,
-  reason: string,
-  priority?: string,
-): void {
+export function saveAnalysis(emailId: string, needsReply: boolean, reason: string): void {
   const db = getDatabase();
   const stmt = db.prepare(`
-    INSERT OR REPLACE INTO analyses (email_id, needs_reply, reason, priority, analyzed_at)
-    VALUES (?, ?, ?, ?, ?)
+    INSERT OR REPLACE INTO analyses (email_id, needs_reply, reason, analyzed_at)
+    VALUES (?, ?, ?, ?)
   `);
-  stmt.run(emailId, needsReply ? 1 : 0, reason, priority || null, Date.now());
+  stmt.run(emailId, needsReply ? 1 : 0, reason, Date.now());
 }
 
 // Draft operations
@@ -1989,6 +1983,70 @@ export function getSenderProfiles(): SenderProfile[] {
     title: row.title || undefined,
     lookupAt: row.lookupAt,
   }));
+}
+
+// ============================================
+// Blocked senders (mirrors Gmail filter that routes a sender to Spam)
+// ============================================
+
+export type BlockedSenderRow = {
+  senderEmail: string;
+  accountId: string;
+  gmailFilterId: string | null;
+  blockedAt: number;
+};
+
+export function addBlockedSender(
+  senderEmail: string,
+  accountId: string,
+  gmailFilterId: string | null,
+): void {
+  const db = getDatabase();
+  db.prepare(
+    `INSERT OR REPLACE INTO blocked_senders (sender_email, account_id, gmail_filter_id, blocked_at)
+     VALUES (?, ?, ?, ?)`,
+  ).run(senderEmail.toLowerCase(), accountId, gmailFilterId, Date.now());
+}
+
+export function removeBlockedSender(senderEmail: string, accountId: string): void {
+  const db = getDatabase();
+  db.prepare(`DELETE FROM blocked_senders WHERE sender_email = ? AND account_id = ?`).run(
+    senderEmail.toLowerCase(),
+    accountId,
+  );
+}
+
+export function getBlockedSender(senderEmail: string, accountId: string): BlockedSenderRow | null {
+  const db = getDatabase();
+  const row = db
+    .prepare(
+      `SELECT sender_email as senderEmail, account_id as accountId,
+              gmail_filter_id as gmailFilterId, blocked_at as blockedAt
+       FROM blocked_senders WHERE sender_email = ? AND account_id = ?`,
+    )
+    .get(senderEmail.toLowerCase(), accountId) as BlockedSenderRow | undefined;
+  return row ?? null;
+}
+
+export function isSenderBlocked(senderEmail: string, accountId: string): boolean {
+  const db = getDatabase();
+  const row = db
+    .prepare(
+      `SELECT 1 as found FROM blocked_senders WHERE sender_email = ? AND account_id = ? LIMIT 1`,
+    )
+    .get(senderEmail.toLowerCase(), accountId);
+  return row !== undefined;
+}
+
+export function getBlockedSenders(accountId?: string): BlockedSenderRow[] {
+  const db = getDatabase();
+  const sql = `SELECT sender_email as senderEmail, account_id as accountId,
+                      gmail_filter_id as gmailFilterId, blocked_at as blockedAt
+               FROM blocked_senders
+               ${accountId ? "WHERE account_id = ?" : ""}
+               ORDER BY blocked_at DESC`;
+  const stmt = db.prepare(sql);
+  return (accountId ? stmt.all(accountId) : stmt.all()) as BlockedSenderRow[];
 }
 
 // ============================================
@@ -3205,9 +3263,9 @@ export function saveArchiveReady(
 
 /**
  * Batch-mark emails as skipped during onboarding.
- * Inserts analysis rows (needs_reply=false, priority='skip') and
- * archive_ready rows (is_ready=true) so these emails are treated as
- * already-processed by the prefetch pipeline.
+ * Inserts analysis rows (needs_reply=false) and archive_ready rows
+ * (is_ready=true) so these emails are treated as already-processed by
+ * the prefetch pipeline.
  */
 export function batchInsertOnboardingSkips(
   emailIds: string[],
@@ -3221,8 +3279,8 @@ export function batchInsertOnboardingSkips(
   const reason = "Pre-existing email before app setup";
 
   const insertAnalysis = db.prepare(`
-    INSERT OR IGNORE INTO analyses (email_id, needs_reply, reason, priority, analyzed_at)
-    VALUES (?, 0, ?, 'skip', ?)
+    INSERT OR IGNORE INTO analyses (email_id, needs_reply, reason, analyzed_at)
+    VALUES (?, 0, ?, ?)
   `);
   const insertArchiveReady = db.prepare(`
     INSERT INTO archive_ready (thread_id, account_id, is_ready, reason, analyzed_at, dismissed)

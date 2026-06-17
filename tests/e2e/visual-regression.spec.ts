@@ -73,8 +73,6 @@ test.describe("Visual regression — Linux-only", () => {
 
     await checkA11y(page, {
       exclude: ["[data-testid='email-date']"],
-      // color-contrast still tracked under #126 (tailwind text-gray-300/400 on white).
-      disableRules: ["color-contrast"],
     });
   });
 
@@ -89,7 +87,7 @@ test.describe("Visual regression — Linux-only", () => {
       maxDiffPixelRatio: 0.01,
     });
 
-    await checkA11y(page, { disableRules: ["color-contrast"] });
+    await checkA11y(page);
 
     // Close compose so the next test starts from inbox.
     await page.keyboard.press("Escape");
@@ -115,7 +113,8 @@ test.describe("Visual regression — Linux-only", () => {
       maxDiffPixelRatio: 0.01,
     });
 
-    // color-contrast still tracked under #126.
+    // SettingsPanel has its own palette debt that's out of scope for #126.
+    // Tracked as a follow-up sweep — keep color-contrast disabled here.
     await checkA11y(page, {
       disableRules: ["color-contrast"],
     });

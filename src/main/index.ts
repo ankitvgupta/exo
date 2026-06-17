@@ -397,8 +397,8 @@ ipcMain.handle("default-mail-app:get-pending", () => {
 // Initialize database on startup
 const _db = initDatabase();
 
-// Wire up AnthropicService cost tracking
-import { setAnthropicServiceDb } from "./services/anthropic-service";
+// Wire up LLM service cost tracking
+import { setAnthropicServiceDb, setOllamaConfig } from "./services/llm-service";
 setAnthropicServiceDb(_db);
 
 // If no ANTHROPIC_API_KEY in env (e.g. packaged app with no .env), read from stored config
@@ -407,6 +407,10 @@ setAnthropicServiceDb(_db);
   const config = getConfig();
   if (!process.env.ANTHROPIC_API_KEY && config.anthropicApiKey) {
     process.env.ANTHROPIC_API_KEY = config.anthropicApiKey;
+  }
+  // Initialize Ollama Cloud client if configured
+  if (config.ollamaCloud?.apiKey) {
+    setOllamaConfig(config.ollamaCloud.apiKey);
   }
 }
 
@@ -428,9 +432,15 @@ app.whenReady().then(async () => {
   // Set app user model id for windows
   electronApp.setAppUserModelId("com.exo.app");
 
-  // Set dock icon on macOS (especially for dev mode where packaged icon isn't used)
+  // Set dock icon on macOS (especially for dev mode where packaged icon isn't used).
+  // In headless mode, hide the dock icon entirely so launching the app for CDP-based
+  // testing doesn't pop a dock icon or steal focus from the user.
   if (process.platform === "darwin" && app.dock) {
-    app.dock.setIcon(getIconPath());
+    if (process.env.EXO_HEADLESS === "true" || process.env.NODE_ENV === "test") {
+      app.dock.hide();
+    } else {
+      app.dock.setIcon(getIconPath());
+    }
   }
 
   // Initialize network monitor

@@ -10,7 +10,8 @@ import {
   getRecentSentEmailsWithBody,
 } from "../db";
 import type { GmailClient } from "./gmail-client";
-import { createMessage } from "./anthropic-service";
+import { createMessage } from "./llm-service";
+import { getFeatureModelConfig } from "../ipc/settings.ipc";
 import { stripQuotedContent } from "./strip-quoted-content";
 import { createLogger } from "./logger";
 
@@ -448,9 +449,15 @@ export async function inferStyleFromSentEmails(
     })
     .join("\n\n");
 
+  // Route through styleInference's configured provider/model. Default tier
+  // is opus (preserving the previous Anthropic behavior — this task benefits
+  // from a more capable model and runs rarely). Ollama-only users get whatever
+  // they configured for styleInference, falling back to their default Ollama
+  // model — no crash on missing Anthropic key.
+  const { provider, model } = getFeatureModelConfig("styleInference");
   const response = await createMessage(
     {
-      model: "claude-opus-4-20250514",
+      model,
       max_tokens: 1024,
       system: [{ type: "text", text: STYLE_INFERENCE_PROMPT }],
       messages: [
@@ -460,7 +467,7 @@ export async function inferStyleFromSentEmails(
         },
       ],
     },
-    { caller: "style-inference" },
+    { caller: "style-inference", provider },
   );
 
   const textBlock = response.content.find((block) => block.type === "text");

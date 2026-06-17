@@ -7,6 +7,8 @@ import {
   type ThemePreference,
   type ModelConfig,
   type ModelTier,
+  type LlmProvider,
+  type SenderLookupProvider,
   DEFAULT_ANALYSIS_PROMPT,
   DEFAULT_DRAFT_PROMPT,
   DEFAULT_ARCHIVE_READY_PROMPT,
@@ -15,10 +17,17 @@ import {
   DEFAULT_MODEL_CONFIG,
   MODEL_TIER_IDS,
   resolveModelId,
+  resolveAgentOllamaConfig,
+  DEFAULT_OLLAMA_MODEL,
 } from "../../shared/types";
 import { resetAnalyzer } from "./analysis.ipc";
 import { resetArchiveReadyAnalyzer } from "./archive-ready.ipc";
-import { resetClient, getUsageStats, getCallHistory } from "../services/anthropic-service";
+import {
+  resetClient,
+  setOllamaConfig,
+  getUsageStats,
+  getCallHistory,
+} from "../services/llm-service";
 import { prefetchService } from "../services/prefetch-service";
 import { agentCoordinator } from "../agents/agent-coordinator";
 import {
@@ -53,20 +62,24 @@ function getStore(): Store<{ config: Config }> {
           analysisPrompt: DEFAULT_ANALYSIS_PROMPT,
           draftPrompt: DEFAULT_DRAFT_PROMPT,
           enableSenderLookup: true,
+          senderLookupProvider: "anthropic" as const,
           syncDraftsToGmail: false,
           theme: "system" as const,
           inboxDensity: "compact" as const,
           undoSendDelay: 5,
+          sendAndArchive: false,
           showExoBranding: true,
           autoDraft: {
             enabled: true,
-            priorities: ["high", "medium", "low"],
           },
           // posthog intentionally omitted from defaults — getConfig() applies
           // a version-aware default so pre-existing installs (configVersion < 2)
           // are not silently opted in to analytics + session replay.
           keyboardBindings: "superhuman" as const,
-          configVersion: 2,
+          // Keep in sync with the latest migration version in getConfig() so a
+          // fresh install starts current and doesn't trigger a no-op migration
+          // write on first load.
+          configVersion: 3,
         },
       },
     });
@@ -83,12 +96,10 @@ export function getConfig(): Config {
     getStore().set("config", config);
   }
 
-  // One-time migration: include "low" in autoDraft priorities for existing users
-  // Gated on configVersion so it only runs once — users can later remove "low" if desired
+  // configVersion 1 baseline — pre-existing per-priority autoDraft configs are
+  // no longer meaningful (issue #143: collapsed to binary Priority/Other) but we
+  // keep the version bump so subsequent migrations key off the same scheme.
   if ((config.configVersion ?? 0) < 1) {
-    if (config.autoDraft?.priorities && !config.autoDraft.priorities.includes("low")) {
-      config.autoDraft.priorities.push("low");
-    }
     config.configVersion = 1;
     getStore().set("config", config);
   }
@@ -130,6 +141,20 @@ export function getConfig(): Config {
     getStore().set("config", config);
   }
 
+  // v3 migration: GLM 5.2 replaced kimi-k2.6 as the default Ollama model. Existing
+  // installs persisted ollamaCloud.defaultModel under the old constant (SetupWizard
+  // and ExtensionsTab write DEFAULT_OLLAMA_MODEL on save), so the stored value would
+  // otherwise pin them to kimi-k2.6 forever — making the new default a no-op for
+  // anyone who already enabled Ollama. Flip the old default to the new one; leave any
+  // other (explicitly chosen) model untouched.
+  if ((config.configVersion ?? 0) < 3) {
+    if (config.ollamaCloud?.defaultModel === "kimi-k2.6:cloud") {
+      config.ollamaCloud = { ...config.ollamaCloud, defaultModel: DEFAULT_OLLAMA_MODEL };
+    }
+    config.configVersion = 3;
+    getStore().set("config", config);
+  }
+
   return config;
 }
 
@@ -143,6 +168,46 @@ export function getModelConfig(): ModelConfig {
 export function getModelIdForFeature(feature: keyof ModelConfig): string {
   const mc = getModelConfig();
   return resolveModelId(mc[feature]);
+}
+
+/**
+ * Resolve which search backend sender lookup should use, plus the Exa key,
+ * plus whether an Anthropic API key is configured. The Anthropic flag lets
+ * the extension know whether the Anthropic web_search fallback is even an
+ * option — relevant on the Ollama+Exa-only path where there's no Anthropic
+ * key at all, and silently falling back would just produce an AuthError.
+ */
+export function getSenderLookupConfig(): {
+  provider: SenderLookupProvider;
+  exaApiKey: string;
+  anthropicConfigured: boolean;
+} {
+  const config = getConfig();
+  return {
+    provider: config.senderLookupProvider ?? "anthropic",
+    exaApiKey: config.exaApiKey ?? "",
+    // process.env fallback covers dev (.env) and packaged builds where the
+    // SDK reads ANTHROPIC_API_KEY directly. Same lookup the LLM service uses.
+    anthropicConfigured: Boolean(config.anthropicApiKey || process.env.ANTHROPIC_API_KEY),
+  };
+}
+
+/** Resolve provider + model for a feature, supporting Ollama Cloud routing. */
+export function getFeatureModelConfig(feature: keyof ModelConfig): {
+  provider: LlmProvider;
+  model: string;
+} {
+  const config = getConfig();
+  const provider = (config.featureProviders?.[feature] ?? "anthropic") as LlmProvider;
+  if (provider === "ollama-cloud") {
+    const model =
+      config.ollamaCloud?.featureModels?.[feature] ??
+      config.ollamaCloud?.defaultModel ??
+      DEFAULT_OLLAMA_MODEL;
+    return { provider, model };
+  }
+  const mc = getModelConfig();
+  return { provider: "anthropic", model: resolveModelId(mc[feature]) };
 }
 
 export function registerSettingsIpc(): void {
@@ -189,6 +254,49 @@ export function registerSettingsIpc(): void {
     },
   );
 
+  // Validate an Ollama Cloud API key by listing models
+  ipcMain.handle(
+    "settings:validate-ollama-key",
+    async (_, { apiKey }: { apiKey: string }): Promise<IpcResponse<void>> => {
+      try {
+        const Anthropic = (await import("@anthropic-ai/sdk")).default;
+        const client = new Anthropic({
+          baseURL: "https://ollama.com",
+          authToken: apiKey,
+          // apiKey: null prevents the SDK from leaking process.env.ANTHROPIC_API_KEY
+          // to ollama.com (the SDK reads it as a default fallback for X-Api-Key
+          // alongside our Bearer authToken — credential leak for users with both keys).
+          apiKey: null,
+          timeout: 10_000,
+        });
+        // Validate by making a real messages.create call. The default Ollama
+        // model emits thinking blocks before text, so max_tokens needs to be
+        // high enough that Ollama doesn't reject the request and the user's
+        // key gets a fair test. 4096 mirrors the floor adjustParamsForOllama
+        // uses for runtime calls.
+        await client.messages.create({
+          model: DEFAULT_OLLAMA_MODEL,
+          max_tokens: 4096,
+          messages: [{ role: "user", content: "hi" }],
+        });
+        return { success: true, data: undefined };
+      } catch (error) {
+        const Anthropic = (await import("@anthropic-ai/sdk")).default;
+        if (error instanceof Anthropic.AuthenticationError) {
+          return { success: false, error: "Invalid API key. Please check and try again." };
+        }
+        if (
+          error instanceof Anthropic.RateLimitError ||
+          error instanceof Anthropic.PermissionDeniedError
+        ) {
+          return { success: true, data: undefined };
+        }
+        const msg = error instanceof Error ? error.message : "Unknown error";
+        return { success: false, error: `Ollama Cloud validation failed: ${msg}` };
+      }
+    },
+  );
+
   // Get current config
   ipcMain.handle("settings:get", async (): Promise<IpcResponse<Config>> => {
     try {
@@ -205,7 +313,29 @@ export function registerSettingsIpc(): void {
   ipcMain.handle("settings:set", async (_, config: Partial<Config>): Promise<IpcResponse<void>> => {
     try {
       const currentConfig = getConfig();
-      const newConfig = { ...currentConfig, ...config };
+      // Shallow-merge most fields. Deep-merge ollamaCloud so partial updates from
+      // different UIs don't clobber each other — ExtensionsTab writes
+      // { apiKey, defaultModel } while the General tab writes { featureModels }.
+      // With a shallow merge, whichever caller wrote second would overwrite the other
+      // (Devin caught this: SettingsPanel reads stale react-query data and stomps the key).
+      let newConfig: Config = { ...currentConfig, ...config };
+      if ("ollamaCloud" in config) {
+        const incoming = config.ollamaCloud;
+        const existing = currentConfig.ollamaCloud;
+        if (incoming === undefined) {
+          // Caller wants to clear it
+          newConfig = { ...newConfig, ollamaCloud: undefined };
+        } else {
+          newConfig = {
+            ...newConfig,
+            ollamaCloud: {
+              apiKey: incoming.apiKey ?? existing?.apiKey ?? "",
+              defaultModel: incoming.defaultModel ?? existing?.defaultModel ?? DEFAULT_OLLAMA_MODEL,
+              featureModels: incoming.featureModels ?? existing?.featureModels,
+            },
+          };
+        }
+      }
       getStore().set("config", newConfig);
 
       // If githubToken changed, propagate to auto-updater immediately
@@ -277,13 +407,50 @@ export function registerSettingsIpc(): void {
         });
       }
 
+      // Propagate OpenCode config to the agent framework.
+      // The provider's updateConfig() will close the existing opencode server
+      // so the next run picks up new model / enable state.
+      if ("opencode" in config) {
+        agentCoordinator.updateConfig({
+          opencode: {
+            enabled: newConfig.opencode?.enabled ?? false,
+            model: newConfig.opencode?.model,
+          },
+        });
+      }
+
+      // Propagate Ollama Cloud config to LLM service whenever the apiKey/defaultModel
+      // changes (used by non-agent createMessage routing).
+      if ("ollamaCloud" in config) {
+        const oc = newConfig.ollamaCloud;
+        setOllamaConfig(oc?.apiKey ?? "");
+      }
+
+      // Propagate Ollama Cloud config to the agent framework when EITHER ollamaCloud
+      // or featureProviders changes. resolveAgentOllamaConfig encapsulates the rule
+      // (must have an apiKey AND agentChat must be explicitly routed to ollama-cloud).
+      if ("ollamaCloud" in config || "featureProviders" in config) {
+        agentCoordinator.updateConfig({
+          ollamaCloud: resolveAgentOllamaConfig(newConfig),
+        });
+      }
+
       // Propagate model config changes to the agent worker.
       // Only agentDrafter needs propagation here — it's the worker's default model for
       // auto-draft tasks that don't pass a per-task override. The agentChat model is
       // resolved fresh per-invocation in agent.ipc.ts via getModelIdForFeature("agentChat").
-      if ("modelConfig" in config) {
+      // When Ollama is the agent destination (both agent features opted in via
+      // resolveAgentOllamaConfig), use the Ollama model rather than the per-feature
+      // Anthropic-tier resolver, otherwise the env-var-remapped destination and the
+      // model param in query() can disagree (Anthropic model name → ollama.com → 404).
+      if ("modelConfig" in config || "featureProviders" in config || "ollamaCloud" in config) {
+        const ollamaConfig = resolveAgentOllamaConfig(newConfig);
         agentCoordinator.updateConfig({
-          model: getModelIdForFeature("agentDrafter"),
+          // When ollamaConfig is undefined the worker is on Anthropic — must use
+          // an Anthropic model name (getModelIdForFeature, which ignores
+          // featureProviders) rather than getFeatureModelConfig which could
+          // return an Ollama model name if agentDrafter is solo-set to ollama.
+          model: ollamaConfig?.model ?? getModelIdForFeature("agentDrafter"),
         });
       }
 
@@ -298,9 +465,15 @@ export function registerSettingsIpc(): void {
         }
       }
 
-      // Reset cached analyzer/service instances when model config or API key changes,
-      // since they hold Anthropic client instances that capture the key at construction.
-      if ("modelConfig" in config || "anthropicApiKey" in config) {
+      // Reset cached analyzer/service instances when model config, API keys, provider
+      // routing, or Ollama config changes. These services capture { provider, model } at
+      // construction time, so any of these changes can leave them holding stale values.
+      if (
+        "modelConfig" in config ||
+        "anthropicApiKey" in config ||
+        "ollamaCloud" in config ||
+        "featureProviders" in config
+      ) {
         resetClient();
         resetAnalyzer();
         resetArchiveReadyAnalyzer();

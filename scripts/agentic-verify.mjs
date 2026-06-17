@@ -106,12 +106,14 @@ function flag(name, defaultValue = null) {
 
 const MODE = flag("mode", "verify-diff");
 // --data=auto|real|demo
-//   auto  : detect from the diff. Files matching DATA_REAL_PATTERNS push
-//           the run toward real-account mode; everything else is demo.
+//   auto  : real-mode-first (the default). Real mode is used unless the
+//           ENTIRE diff matches DATA_DEMO_SAFE_PATTERNS (docs/tests/
+//           scripts/config — provably non-behavioral), in which case demo
+//           is used. Any behavioral file in the diff → real.
 //   real  : force real mode (uses .dev-data/ tokens for the test account
 //           and sets EXO_DISABLE_PREFETCH so we don't burn API spend on
 //           background analysis).
-//   demo  : force demo mode (current default). Hermetic, no real Gmail.
+//   demo  : force demo mode. Hermetic, no real Gmail.
 const DATA_MODE_RAW = flag("data", "auto");
 const ACTION_BUDGET = Number(flag("action-budget", MODE === "explore" ? 100 : 40));
 const BUDGET_USD = Number(flag("budget-usd", MODE === "explore" ? 2 : 0.5));
@@ -129,9 +131,7 @@ if (!["verify-diff", "explore"].includes(MODE)) {
 }
 
 if (!process.env.ANTHROPIC_API_KEY) {
-  console.error(
-    `ANTHROPIC_API_KEY is required. Put it in .env.local (see .env.local.example).`,
-  );
+  console.error(`ANTHROPIC_API_KEY is required. Put it in .env.local (see .env.local.example).`);
   process.exit(1);
 }
 
@@ -164,9 +164,7 @@ function flushLog() {
 
 function gitDiffSummary() {
   try {
-    const base = execSync("git merge-base origin/main HEAD", { cwd: REPO_ROOT })
-      .toString()
-      .trim();
+    const base = execSync("git merge-base origin/main HEAD", { cwd: REPO_ROOT }).toString().trim();
     const files = execSync(`git diff --name-only ${base}..HEAD`, { cwd: REPO_ROOT })
       .toString()
       .trim();
@@ -199,43 +197,78 @@ function truncateForPrompt(text, maxChars) {
 }
 
 /**
- * Files whose changes warrant testing against the REAL test Gmail
- * account, not demo data. Anything matching these patterns means the
- * agent is more likely to find real bugs when it can interact with
- * actual Gmail-shaped state (multipart bodies, threading, labels,
- * send-as aliases, etc.) than with the curated demo fixtures.
+ * Files whose changes are unambiguously non-behavioral — docs, tests,
+ * scripts, infra config, type-only declarations. If the ENTIRE diff
+ * matches these patterns, demo mode is safe. Anything else routes to
+ * the real test Gmail account.
+ *
+ * The default flipped on 2026-05-27: previously the router defaulted
+ * to demo and only escalated to real for an allowlist of "risky" service
+ * files. That left almost every behavioral change running against
+ * curated demo fixtures, which can't expose agent runtimes, real Gmail
+ * threading quirks, or auth/token paths. The whole reason the
+ * `exoemailtest@gmail.com` test account exists is so agentic
+ * verification can hit real Gmail-shaped state — making demo the
+ * default defeats that.
  */
-const DATA_REAL_PATTERNS = [
-  /^src\/main\/services\/gmail-client\.ts$/,
-  /^src\/main\/services\/email-sync\.ts$/,
-  /^src\/main\/services\/prefetch-service\.ts$/,
-  /^src\/main\/services\/email-analyzer\.ts$/,
-  /^src\/main\/services\/draft-generator\.ts$/,
-  /^src\/main\/services\/calendaring-agent\.ts$/,
-  /^src\/main\/services\/archive-ready-analyzer\.ts$/,
-  /^src\/main\/services\/sender-lookup\.ts$/,
-  /^src\/main\/services\/style-profiler\.ts$/,
-  /^src\/main\/ipc\/gmail\.ipc\.ts$/,
-  /^src\/main\/ipc\/sync\.ipc\.ts$/,
-  /^src\/main\/ipc\/analysis\.ipc\.ts$/,
-  /^src\/main\/ipc\/drafts\.ipc\.ts$/,
-  /^src\/main\/ipc\/compose\.ipc\.ts$/,
+const DATA_DEMO_SAFE_PATTERNS = [
+  /^docs\//,
+  /^tests\//,
+  /^scripts\//,
+  /^benchmarks\//,
+  /^\.github\//,
+  /^\.claude\//,
+  /\.md$/,
+  /^CHANGELOG/,
+  /^README/,
+  /^LICENSE/,
+  /^TODOS/,
+  /^CONTRIBUTING/,
+  /^\.gitignore$/,
+  /^\.prettierrc/,
+  /^\.editorconfig$/,
+  /^eslint\.config\./,
+  /^prettier\.config\./,
+  /^postcss\.config\./,
+  /^tailwind\.config\./,
+  /^playwright.*\.config\./,
+  /^vite\.[^/]*\.config\./,
+  /^electron-vite\.config\./,
+  /^tsconfig[^/]*\.json$/,
+  /^package(-lock)?\.json$/,
+  /^src\/shared\/types\.ts$/,
 ];
 
 /**
  * Decide whether the agent should run against the real test account
  * or demo data, given the changed files and the user's explicit flag.
+ *
+ * Real-mode-first: if ANY changed file is not in the demo-safe
+ * allowlist, we run against the real test Gmail account. Demo mode is
+ * only used when the diff is provably non-behavioral (docs, tests,
+ * scripts, config). The test account exists for this; using demo by
+ * default wastes that infrastructure and produces false-pass verdicts
+ * for anything that depends on real Gmail or real agent execution.
  */
 function resolveDataMode(rawFlag, changedFiles) {
   if (rawFlag === "real" || rawFlag === "demo") return rawFlag;
-  // auto: any changed file matching a real-pattern → real
-  const realRelevant = changedFiles.filter((f) =>
-    DATA_REAL_PATTERNS.some((p) => p.test(f)),
-  );
-  if (realRelevant.length > 0) {
-    return { mode: "real", reason: `diff touches ${realRelevant.join(", ")}` };
+  if (changedFiles.length === 0) {
+    return { mode: "demo", reason: "no diff" };
   }
-  return { mode: "demo", reason: "diff is UI/scripts/tests only" };
+  const behavioral = changedFiles.filter((f) => !DATA_DEMO_SAFE_PATTERNS.some((p) => p.test(f)));
+  if (behavioral.length === 0) {
+    return {
+      mode: "demo",
+      reason: "diff is docs/tests/scripts/config only — no runtime surface to exercise",
+    };
+  }
+  // Truncate the reason if many files changed — keeps the log readable.
+  const sample = behavioral.slice(0, 5).join(", ");
+  const suffix = behavioral.length > 5 ? `, +${behavioral.length - 5} more` : "";
+  return {
+    mode: "real",
+    reason: `diff touches behavioral code (${sample}${suffix}) — running against test account`,
+  };
 }
 
 function headSha() {
@@ -271,18 +304,32 @@ function fillTemplate(template, vars) {
 // Electron lifecycle
 // ============================================================
 
-async function waitForCdp(timeoutMs = 30_000) {
+// Default 3 min — first-run cold electron-vite builds can take 1-2 min
+// to produce a CDP-listening main process after `npx electron-vite dev`
+// returns. Previous 30s default consistently flaked on cold caches.
+async function waitForCdp(timeoutMs = 180_000) {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
+    // Bound each fetch independently — without a per-fetch signal,
+    // `fetch` can hang for the full Node default if Electron has the
+    // socket bound but isn't yet responding (cold CDP init). One
+    // hanging fetch would consume the entire `timeoutMs` budget and
+    // produce a misleading "not ready after Nms" error where N is
+    // the configured budget, not the actual elapsed wall time.
+    const controller = new AbortController();
+    const fetchAbort = setTimeout(() => controller.abort(), 2_000);
     try {
-      const r = await fetch(`${CDP_URL}/json/version`);
+      const r = await fetch(`${CDP_URL}/json/version`, { signal: controller.signal });
       if (r.ok) return;
     } catch {
-      // not ready
+      // not ready / aborted — keep polling
+    } finally {
+      clearTimeout(fetchAbort);
     }
     await new Promise((res) => setTimeout(res, 500));
   }
-  throw new Error(`CDP at ${CDP_URL} not ready after ${timeoutMs}ms`);
+  const actualMs = Date.now() - start;
+  throw new Error(`CDP at ${CDP_URL} not ready after ${actualMs}ms (budget ${timeoutMs}ms)`);
 }
 
 function launchElectron(dataMode) {
@@ -290,13 +337,26 @@ function launchElectron(dataMode) {
   // test account using .dev-data/ tokens. Set EXO_DISABLE_PREFETCH so
   // the agent's run doesn't trigger background Claude analysis on every
   // seeded email (would burn $$).
+  //
+  // EXO_HEADLESS=true suppresses the visible BrowserWindow (src/main/window.ts
+  // creates it with `show: false` and skips the `ready-to-show` `.show()` call).
+  // CDP and IPC still work, so the chrome-devtools MCP agent is unaffected —
+  // the window just never paints, so pre-pr runs don't steal focus.
   const launchEnv =
     dataMode === "real"
-      ? { ...process.env, EXO_DEMO_MODE: "", EXO_DISABLE_PREFETCH: "true" }
-      : { ...process.env, EXO_DEMO_MODE: "true" };
-  log(
-    `Launching Electron in ${dataMode} mode with --remote-debugging-port=${CDP_PORT}...`,
-  );
+      ? {
+          ...process.env,
+          EXO_DEMO_MODE: "",
+          EXO_DISABLE_PREFETCH: "true",
+          EXO_HEADLESS: "true",
+        }
+      : { ...process.env, EXO_DEMO_MODE: "true", EXO_HEADLESS: "true" };
+  log(`Launching Electron in ${dataMode} mode with --remote-debugging-port=${CDP_PORT}...`);
+  // `detached: true` makes the child the leader of a new process group.
+  // We can then signal the whole tree at once via `process.kill(-pid, ...)`.
+  // Without this, killing the npx wrapper leaves electron-vite and Electron
+  // (and Electron's GPU/network/renderer helpers) orphaned — historically
+  // we've leaked dozens of these from aborted pre-pr / agentic-verify runs.
   const electron = spawn(
     "npx",
     ["electron-vite", "dev", "--", `--remote-debugging-port=${CDP_PORT}`],
@@ -304,6 +364,7 @@ function launchElectron(dataMode) {
       env: launchEnv,
       stdio: ["ignore", "pipe", "pipe"],
       cwd: REPO_ROOT,
+      detached: true,
     },
   );
   electron.stdout.on("data", (d) =>
@@ -315,15 +376,81 @@ function launchElectron(dataMode) {
   return electron;
 }
 
+/**
+ * Kill the entire Electron process group. Returns a promise that resolves
+ * once the leader has actually exited (or after a hard SIGKILL deadline),
+ * so the caller can safely process.exit() without leaving children behind.
+ */
 function killElectron(electron) {
-  if (electron.killed) return;
-  try {
-    electron.kill("SIGTERM");
-    setTimeout(() => {
-      if (!electron.killed) electron.kill("SIGKILL");
+  return new Promise((resolve) => {
+    const pid = electron.pid;
+    if (!pid || electron.exitCode !== null || electron.signalCode !== null) {
+      resolve();
+      return;
+    }
+
+    let exited = false;
+    const onExit = () => {
+      if (exited) return;
+      exited = true;
+      resolve();
+    };
+    electron.once("exit", onExit);
+    electron.once("close", onExit);
+
+    // Signal the whole process group (negative pid). electron-vite spawns
+    // Electron, which spawns helpers — they all need to die together.
+    try {
+      process.kill(-pid, "SIGTERM");
+    } catch {
+      try {
+        electron.kill("SIGTERM");
+      } catch {
+        /* already gone */
+      }
+    }
+
+    const sigkillTimer = setTimeout(() => {
+      if (exited) return;
+      try {
+        process.kill(-pid, "SIGKILL");
+      } catch {
+        try {
+          electron.kill("SIGKILL");
+        } catch {
+          /* already gone */
+        }
+      }
     }, 3000);
+
+    // Hard deadline: even if SIGKILL didn't take, give up and let the
+    // OS reap. We've at least requested the kill.
+    const giveUpTimer = setTimeout(onExit, 6000);
+
+    electron.once("exit", () => {
+      clearTimeout(sigkillTimer);
+      clearTimeout(giveUpTimer);
+    });
+  });
+}
+
+/**
+ * Synchronous best-effort kill, for `process.on("exit", ...)` — Node's
+ * exit event doesn't await async work, so we can't `await killElectron`
+ * there. This sends SIGKILL to the process group as a last resort.
+ */
+function killElectronSync(electron) {
+  const pid = electron?.pid;
+  if (!pid) return;
+  if (electron.exitCode !== null || electron.signalCode !== null) return;
+  try {
+    process.kill(-pid, "SIGKILL");
   } catch {
-    // ignore
+    try {
+      electron.kill("SIGKILL");
+    } catch {
+      /* already gone */
+    }
   }
 }
 
@@ -389,31 +516,71 @@ async function main() {
       DIFF_SUMMARY: diff.shortstat,
       DIFF_PATCH: diff.patch,
       CHANGED_FILES: diff.files,
+      DATA_MODE: dataMode,
+      CDP_URL,
       ACTION_BUDGET,
       BUDGET_USD,
     });
   } else {
     const template = loadPrompt("explore");
-    prompt = fillTemplate(template, { ACTION_BUDGET, BUDGET_USD });
+    prompt = fillTemplate(template, { DATA_MODE: dataMode, CDP_URL, ACTION_BUDGET, BUDGET_USD });
   }
 
   const electron = launchElectron(dataMode);
   let killed = false;
-  function cleanup() {
+  async function cleanup() {
     if (killed) return;
     killed = true;
-    killElectron(electron);
+    await killElectron(electron);
   }
-  process.on("SIGINT", () => {
-    log("SIGINT");
-    cleanup();
-    flushLog();
-    process.exit(130);
-  });
 
+  // Register cleanup on every plausible exit path. Historically only
+  // SIGINT was handled, so Ctrl-C-from-pre-pr, SIGTERM from a parent,
+  // SIGHUP on terminal close, and uncaught exceptions all leaked the
+  // Electron process tree.
+  //
+  // Signal handlers exit SYNCHRONOUSLY with the signal's exit code.
+  // If we awaited cleanup() here, the main `for await` loop would keep
+  // running concurrently — Electron's death tears down CDP, the agent
+  // SDK finishes naturally, and the normal-completion path's
+  // `process.exit(0/2/3)` would race ahead and replace the signal exit
+  // code. Kicking the async kill is fire-and-forget; the sync
+  // `on("exit", killElectronSync)` below sends SIGKILL to the whole
+  // process group, which the kernel delivers regardless of our state.
+  function installExitHandlers() {
+    const onSignal = (signal, exitCode) => () => {
+      log(signal);
+      killElectron(electron).catch(() => {});
+      flushLog();
+      process.exit(exitCode);
+    };
+    process.once("SIGINT", onSignal("SIGINT", 130));
+    process.once("SIGTERM", onSignal("SIGTERM", 143));
+    process.once("SIGHUP", onSignal("SIGHUP", 129));
+    process.once("uncaughtException", (err) => {
+      log(`uncaughtException: ${err instanceof Error ? err.stack : String(err)}`);
+      killElectron(electron).catch(() => {});
+      flushLog();
+      process.exit(1);
+    });
+    process.once("unhandledRejection", (reason) => {
+      log(`unhandledRejection: ${reason instanceof Error ? reason.stack : String(reason)}`);
+      killElectron(electron).catch(() => {});
+      flushLog();
+      process.exit(1);
+    });
+    // Last-resort synchronous cleanup. Runs even if something else
+    // calls process.exit() without going through cleanup() first.
+    process.once("exit", () => killElectronSync(electron));
+  }
+  installExitHandlers();
+
+  // Synchronous exit for the same reason as the signal handlers above:
+  // we can't `await` here without letting the main loop race to a
+  // different exit code. The sync on("exit") fallback handles cleanup.
   const timeout = setTimeout(() => {
     log(`hard timeout after ${TIMEOUT_MS}ms`);
-    cleanup();
+    killElectron(electron).catch(() => {});
     flushLog();
     process.exit(124);
   }, TIMEOUT_MS);
@@ -443,22 +610,71 @@ async function main() {
     const toolCalls = [];
     const textChunks = [];
     let resultMeta = null;
+    // Per-tool-call cap so a single huge `take_snapshot` (which dumps
+    // the entire DOM) can't bloat the log file. The PR comment trims
+    // again at body-size scale; this cap keeps individual entries
+    // human-readable while preserving the bulk of the trace.
+    const TOOL_RESULT_LOG_CAP = 4000;
+    let toolIndex = 0;
+    const toolIdToIndex = new Map();
+
+    function formatToolInput(input) {
+      try {
+        const s = JSON.stringify(input);
+        return s.length > 800 ? s.slice(0, 800) + " …[truncated]" : s;
+      } catch {
+        return String(input);
+      }
+    }
+
+    function extractToolResultText(block) {
+      const c = block.content;
+      if (typeof c === "string") return c;
+      if (Array.isArray(c)) {
+        return c
+          .map((part) => (typeof part?.text === "string" ? part.text : JSON.stringify(part)))
+          .join("\n");
+      }
+      return JSON.stringify(c ?? "");
+    }
 
     for await (const msg of result) {
       if (msg.type === "system" && msg.subtype === "init") {
-        const cdpTools = (msg.tools ?? []).filter((t) =>
-          t.startsWith("mcp__chrome-devtools__"),
-        );
+        const cdpTools = (msg.tools ?? []).filter((t) => t.startsWith("mcp__chrome-devtools__"));
         log(`session init — chrome-devtools tools: ${cdpTools.length}`);
       }
       if (msg.type === "assistant") {
         for (const block of msg.message.content ?? []) {
           if (block.type === "tool_use") {
+            toolIndex += 1;
             toolCalls.push({ name: block.name, input: block.input });
-            log(`tool: ${block.name}`);
+            if (block.id) toolIdToIndex.set(block.id, toolIndex);
+            log(`tool#${toolIndex}: ${block.name}`);
+            log(`  input: ${formatToolInput(block.input)}`);
           } else if (block.type === "text" && block.text) {
             textChunks.push(block.text);
-            log(`text: ${block.text.replace(/\n/g, " ").slice(0, 200)}`);
+            log(`text: ${block.text}`);
+          }
+        }
+      }
+      if (msg.type === "user") {
+        for (const block of msg.message.content ?? []) {
+          if (block.type === "tool_result") {
+            const idx = toolIdToIndex.get(block.tool_use_id) ?? "?";
+            const tag = block.is_error ? "error" : "result";
+            const text = extractToolResultText(block);
+            const capped =
+              text.length > TOOL_RESULT_LOG_CAP
+                ? text.slice(0, TOOL_RESULT_LOG_CAP) +
+                  ` …[truncated, ${text.length - TOOL_RESULT_LOG_CAP} more chars]`
+                : text;
+            // Indent multi-line output so it's visually grouped with
+            // the tool call in the log.
+            const indented = capped
+              .split("\n")
+              .map((l) => `  ${l}`)
+              .join("\n");
+            log(`${tag}#${idx}:\n${indented}`);
           }
         }
       }
@@ -470,8 +686,8 @@ async function main() {
       }
     }
 
-    cleanup();
     clearTimeout(timeout);
+    await cleanup();
 
     const finalText = textChunks.join("\n\n");
     const parsed = extractFinalJson(finalText);
@@ -512,8 +728,8 @@ async function main() {
     process.exit(0);
   } catch (err) {
     log(`FATAL: ${err instanceof Error ? err.stack : String(err)}`);
-    cleanup();
     clearTimeout(timeout);
+    await cleanup();
     flushLog();
     console.error(`\nFATAL — see ${LOG_PATH}`);
     process.exit(1);

@@ -47,6 +47,13 @@ test.describe("Real-Gmail Layer 9a — cached .dev-data", () => {
   let runId: string;
 
   test.beforeAll(async () => {
+    // beforeAll runs `pingAccount` + `electron.launch` + first-window
+    // render + `waitForSelector`. Cold Electron starts after a fresh
+    // npm install can take 90-120s; the default 60s hook budget flakes.
+    // Per Playwright docs, setTimeout for a hook must be called inside
+    // the hook itself, not at the describe level.
+    test.setTimeout(240_000);
+
     // Verify auth works before booting Electron — fail fast on bad token.
     await pingAccount();
     runId = makeRunId();
@@ -71,18 +78,22 @@ test.describe("Real-Gmail Layer 9a — cached .dev-data", () => {
         // cover AI behavior separately).
         EXO_DISABLE_PREFETCH: "true",
       },
-      timeout: 30_000,
+      // 180s, matching scripts/agentic-verify.mjs:waitForCdp. First-run
+      // cold Electron starts after a fresh `npm install` consistently
+      // exceed 30s in worktrees; the previous defaults flaked the full
+      // pre-pr gate even when nothing was actually broken.
+      timeout: 180_000,
     });
     page = await app.firstWindow();
     await page.waitForLoadState("domcontentloaded");
-    await page.waitForSelector("text=Exo", { timeout: 30_000 });
+    await page.waitForSelector("text=Exo", { timeout: 180_000 });
 
     // Switch to the "All" inbox sub-tab. The default sub-tab is
-    // "Priority", which filters by analysis.priority — empty on a
-    // fresh .dev-data/ where no PrefetchService analyses have run yet
-    // (and Layer 9 tests set EXO_DISABLE_PREFETCH=true, so they never
-    // will). Using "All" makes thread visibility independent of the
-    // analysis pipeline.
+    // "Priority", which only shows analyzed threads that need a reply —
+    // empty on a fresh .dev-data/ where no PrefetchService analyses
+    // have run yet (and Layer 9 tests set EXO_DISABLE_PREFETCH=true, so
+    // they never will). Using "All" makes thread visibility independent
+    // of the analysis pipeline.
     const allTab = page.locator('button:has-text("All")').first();
     if (await allTab.isVisible({ timeout: 5_000 }).catch(() => false)) {
       await allTab.click();
