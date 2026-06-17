@@ -202,7 +202,13 @@ const INFRA_PATH_PREFIXES = [
   ".claude/",
   ".codex/",
 ];
-const INFRA_PATH_FILES = new Set([".gitignore", "AGENTS.md", "CLAUDE.md", "README.md"]);
+const INFRA_PATH_FILES = new Set([
+  ".gitignore",
+  "AGENTS.md",
+  "CLAUDE.md",
+  "README.md",
+  "package-lock.json",
+]);
 
 function isInfraOnlyDiff(changedFiles) {
   if (changedFiles.length === 0) return false;
