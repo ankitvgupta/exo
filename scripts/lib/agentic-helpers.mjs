@@ -8,20 +8,56 @@
  * Find the LAST JSON object in `text` that has a `verdict` field.
  * Agents often prefix their final answer with prose; we want the
  * structured tail. Returns null if no valid match.
+ *
+ * Candidates are found with a string-aware brace scanner, not a regex: the
+ * agent's anomaly descriptions routinely quote UI text or API bodies
+ * containing braces (`{error: ...}`), and braces inside JSON string values
+ * break any regex-counted nesting — the whole final JSON then silently
+ * fails to match and a real fail verdict is read as "inconclusive". That
+ * is a silent false-negative in the safety harness itself, since pre-pr
+ * soft-passes some inconclusive-with-0-anomalies runs (live evidence:
+ * managed-agents PR #7, a 6-anomaly verdict misread as inconclusive).
  */
 export function extractFinalJson(text) {
-  // Match brace-balanced blocks. Greedy enough to handle nested objects
-  // but bounded so we don't match across the whole transcript.
-  const matches = text.match(/\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/g) ?? [];
-  for (let i = matches.length - 1; i >= 0; i--) {
+  let last = null;
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] !== "{") continue;
+    const end = findMatchingBrace(text, i);
+    if (end === -1) continue;
     try {
-      const parsed = JSON.parse(matches[i]);
-      if (parsed && typeof parsed === "object" && "verdict" in parsed) return parsed;
+      const parsed = JSON.parse(text.slice(i, end + 1));
+      if (parsed && typeof parsed === "object" && "verdict" in parsed) {
+        last = parsed;
+        i = end; // don't re-scan inside an object we already accepted
+      }
     } catch {
-      // try previous
+      // not valid JSON from this position — keep scanning
     }
   }
-  return null;
+  return last;
+}
+
+/** Index of the `}` closing the `{` at `start`, honoring JSON string
+ *  literals (braces and escaped quotes inside strings don't count). -1 if
+ *  unbalanced. */
+function findMatchingBrace(text, start) {
+  let depth = 0;
+  let inString = false;
+  for (let i = start; i < text.length; i++) {
+    const c = text[i];
+    if (inString) {
+      if (c === "\\") i++;
+      else if (c === '"') inString = false;
+    } else if (c === '"') {
+      inString = true;
+    } else if (c === "{") {
+      depth++;
+    } else if (c === "}") {
+      depth--;
+      if (depth === 0) return i;
+    }
+  }
+  return -1;
 }
 
 /**
