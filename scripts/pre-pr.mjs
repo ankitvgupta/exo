@@ -193,8 +193,22 @@ function findLatestVerifyReport(sinceMs) {
 // When a diff touches ONLY these paths, agentic-verify will correctly
 // return "inconclusive" (exit 3) because there's nothing UI-reachable
 // to verify — we treat that as a soft pass instead of a hard failure.
-const INFRA_PATH_PREFIXES = ["tests/", "scripts/", "docs/", ".github/"];
-const INFRA_PATH_FILES = new Set([".gitignore", "CLAUDE.md", "README.md"]);
+const INFRA_PATH_PREFIXES = [
+  "tests/",
+  "scripts/",
+  "docs/",
+  "skills/",
+  ".github/",
+  ".claude/",
+  ".codex/",
+];
+const INFRA_PATH_FILES = new Set([
+  ".gitignore",
+  "AGENTS.md",
+  "CLAUDE.md",
+  "README.md",
+  "package-lock.json",
+]);
 
 function isInfraOnlyDiff(changedFiles) {
   if (changedFiles.length === 0) return false;
@@ -314,11 +328,7 @@ async function main() {
   // verifying the surrounding flows are healthy. Treating that as a hard
   // failure blocked legitimate Ollama-only fixes (PR #160). The action
   // floor (≥10) ensures the agent actually explored before bailing.
-  if (
-    verifyResult.status === 3 &&
-    !verifyResult.ok &&
-    !infraOnly
-  ) {
+  if (verifyResult.status === 3 && !verifyResult.ok && !infraOnly) {
     const report = findLatestVerifyReport(verifyStartMs);
     if (report?.json) {
       try {
@@ -477,7 +487,9 @@ function buildPrCommentBody({ verdict, phases, sha, mode, verifyReport }) {
   headerLines.push("|---|---|---|");
   for (const p of phases) {
     const statusEmoji = p.ok ? "✅" : "❌";
-    headerLines.push(`| ${p.name} | ${statusEmoji} exit ${p.status} | ${(p.ms / 1000).toFixed(1)}s |`);
+    headerLines.push(
+      `| ${p.name} | ${statusEmoji} exit ${p.status} | ${(p.ms / 1000).toFixed(1)}s |`,
+    );
   }
   headerLines.push("");
   const header = headerLines.join("\n");

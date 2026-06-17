@@ -218,7 +218,10 @@ const DATA_DEMO_SAFE_PATTERNS = [
   /^benchmarks\//,
   /^\.github\//,
   /^\.claude\//,
+  /^\.codex\//,
+  /^skills\//,
   /\.md$/,
+  /^AGENTS\.md$/,
   /^CHANGELOG/,
   /^README/,
   /^LICENSE/,
@@ -517,12 +520,13 @@ async function main() {
       DIFF_PATCH: diff.patch,
       CHANGED_FILES: diff.files,
       DATA_MODE: dataMode,
+      CDP_URL,
       ACTION_BUDGET,
       BUDGET_USD,
     });
   } else {
     const template = loadPrompt("explore");
-    prompt = fillTemplate(template, { DATA_MODE: dataMode, ACTION_BUDGET, BUDGET_USD });
+    prompt = fillTemplate(template, { DATA_MODE: dataMode, CDP_URL, ACTION_BUDGET, BUDGET_USD });
   }
 
   const electron = launchElectron(dataMode);

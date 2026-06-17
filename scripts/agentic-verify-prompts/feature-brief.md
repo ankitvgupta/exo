@@ -8,7 +8,7 @@ confirm that some surface affordance renders.
 ## Environment
 
 The app is running in **`{{DATA_MODE}}`** mode on
-`http://127.0.0.1:9222`.
+`{{CDP_URL}}`.
 
 - **`real`** — the app is signed into the dedicated test Gmail account
   (`exoemailtest@gmail.com`). Real threads, real Gmail API, real

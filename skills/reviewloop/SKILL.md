@@ -19,6 +19,10 @@ Iteratively fix a PR until **all review bots** give clean feedback and CI passes
 
 **CI strategy:** On the first iteration, wait for both CI and review bots together, fixing any CI issues alongside bot feedback. On subsequent iterations, only wait for review bots (skipping CI) to keep the loop fast. After all review bots are satisfied, do one final CI check.
 
+**Compatibility note:** `allowed-tools` is Claude Code-specific metadata. Codex does not enforce it, so Codex agents should follow this skill's command scope manually and rely on the active Codex sandbox and approval policy.
+
+**Push authorization:** Treat an explicit user request to run this skill, such as "run reviewloop" or "next reviewloop", as authorization for the `git push` steps inside the loop. If invocation is indirect or ambiguous, ask before the first push; do not ask again on every iteration.
+
 ## Inputs
 
 - **PR number** (optional): If not provided, detect the PR for the current branch.
