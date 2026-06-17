@@ -228,6 +228,11 @@ test.describe("Snooze Feature — All Inboxes", () => {
 
     expect(undoAccountId).toBe(selected.accountId);
   });
+
+  // NOTE: A faithful cross-account *batch* E2E isn't possible in demo mode — the
+  // snooze IPC only accepts the single real demo account, so a second account
+  // can't round-trip. The cross-account thread→account mapping is covered by a
+  // unit test instead (tests/unit/snooze-accounts.spec.ts).
 });
 
 test.describe("Snooze Feature — Natural Language Input", () => {

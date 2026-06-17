@@ -58,6 +58,7 @@ import type {
 } from "../shared/types";
 import type { ScopedAgentEvent, AgentProviderConfig } from "../shared/agent-types";
 import { mergeAndThreadSearchResults } from "./utils/searchResults";
+import { buildSnoozeThreadAccounts } from "./utils/snooze-accounts";
 import type { EmailThread } from "./store";
 
 function decodeHtmlEntities(text: string): string {
@@ -2363,14 +2364,16 @@ function SnoozeOverlay() {
               // Batch snooze: snooze all selected threads using the same snoozeUntil time
               const snoozeUntil = snoozedEmail.snoozeUntil;
               const threadIdsToSnooze = Array.from(selectedThreadIds);
-              const threadAccountById: Record<string, string> = {
-                [snoozedEmail.threadId]: snoozedEmail.accountId || selectedAccountId,
-              };
-              for (const tid of threadIdsToSnooze) {
-                const thread = currentThreads.find((t) => t.threadId === tid);
-                const accountId = thread?.latestEmail.accountId ?? threadAccountById[tid];
-                if (accountId) threadAccountById[tid] = accountId;
-              }
+              const threadAccountById = buildSnoozeThreadAccounts(
+                threadIdsToSnooze,
+                (tid) => {
+                  const thread = currentThreads.find((t) => t.threadId === tid);
+                  return thread ? { threadId: tid, accountId: thread.latestEmail.accountId } : undefined;
+                },
+                snoozedEmail.threadId,
+                snoozedEmail.accountId || selectedAccountId,
+                selectedAccountId,
+              );
 
               // Close menu and clear selection immediately
               useAppStore.setState({
@@ -2396,17 +2399,18 @@ function SnoozeOverlay() {
                 newSnoozedIds.add(snoozedEmail.threadId);
                 newSnoozedMap.set(snoozedEmail.threadId, snoozedEmail);
 
-                // Add remaining threads with unique ids and explicit accountId
+                // Add remaining threads with unique ids and explicit accountId.
+                // buildSnoozeThreadAccounts guarantees an entry for every thread,
+                // so the only skip is a thread that's no longer in the list.
                 for (const tid of otherThreadIds) {
                   const thread = currentThreads.find((t) => t.threadId === tid);
-                  const accountId = thread?.latestEmail.accountId ?? threadAccountById[tid];
-                  if (thread && accountId) {
+                  if (thread) {
                     newSnoozedIds.add(tid);
                     newSnoozedMap.set(tid, {
                       id: `snooze-${tid}-${Date.now()}`,
                       emailId: thread.latestEmail.id,
                       threadId: tid,
-                      accountId,
+                      accountId: threadAccountById[tid],
                       snoozeUntil: snoozedEmail.snoozeUntil,
                       snoozedAt: snoozedEmail.snoozedAt,
                     });
@@ -2432,10 +2436,9 @@ function SnoozeOverlay() {
               // Fire API calls for remaining threads in background
               for (const tid of otherThreadIds) {
                 const thread = currentThreads.find((t) => t.threadId === tid);
-                const accountId = thread?.latestEmail.accountId ?? threadAccountById[tid];
-                if (thread && accountId) {
+                if (thread) {
                   window.api.snooze
-                    .snooze(thread.latestEmail.id, tid, accountId, snoozeUntil)
+                    .snooze(thread.latestEmail.id, tid, threadAccountById[tid], snoozeUntil)
                     .catch((err: unknown) =>
                       console.error("Batch snooze failed for thread", tid, err),
                     );
@@ -2476,17 +2479,21 @@ function SnoozeOverlay() {
                 return { snoozedThreadIds: newSnoozedIds, snoozedThreads: newSnoozedMap };
               });
 
+              // Prefer the account of the email that was actually snoozed, matching
+              // the batch path; fall back to the selected account.
+              const snoozedAccountId = snoozedEmail.accountId || selectedAccountId;
+
               // Queue undo synchronously to avoid race with other actions in the rAF delay
               addUndoAction({
                 id: `snooze-${snoozedThreadId}-${Date.now()}`,
                 type: "snooze",
                 threadCount: 1,
-                accountId: selectedAccountId,
+                accountId: snoozedAccountId,
                 emails: [],
                 scheduledAt: Date.now(),
                 delayMs: 5000,
                 snoozedThreadIds: [snoozedThreadId],
-                snoozedThreadAccounts: { [snoozedThreadId]: selectedAccountId },
+                snoozedThreadAccounts: { [snoozedThreadId]: snoozedAccountId },
               });
             }
           }}
