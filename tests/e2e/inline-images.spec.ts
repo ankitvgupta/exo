@@ -2,7 +2,7 @@ import { test, expect, Page, ElectronApplication } from "@playwright/test";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
-import { launchElectronApp, takeScreenshot , closeApp } from "./launch-helpers";
+import { launchElectronApp, takeScreenshot, closeApp } from "./launch-helpers";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -88,12 +88,12 @@ test.describe("Inline Images - Reading", () => {
     );
   });
 
-  test("rich HTML email with external image also displays", async () => {
+  test("rich HTML email replaces external images with privacy placeholders", async () => {
     // Navigate back to inbox (press Escape to deselect current email)
     await page.keyboard.press("Escape");
     await page.waitForTimeout(500);
 
-    // Click the Q3 report email which has an external image (https://via.placeholder.com)
+    // Click the Q3 report email which contains a remote image in the HTML body
     const emailItem = page
       .locator("button")
       .filter({ hasText: /Garry|Q3 Quarterly/i })
@@ -108,17 +108,24 @@ test.describe("Inline Images - Reading", () => {
     const frame = iframe.contentFrame();
     expect(frame).not.toBeNull();
 
-    // This email has the TechCorp logo image
+    // The remote image should be replaced with a local placeholder
     const images = frame!.locator("img");
     const imgCount = await images.count();
     console.log(`Found ${imgCount} images in the Q3 report email`);
     expect(imgCount).toBeGreaterThanOrEqual(1);
 
+    const src = await images.first().getAttribute("src");
+    expect(src).toBeTruthy();
+    expect(src!.startsWith("data:image/")).toBe(true);
+
+    const title = await images.first().getAttribute("title");
+    expect(title).toContain("Remote image blocked for privacy");
+
     await takeScreenshot(
       electronApp,
       page,
-      "inline-images-external",
-      "Email with external image (TechCorp logo)",
+      "inline-images-external-blocked",
+      "Email with external image replaced by a privacy placeholder",
     );
   });
 });

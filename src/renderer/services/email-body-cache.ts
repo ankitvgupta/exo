@@ -1,4 +1,5 @@
 import DOMPurify from "dompurify";
+import { replaceRemoteImageSources } from "../../shared/email-image-privacy";
 
 /**
  * Checks if content appears to be HTML.
@@ -356,7 +357,8 @@ class EmailBodyCache {
 
     const needsPreLine = isPlainTextInHtml(stripped);
     const clean = DOMPurify.sanitize(stripped, SANITIZE_CONFIG);
-    const htmlContent = buildIframeHtml(clean, useLightMode, needsPreLine);
+    const privacySafe = replaceRemoteImageSources(clean, useLightMode);
+    const htmlContent = buildIframeHtml(privacySafe, useLightMode, needsPreLine);
 
     return { isHtml: true, htmlContent };
   }
