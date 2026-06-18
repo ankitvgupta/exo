@@ -39,6 +39,7 @@ import {
   getEnrichmentBySender,
 } from "./enrichment-store";
 import { createLogger } from "../services/logger";
+import { extractZipArchive } from "../utils/zip";
 
 const log = createLogger("extension-host");
 
@@ -849,13 +850,11 @@ export class ExtensionHost {
     }
 
     // Extract to a temp directory first to read the manifest
-    const { execFileSync } = await import("child_process");
     const tempDir = join(this.installedExtensionsDir, `.installing-${Date.now()}`);
     mkdirSync(tempDir, { recursive: true });
 
     try {
-      // Use execFileSync (no shell) to prevent shell injection via zipPath
-      execFileSync("unzip", ["-o", zipPath, "-d", tempDir], { stdio: "pipe" });
+      await extractZipArchive(zipPath, tempDir);
     } catch (_error) {
       rmSync(tempDir, { recursive: true, force: true });
       throw new Error("Failed to extract extension — is it a valid zip archive?");

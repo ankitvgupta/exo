@@ -37,11 +37,9 @@ test.describe("Snooze — email must leave inbox and cursor must advance", () =>
       console.log(`[RENDERER ${msg.type()}]: ${msg.text()}`);
     });
 
-    // Wait for the app to fully load with emails
-    await page.waitForSelector("text=Exo", { timeout: 15000 });
-    // Priority pills were collapsed in issue #143 — wait on the stable
-    // per-row data-thread-id attribute instead.
-    await page.locator("[data-thread-id]").first().waitFor({ timeout: 10000 });
+    // Wait for the app to fully load with emails. The "Exo" titlebar brand is
+    // macOS-only, so anchor on the stable per-row data-thread-id attribute.
+    await page.locator("[data-thread-id]").first().waitFor({ timeout: 15000 });
   });
 
   test.afterAll(async () => {

@@ -43,6 +43,7 @@ import { autoUpdateService } from "../services/auto-updater";
 import { existsSync } from "fs";
 import { getDataDir } from "../data-dir";
 import { createLogger } from "../services/logger";
+import { zipDirectory } from "../utils/zip";
 
 const log = createLogger("settings-ipc");
 
@@ -1016,13 +1017,8 @@ export function registerSettingsIpc(): void {
   // Export logs: zip the log directory and prompt the user to save
   ipcMain.handle("settings:export-logs", async (): Promise<IpcResponse<void>> => {
     try {
-      if (process.platform !== "darwin") {
-        return { success: false, error: "Log export is currently only supported on macOS." };
-      }
-
       const { join } = await import("path");
       const { readdirSync, mkdirSync } = await import("fs");
-      const { execFile } = await import("child_process");
 
       const logDir = join(getDataDir(), "logs");
       mkdirSync(logDir, { recursive: true });
@@ -1043,20 +1039,9 @@ export function registerSettingsIpc(): void {
         return { success: true, data: undefined };
       }
 
-      // Use macOS ditto to create a zip of the logs directory
-      await new Promise<void>((resolve, reject) => {
-        execFile(
-          "ditto",
-          ["-c", "-k", "--sequesterRsrc", logDir, filePath],
-          { timeout: 30_000 },
-          (error) => {
-            if (error) reject(error);
-            else resolve();
-          },
-        );
-      });
+      await zipDirectory(logDir, filePath);
 
-      // Reveal the exported file in Finder
+      // Reveal the exported file in the platform file manager.
       shell.showItemInFolder(filePath);
 
       return { success: true, data: undefined };

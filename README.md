@@ -14,7 +14,7 @@ Built with Electron, React, TypeScript, and Tailwind CSS.
 
 <br />
 
-[**Download for macOS**](https://github.com/ankitvgupta/exo/releases/latest) &nbsp;&bull;&nbsp; [Documentation](https://exo.email) &nbsp;&bull;&nbsp; [Changelog](https://github.com/ankitvgupta/exo/releases)
+[**Download for macOS or Linux**](https://github.com/ankitvgupta/exo/releases/latest) &nbsp;&bull;&nbsp; [Documentation](https://exo.email) &nbsp;&bull;&nbsp; [Changelog](https://github.com/ankitvgupta/exo/releases)
 
 <br />
 
@@ -33,7 +33,7 @@ Exo treats AI as a first-class citizen — not a bolted-on feature. Every email 
 
 ## Getting Started 
 
-You can click the "Download .dmg" button above to download a Mac app that is ready for configuration. All you need to provide is Gmail API information (it has instructions) and an Anthropic API Key. If you're a developer, see the instructions at the bottom, or ask Claude Code to figure it out. 
+You can click the download button above to get a packaged app that is ready for configuration. macOS releases ship as a DMG, and Linux releases ship as AppImage and deb packages. All you need to provide is Gmail API information (it has instructions) and an Anthropic API Key. If you're a developer, see the instructions at the bottom, or ask Claude Code to figure it out.
 
 ## Features
 
@@ -158,6 +158,7 @@ https://github.com/user-attachments/assets/442f5320-2bec-4348-937d-48ad2100552e
 - **Auto-update** — checks for updates daily with download progress, supports pre-release channels
 - **Default mail app** — register as the system default mail handler (mailto: protocol)
 - **macOS native** — hidden titlebar with traffic light buttons, code-signed and notarized
+- **Linux packages** — AppImage and deb builds with native window chrome and mailto registration
 - **Dark mode** — class-based theme toggle with smart inversion for email content
 - **Inbox density** — comfortable, default, and compact density settings
 - **PostHog analytics** — opt-in analytics with session replay for debugging (no PII)

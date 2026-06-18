@@ -400,8 +400,9 @@ test.describe("Compose - Rich Text Editor", () => {
     await composeButton.click();
     await page.waitForTimeout(500);
 
-    // Check for toolbar buttons - Bold button has title "Bold (Cmd+B)"
-    const boldButton = page.locator("button[title='Bold (Cmd+B)']").first();
+    // Check for toolbar buttons. The Bold button's title is "Bold (Cmd+B)" on
+    // macOS and "Bold (Ctrl+B)" on Linux, so match the modifier-agnostic prefix.
+    const boldButton = page.locator("button[title^='Bold (']").first();
     const hasBold = await boldButton.isVisible().catch(() => false);
 
     // At minimum, some formatting options should exist

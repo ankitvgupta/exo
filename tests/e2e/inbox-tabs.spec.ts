@@ -21,10 +21,14 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 async function launchWithoutTabSwitch(
   workerIndex = 0,
 ): Promise<{ app: ElectronApplication; page: Page }> {
+  const { ELECTRON_RUN_AS_NODE: _electronRunAsNode, ...baseEnv } = process.env;
   const app = await electron.launch({
-    args: [path.join(__dirname, "../../out/main/index.js")],
+    args: [
+      path.join(__dirname, "../../out/main/index.js"),
+      ...(process.platform === "linux" ? ["--no-sandbox"] : []),
+    ],
     env: {
-      ...process.env,
+      ...baseEnv,
       NODE_ENV: "test",
       EXO_DEMO_MODE: "true",
       TEST_WORKER_INDEX: String(workerIndex),
@@ -33,7 +37,9 @@ async function launchWithoutTabSwitch(
 
   const window = await app.firstWindow();
   await window.waitForLoadState("domcontentloaded");
-  await window.waitForSelector("text=Exo", { timeout: 15000 });
+  // The "Exo" titlebar brand is macOS-only; anchor on the always-visible
+  // Settings button so the load wait works on Linux too.
+  await window.locator('button[aria-label="Settings"]').waitFor({ timeout: 15000 });
 
   return { app, page: window };
 }

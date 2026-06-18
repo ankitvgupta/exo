@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { type IpcResponse, DEFAULT_OLLAMA_MODEL } from "../../shared/types";
 import { reconfigurePostHog } from "../services/posthog";
+import { getRendererPlatform } from "../utils/platform";
 
 interface SetupWizardProps {
   onComplete: () => void;
@@ -324,10 +325,12 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
   return (
     <div className="h-screen flex flex-col bg-gray-100 dark:bg-gray-900">
       {/* Titlebar */}
-      <div className="titlebar-drag h-12 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center px-4">
-        <div className="w-20" /> {/* Space for traffic lights */}
-        <h1 className="text-lg font-semibold text-gray-800 dark:text-gray-200">Exo Setup</h1>
-      </div>
+      {getRendererPlatform().isMac && (
+        <div className="titlebar-drag h-12 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center px-4">
+          <div className="w-20" /> {/* Space for traffic lights */}
+          <h1 className="text-lg font-semibold text-gray-800 dark:text-gray-200">Exo Setup</h1>
+        </div>
+      )}
 
       {/* Content */}
       <div className="flex-1 flex items-center justify-center p-8">

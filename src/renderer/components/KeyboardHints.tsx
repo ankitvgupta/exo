@@ -1,4 +1,5 @@
 import { useAppStore } from "../store";
+import { modifierShortcut, symbolShortcut } from "../utils/platform";
 
 type Hint = {
   key: string;
@@ -15,14 +16,14 @@ const DEFAULT_HINTS: Hint[] = [
   { key: "c", label: "compose" },
   { key: "/", label: "search" },
   { key: "b", label: "sidebar" },
-  { key: "\u2318K", label: "commands" },
+  { key: symbolShortcut("K"), label: "commands" },
 ];
 
 const BATCH_HINTS: Hint[] = [
   { key: "e", label: "archive" },
   { key: "#", label: "trash" },
   { key: "u", label: "unread" },
-  { key: "Cmd+A", label: "select all" },
+  { key: modifierShortcut("A"), label: "select all" },
   { key: "Esc", label: "deselect" },
 ];
 
@@ -45,7 +46,7 @@ const SEARCH_RESULTS_HINTS: Hint[] = [
 ];
 
 const COMPOSE_HINTS: Hint[] = [
-  { key: "Cmd+Enter", label: "send" },
+  { key: modifierShortcut("Enter"), label: "send" },
   { key: "Esc", label: "cancel" },
 ];
 
