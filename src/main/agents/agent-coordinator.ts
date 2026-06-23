@@ -300,9 +300,9 @@ export class AgentCoordinator {
     // After worker init, re-load any installed providers (respawn recovery)
     if (this.installedProviders.size > 0) {
       this.workerReady = this.workerReady.then(async () => {
+        const providerConfig = await this.buildEnrichedConfig();
         for (const [providerId, providerPath] of this.installedProviders) {
           log.info(`[AgentCoordinator] Re-loading installed provider on respawn: ${providerId}`);
-          const providerConfig = await this.buildEnrichedConfig();
           this.sendToWorker({
             type: "load_provider",
             providerId,
