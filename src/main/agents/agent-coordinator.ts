@@ -100,7 +100,11 @@ export class AgentCoordinator {
     const baseConfig = this.buildBaseConfig();
     try {
       return await populatePrivateProviderConfig(baseConfig);
-    } catch {
+    } catch (err) {
+      log.error(
+        { err },
+        "[AgentCoordinator] populatePrivateProviderConfig failed; falling back to base config",
+      );
       return baseConfig;
     }
   }
