@@ -95,8 +95,14 @@ test.describe("isNoUiSurfaceDiff", () => {
     expect(isNoUiSurfaceDiff(["package-lock.json"])).toBe(true);
   });
 
-  test("dependency manifest bump (package.json + lock) → true", () => {
-    expect(isNoUiSurfaceDiff(["package.json", "package-lock.json"])).toBe(true);
+  test("package.json alone → false (it carries scripts / main / build config)", () => {
+    // package.json is deliberately NOT in the no-UI-surface set: from the
+    // filename alone we can't tell a dependency-range bump from an edit to
+    // npm scripts, the `main` entry point, or the electron-builder `build`
+    // config — all behavioral. So a package.json change always stays on the
+    // real-verification path, including a direct-dep bump (package.json + lock).
+    expect(isNoUiSurfaceDiff(["package.json"])).toBe(false);
+    expect(isNoUiSurfaceDiff(["package.json", "package-lock.json"])).toBe(false);
   });
 
   test("infra paths (tests/scripts/docs/.github) → true", () => {
@@ -110,7 +116,7 @@ test.describe("isNoUiSurfaceDiff", () => {
     ).toBe(true);
   });
 
-  test("dependency manifest mixed with infra paths → true", () => {
+  test("lockfile mixed with infra paths → true", () => {
     expect(isNoUiSurfaceDiff(["package-lock.json", "scripts/lib/agentic-helpers.mjs"])).toBe(true);
   });
 
@@ -122,9 +128,7 @@ test.describe("isNoUiSurfaceDiff", () => {
     // The safety property: if a bumped dependency is actually exercised by
     // new behavior, the consuming src/ file is in the diff too, which takes
     // it off the soft-pass path and routes it to real verification.
-    expect(isNoUiSurfaceDiff(["package.json", "package-lock.json", "src/main/index.ts"])).toBe(
-      false,
-    );
+    expect(isNoUiSurfaceDiff(["package-lock.json", "src/main/index.ts"])).toBe(false);
     expect(isNoUiSurfaceDiff(["src/renderer/App.tsx"])).toBe(false);
   });
 
@@ -133,7 +137,7 @@ test.describe("isNoUiSurfaceDiff", () => {
     // stay on the real-verification path (mirrors the doc comment).
     expect(isNoUiSurfaceDiff(["electron.vite.config.ts"])).toBe(false);
     expect(isNoUiSurfaceDiff(["src/shared/types.ts"])).toBe(false);
-    expect(isNoUiSurfaceDiff(["package.json", "tsconfig.json"])).toBe(false);
+    expect(isNoUiSurfaceDiff(["tsconfig.json"])).toBe(false);
   });
 });
 

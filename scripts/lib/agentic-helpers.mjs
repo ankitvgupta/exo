@@ -73,35 +73,32 @@ export function summarizeToolCalls(calls) {
 /**
  * Files whose changes have no UI-reachable surface for the agentic
  * verifier to exercise: test scaffolding, build/CI scripts, docs, repo
- * metadata, and dependency manifests (`package.json` / `package-lock.json`).
+ * metadata, and the generated dependency lockfile.
  *
  * When the ENTIRE diff is within this set, `agentic-verify` correctly
  * returns `inconclusive` (exit 3) — there's no user-visible flow to
  * drive — and `pre-pr` accepts that as a soft pass instead of a hard
  * failure (otherwise these PRs can never go green).
  *
- * Why dependency manifests belong here: a bumped dependency that is
- * actually *used* by new behavior also changes a `src/` file, which takes
- * the diff out of this set and routes it back to real verification. So
- * including the manifests can't mask a behavioral change that has any UI
- * surface — it only unblocks pure dependency bumps (e.g. a security
- * `npm audit` fix), whose regression coverage comes from the unit /
- * integration / e2e suites and the build, not from driving the UI. This
- * mirrors `DATA_DEMO_SAFE_PATTERNS` in agentic-verify.mjs, which already
- * routes manifest-only diffs to demo mode.
+ * Why `package-lock.json` belongs here but `package.json` does NOT:
+ * `package-lock.json` is generated and records *resolved dependency
+ * versions only* — it never carries first-party behavior. A lockfile-only
+ * diff (e.g. a transitive `npm audit fix`) is a pure dependency-resolution
+ * change whose regression coverage comes from the unit / integration / e2e
+ * suites and the build, not from driving the UI. `package.json`, by
+ * contrast, also holds npm `scripts`, the `main` entry point, and the
+ * electron-builder `build` config — a `package.json`-only edit to any of
+ * those is behavioral, so it stays on the real-verification path. (A
+ * dependency bump that's actually *used* also changes a `src/` file, which
+ * takes the diff out of this set regardless.) This mirrors
+ * `DATA_DEMO_SAFE_PATTERNS` in agentic-verify.mjs, which routes
+ * lockfile-only diffs to demo mode.
  *
- * Config files and type-only changes are deliberately NOT included: those
- * can still alter runtime/build output, so they stay on the
- * real-verification path.
+ * Build-config and type-only changes are likewise NOT included: they can
+ * alter runtime/build output, so they stay on the real-verification path.
  */
 const NO_UI_SURFACE_PREFIXES = ["tests/", "scripts/", "docs/", ".github/"];
-const NO_UI_SURFACE_FILES = new Set([
-  ".gitignore",
-  "CLAUDE.md",
-  "README.md",
-  "package.json",
-  "package-lock.json",
-]);
+const NO_UI_SURFACE_FILES = new Set([".gitignore", "CLAUDE.md", "README.md", "package-lock.json"]);
 
 export function isNoUiSurfaceDiff(changedFiles) {
   if (!Array.isArray(changedFiles) || changedFiles.length === 0) return false;

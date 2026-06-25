@@ -190,8 +190,8 @@ function findLatestVerifyReport(sinceMs) {
 // ============================================================
 
 // Whether a diff has no UI-reachable surface for agentic-verify to drive
-// (test scaffolding, build/CI scripts, docs, repo metadata, or pure
-// dependency-manifest bumps) lives in agentic-helpers.mjs so it's unit
+// (test scaffolding, build/CI scripts, docs, repo metadata, or a
+// lockfile-only dependency bump) lives in agentic-helpers.mjs so it's unit
 // tested. When the whole diff is in that set, agentic-verify correctly
 // returns "inconclusive" (exit 3) and we treat it as a soft pass.
 
@@ -214,7 +214,7 @@ function runPhase(name, cmd, argv, opts = {}) {
   console.log(`  → exit=${status} (${(ms / 1000).toFixed(1)}s)`);
   // agentic-verify exit 3 = inconclusive ("couldn't reach the
   // diff-affected flow"). For no-UI-surface diffs (tests/scripts/docs or
-  // pure dependency-manifest bumps), the diff is structurally unreachable
+  // a lockfile-only dependency bump), the diff is structurally unreachable
   // from the UI, so inconclusive is the right answer and shouldn't fail
   // the gate. opts.softExits lets the caller widen `ok` for known-non-fatal
   // exit codes.
@@ -271,11 +271,11 @@ async function main() {
   // Phase 2 — Agentic verify (diff-scoped)
   // ============================================================
   //
-  // For no-UI-surface diffs (tests/scripts/docs or pure
-  // dependency-manifest bumps), the agent has no UI-reachable code path to
-  // exercise and will correctly report "inconclusive" (exit 3). We still
-  // run the phase to confirm the app boots clean, but accept inconclusive
-  // as a soft pass in that case so those PRs aren't blocked.
+  // For no-UI-surface diffs (tests/scripts/docs or a lockfile-only
+  // dependency bump), the agent has no UI-reachable code path to exercise
+  // and will correctly report "inconclusive" (exit 3). We still run the
+  // phase to confirm the app boots clean, but accept inconclusive as a
+  // soft pass in that case so those PRs aren't blocked.
   //
   // verifyStartMs captures wall-clock so the PR-comment upsert step
   // can pick out THIS run's agentic-verify report file from RUNS_DIR
@@ -284,7 +284,7 @@ async function main() {
   const noUiSurface = isNoUiSurfaceDiff(changed);
   if (noUiSurface) {
     console.log(
-      `\n[agentic-verify] diff has no UI surface (tests/scripts/docs/deps); will accept "inconclusive" verdict.`,
+      `\n[agentic-verify] diff has no UI surface (tests/scripts/docs/lockfile); will accept "inconclusive" verdict.`,
     );
   }
   // Budget bump: the default $0.50 in agentic-verify.mjs is enough for shallow
