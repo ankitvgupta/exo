@@ -14,6 +14,7 @@ import {
   extractFinalJson,
   summarizeToolCalls,
   renderReportMd,
+  isNoUiSurfaceDiff,
   // @ts-expect-error — .mjs without type declarations; helpers are pure JS.
 } from "../../scripts/lib/agentic-helpers.mjs";
 
@@ -79,6 +80,60 @@ test.describe("extractFinalJson", () => {
     const text = '```json\n{"verdict":"fail","summary":"x","anomalies":[]}\n```';
     const r = extractFinalJson(text);
     expect(r.verdict).toBe("fail");
+  });
+});
+
+test.describe("isNoUiSurfaceDiff", () => {
+  test("empty diff is not soft-passable", () => {
+    // An empty changed-file list must not be treated as "no UI surface" —
+    // there's nothing to verify either way, and a real run always has a diff.
+    expect(isNoUiSurfaceDiff([])).toBe(false);
+    expect(isNoUiSurfaceDiff(null)).toBe(false);
+  });
+
+  test("pure lockfile bump → true (the security-audit-fix case)", () => {
+    expect(isNoUiSurfaceDiff(["package-lock.json"])).toBe(true);
+  });
+
+  test("dependency manifest bump (package.json + lock) → true", () => {
+    expect(isNoUiSurfaceDiff(["package.json", "package-lock.json"])).toBe(true);
+  });
+
+  test("infra paths (tests/scripts/docs/.github) → true", () => {
+    expect(
+      isNoUiSurfaceDiff([
+        "tests/unit/foo.spec.ts",
+        "scripts/pre-pr.mjs",
+        "docs/EVALS.md",
+        ".github/workflows/ci.yml",
+      ]),
+    ).toBe(true);
+  });
+
+  test("dependency manifest mixed with infra paths → true", () => {
+    expect(isNoUiSurfaceDiff(["package-lock.json", "scripts/lib/agentic-helpers.mjs"])).toBe(true);
+  });
+
+  test("repo-metadata files → true", () => {
+    expect(isNoUiSurfaceDiff([".gitignore", "CLAUDE.md", "README.md"])).toBe(true);
+  });
+
+  test("any src/ file present → false (a used dependency change has a surface)", () => {
+    // The safety property: if a bumped dependency is actually exercised by
+    // new behavior, the consuming src/ file is in the diff too, which takes
+    // it off the soft-pass path and routes it to real verification.
+    expect(isNoUiSurfaceDiff(["package.json", "package-lock.json", "src/main/index.ts"])).toBe(
+      false,
+    );
+    expect(isNoUiSurfaceDiff(["src/renderer/App.tsx"])).toBe(false);
+  });
+
+  test("build/config and type-only changes are NOT soft-passed", () => {
+    // Deliberately excluded — these can alter runtime/build output, so they
+    // stay on the real-verification path (mirrors the doc comment).
+    expect(isNoUiSurfaceDiff(["electron.vite.config.ts"])).toBe(false);
+    expect(isNoUiSurfaceDiff(["src/shared/types.ts"])).toBe(false);
+    expect(isNoUiSurfaceDiff(["package.json", "tsconfig.json"])).toBe(false);
   });
 });
 
