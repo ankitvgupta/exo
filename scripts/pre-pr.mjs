@@ -300,10 +300,22 @@ async function main() {
   // real-mode flows with sender enrichment + draft generation and routinely
   // crashes mid-verification on budget exhaustion (exit 1) before it can emit
   // a verdict. $1.50 gives ~3× headroom over the worst observed run ($0.90).
+  //
+  // Timeout bump: the 10-min default in agentic-verify.mjs is too tight for
+  // flows with built-in waits — e.g. block-sender commits via a 12s undo
+  // toast and then makes several real-Gmail round-trips. A run on PR #172
+  // completed the verification (filter created, email removed) but hit the
+  // hard timeout before emitting its verdict (exit 124). 20 min covers the
+  // observed worst case (~16 min) with headroom.
   const verifyResult = runPhase(
     "agentic-verify",
     "node",
-    ["scripts/agentic-verify.mjs", "--mode=verify-diff", "--budget-usd=1.5"],
+    [
+      "scripts/agentic-verify.mjs",
+      "--mode=verify-diff",
+      "--budget-usd=1.5",
+      "--timeout-ms=1200000",
+    ],
     infraOnly ? { softExits: [3] } : {},
   );
 
