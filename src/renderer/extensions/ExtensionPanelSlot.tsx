@@ -73,6 +73,9 @@ interface ExtensionPanelSlotProps {
   enrichment: ExtensionEnrichmentResult | null;
   isLoading: boolean;
   isFirst?: boolean;
+  // When the panel declares `ownHeader` in its manifest it renders its own
+  // header chrome, so the generic title bar below is suppressed.
+  ownHeader?: boolean;
 }
 
 /**
@@ -87,6 +90,7 @@ export function ExtensionPanelSlot({
   enrichment,
   isLoading,
   isFirst = false,
+  ownHeader = false,
 }: ExtensionPanelSlotProps): React.ReactElement | null {
   const Component = getPanelComponent(extensionId, panelId);
 
@@ -99,11 +103,13 @@ export function ExtensionPanelSlot({
     <div
       className={`flex flex-col overflow-hidden ${!isFirst ? "border-t border-gray-200 dark:border-gray-700" : ""}`}
     >
-      <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700/50 bg-gray-50 dark:bg-gray-800/50">
-        <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-          {title}
-        </h3>
-      </div>
+      {!ownHeader && (
+        <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700/50 bg-gray-50 dark:bg-gray-800/50">
+          <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+            {title}
+          </h3>
+        </div>
+      )}
       <div className="flex-1 overflow-y-auto">
         <Component
           email={email}

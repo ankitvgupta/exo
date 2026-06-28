@@ -63,6 +63,12 @@ export type ComposeState = {
   restoredDraft?: RestoredDraft;
 } | null;
 
+export type CalendarInviteRequest = {
+  emailId: string;
+  threadId: string;
+  nonce: number;
+};
+
 // Thread representation - a group of emails with the same threadId.
 //
 // KEEP IN SYNC: EmailRow's memo comparator (src/renderer/components/EmailRow.tsx)
@@ -248,6 +254,9 @@ interface AppState {
   sidebarTab: "sender" | "email" | "agent";
   availableSidebarTabs: ("sender" | "email" | "agent")[];
 
+  // Calendar invite editor state
+  calendarInviteRequest: CalendarInviteRequest | null;
+
   // Network/offline state
   isOnline: boolean;
   outboxStats: OutboxStats;
@@ -420,6 +429,8 @@ interface AppState {
   setSidebarTab: (tab: "sender" | "email" | "agent") => void;
   cycleSidebarTab: () => void;
   setAvailableSidebarTabs: (tabs: ("sender" | "email" | "agent")[]) => void;
+  startCalendarInvite: (emailId: string, threadId: string) => void;
+  clearCalendarInviteRequest: () => void;
 
   // Network/offline actions
   setOnline: (online: boolean) => void;
@@ -616,6 +627,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   // Sidebar tab state
   sidebarTab: "sender",
   availableSidebarTabs: ["sender"],
+
+  // Calendar invite editor state
+  calendarInviteRequest: null,
 
   // Network/offline state
   isOnline: true,
@@ -1164,6 +1178,12 @@ export const useAppStore = create<AppState>((set, get) => ({
       return { sidebarTab: tabs[nextIndex] };
     }),
   setAvailableSidebarTabs: (tabs) => set({ availableSidebarTabs: tabs }),
+  startCalendarInvite: (emailId, threadId) =>
+    set({
+      calendarInviteRequest: { emailId, threadId, nonce: Date.now() },
+      sidebarTab: "email",
+    }),
+  clearCalendarInviteRequest: () => set({ calendarInviteRequest: null }),
 
   // Network/offline actions
   setOnline: (online) => set({ isOnline: online }),

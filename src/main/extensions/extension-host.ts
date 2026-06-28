@@ -156,6 +156,7 @@ export class ExtensionHost {
           title: panel.title,
           priority: panel.priority,
           scope: panel.scope ?? "sender",
+          ownHeader: panel.ownHeader ?? false,
         };
         this.sidebarPanels.set(`${manifest.id}:${panel.id}`, registration);
         log.info(`[Extensions] Registered sidebar panel: ${manifest.id}:${panel.id}`);
@@ -272,6 +273,7 @@ export class ExtensionHost {
           title: panel.title,
           priority: panel.priority,
           scope: panel.scope ?? "sender",
+          ownHeader: panel.ownHeader ?? false,
         };
         this.sidebarPanels.set(`${manifest.id}:${panel.id}`, registration);
         log.info(`[Extensions] Registered sidebar panel: ${manifest.id}:${panel.id}`);
@@ -485,6 +487,7 @@ export class ExtensionHost {
         title: panel.title,
         priority: panel.priority,
         scope: panel.scope,
+        ownHeader: panel.ownHeader,
       }));
   }
 
@@ -736,6 +739,7 @@ export class ExtensionHost {
               title: panel.title,
               priority: panel.priority,
               scope: panel.scope ?? "sender",
+              ownHeader: panel.ownHeader ?? false,
             };
             this.sidebarPanels.set(`${id}:${panel.id}`, registration);
           }
