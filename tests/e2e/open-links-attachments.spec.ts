@@ -56,6 +56,10 @@ test.describe("Open Links & Attachments palette", () => {
     await expect(palette.getByText("Q3_Metrics.xlsx")).toBeVisible();
     await expect(palette.getByText("Q3_Report_2025.pdf")).toBeHidden();
 
+    await input.fill("q3 pdf");
+    await expect(palette.getByText("Q3_Report_2025.pdf")).toBeVisible();
+    await expect(palette.getByText("Q3_Metrics.xlsx")).toBeHidden();
+
     await page.keyboard.press("Escape");
     await expect(input).toBeHidden();
   });
@@ -179,6 +183,65 @@ Zoom: https://zoom.us/j/123456789`,
     ).toBeVisible();
     await expect(palette.getByText("docs.example.com/runbook", { exact: true })).toBeVisible();
     await expect(palette.getByText("docs.example.com/runbook.", { exact: true })).toBeHidden();
+
+    await page.keyboard.press("Escape");
+    await expect(palette).toBeHidden();
+  });
+
+  test("Cmd+O handles URL extraction edge cases", async () => {
+    await page.evaluate(() => {
+      const store = (window as unknown as { __ZUSTAND_STORE__?: TestStore }).__ZUSTAND_STORE__;
+      if (!store) return;
+
+      const state = store.getState();
+      const syntheticEmail = {
+        id: "e2e-openables-url-extraction-cases",
+        threadId: "thread-e2e-openables-url-extraction-cases",
+        subject: "URL extraction cases",
+        from: "Links <links@example.com>",
+        to: "Test <test@example.com>",
+        date: new Date().toISOString(),
+        body: `
+          <p><a href="//cdn.example.com/asset">Protocol relative CDN</a></p>
+          <p><a href="https://dup.example.com/path?x=1#top">Duplicate target</a></p>
+          <p>Same target again: https://dup.example.com/path?x=1#top</p>
+          <p><a href="mailto:help@example.com">Email us</a></p>
+          <p><a href="tel:+15551234567">Call us</a></p>
+          <p><a href="https://labels.example.com/title" title="Title fallback"></a></p>
+          <p><a href="https://labels.example.com/aria" aria-label="Aria fallback"></a></p>
+          <p>Unsupported bare domain: www.example.com/no-protocol</p>
+          <p><a href="https://same.example.com/path?one=1">Query one</a></p>
+          <p><a href="https://same.example.com/path?two=2#section">Query two</a></p>
+        `,
+        attachments: [],
+      };
+
+      store.setState({
+        emails: [...state.emails.filter((email) => email.id !== syntheticEmail.id), syntheticEmail],
+        selectedEmailId: syntheticEmail.id,
+        selectedThreadId: syntheticEmail.threadId,
+        focusedThreadEmailId: null,
+        viewMode: "split",
+      });
+    });
+
+    await page.keyboard.press("ControlOrMeta+o");
+
+    const palette = page.getByRole("dialog", { name: "Open Links & Attachments" });
+    await expect(palette).toBeVisible({ timeout: 3000 });
+    await expect(palette.getByText("Protocol relative CDN")).toBeVisible();
+    await expect(palette.getByText("cdn.example.com/asset", { exact: true })).toBeVisible();
+    await expect(palette.getByText("Duplicate target")).toBeVisible();
+    await expect(palette.getByText("dup.example.com/path?x=1#top", { exact: true })).toHaveCount(1);
+    await expect(palette.getByText("Email us", { exact: true })).toBeHidden();
+    await expect(palette.getByText("Call us", { exact: true })).toBeHidden();
+    await expect(palette.getByText("www.example.com/no-protocol", { exact: true })).toBeHidden();
+    await expect(palette.getByText("Title fallback", { exact: true })).toBeVisible();
+    await expect(palette.getByText("Aria fallback", { exact: true })).toBeVisible();
+    await expect(palette.getByText("same.example.com/path?one=1", { exact: true })).toBeVisible();
+    await expect(
+      palette.getByText("same.example.com/path?two=2#section", { exact: true }),
+    ).toBeVisible();
 
     await page.keyboard.press("Escape");
     await expect(palette).toBeHidden();

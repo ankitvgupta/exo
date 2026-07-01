@@ -5,6 +5,7 @@ import { markNavigationActive } from "./useSyncBuffer";
 import { mergeAndThreadSearchResults } from "../utils/searchResults";
 import { draftMatchesSplit } from "../utils/split-conditions";
 import { trackEvent } from "../services/posthog";
+import { formatPlatformShortcut } from "../utils/platform";
 
 declare global {
   interface Window {
@@ -295,7 +296,7 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
         return;
       }
 
-      // Cmd+O: open links and attachments for the currently focused email.
+      // Cmd+O / Ctrl+O: open links and attachments for the currently focused email.
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "o") {
         e.preventDefault();
         state.openLinksAttachments();
@@ -1197,7 +1198,7 @@ export function getKeyboardShortcuts(bindings: "superhuman" | "gmail") {
       ...(isGmail ? [{ key: "Shift+I", description: "Mark as read" }] : []),
       { key: "s", description: "Star / unstar" },
       { key: "h", description: "Snooze" },
-      { key: "⌘O", description: "Open links and attachments" },
+      { key: formatPlatformShortcut("O"), description: "Open links and attachments" },
       ...(isGmail
         ? [
             { key: "z", description: "Undo last action" },
@@ -1206,7 +1207,7 @@ export function getKeyboardShortcuts(bindings: "superhuman" | "gmail") {
         : []),
       { key: "x", description: "Select / deselect thread" },
       { key: "Shift+J/K", description: "Extend selection down/up" },
-      { key: "Cmd+A", description: "Select all threads" },
+      { key: formatPlatformShortcut("A"), description: "Select all threads" },
     ],
     compose: [
       { key: "c", description: "Compose new email" },
@@ -1216,9 +1217,9 @@ export function getKeyboardShortcuts(bindings: "superhuman" | "gmail") {
     ],
     search: [
       { key: "/", description: "Open search" },
-      { key: "Cmd+F", description: "Find in page" },
-      { key: "Cmd+K", description: "Command palette" },
-      { key: "Cmd+J", description: "Agent action palette" },
+      { key: formatPlatformShortcut("F"), description: "Find in page" },
+      { key: formatPlatformShortcut("K"), description: "Command palette" },
+      { key: formatPlatformShortcut("J"), description: "Agent action palette" },
     ],
     other: [
       { key: "b", description: "Switch sidebar tab" },
