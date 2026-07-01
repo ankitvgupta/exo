@@ -50,10 +50,17 @@ function isInputFocused(): boolean {
 
 // Read current keyboard mode directly from store (no closure dependency)
 function getKeyboardMode(): KeyboardMode {
-  const { composeState, isSearchOpen, isCommandPaletteOpen, isAgentPaletteOpen } =
-    useAppStore.getState();
+  const {
+    composeState,
+    isSearchOpen,
+    isCommandPaletteOpen,
+    isAgentPaletteOpen,
+    isOpenLinksAttachmentsOpen,
+  } = useAppStore.getState();
   if (composeState?.isOpen) return "compose";
-  if (isSearchOpen || isCommandPaletteOpen || isAgentPaletteOpen) return "search";
+  if (isSearchOpen || isCommandPaletteOpen || isAgentPaletteOpen || isOpenLinksAttachmentsOpen) {
+    return "search";
+  }
   return "normal";
 }
 
@@ -172,6 +179,11 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
           }
           return;
         }
+        if (state.isOpenLinksAttachmentsOpen) {
+          e.preventDefault();
+          state.closeLinksAttachments();
+          return;
+        }
         if (mode === "compose") {
           // New compose: always let the compose component handle Esc (it saves the draft)
           // Reply/forward compose (InlineReply): only defer when input is focused
@@ -280,6 +292,13 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
       if ((e.metaKey || e.ctrlKey) && e.key === "a" && !activeSearchQuery) {
         e.preventDefault();
         state.selectAllThreads(visibleThreads.map((t) => t.threadId));
+        return;
+      }
+
+      // Cmd+O: open links and attachments for the currently focused email.
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "o") {
+        e.preventDefault();
+        state.openLinksAttachments();
         return;
       }
 
@@ -1178,6 +1197,7 @@ export function getKeyboardShortcuts(bindings: "superhuman" | "gmail") {
       ...(isGmail ? [{ key: "Shift+I", description: "Mark as read" }] : []),
       { key: "s", description: "Star / unstar" },
       { key: "h", description: "Snooze" },
+      { key: "⌘O", description: "Open links and attachments" },
       ...(isGmail
         ? [
             { key: "z", description: "Undo last action" },

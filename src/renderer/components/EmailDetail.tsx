@@ -306,8 +306,8 @@ function EmailBodyRenderer({
     const iframeKeydownHandler = (e: KeyboardEvent) => {
       // Let modifier combos (Cmd+C, Cmd+V, etc.) work natively in the iframe
       if (e.metaKey || e.ctrlKey) {
-        // Only forward Cmd+K, Cmd+, and Cmd+F which are app-level shortcuts
-        if (e.key !== "k" && e.key !== "," && e.key !== "f") return;
+        // Only forward app-level shortcuts.
+        if (e.key !== "k" && e.key !== "," && e.key !== "f" && e.key !== "o") return;
       }
       window.dispatchEvent(
         new KeyboardEvent("keydown", {

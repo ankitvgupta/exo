@@ -16,6 +16,7 @@ const DEFAULT_HINTS: Hint[] = [
   { key: "/", label: "search" },
   { key: "b", label: "sidebar" },
   { key: "\u2318K", label: "commands" },
+  { key: "\u2318O", label: "open links" },
 ];
 
 const BATCH_HINTS: Hint[] = [
@@ -34,6 +35,7 @@ const FULL_VIEW_HINTS: Hint[] = [
   { key: "f", label: "forward" },
   { key: "e", label: "archive" },
   { key: "u", label: "unread" },
+  { key: "\u2318O", label: "open links" },
 ];
 
 const SEARCH_RESULTS_HINTS: Hint[] = [
@@ -66,12 +68,13 @@ export function KeyboardHints() {
     composeState,
     isSearchOpen,
     isCommandPaletteOpen,
+    isOpenLinksAttachmentsOpen,
     activeSearchQuery,
     selectedThreadIds,
   } = useAppStore();
 
   // Don't show hints when search or command palette is open
-  if (isSearchOpen || isCommandPaletteOpen) {
+  if (isSearchOpen || isCommandPaletteOpen || isOpenLinksAttachmentsOpen) {
     return null;
   }
 
