@@ -81,7 +81,7 @@ function extractLinks(body: string): OpenableLink[] {
   const addLink = (rawHref: string, labelText: string) => {
     if (!rawHref) return;
 
-    const href = trimUrlCandidate(rawHref);
+    const href = rawHref.trim();
     if (!href) return;
 
     const absoluteHref = href.startsWith("//") ? `https:${href}` : href;
@@ -119,7 +119,8 @@ function extractLinks(body: string): OpenableLink[] {
   const text = doc.body?.textContent ?? body;
   const urlMatches = text.matchAll(/https?:\/\/[^\s<>"']+/gi);
   for (const match of urlMatches) {
-    addLink(match[0], match[0]);
+    const href = trimUrlCandidate(match[0]);
+    addLink(href, href);
   }
 
   return links;
@@ -237,6 +238,21 @@ export function OpenLinksAttachmentsPalette({
       setPreviewAttachment(null);
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!previewAttachment) return;
+
+    const handlePreviewEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      setPreviewAttachment(null);
+    };
+
+    window.addEventListener("keydown", handlePreviewEscape, true);
+    return () => window.removeEventListener("keydown", handlePreviewEscape, true);
+  }, [previewAttachment]);
 
   useEffect(() => {
     if (!isOpen || !sourceEmailId) return;
@@ -366,6 +382,10 @@ export function OpenLinksAttachmentsPalette({
         case "Escape":
           event.preventDefault();
           event.stopPropagation();
+          if (previewAttachment) {
+            setPreviewAttachment(null);
+            return;
+          }
           onClose();
           break;
         case "ArrowDown":
@@ -385,7 +405,7 @@ export function OpenLinksAttachmentsPalette({
           break;
       }
     },
-    [executeItem, flatItems, onClose, selectedIndex],
+    [executeItem, flatItems, onClose, previewAttachment, selectedIndex],
   );
 
   if (!isOpen) return null;

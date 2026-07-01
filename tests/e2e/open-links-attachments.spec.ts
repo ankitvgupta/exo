@@ -60,21 +60,75 @@ test.describe("Open Links & Attachments palette", () => {
     await expect(input).toBeHidden();
   });
 
-  test("Cmd+O includes bare URLs from plain text email bodies", async () => {
-    await page.locator("button[title*='Search']").first().click();
-    const searchInput = page.locator("input[placeholder*='Search emails']");
-    await expect(searchInput).toBeVisible({ timeout: 5000 });
-    await searchInput.fill("PAYMENT_TIMEOUT");
+  test("Escape closes attachment preview without closing the picker", async () => {
+    const selectedReport = await page.evaluate(() => {
+      const store = (window as unknown as { __ZUSTAND_STORE__?: TestStore }).__ZUSTAND_STORE__;
+      if (!store) return false;
 
-    const incidentResult = page
-      .locator("button")
-      .filter({ hasText: "URGENT: Production issue affecting checkout flow" })
-      .first();
-    await expect(incidentResult).toBeVisible({ timeout: 5000 });
-    await incidentResult.click();
-    await expect(
-      page.getByRole("heading", { name: "URGENT: Production issue affecting checkout flow" }),
-    ).toBeVisible();
+      const state = store.getState();
+      const reportEmail = state.emails.find((email) =>
+        email.subject.includes("Q3 Quarterly Report"),
+      );
+      if (!reportEmail) return false;
+
+      store.setState({
+        selectedEmailId: reportEmail.id,
+        selectedThreadId: reportEmail.threadId,
+        focusedThreadEmailId: null,
+        viewMode: "split",
+      });
+      return true;
+    });
+    expect(selectedReport).toBe(true);
+
+    await page.keyboard.press("ControlOrMeta+o");
+
+    const palette = page.getByRole("dialog", { name: "Open Links & Attachments" });
+    await expect(palette).toBeVisible({ timeout: 3000 });
+    await palette.getByText("Q3_Report_2025.pdf", { exact: true }).click();
+
+    const previewHeading = page.getByRole("heading", { name: "Q3_Report_2025.pdf" });
+    await expect(previewHeading).toBeVisible({ timeout: 3000 });
+
+    await page.keyboard.press("Escape");
+    await expect(previewHeading).toBeHidden();
+    await expect(palette).toBeVisible();
+
+    await page.keyboard.press("Escape");
+    await expect(palette).toBeHidden();
+  });
+
+  test("Cmd+O includes bare URLs from plain text email bodies", async () => {
+    await page.evaluate(() => {
+      const store = (window as unknown as { __ZUSTAND_STORE__?: TestStore }).__ZUSTAND_STORE__;
+      if (!store) return;
+
+      const state = store.getState();
+      const incidentEmail = {
+        id: "e2e-openables-incident-link",
+        threadId: "thread-e2e-openables-incident-link",
+        subject: "URGENT: Production issue affecting checkout flow",
+        from: "Incident <incident@example.com>",
+        to: "Test <test@example.com>",
+        date: new Date().toISOString(),
+        body: `INCIDENT ALERT
+
+Severity: P1
+Status: Investigating
+
+Slack: #incident-checkout-012
+Zoom: https://zoom.us/j/123456789`,
+        attachments: [],
+      };
+
+      store.setState({
+        emails: [...state.emails.filter((email) => email.id !== incidentEmail.id), incidentEmail],
+        selectedEmailId: incidentEmail.id,
+        selectedThreadId: incidentEmail.threadId,
+        focusedThreadEmailId: null,
+        viewMode: "split",
+      });
+    });
 
     await page.keyboard.press("ControlOrMeta+o");
 
@@ -82,6 +136,49 @@ test.describe("Open Links & Attachments palette", () => {
     await expect(palette).toBeVisible({ timeout: 3000 });
     await expect(palette.getByText("Links", { exact: true })).toBeVisible();
     await expect(palette.getByText("zoom.us/j/123456789", { exact: true })).toBeVisible();
+
+    await page.keyboard.press("Escape");
+    await expect(palette).toBeHidden();
+  });
+
+  test("Cmd+O preserves anchor URL punctuation and trims bare URL punctuation", async () => {
+    await page.evaluate(() => {
+      const store = (window as unknown as { __ZUSTAND_STORE__?: TestStore }).__ZUSTAND_STORE__;
+      if (!store) return;
+
+      const state = store.getState();
+      const syntheticEmail = {
+        id: "e2e-openables-punctuation-links",
+        threadId: "thread-e2e-openables-punctuation-links",
+        subject: "Punctuation links",
+        from: "Links <links@example.com>",
+        to: "Test <test@example.com>",
+        date: new Date().toISOString(),
+        body: `
+          <p><a href="https://en.wikipedia.org/wiki/Rust_(programming_language)">Rust reference</a></p>
+          <p>Bare runbook: https://docs.example.com/runbook.</p>
+        `,
+        attachments: [],
+      };
+
+      store.setState({
+        emails: [...state.emails.filter((email) => email.id !== syntheticEmail.id), syntheticEmail],
+        selectedEmailId: syntheticEmail.id,
+        selectedThreadId: syntheticEmail.threadId,
+        focusedThreadEmailId: null,
+        viewMode: "split",
+      });
+    });
+
+    await page.keyboard.press("ControlOrMeta+o");
+
+    const palette = page.getByRole("dialog", { name: "Open Links & Attachments" });
+    await expect(palette).toBeVisible({ timeout: 3000 });
+    await expect(
+      palette.getByText("en.wikipedia.org/wiki/Rust_(programming_language)", { exact: true }),
+    ).toBeVisible();
+    await expect(palette.getByText("docs.example.com/runbook", { exact: true })).toBeVisible();
+    await expect(palette.getByText("docs.example.com/runbook.", { exact: true })).toBeHidden();
 
     await page.keyboard.press("Escape");
     await expect(palette).toBeHidden();
