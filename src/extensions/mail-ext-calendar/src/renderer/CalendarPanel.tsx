@@ -12,14 +12,13 @@ import type { ExtensionEnrichmentResult } from "../../../../shared/extension-typ
 import { useAppStore } from "../../../../renderer/store";
 import {
   addDays,
-  addMinutes,
-  combineDateAndTime,
   shouldStartInviteExtraction,
   todayString,
   toDateInput,
   toTimeInput,
   updateInviteEndTime,
   updateInviteStartDate,
+  updateInviteStartTime,
 } from "../../../../shared/calendar-invite-editor";
 import { wallClockToInstant } from "../../../../shared/calendar-timezone";
 
@@ -636,15 +635,7 @@ function InviteEditor({
   };
 
   const updateStartTime = (time: string) => {
-    onDraftChange((prev) => {
-      const date = toDateInput(prev.start) || todayString();
-      const nextStart = combineDateAndTime(date, time);
-      return {
-        ...prev,
-        start: nextStart,
-        end: prev.end ? prev.end : addMinutes(nextStart, 30),
-      };
-    });
+    onDraftChange((prev) => updateInviteStartTime(prev, time));
   };
 
   const updateEndTime = (time: string) => {
@@ -841,9 +832,7 @@ function InviteEditor({
                     }))
                   }
                   placeholder={
-                    draft.conference.type === "phone"
-                      ? "Phone number or dial-in"
-                      : "Meeting link"
+                    draft.conference.type === "phone" ? "Phone number or dial-in" : "Meeting link"
                   }
                   className={inviteControlClass}
                 />
@@ -1010,65 +999,64 @@ export function CalendarPanel({
   );
 
   const cancelInvite = useCallback(() => {
-    setInviteOpen(false);
-    setInviteStatus("idle");
-    setInviteError(null);
-    setValidationErrors([]);
-    setInviteReauthing(false);
+    // Clearing the request is the single teardown trigger — the effect that
+    // watches calendarInviteRequest closes the editor and resets its state.
     clearCalendarInviteRequest();
   }, [clearCalendarInviteRequest]);
 
-  const startInvite = useCallback(async (emailId: string) => {
-    const api = getCalendarApi();
-    setInviteOpen(true);
-    setInviteStatus("extracting");
-    setInviteError(null);
-    setValidationErrors([]);
-    setInviteReauthing(false);
+  const startInvite = useCallback(
+    async (emailId: string) => {
+      const api = getCalendarApi();
+      setInviteOpen(true);
+      setInviteStatus("extracting");
+      setInviteError(null);
+      setValidationErrors([]);
+      setInviteReauthing(false);
 
-    try {
-      const extractResult = await api.extractInvite(emailId);
-      const calendars = extractResult.calendars ?? [];
-      setInviteCalendars(calendars);
-      setRequiresReauth(Boolean(extractResult.requiresReauth));
-      if (!extractResult.success && extractResult.error) {
-        setInviteError(extractResult.error);
-      }
-      const fallbackTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
-      const draft = extractResult.success
-        ? (extractResult.draft ?? blankInviteDraft(fallbackTimezone))
-        : {
-            ...blankInviteDraft(fallbackTimezone),
-            warnings: [CALENDAR_INVITE_EXTRACTION_FAILURE_WARNING],
-          };
+      try {
+        const extractResult = await api.extractInvite(emailId);
+        const calendars = extractResult.calendars ?? [];
+        setInviteCalendars(calendars);
+        setRequiresReauth(Boolean(extractResult.requiresReauth));
+        if (!extractResult.success && extractResult.error) {
+          setInviteError(extractResult.error);
+        }
+        const fallbackTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+        const draft = extractResult.success
+          ? (extractResult.draft ?? blankInviteDraft(fallbackTimezone))
+          : {
+              ...blankInviteDraft(fallbackTimezone),
+              warnings: [CALENDAR_INVITE_EXTRACTION_FAILURE_WARNING],
+            };
 
-      const selected = preferredCalendarOption(calendars, email.accountId ?? "", draft.calendarId);
+        const selected = preferredCalendarOption(
+          calendars,
+          email.accountId ?? "",
+          draft.calendarId,
+        );
 
-      setSelectedInviteAccountId(selected?.accountId ?? "");
-      setInviteDraft({
-        ...draft,
-        calendarId: selected?.calendarId ?? draft.calendarId,
-        timezone: selected?.timezone ?? (draft.timezone || fallbackTimezone),
-      });
-      if (draft.start) {
-        const date = toDateInput(draft.start);
-        if (date) setSelectedDate(date);
+        setSelectedInviteAccountId(selected?.accountId ?? "");
+        setInviteDraft({
+          ...draft,
+          calendarId: selected?.calendarId ?? draft.calendarId,
+          timezone: selected?.timezone ?? (draft.timezone || fallbackTimezone),
+        });
+        // selectedDate is synced from inviteDraft.start by a dedicated effect
+        // below, so no manual setSelectedDate is needed here.
+      } catch (err) {
+        console.error("[CalendarPanel] invite extraction failed:", err);
+        const fallbackTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+        setInviteDraft({
+          ...blankInviteDraft(fallbackTimezone),
+          warnings: [CALENDAR_INVITE_EXTRACTION_FAILURE_WARNING],
+        });
+        setInviteError(err instanceof Error ? err.message : "Failed to extract invite");
+      } finally {
+        setInviteStatus("ready");
       }
-      if (!extractResult.success && extractResult.error) {
-        setInviteError(extractResult.error);
-      }
-    } catch (err) {
-      console.error("[CalendarPanel] invite extraction failed:", err);
-      const fallbackTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
-      setInviteDraft({
-        ...blankInviteDraft(fallbackTimezone),
-        warnings: [CALENDAR_INVITE_EXTRACTION_FAILURE_WARNING],
-      });
-      setInviteError(err instanceof Error ? err.message : "Failed to extract invite");
-    } finally {
-      setInviteStatus("ready");
-    }
-  }, [email.accountId]);
+    },
+    [email.accountId],
+  );
 
   const reauthenticateInviteCalendar = useCallback(async () => {
     if (!selectedInviteAccountId) {
@@ -1151,15 +1139,19 @@ export function CalendarPanel({
     }
   }, [inviteDraft.start, selectedDate]);
 
+  // Close the editor whenever the invite request is cleared — by Escape (handled
+  // centrally in useKeyboardShortcuts), by the stale-navigation safety net in
+  // EmailPreviewSidebar, or after a completed create. Slaving the editor to the
+  // request means there is exactly one "invite mode" signal, so the editor can't
+  // linger showing a stale draft for a thread the user has navigated away from.
   useEffect(() => {
-    const handleEscape = (event: KeyboardEvent) => {
-      if (!inviteOpen || event.key !== "Escape") return;
-      event.preventDefault();
-      cancelInvite();
-    };
-    window.addEventListener("keydown", handleEscape);
-    return () => window.removeEventListener("keydown", handleEscape);
-  }, [cancelInvite, inviteOpen]);
+    if (calendarInviteRequest || !inviteOpen) return;
+    setInviteOpen(false);
+    setInviteStatus("idle");
+    setInviteError(null);
+    setValidationErrors([]);
+    setInviteReauthing(false);
+  }, [calendarInviteRequest, inviteOpen]);
 
   const createInvite = useCallback(async () => {
     const errors = validateCalendarInviteDraft(inviteDraft);

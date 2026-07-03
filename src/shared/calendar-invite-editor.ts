@@ -45,27 +45,64 @@ export function combineDateAndTime(dateStr: string, timeStr: string): string {
   return `${dateStr}T${timeStr}:00`;
 }
 
-export function addMinutes(wallClock: string, minutes: number): string {
+// Anchor a wall-clock string's date/time fields as if they were UTC. Staying in
+// UTC keeps the math independent of the browser's local zone; only the
+// date/time fields are used, never the absolute instant. Returns null for a
+// malformed wall clock.
+function wallClockToUtcMs(wallClock: string): number | null {
   const date = toDateInput(wallClock);
   const time = toTimeInput(wallClock);
-  if (!date || !time) return "";
+  if (!date || !time) return null;
   const [h, m] = time.split(":").map(Number);
-  // Anchor at the wall-clock fields as if UTC, shift, and re-read the fields.
-  // Staying in UTC keeps the math independent of the browser's local zone;
-  // only the date/time fields are used, never the absolute instant.
-  const base = Date.UTC(
+  return Date.UTC(
     Number(date.slice(0, 4)),
     Number(date.slice(5, 7)) - 1,
     Number(date.slice(8, 10)),
     h,
     m,
   );
+}
+
+export function addMinutes(wallClock: string, minutes: number): string {
+  const base = wallClockToUtcMs(wallClock);
+  if (base === null) return "";
   const shifted = new Date(base + minutes * 60_000);
   const pad = (n: number) => String(n).padStart(2, "0");
   return (
     `${shifted.getUTCFullYear()}-${pad(shifted.getUTCMonth() + 1)}-${pad(shifted.getUTCDate())}` +
     `T${pad(shifted.getUTCHours())}:${pad(shifted.getUTCMinutes())}:00`
   );
+}
+
+// Duration of a draft in minutes when both ends are valid wall clocks and the
+// end is strictly after the start; null otherwise.
+function draftDurationMinutes(draft: CalendarInviteDraft): number | null {
+  const startMs = wallClockToUtcMs(draft.start);
+  const endMs = wallClockToUtcMs(draft.end);
+  if (startMs === null || endMs === null || endMs <= startMs) return null;
+  return Math.round((endMs - startMs) / 60_000);
+}
+
+export function updateInviteStartTime(
+  draft: CalendarInviteDraft,
+  time: string,
+): CalendarInviteDraft {
+  const startDate = toDateInput(draft.start) || todayString();
+  const nextStart = combineDateAndTime(startDate, time);
+
+  // Moving the start time shifts the whole meeting: preserve the existing
+  // duration so the end follows the start (matching Google Calendar's editor).
+  // Without this, editing only the start could leave the end at/before it,
+  // which blanks the preview block and blocks creation. Fall back to 30 minutes
+  // when there is no valid existing duration.
+  const duration = draftDurationMinutes(draft);
+  const nextEnd = addMinutes(nextStart, duration ?? 30);
+
+  return {
+    ...draft,
+    start: nextStart,
+    end: nextEnd,
+  };
 }
 
 export function updateInviteEndTime(draft: CalendarInviteDraft, time: string): CalendarInviteDraft {

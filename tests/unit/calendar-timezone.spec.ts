@@ -21,14 +21,22 @@ test.describe("calendar timezone helpers", () => {
     expect(instantToWallClock(instant, "Europe/London")).toBe("2026-06-02T14:00:00");
   });
 
+  test("wallClockToInstant resolves a time just after a DST spring-forward correctly", () => {
+    // 2026-03-08 02:00 EST → clocks jump to 03:00 EDT in America/New_York.
+    // 03:30 is EDT (UTC-4), so the true instant is 07:30Z. A single-pass
+    // correction (offset read only at the naive-UTC guess, which still reads
+    // EST/-5) would land an hour late at 08:30Z; the two-pass fixed point fixes it.
+    const instant = wallClockToInstant("2026-03-08T03:30:00", "America/New_York");
+    expect(instant && instant.toISOString()).toBe("2026-03-08T07:30:00.000Z");
+    expect(instant && instantToWallClock(instant, "America/New_York")).toBe("2026-03-08T03:30:00");
+  });
+
   test("wallClockToInstant round-trips with instantToWallClock", () => {
     const instant = wallClockToInstant("2026-06-02T09:00:00", "America/New_York");
     expect(instant).not.toBeNull();
     expect(instant && instant.toISOString()).toBe("2026-06-02T13:00:00.000Z");
     // And back again.
-    expect(instant && instantToWallClock(instant, "America/New_York")).toBe(
-      "2026-06-02T09:00:00",
-    );
+    expect(instant && instantToWallClock(instant, "America/New_York")).toBe("2026-06-02T09:00:00");
   });
 
   test("normalizes an explicit-offset time into the calendar wall-clock (2pm London → NY)", () => {

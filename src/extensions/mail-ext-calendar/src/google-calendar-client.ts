@@ -124,14 +124,19 @@ export async function hasCalendarScope(accountId: string): Promise<boolean> {
   return Array.from(CALENDAR_READ_SCOPES).some((scope) => scopes.has(scope));
 }
 
+/** Does this already-loaded client's token grant calendar write scope? */
+function authHasWriteScope(auth: OAuth2Client): boolean {
+  const scopes = tokenScopes(auth);
+  return Array.from(CALENDAR_WRITE_SCOPES).some((scope) => scopes.has(scope));
+}
+
 /**
  * Check if the current tokens include Google Calendar event write scope.
  */
 export async function hasCalendarWriteScope(accountId: string): Promise<boolean> {
   const auth = await getOAuth2Client(accountId);
   if (!auth) return false;
-  const scopes = tokenScopes(auth);
-  return Array.from(CALENDAR_WRITE_SCOPES).some((scope) => scopes.has(scope));
+  return authHasWriteScope(auth);
 }
 
 /**
@@ -198,7 +203,9 @@ export async function getCalendarList(accountId: string): Promise<CalendarInfo[]
 
   const calendar = google.calendar({ version: "v3", auth });
   const response = await calendar.calendarList.list();
-  const accountHasWriteScope = await hasCalendarWriteScope(accountId);
+  // Derive write scope from the client we already hold — hasCalendarWriteScope
+  // would re-open the OAuth client and re-read credentials/token files from disk.
+  const accountHasWriteScope = authHasWriteScope(auth);
   const result: CalendarInfo[] = [];
   for (const cal of response.data.items || []) {
     if (cal.id) {

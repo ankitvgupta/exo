@@ -33,7 +33,7 @@ declare global {
 export type ThreadNavDirection = "next" | "prev";
 export const THREAD_NAV_EVENT = "gmail-thread-nav";
 
-type KeyboardMode = "normal" | "compose" | "search";
+type KeyboardMode = "normal" | "compose" | "search" | "invite";
 
 // Check if user is typing in an input field
 function isInputFocused(): boolean {
@@ -50,10 +50,19 @@ function isInputFocused(): boolean {
 
 // Read current keyboard mode directly from store (no closure dependency)
 function getKeyboardMode(): KeyboardMode {
-  const { composeState, isSearchOpen, isCommandPaletteOpen, isAgentPaletteOpen } =
-    useAppStore.getState();
+  const {
+    composeState,
+    isSearchOpen,
+    isCommandPaletteOpen,
+    isAgentPaletteOpen,
+    calendarInviteRequest,
+  } = useAppStore.getState();
   if (composeState?.isOpen) return "compose";
   if (isSearchOpen || isCommandPaletteOpen || isAgentPaletteOpen) return "search";
+  // The invite editor is a modal flow: while it's open, single-key thread
+  // shortcuts must not act on the underlying email. Treated as its own mode so
+  // the gate below suppresses them all at once (Escape is handled specially).
+  if (calendarInviteRequest) return "invite";
   return "normal";
 }
 
@@ -173,6 +182,18 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
           }
           return;
         }
+        // The invite editor is a modal sidebar flow — Escape cancels it by
+        // clearing the request; CalendarPanel closes its editor when the request
+        // goes away. Handling it here in the single global keydown handler (rather
+        // than a second window listener in CalendarPanel) avoids the two firing on
+        // the same keypress, which previously also deselected the thread. This is
+        // also the always-mounted exit: even if no CalendarPanel is mounted to
+        // consume the request, Escape still releases the invite lock.
+        if (state.calendarInviteRequest) {
+          e.preventDefault();
+          state.clearCalendarInviteRequest();
+          return;
+        }
         if (mode === "compose") {
           // New compose: always let the compose component handle Esc (it saves the draft)
           // Reply/forward compose (InlineReply): only defer when input is focused
@@ -259,6 +280,14 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
 
       // In search mode, let the search component handle keys
       if (mode === "search") {
+        return;
+      }
+
+      // In invite mode the editor owns the sidebar: suppress every single-key
+      // thread shortcut (s/e/#/j/k/b/…) so they can't act on the underlying
+      // email. Escape (handled above) and Cmd/Ctrl combos (handled above) still
+      // work; the editor's own inputs/selects handle their own keys.
+      if (mode === "invite") {
         return;
       }
 
@@ -1085,10 +1114,8 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
           }
           break;
 
-        // Switch sidebar tab — disabled while an invite is open, which is a
-        // modal flow locked to the email tab (the tab bar is hidden too).
+        // Switch sidebar tab
         case "b":
-          if (state.calendarInviteRequest) break;
           e.preventDefault();
           state.cycleSidebarTab();
           break;

@@ -78,23 +78,28 @@ function timeZoneOffsetMinutes(date: Date, timeZone: string): number {
  * Interpret a floating wall-clock string ("YYYY-MM-DDTHH:mm[:ss]") as a real
  * instant in `timeZone`. Returns null if the input is not a bare wall clock.
  *
- * DST is handled by computing the zone offset *at the candidate instant* and
- * correcting once — sufficient for the 30–60 minute jumps real zones use.
+ * DST is handled with a two-pass fixed-point correction: guess the instant, read
+ * the zone offset there, correct, then re-read the offset at the corrected
+ * instant and correct again. The second pass is what makes this accurate right
+ * around a DST transition, where the offset at the naive guess differs from the
+ * offset at the true instant — a single pass could land an hour off there.
  *
- * Caveat: at a DST transition a wall clock can be nonexistent (the "spring
- * forward" gap) or ambiguous (the "fall back" repeat), and the single
- * correction can land an hour off in those ~1hr/year windows. This is only
- * used to POSITION the preview block on the day grid; the instant sent to
- * Google is the floating string + `timeZone`, which Google resolves itself,
- * so the imprecision never reaches the created event.
+ * This matters beyond the day-grid preview: normalizeToCalendarWallClock feeds
+ * this result back through instantToWallClock to produce the draft start/end
+ * that is sent to Google, so an hour error here would reach the created event.
+ *
+ * Residual caveat: a wall clock inside the "spring forward" gap is nonexistent
+ * and one inside the "fall back" overlap is ambiguous; the fixed point resolves
+ * to a single consistent choice for those, which is the best a bare wall clock
+ * (no offset) allows.
  */
 export function wallClockToInstant(wallClock: string, timeZone: string): Date | null {
   const match = FLOATING_RE.exec(wallClock.trim());
   if (!match) return null;
   const [, y, mo, d, h, mi, s] = match;
 
-  // First guess: treat the wall clock as if it were UTC.
-  const guess = Date.UTC(
+  // Naive guess: treat the wall-clock fields as if they were UTC.
+  const naiveUtc = Date.UTC(
     Number(y),
     Number(mo) - 1,
     Number(d),
@@ -102,10 +107,13 @@ export function wallClockToInstant(wallClock: string, timeZone: string): Date | 
     Number(mi),
     Number(s || "0"),
   );
-  // The zone was `offset` minutes ahead of UTC at this instant, so the true
-  // instant is `offset` minutes earlier than the naive-UTC guess.
-  const offset = timeZoneOffsetMinutes(new Date(guess), timeZone);
-  return new Date(guess - offset * 60_000);
+  // The zone was `offset` minutes ahead of UTC at a given instant, so the true
+  // instant is `offset` minutes earlier than the naive-UTC guess. Apply once
+  // using the offset at the naive guess, then again using the offset at the
+  // corrected instant so we converge across a DST boundary.
+  const offset1 = timeZoneOffsetMinutes(new Date(naiveUtc), timeZone);
+  const offset2 = timeZoneOffsetMinutes(new Date(naiveUtc - offset1 * 60_000), timeZone);
+  return new Date(naiveUtc - offset2 * 60_000);
 }
 
 /**

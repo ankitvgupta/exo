@@ -8,6 +8,7 @@ import {
   toTimeInput,
   updateInviteEndTime,
   updateInviteStartDate,
+  updateInviteStartTime,
 } from "../../src/shared/calendar-invite-editor";
 import type { CalendarInviteDraft } from "../../src/shared/types";
 
@@ -110,5 +111,30 @@ test.describe("calendar invite review regressions", () => {
     expect(toDateInput(updated.end)).toBe("2026-06-03");
     expect(toTimeInput(updated.end)).toBe("00:30");
     expect(updated.end > updated.start).toBe(true);
+  });
+
+  test("changing the start time shifts the end, preserving the meeting duration", () => {
+    // A one-hour meeting moved from 10:00 to 11:00 should become 11:00–12:00,
+    // not leave the end at 11:00 (before the new start) and blank the preview.
+    const draft = draftWithDates(
+      combineDateAndTime("2026-06-02", "10:00"),
+      combineDateAndTime("2026-06-02", "11:00"),
+    );
+
+    const updated = updateInviteStartTime(draft, "11:00");
+
+    expect(updated.start).toBe(combineDateAndTime("2026-06-02", "11:00"));
+    expect(updated.end).toBe(combineDateAndTime("2026-06-02", "12:00"));
+    expect(updated.end > updated.start).toBe(true);
+  });
+
+  test("changing the start time defaults to a 30-minute duration when the end is malformed", () => {
+    const draft = draftWithDates(combineDateAndTime("2026-06-02", "10:00"), "not-a-date");
+
+    const updated = updateInviteStartTime(draft, "14:00");
+
+    expect(toDateInput(updated.start)).toBe("2026-06-02");
+    expect(toTimeInput(updated.start)).toBe("14:00");
+    expect(toTimeInput(updated.end)).toBe("14:30");
   });
 });
