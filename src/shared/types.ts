@@ -432,17 +432,42 @@ export type SenderLookupProvider = z.infer<typeof SenderLookupProviderSchema>;
 /**
  * Default Ollama Cloud model when none is configured.
  *
- * kimi-k2.6:cloud is Moonshot's latest. Chosen over deepseek-v4-pro:cloud
- * because deepseek's compat-layer thinking depth is capped at default-level
- * (no way to invoke "max" through Ollama's Anthropic-compat endpoint —
- * filed upstream at ollama/ollama#15952), which made the agent feel
- * underpowered. kimi-k2.6 doesn't need a thinking knob to perform well.
+ * glm-5.2:cloud (z.ai, 744B MoE, 1M context). Chosen after a 16-task
+ * agent-sidebar benchmark against kimi-k2.7-code:cloud: GLM 5.2 was
+ * consistently the faster model at parity final-answer quality (both clearly
+ * beat the prior kimi-k2.6 default). Reasoning is returned in proper
+ * `thinking` blocks on Ollama's Anthropic-compat endpoint (the agent path),
+ * so chain-of-thought does not leak into drafts; non-agent features use the
+ * native /api/chat path with think:true, which likewise keeps CoT out of
+ * parsed JSON. Note: GLM emits brief inter-turn progress text in agent loops
+ * (visible as status lines in the sidebar) — suppressible via the agent
+ * system prompt if undesired.
  *
  * Note: cloud models may occasionally return overloaded_error during peak
  * traffic — llm-service.ts retry logic catches this via Anthropic.APIError
  * status 529 (rate_limit category) and backs off automatically.
  */
-export const DEFAULT_OLLAMA_MODEL = "kimi-k2.6:cloud";
+export const DEFAULT_OLLAMA_MODEL = "glm-5.2:cloud";
+
+/**
+ * Curated list of common Ollama Cloud models for the settings dropdown, so
+ * users don't have to hand-type model ids. The first entry is the default
+ * (glm-5.2:cloud — kept in sync with DEFAULT_OLLAMA_MODEL). This is a
+ * convenience list, NOT an allowlist — new models ship on Ollama Cloud
+ * regularly, so the UI also offers a "Custom…" escape hatch for any other id.
+ * Ids use the ":cloud" tag to match how the app addresses Ollama Cloud models
+ * (see DEFAULT_OLLAMA_MODEL); each was confirmed to resolve against
+ * https://ollama.com/v1.
+ */
+export const COMMON_OLLAMA_MODELS: readonly { id: string; label: string }[] = [
+  { id: "glm-5.2:cloud", label: "GLM 5.2 — z.ai (default)" },
+  { id: "minimax-m3:cloud", label: "MiniMax M3 — newest, agentic" },
+  { id: "minimax-m2.7:cloud", label: "MiniMax M2.7" },
+  { id: "kimi-k2.6:cloud", label: "Kimi K2.6 — Moonshot" },
+  { id: "kimi-k2-thinking:cloud", label: "Kimi K2 Thinking" },
+  { id: "qwen3-coder:480b-cloud", label: "Qwen3 Coder 480B" },
+  { id: "deepseek-v3.2:cloud", label: "DeepSeek V3.2" },
+] as const;
 
 export const OllamaCloudConfigSchema = z.object({
   apiKey: z.string().default(""),
