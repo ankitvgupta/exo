@@ -221,6 +221,70 @@ export const CalendaringResultSchema = z.object({
 
 export type CalendaringResult = z.infer<typeof CalendaringResultSchema>;
 
+export const CalendarInviteConferenceSchema = z.object({
+  type: z.enum(["googleMeet", "link", "phone", "none"]).default("googleMeet"),
+  value: z.string().optional(),
+});
+
+export type CalendarInviteConference = z.infer<typeof CalendarInviteConferenceSchema>;
+
+export const CalendarInviteDraftSchema = z.object({
+  title: z.string().default(""),
+  start: z.string().default(""),
+  end: z.string().default(""),
+  timezone: z.string().default(""),
+  guests: z.array(z.string()).default([]),
+  conference: CalendarInviteConferenceSchema.default({ type: "googleMeet" }),
+  location: z.string().default(""),
+  description: z.string().default(""),
+  calendarId: z.string().default(""),
+  confidence: z.number().min(0).max(1).default(0),
+  warnings: z.array(z.string()).default([]),
+});
+
+export type CalendarInviteDraft = z.infer<typeof CalendarInviteDraftSchema>;
+
+export const CalendarInviteCalendarOptionSchema = z.object({
+  accountId: z.string(),
+  accountEmail: z.string(),
+  calendarId: z.string(),
+  calendarName: z.string(),
+  calendarColor: z.string(),
+  timezone: z.string().optional(),
+  writable: z.boolean(),
+  primary: z.boolean().optional(),
+});
+
+export type CalendarInviteCalendarOption = z.infer<typeof CalendarInviteCalendarOptionSchema>;
+
+export type CalendarEventInsertParams = {
+  calendarId: string;
+  sendUpdates: "all";
+  conferenceDataVersion?: 1;
+  requestBody: {
+    summary: string;
+    description?: string;
+    location?: string;
+    start: {
+      dateTime: string;
+      timeZone: string;
+    };
+    end: {
+      dateTime: string;
+      timeZone: string;
+    };
+    attendees?: Array<{ email: string }>;
+    conferenceData?: {
+      createRequest: {
+        requestId: string;
+        conferenceSolutionKey: {
+          type: "hangoutsMeet";
+        };
+      };
+    };
+  };
+};
+
 // Generated draft response (includes CC and calendaring info)
 export const GeneratedDraftResponseSchema = z.object({
   body: z.string(),

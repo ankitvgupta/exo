@@ -2,6 +2,7 @@ import { memo, useMemo, useEffect, useRef } from "react";
 import { useAppStore } from "../store";
 import { useExtensionPanels, ExtensionPanelSlot } from "../extensions";
 import { AgentTabContent } from "./AgentPanel";
+import { isStaleInviteRequest } from "../../shared/calendar-invite-editor";
 import type { ScopedAgentEvent } from "../../shared/agent-types";
 
 // SVG icon components for sidebar tabs
@@ -94,6 +95,8 @@ export const EmailPreviewSidebar = memo(function EmailPreviewSidebar() {
   const setSidebarTab = useAppStore((s) => s.setSidebarTab);
   const availableTabs = useAppStore((s) => s.availableSidebarTabs);
   const setAvailableTabs = useAppStore((s) => s.setAvailableSidebarTabs);
+  const calendarInviteRequest = useAppStore((s) => s.calendarInviteRequest);
+  const clearCalendarInviteRequest = useAppStore((s) => s.clearCalendarInviteRequest);
   const globalAgentTaskKey = useAppStore((s) => s.globalAgentTaskKey);
   // Draft task key for agent tab — drafts use `draft:${id}` as their task key
   const draftTaskKey = selectedDraftId ? `draft:${selectedDraftId}` : null;
@@ -202,6 +205,34 @@ export const EmailPreviewSidebar = memo(function EmailPreviewSidebar() {
       setSidebarTab(availableTabs[0]);
     }
   }, [availableTabs, sidebarTab, setSidebarTab]);
+
+  // Opening an invite is a focused, modal-like task: force the email tab once
+  // when the request first appears. The tab bar is then hidden while the invite
+  // is open (see render below), so the lock is structural — we don't keep
+  // reverting tab changes, which previously made the tabs flicker and feel
+  // broken when clicked. Guarding on the edge (was-null → now-set) means a user
+  // who later switches tabs isn't yanked back on every render.
+  const invitePending = Boolean(calendarInviteRequest);
+  const prevInvitePendingRef = useRef(false);
+  useEffect(() => {
+    const justOpened = invitePending && !prevInvitePendingRef.current;
+    prevInvitePendingRef.current = invitePending;
+    if (justOpened && sidebarTab !== "email" && availableTabs.includes("email")) {
+      setSidebarTab("email");
+    }
+  }, [invitePending, availableTabs, sidebarTab, setSidebarTab]);
+
+  // Always-mounted safety net for a stale invite lock: if the request targets a
+  // thread other than the one now selected, the user navigated away before the
+  // (possibly never-mounted) CalendarPanel could start it. Left alone, the
+  // request keeps the tab bar hidden and `b` suppressed with no reachable exit.
+  // Keying strictly on a confirmed different selected thread avoids racing
+  // CalendarPanel's legitimate same-thread start.
+  useEffect(() => {
+    if (isStaleInviteRequest(calendarInviteRequest, selectedEmail?.threadId)) {
+      clearCalendarInviteRequest();
+    }
+  }, [calendarInviteRequest, selectedEmail, clearCalendarInviteRequest]);
 
   // When switching emails (or returning to inbox), auto-select the agent tab
   // if the current key has an agent task/trace, or reset away if it doesn't.
@@ -340,8 +371,9 @@ export const EmailPreviewSidebar = memo(function EmailPreviewSidebar() {
 
   return (
     <div className="w-80 bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 flex flex-col overflow-hidden">
-      {/* Tab bar — only show when multiple tabs available */}
-      {availableTabs.length > 1 && (
+      {/* Tab bar — only show when multiple tabs available, and hidden while an
+          invite is open so the (then-locked) tabs don't read as clickable. */}
+      {availableTabs.length > 1 && !invitePending && (
         <div className="flex-shrink-0 h-10 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/80">
           <div className="flex h-full">
             {availableTabs.map((tab) => {
@@ -432,6 +464,7 @@ export const EmailPreviewSidebar = memo(function EmailPreviewSidebar() {
                 extensionId={panelData.panelInfo.extensionId}
                 panelId={panelData.panelInfo.id}
                 title={panelData.panelInfo.title}
+                ownHeader={panelData.panelInfo.ownHeader}
                 email={sidebarEmail}
                 threadEmails={threadEmails}
                 enrichment={panelData.enrichment}

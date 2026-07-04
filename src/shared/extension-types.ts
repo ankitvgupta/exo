@@ -23,6 +23,10 @@ export const SidebarPanelContributionSchema = z.object({
   title: z.string(),
   priority: z.number().default(50), // Higher = shows first
   scope: z.enum(["sender", "email"]).default("sender"), // "sender" = needs sender info only, "email" = needs full email body
+  // When true, the panel renders its own header/chrome and the generic slot
+  // title bar is suppressed. Lets a panel own its full vertical space (e.g. a
+  // panel with its own toolbar or a modal-like flow) without a duplicate title.
+  ownHeader: z.boolean().default(false),
 });
 
 export type SidebarPanelContribution = z.infer<typeof SidebarPanelContributionSchema>;
@@ -227,6 +231,7 @@ export interface SidebarPanelRegistration {
   title: string;
   priority: number;
   scope: "sender" | "email";
+  ownHeader: boolean;
   // Component is registered separately in the renderer
 }
 
@@ -352,6 +357,7 @@ export interface ExtensionPanelInfo {
   title: string;
   priority: number;
   scope: "sender" | "email";
+  ownHeader: boolean;
 }
 
 export interface ExtensionEnrichmentResult {

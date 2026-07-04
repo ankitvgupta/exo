@@ -872,6 +872,11 @@ const api = {
       ipcRenderer.invoke("calendar:get-events", { date }),
     checkAccess: (): Promise<unknown> => ipcRenderer.invoke("calendar:check-access"),
     getCalendars: (): Promise<unknown> => ipcRenderer.invoke("calendar:get-calendars"),
+    getInviteOptions: (): Promise<unknown> => ipcRenderer.invoke("calendar:get-invite-options"),
+    extractInvite: (emailId: string): Promise<unknown> =>
+      ipcRenderer.invoke("calendar:extract-invite", { emailId }),
+    createInvite: (accountId: string, draft: unknown): Promise<unknown> =>
+      ipcRenderer.invoke("calendar:create-invite", { accountId, draft }),
     setVisibility: (accountId: string, calendarId: string, visible: boolean): Promise<unknown> =>
       ipcRenderer.invoke("calendar:set-visibility", { accountId, calendarId, visible }),
     onEventsUpdated: (callback: () => void): (() => void) => {
