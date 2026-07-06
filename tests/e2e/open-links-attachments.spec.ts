@@ -161,6 +161,8 @@ Zoom: https://zoom.us/j/123456789`,
         body: `
           <p><a href="https://en.wikipedia.org/wiki/Rust_(programming_language)">Rust reference</a></p>
           <p>Bare runbook: https://docs.example.com/runbook.</p>
+          <p>Bare wiki link https://en.wikipedia.org/wiki/Vim_(text_editor) mid-sentence.</p>
+          <p>Wrapped link (see https://docs.example.com/guide) in parens.</p>
         `,
         attachments: [],
       };
@@ -183,6 +185,16 @@ Zoom: https://zoom.us/j/123456789`,
     ).toBeVisible();
     await expect(palette.getByText("docs.example.com/runbook", { exact: true })).toBeVisible();
     await expect(palette.getByText("docs.example.com/runbook.", { exact: true })).toBeHidden();
+    // Balanced parens in a bare URL are part of the URL and must survive trimming
+    await expect(
+      palette.getByText("en.wikipedia.org/wiki/Vim_(text_editor)", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      palette.getByText("en.wikipedia.org/wiki/Vim_(text_editor", { exact: true }),
+    ).toBeHidden();
+    // A paren that only wraps the URL is surrounding punctuation and is trimmed
+    await expect(palette.getByText("docs.example.com/guide", { exact: true })).toBeVisible();
+    await expect(palette.getByText("docs.example.com/guide)", { exact: true })).toBeHidden();
 
     await page.keyboard.press("Escape");
     await expect(palette).toBeHidden();

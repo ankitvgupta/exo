@@ -33,7 +33,27 @@ function normalizeLabel(label: string, fallback: string): string {
 }
 
 function trimUrlCandidate(candidate: string): string {
-  return candidate.replace(/[),.;!?]+$/g, "");
+  let url = candidate;
+  while (url.length > 0) {
+    const last = url[url.length - 1];
+    if (",.;!?".includes(last)) {
+      url = url.slice(0, -1);
+      continue;
+    }
+    // Keep a trailing ")" that closes a "(" inside the URL, e.g.
+    // https://en.wikipedia.org/wiki/Rust_(programming_language); only trim
+    // parens that are surrounding punctuation.
+    if (last === ")") {
+      const opens = url.split("(").length - 1;
+      const closes = url.split(")").length - 1;
+      if (closes > opens) {
+        url = url.slice(0, -1);
+        continue;
+      }
+    }
+    break;
+  }
+  return url;
 }
 
 export function extractLinks(body: string): OpenableLink[] {

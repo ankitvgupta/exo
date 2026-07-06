@@ -6,44 +6,38 @@ type Hint = {
   label: string;
 };
 
-function getDefaultHints(): Hint[] {
-  return [
-    { key: "j/k", label: "navigate" },
-    { key: "Enter", label: "open" },
-    { key: "r", label: "reply" },
-    { key: "e", label: "archive" },
-    { key: "u", label: "unread" },
-    { key: "x", label: "select" },
-    { key: "c", label: "compose" },
-    { key: "/", label: "search" },
-    { key: "b", label: "sidebar" },
-    { key: formatPlatformShortcut("K"), label: "commands" },
-    { key: formatPlatformShortcut("O"), label: "open links" },
-  ];
-}
+const DEFAULT_HINTS: Hint[] = [
+  { key: "j/k", label: "navigate" },
+  { key: "Enter", label: "open" },
+  { key: "r", label: "reply" },
+  { key: "e", label: "archive" },
+  { key: "u", label: "unread" },
+  { key: "x", label: "select" },
+  { key: "c", label: "compose" },
+  { key: "/", label: "search" },
+  { key: "b", label: "sidebar" },
+  { key: formatPlatformShortcut("K"), label: "commands" },
+  { key: formatPlatformShortcut("O"), label: "open links" },
+];
 
-function getBatchHints(): Hint[] {
-  return [
-    { key: "e", label: "archive" },
-    { key: "#", label: "trash" },
-    { key: "u", label: "unread" },
-    { key: formatPlatformShortcut("A"), label: "select all" },
-    { key: "Esc", label: "deselect" },
-  ];
-}
+const BATCH_HINTS: Hint[] = [
+  { key: "e", label: "archive" },
+  { key: "#", label: "trash" },
+  { key: "u", label: "unread" },
+  { key: formatPlatformShortcut("A"), label: "select all" },
+  { key: "Esc", label: "deselect" },
+];
 
-function getFullViewHints(): Hint[] {
-  return [
-    { key: "Esc", label: "back" },
-    { key: "j/k", label: "prev/next" },
-    { key: "Enter", label: "reply" },
-    { key: "R", label: "reply all" },
-    { key: "f", label: "forward" },
-    { key: "e", label: "archive" },
-    { key: "u", label: "unread" },
-    { key: formatPlatformShortcut("O"), label: "open links" },
-  ];
-}
+const FULL_VIEW_HINTS: Hint[] = [
+  { key: "Esc", label: "back" },
+  { key: "j/k", label: "prev/next" },
+  { key: "Enter", label: "reply" },
+  { key: "R", label: "reply all" },
+  { key: "f", label: "forward" },
+  { key: "e", label: "archive" },
+  { key: "u", label: "unread" },
+  { key: formatPlatformShortcut("O"), label: "open links" },
+];
 
 const SEARCH_RESULTS_HINTS: Hint[] = [
   { key: "j/k", label: "navigate" },
@@ -53,12 +47,10 @@ const SEARCH_RESULTS_HINTS: Hint[] = [
   { key: "Esc", label: "back to inbox" },
 ];
 
-function getComposeHints(): Hint[] {
-  return [
-    { key: formatPlatformShortcut("Enter"), label: "send" },
-    { key: "Esc", label: "cancel" },
-  ];
-}
+const COMPOSE_HINTS: Hint[] = [
+  { key: formatPlatformShortcut("Enter"), label: "send" },
+  { key: "Esc", label: "cancel" },
+];
 
 function HintItem({ hint }: { hint: Hint }) {
   return (
@@ -89,10 +81,9 @@ export function KeyboardHints() {
 
   // Show compose hints when composing
   if (composeState?.isOpen) {
-    const composeHints = getComposeHints();
     return (
       <div className="h-8 bg-gray-100 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 flex items-center justify-center gap-6 text-xs">
-        {composeHints.map((hint) => (
+        {COMPOSE_HINTS.map((hint) => (
           <HintItem key={hint.key} hint={hint} />
         ))}
       </div>
@@ -102,12 +93,12 @@ export function KeyboardHints() {
   // Select hints based on context
   const hints =
     selectedThreadIds.size > 0
-      ? getBatchHints()
+      ? BATCH_HINTS
       : activeSearchQuery && viewMode !== "full"
         ? SEARCH_RESULTS_HINTS
         : viewMode === "full"
-          ? getFullViewHints()
-          : getDefaultHints();
+          ? FULL_VIEW_HINTS
+          : DEFAULT_HINTS;
 
   return (
     <div className="h-8 bg-gray-100 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 flex items-center justify-center gap-6 text-xs">

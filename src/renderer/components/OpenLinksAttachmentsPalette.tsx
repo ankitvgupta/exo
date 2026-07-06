@@ -3,7 +3,6 @@ import {
   useCallback,
   useEffect,
   useMemo,
-  useRef,
   useState,
 } from "react";
 import type { AttachmentMeta, DashboardEmail, IpcResponse } from "../../shared/types";
@@ -19,6 +18,15 @@ import {
 } from "../utils/openables";
 import { formatPlatformShortcut } from "../utils/platform";
 import { AttachmentPreviewModal } from "./AttachmentList";
+import {
+  PaletteFooter,
+  PaletteHeader,
+  PaletteResults,
+  PaletteShell,
+  usePaletteSelection,
+} from "./PaletteShell";
+
+const OPEN_SHORTCUT = formatPlatformShortcut("O");
 
 const ICONS = {
   command: "M13 10V3L4 14h7v7l9-11h-7z",
@@ -67,7 +75,6 @@ export function OpenLinksAttachmentsPalette({
   onClose: () => void;
 }) {
   const [query, setQuery] = useState("");
-  const [selectedIndex, setSelectedIndex] = useState(0);
   const [loadedEmailState, setLoadedEmailState] = useState<{
     id: string;
     email: DashboardEmail;
@@ -78,8 +85,6 @@ export function OpenLinksAttachmentsPalette({
     attachment: AttachmentMeta;
     data: string;
   } | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const listRef = useRef<HTMLDivElement>(null);
 
   const emails = useAppStore((s) => s.emails);
   const selectedEmailId = useAppStore((s) => s.selectedEmailId);
@@ -96,13 +101,10 @@ export function OpenLinksAttachmentsPalette({
   const email = loadedEmailState?.id === sourceEmailId ? loadedEmailState.email : storeEmail;
   const accountId = email?.accountId ?? currentAccountId;
   const isLoadingEmail = loadingEmailId === sourceEmailId;
-  const openShortcut = useMemo(() => formatPlatformShortcut("O"), []);
 
   useEffect(() => {
     if (isOpen) {
       setQuery("");
-      setSelectedIndex(0);
-      requestAnimationFrame(() => inputRef.current?.focus());
     } else {
       setLoadedEmailState(null);
       setLoadingEmailId(null);
@@ -159,7 +161,7 @@ export function OpenLinksAttachmentsPalette({
       })
       .finally(() => {
         if (cancelled) return;
-        setLoadingEmailId((current) => (current === sourceEmailId ? null : current));
+        setLoadingEmailId(null);
       });
 
     return () => {
@@ -174,6 +176,9 @@ export function OpenLinksAttachmentsPalette({
     [openableItems, query],
   );
 
+  // buildOpenables returns links before attachments, so the visible slice is
+  // already in rendered (grouped) order — it doubles as the flat list that
+  // data-index/selection/Enter operate on.
   const visibleItems = useMemo(
     () => filteredItems.slice(0, MAX_RENDERED_OPENABLE_ITEMS),
     [filteredItems],
@@ -188,31 +193,16 @@ export function OpenLinksAttachmentsPalette({
     };
   }, [visibleItems]);
 
-  const flatItems = useMemo(
-    () => [...groupedItems.links, ...groupedItems.attachments],
-    [groupedItems],
-  );
   const hiddenMatchCount = Math.max(filteredItems.length - visibleItems.length, 0);
 
+  const { selectedIndex, setSelectedIndex, inputRef, listRef, moveSelection } = usePaletteSelection(
+    { isOpen, query, itemCount: visibleItems.length },
+  );
+
+  // Reset selection when the palette switches to a different email
   useEffect(() => {
     setSelectedIndex(0);
-  }, [query, sourceEmailId]);
-
-  useEffect(() => {
-    if (flatItems.length === 0 && selectedIndex !== 0) {
-      setSelectedIndex(0);
-      return;
-    }
-    if (selectedIndex >= flatItems.length) {
-      setSelectedIndex(Math.max(flatItems.length - 1, 0));
-    }
-  }, [flatItems.length, selectedIndex]);
-
-  useEffect(() => {
-    if (!listRef.current) return;
-    const selected = listRef.current.querySelector(`[data-index="${selectedIndex}"]`);
-    selected?.scrollIntoView({ block: "nearest" });
-  }, [selectedIndex]);
+  }, [sourceEmailId, setSelectedIndex]);
 
   const openAttachment = useCallback(
     async (attachment: OpenableAttachment["attachment"]) => {
@@ -267,7 +257,7 @@ export function OpenLinksAttachmentsPalette({
       if ((event.metaKey || event.ctrlKey) && /^[1-9]$/.test(event.key)) {
         event.preventDefault();
         const index = Number(event.key) - 1;
-        const item = flatItems[index];
+        const item = visibleItems[index];
         if (item) {
           executeItem(item);
         }
@@ -286,31 +276,28 @@ export function OpenLinksAttachmentsPalette({
           break;
         case "ArrowDown":
           event.preventDefault();
-          if (flatItems.length === 0) return;
-          setSelectedIndex((index) => Math.min(index + 1, flatItems.length - 1));
+          moveSelection(1);
           break;
         case "ArrowUp":
           event.preventDefault();
-          if (flatItems.length === 0) return;
-          setSelectedIndex((index) => Math.max(index - 1, 0));
+          moveSelection(-1);
           break;
         case "Enter":
           event.preventDefault();
           event.stopPropagation();
-          if (flatItems.length === 0) return;
-          if (flatItems[selectedIndex]) {
-            executeItem(flatItems[selectedIndex]);
+          if (visibleItems[selectedIndex]) {
+            executeItem(visibleItems[selectedIndex]);
           }
           break;
       }
     },
-    [executeItem, flatItems, onClose, previewAttachment, selectedIndex],
+    [executeItem, moveSelection, onClose, previewAttachment, selectedIndex, visibleItems],
   );
 
   if (!isOpen) return null;
 
   let flatIndex = 0;
-  const hasItems = flatItems.length > 0;
+  const hasItems = visibleItems.length > 0;
 
   const renderRows = (title: string, items: OpenableItem[]) => {
     if (items.length === 0) return null;
@@ -391,74 +378,52 @@ export function OpenLinksAttachmentsPalette({
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-start justify-center pt-20">
-        <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label="Open Links & Attachments"
-          className="relative w-full max-w-xl bg-white dark:bg-gray-800 rounded-xl shadow-2xl dark:shadow-black/40 overflow-hidden border border-gray-200 dark:border-gray-700"
-        >
-          <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+      <PaletteShell label="Open Links & Attachments" onClose={onClose}>
+        <PaletteHeader
+          icon={
             <PaletteIcon
               path={ICONS.command}
               className="w-5 h-5 text-gray-400 flex-shrink-0"
               strokeWidth={2}
             />
-            <input
-              ref={inputRef}
-              type="text"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Open Links & Attachments..."
-              className="flex-1 text-base outline-none placeholder-gray-400 dark:text-gray-100 dark:placeholder-gray-500 bg-transparent"
-            />
+          }
+          inputRef={inputRef}
+          query={query}
+          onQueryChange={setQuery}
+          onKeyDown={handleKeyDown}
+          placeholder="Open Links & Attachments..."
+          trailing={
             <kbd className="px-2 py-0.5 text-xs text-gray-400 bg-gray-100 dark:bg-gray-700 rounded">
-              {openShortcut}
+              {OPEN_SHORTCUT}
             </kbd>
-            <kbd className="px-2 py-0.5 text-xs text-gray-400 bg-gray-100 dark:bg-gray-700 rounded">
-              esc
-            </kbd>
-          </div>
+          }
+        />
 
-          <div ref={listRef} className="max-h-80 overflow-y-auto py-1">
-            {!hasItems ? (
-              <div className="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
-                {isLoadingEmail
-                  ? "Loading links and attachments..."
-                  : query
-                    ? "No matching links or attachments"
-                    : "No links or attachments"}
-              </div>
-            ) : (
-              <>
-                {renderRows("Links", groupedItems.links)}
-                {renderRows("Attachments", groupedItems.attachments)}
-                {hiddenMatchCount > 0 && (
-                  <div className="px-4 py-2 text-xs text-gray-400 dark:text-gray-500">
-                    {hiddenMatchCount} more {hiddenMatchCount === 1 ? "item" : "items"} match. Keep
-                    typing to narrow.
-                  </div>
-                )}
-              </>
-            )}
-          </div>
+        <PaletteResults listRef={listRef}>
+          {!hasItems ? (
+            <div className="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+              {isLoadingEmail
+                ? "Loading links and attachments..."
+                : query
+                  ? "No matching links or attachments"
+                  : "No links or attachments"}
+            </div>
+          ) : (
+            <>
+              {renderRows("Links", groupedItems.links)}
+              {renderRows("Attachments", groupedItems.attachments)}
+              {hiddenMatchCount > 0 && (
+                <div className="px-4 py-2 text-xs text-gray-400 dark:text-gray-500">
+                  {hiddenMatchCount} more {hiddenMatchCount === 1 ? "item" : "items"} match. Keep
+                  typing to narrow.
+                </div>
+              )}
+            </>
+          )}
+        </PaletteResults>
 
-          <div className="flex items-center gap-4 px-4 py-2 text-xs text-gray-400 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
-            <span>
-              <kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 rounded">&uarr;&darr;</kbd>{" "}
-              navigate
-            </span>
-            <span>
-              <kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 rounded">Enter</kbd> open
-            </span>
-            <span>
-              <kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 rounded">Esc</kbd> close
-            </span>
-          </div>
-        </div>
-      </div>
+        <PaletteFooter enterLabel="open" />
+      </PaletteShell>
 
       {previewAttachment && (
         <AttachmentPreviewModal

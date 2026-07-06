@@ -5,7 +5,7 @@ import { markNavigationActive } from "./useSyncBuffer";
 import { mergeAndThreadSearchResults } from "../utils/searchResults";
 import { draftMatchesSplit } from "../utils/split-conditions";
 import { trackEvent } from "../services/posthog";
-import { formatPlatformShortcut } from "../utils/platform";
+import { formatPlatformShortcut, isMacPlatform } from "../utils/platform";
 
 declare global {
   interface Window {
@@ -48,6 +48,12 @@ function isInputFocused(): boolean {
     active.classList.contains("ProseMirror")
   );
 }
+
+// Cmd/Ctrl combos that are app-level shortcuts and must be forwarded from the
+// email-body iframe to the parent window (see EmailDetail's iframeKeydownHandler):
+// agent palette (j), command palette (k), settings (,), find-in-page (f),
+// open links & attachments (o).
+export const APP_SHORTCUT_MODIFIER_KEYS = new Set(["j", "k", ",", "f", "o"]);
 
 // Read current keyboard mode directly from store (no closure dependency)
 function getKeyboardMode(): KeyboardMode {
@@ -255,10 +261,19 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
 
       // Cmd+F (macOS) / Ctrl+F (Windows/Linux) for find-in-page
       // Don't intercept Ctrl+F on macOS — it's Emacs cursor-forward in text inputs
-      const isMac = navigator.platform.startsWith("Mac");
+      const isMac = isMacPlatform();
       if (e.key === "f" && (isMac ? e.metaKey : e.ctrlKey)) {
         e.preventDefault();
         openAndFocusFindBar();
+        return;
+      }
+
+      // Cmd+O / Ctrl+O: open links and attachments for the currently focused
+      // email. Handled before the input-focus/mode bails below so it works in
+      // the same focus states as Cmd+K/J/F.
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "o") {
+        e.preventDefault();
+        state.openLinksAttachments();
         return;
       }
 
@@ -293,13 +308,6 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
       if ((e.metaKey || e.ctrlKey) && e.key === "a" && !activeSearchQuery) {
         e.preventDefault();
         state.selectAllThreads(visibleThreads.map((t) => t.threadId));
-        return;
-      }
-
-      // Cmd+O / Ctrl+O: open links and attachments for the currently focused email.
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "o") {
-        e.preventDefault();
-        state.openLinksAttachments();
         return;
       }
 
@@ -1223,7 +1231,7 @@ export function getKeyboardShortcuts(bindings: "superhuman" | "gmail") {
     ],
     other: [
       { key: "b", description: "Switch sidebar tab" },
-      { key: "Cmd+,", description: "Settings" },
+      { key: formatPlatformShortcut(","), description: "Settings" },
       { key: "?", description: "Show shortcuts" },
     ],
   };
