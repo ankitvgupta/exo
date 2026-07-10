@@ -1,5 +1,10 @@
 import { test, expect, Page, ElectronApplication } from "@playwright/test";
-import { launchElectronApp, pressKeyUntilVisible, closeApp } from "./launch-helpers";
+import {
+  launchElectronApp,
+  pressKeyUntilVisible,
+  closeApp,
+  waitForEmailListReady,
+} from "./launch-helpers";
 
 /**
  * E2E Tests for the sender profile panel.
