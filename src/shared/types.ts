@@ -490,6 +490,26 @@ export const ConfigSchema = z.object({
       model: z.string().optional(),
     })
     .optional(),
+  // Hostler provider settings — hosted cloud agent backend (hostler.dev).
+  // The agent harness runs in a Hostler sandbox; tool calls still execute
+  // locally in the app via Hostler's client-tools loop. Disabled by default;
+  // users opt in via Settings → Extensions with a Hostler API key.
+  hostler: z
+    .object({
+      enabled: z.boolean().default(false),
+      apiKey: z.string().default(""),
+      // Which agent harness runs in the sandbox. "pi" is Hostler's hosted
+      // harness today; free-text so e.g. "opencode" works as soon as the
+      // platform supports it (unknown harnesses fail fast with a 400 that
+      // lists the supported ones).
+      harness: z.string().default("pi"),
+      // "provider/model" or bare model id (bare pairs with "anthropic").
+      // Blank uses the documented known-good default (claude-haiku-4-5).
+      model: z.string().optional(),
+      // Self-hosted Hostler deployments only; no UI — edit config.json.
+      baseUrl: z.string().optional(),
+    })
+    .optional(),
   ollamaCloud: OllamaCloudConfigSchema.optional(),
   featureProviders: z.record(z.string(), LlmProviderSchema).optional(),
   configVersion: z.number().optional(),

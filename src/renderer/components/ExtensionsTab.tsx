@@ -67,6 +67,12 @@ export function ExtensionsTab() {
   const [opencodeEnabled, setOpencodeEnabled] = useState(false);
   const [opencodeModel, setOpencodeModel] = useState("");
 
+  // Hostler agent provider settings — hosted cloud agent backend
+  const [hostlerEnabled, setHostlerEnabled] = useState(false);
+  const [hostlerApiKey, setHostlerApiKey] = useState("");
+  const [hostlerHarness, setHostlerHarness] = useState("pi");
+  const [hostlerModel, setHostlerModel] = useState("");
+
   const loadExtensions = useCallback(async () => {
     try {
       const [installedResult, allResult] = await Promise.all([
@@ -231,6 +237,13 @@ export function ExtensionsTab() {
       if (opencodeCfg) {
         setOpencodeEnabled(Boolean(opencodeCfg.enabled));
         setOpencodeModel(String(opencodeCfg.model ?? ""));
+      }
+      const hostlerCfg = config.hostler as Record<string, unknown> | undefined;
+      if (hostlerCfg) {
+        setHostlerEnabled(Boolean(hostlerCfg.enabled));
+        setHostlerApiKey(String(hostlerCfg.apiKey ?? ""));
+        setHostlerHarness(String(hostlerCfg.harness ?? "pi"));
+        setHostlerModel(String(hostlerCfg.model ?? ""));
       }
     })();
   }, []);
@@ -855,6 +868,121 @@ export function ExtensionsTab() {
               <p className="text-xs text-gray-500 dark:text-gray-400">
                 Routes via the same Ollama Cloud / Anthropic config you already have. Tool calls
                 still execute inside Exo with the same permission gate.
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Hostler agent provider — hosted cloud agent backend */}
+      <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600 p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100">
+              Hostler Agent (cloud)
+            </h4>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+              Runs the agent in a hostler.dev cloud sandbox instead of on this device. When enabled,
+              select &quot;Hostler&quot; in the agent picker. Tool calls still execute locally
+              inside Exo with the same permission gate, but whatever the agent reads through them
+              (including email content) is sent to the cloud session. Requires a Hostler API key and
+              an active subscription.
+            </p>
+          </div>
+          <label className="relative inline-flex items-center cursor-pointer">
+            <input
+              type="checkbox"
+              className="sr-only peer"
+              checked={hostlerEnabled}
+              onChange={async (e) => {
+                const val = e.target.checked;
+                setHostlerEnabled(val);
+                await window.api.settings.set({
+                  hostler: {
+                    enabled: val,
+                    apiKey: hostlerApiKey,
+                    harness: hostlerHarness || "pi",
+                    model: hostlerModel,
+                  },
+                });
+              }}
+            />
+            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-500 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:after:border-gray-600 peer-checked:bg-blue-600" />
+          </label>
+        </div>
+
+        {hostlerEnabled && (
+          <div className="space-y-3 mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                API Key
+              </label>
+              <input
+                type="password"
+                className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400"
+                placeholder="cpk_..."
+                value={hostlerApiKey}
+                onChange={(e) => setHostlerApiKey(e.target.value)}
+              />
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Mint one at hostler.dev → Settings → API keys (shown exactly once).
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Harness
+                </label>
+                <input
+                  type="text"
+                  className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400"
+                  placeholder="pi"
+                  value={hostlerHarness}
+                  onChange={(e) => setHostlerHarness(e.target.value)}
+                />
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  &quot;pi&quot; is Hostler&apos;s hosted harness today; &quot;opencode&quot; once
+                  the platform supports it.
+                </p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Model <span className="text-gray-400 font-normal">(optional)</span>
+                </label>
+                <input
+                  type="text"
+                  className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400"
+                  placeholder="claude-haiku-4-5"
+                  value={hostlerModel}
+                  onChange={(e) => setHostlerModel(e.target.value)}
+                />
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Bare model id or &quot;provider/model&quot;. Blank uses claude-haiku-4-5, the
+                  documented known-good pairing.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <button
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 dark:bg-blue-500 rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors"
+                onClick={async () => {
+                  await window.api.settings.set({
+                    hostler: {
+                      enabled: hostlerEnabled,
+                      apiKey: hostlerApiKey,
+                      harness: hostlerHarness || "pi",
+                      model: hostlerModel,
+                    },
+                  });
+                }}
+              >
+                Save
+              </button>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Cloud sandboxes take ~10-30s to launch and are kept warm for 5 minutes after a
+                conversation for fast follow-ups.
               </p>
             </div>
           </div>

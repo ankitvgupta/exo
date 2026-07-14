@@ -336,6 +336,26 @@ export function registerSettingsIpc(): void {
           };
         }
       }
+      // Deep-merge hostler for the same reason as ollamaCloud: the Extensions
+      // card never sends baseUrl (a config-file-only escape hatch for
+      // self-hosted deployments), so a shallow merge would silently erase it
+      // on every UI save — redirecting the stored API key to hostler.dev.
+      if ("hostler" in config) {
+        const incoming = config.hostler;
+        const existing = currentConfig.hostler;
+        newConfig = {
+          ...newConfig,
+          hostler: incoming
+            ? {
+                enabled: incoming.enabled,
+                apiKey: incoming.apiKey ?? existing?.apiKey ?? "",
+                harness: incoming.harness ?? existing?.harness ?? "pi",
+                model: incoming.model ?? existing?.model,
+                baseUrl: incoming.baseUrl ?? existing?.baseUrl,
+              }
+            : undefined,
+        };
+      }
       getStore().set("config", newConfig);
 
       // If githubToken changed, propagate to auto-updater immediately
@@ -415,6 +435,21 @@ export function registerSettingsIpc(): void {
           opencode: {
             enabled: newConfig.opencode?.enabled ?? false,
             model: newConfig.opencode?.model,
+          },
+        });
+      }
+
+      // Propagate Hostler config to the agent framework. The provider's
+      // updateConfig() drops its cached client / agent sync and, on disable,
+      // terminates any warm cloud sessions so they stop billing.
+      if ("hostler" in config) {
+        agentCoordinator.updateConfig({
+          hostler: {
+            enabled: newConfig.hostler?.enabled ?? false,
+            apiKey: newConfig.hostler?.apiKey || undefined,
+            harness: newConfig.hostler?.harness,
+            model: newConfig.hostler?.model,
+            baseUrl: newConfig.hostler?.baseUrl,
           },
         });
       }
