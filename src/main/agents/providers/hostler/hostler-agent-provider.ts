@@ -34,23 +34,30 @@ import { createLogger } from "../../../services/logger";
 
 const log = createLogger("hostler-agent");
 
-export const DEFAULT_HOSTLER_HARNESS = "pi";
+export const DEFAULT_HOSTLER_HARNESS = "opencode";
 
-/** The docs' known-good harness/model pairing (pi + claude-haiku-4-5). Model
- *  ids are NOT validated at agent-create time — an unknown id fails at turn
- *  time, after the sandbox has launched and started billing — so the default
- *  stays on the documented pairing rather than tracking the app's model tiers. */
+/** Where Ollama Cloud models (":cloud"-suffixed ids) are served. Hostler's
+ *  broker only speaks "anthropic" and "openai" wire shapes (verified against
+ *  the live platform), but forwards openai-shaped requests to a custom
+ *  upstream — which is how GLM and the rest of the Ollama Cloud catalog run. */
+const OLLAMA_CLOUD_UPSTREAM = "https://ollama.com/v1";
+
+/** Default pairing: the opencode harness driving GLM 5.2 on Ollama Cloud via
+ *  the broker's openai-compatible upstream forwarding. GLM 5.2 is the same
+ *  model the app's own Ollama Cloud integration defaults to
+ *  (DEFAULT_OLLAMA_MODEL) — chosen there after a 16-task agent benchmark. */
 export const DEFAULT_HOSTLER_MODEL: ModelConfig = {
-  provider: "anthropic",
-  id: "claude-haiku-4-5",
+  provider: "openai",
+  id: "glm-5.2:cloud",
+  upstreamBaseUrl: OLLAMA_CLOUD_UPSTREAM,
 };
 
 /**
  * Resolve the configured model selector. Accepts "provider/model" (e.g.
- * "anthropic/claude-sonnet-4-5") or a bare model id, which pairs with
- * "anthropic" — Hostler's broker holds the provider credentials, so unlike
- * OpenCode there is no local Ollama/Anthropic routing to consult.
- * Exported for tests.
+ * "anthropic/claude-sonnet-4-5") or a bare model id. Bare ids ending in
+ * ":cloud" are Ollama Cloud models (matching COMMON_OLLAMA_MODELS ids) and
+ * route through the broker's openai path with the Ollama upstream; other
+ * bare ids pair with "anthropic". Exported for tests.
  */
 export function resolveHostlerModel(selector: string | undefined): ModelConfig {
   const trimmed = selector?.trim();
@@ -58,6 +65,9 @@ export function resolveHostlerModel(selector: string | undefined): ModelConfig {
   const slash = trimmed.indexOf("/");
   if (slash > 0 && slash < trimmed.length - 1) {
     return { provider: trimmed.slice(0, slash), id: trimmed.slice(slash + 1) };
+  }
+  if (trimmed.endsWith(":cloud")) {
+    return { provider: "openai", id: trimmed, upstreamBaseUrl: OLLAMA_CLOUD_UPSTREAM };
   }
   return { provider: "anthropic", id: trimmed };
 }
@@ -212,9 +222,12 @@ export class HostlerAgentProvider implements AgentProvider {
 
     // The sandbox's LLM calls go through Hostler's broker, invisible to our
     // AnthropicService — without this row there'd be no record the session ran.
+    // LlmProvider is a closed union, so stamp Ollama-Cloud-upstream models as
+    // "ollama-cloud" (that's what they are semantically) and everything else
+    // the broker serves as "anthropic".
     recordSessionStart({
       harness: "hostler",
-      provider: model.provider === "ollama-cloud" ? "ollama-cloud" : "anthropic",
+      provider: model.id.endsWith(":cloud") ? "ollama-cloud" : "anthropic",
       model: model.id,
       accountId: context.accountId,
       emailId: context.currentEmailId,

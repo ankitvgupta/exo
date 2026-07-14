@@ -502,9 +502,11 @@ export const ConfigSchema = z.object({
       // "opencode", and "codex" (July 2026); kept free-text so new harnesses
       // work without an app update — unknown ones fail fast with a 400 that
       // lists the supported set.
-      harness: z.string().default("pi"),
-      // "provider/model" or bare model id (bare pairs with "anthropic").
-      // Blank uses the documented known-good default (claude-haiku-4-5).
+      harness: z.string().default("opencode"),
+      // "provider/model" or bare model id. Bare ids ending in ":cloud" are
+      // Ollama Cloud models (routed via the broker's openai upstream); other
+      // bare ids pair with "anthropic". Blank uses glm-5.2:cloud — the same
+      // default as the app's own Ollama Cloud integration.
       model: z.string().optional(),
       // Self-hosted Hostler deployments only; no UI — edit config.json.
       baseUrl: z.string().optional(),

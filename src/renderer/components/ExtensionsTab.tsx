@@ -70,7 +70,7 @@ export function ExtensionsTab() {
   // Hostler agent provider settings — hosted cloud agent backend
   const [hostlerEnabled, setHostlerEnabled] = useState(false);
   const [hostlerApiKey, setHostlerApiKey] = useState("");
-  const [hostlerHarness, setHostlerHarness] = useState("pi");
+  const [hostlerHarness, setHostlerHarness] = useState("opencode");
   const [hostlerModel, setHostlerModel] = useState("");
 
   const loadExtensions = useCallback(async () => {
@@ -242,7 +242,7 @@ export function ExtensionsTab() {
       if (hostlerCfg) {
         setHostlerEnabled(Boolean(hostlerCfg.enabled));
         setHostlerApiKey(String(hostlerCfg.apiKey ?? ""));
-        setHostlerHarness(String(hostlerCfg.harness ?? "pi"));
+        setHostlerHarness(String(hostlerCfg.harness ?? "opencode"));
         setHostlerModel(String(hostlerCfg.model ?? ""));
       }
     })();
@@ -901,7 +901,7 @@ export function ExtensionsTab() {
                   hostler: {
                     enabled: val,
                     apiKey: hostlerApiKey,
-                    harness: hostlerHarness || "pi",
+                    harness: hostlerHarness || "opencode",
                     model: hostlerModel,
                   },
                 });
@@ -937,13 +937,13 @@ export function ExtensionsTab() {
                 <input
                   type="text"
                   className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400"
-                  placeholder="pi"
+                  placeholder="opencode"
                   value={hostlerHarness}
                   onChange={(e) => setHostlerHarness(e.target.value)}
                 />
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                   Hostler currently hosts &quot;pi&quot;, &quot;opencode&quot;, and
-                  &quot;codex&quot;. &quot;pi&quot; is the default.
+                  &quot;codex&quot;. &quot;opencode&quot; is the default.
                 </p>
               </div>
               <div>
@@ -953,13 +953,13 @@ export function ExtensionsTab() {
                 <input
                   type="text"
                   className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400"
-                  placeholder="claude-haiku-4-5"
+                  placeholder="glm-5.2:cloud"
                   value={hostlerModel}
                   onChange={(e) => setHostlerModel(e.target.value)}
                 />
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  Bare model id or &quot;provider/model&quot;. Blank uses claude-haiku-4-5, the
-                  documented known-good pairing.
+                  Bare model id or &quot;provider/model&quot;. Ids ending in &quot;:cloud&quot; run
+                  on Ollama Cloud. Blank uses glm-5.2:cloud.
                 </p>
               </div>
             </div>
@@ -972,7 +972,7 @@ export function ExtensionsTab() {
                     hostler: {
                       enabled: hostlerEnabled,
                       apiKey: hostlerApiKey,
-                      harness: hostlerHarness || "pi",
+                      harness: hostlerHarness || "opencode",
                       model: hostlerModel,
                     },
                   });

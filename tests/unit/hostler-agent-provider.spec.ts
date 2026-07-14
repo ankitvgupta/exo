@@ -295,10 +295,10 @@ test("happy path: syncs agent, runs a client tool locally, completes", async () 
     { toolCallId: "call_1", content: JSON.stringify({ emailBody: "hello" }) },
   ]);
 
-  // Agent synced with client tools declared.
+  // Agent synced with client tools declared and the default harness/model.
   expect(client.agents.created).toHaveLength(1);
   expect(client.agents.created[0]).toMatchObject({
-    harness: "pi",
+    harness: "opencode",
     model: DEFAULT_HOSTLER_MODEL,
     clientTools: [{ name: "read_email" }],
   });
@@ -721,6 +721,13 @@ test("resolveHostlerModel parses selectors", () => {
     id: "claude-sonnet-4-5",
   });
   expect(resolveHostlerModel("openai/gpt-6")).toEqual({ provider: "openai", id: "gpt-6" });
+  // ":cloud" ids are Ollama Cloud models — routed via the broker's openai
+  // path with the ollama.com upstream.
+  expect(resolveHostlerModel("kimi-k2.6:cloud")).toEqual({
+    provider: "openai",
+    id: "kimi-k2.6:cloud",
+    upstreamBaseUrl: "https://ollama.com/v1",
+  });
 });
 
 test("buildFirstMessage includes context, memory, and replayed history", () => {
