@@ -78,12 +78,14 @@ test("buildClientTools skips tools whose schema cannot convert", () => {
   expect(tools.map((t) => t.name)).toEqual(["read_email"]);
 });
 
-test("buildAgentConfig pins the well-known name and disables sandbox tools", () => {
+test("buildAgentConfig pins the well-known name and omits sandboxTools", () => {
   const config = buildAgentConfig({ tools: TOOLS, model: MODEL, harness: "pi" });
   expect(config.name).toBe(HOSTLER_AGENT_NAME);
   expect(config.harness).toBe("pi");
   expect(config.model).toEqual(MODEL);
-  expect(config.sandboxTools).toEqual([]);
+  // Deliberately absent — the hosted pi harness drops client tools when
+  // sandboxTools is [] (see buildAgentConfig). Guard against reintroducing it.
+  expect("sandboxTools" in config).toBe(false);
   expect(config.clientTools).toHaveLength(1);
   expect(config.system).toContain("untrusted input");
 });
@@ -109,7 +111,6 @@ test("ensureAgent reuses the stored version when the config is unchanged", async
     model: { id: MODEL.id, provider: MODEL.provider },
     harness: desired.harness,
     name: desired.name,
-    sandboxTools: [],
     serverAddedField: "ignored",
   };
   const api = makeFakeAgentsApi([
@@ -157,7 +158,6 @@ test("agentConfigEquals is insensitive to key order and extra fields", () => {
   const a = buildAgentConfig({ tools: TOOLS, model: MODEL, harness: "pi" });
   const b: AgentConfig = {
     serverField: 42,
-    sandboxTools: [],
     clientTools: a.clientTools,
     system: a.system,
     harness: a.harness,

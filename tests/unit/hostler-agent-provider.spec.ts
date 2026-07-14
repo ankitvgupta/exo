@@ -295,12 +295,11 @@ test("happy path: syncs agent, runs a client tool locally, completes", async () 
     { toolCallId: "call_1", content: JSON.stringify({ emailBody: "hello" }) },
   ]);
 
-  // Agent synced with client tools declared and sandbox tools disabled.
+  // Agent synced with client tools declared.
   expect(client.agents.created).toHaveLength(1);
   expect(client.agents.created[0]).toMatchObject({
     harness: "pi",
     model: DEFAULT_HOSTLER_MODEL,
-    sandboxTools: [],
     clientTools: [{ name: "read_email" }],
   });
 
@@ -671,6 +670,47 @@ test("stream ending without an idle event fails the run (never fakes completion)
     message: "Hostler event stream ended unexpectedly",
   });
   expect(events.filter((e) => e.type === "done")).toHaveLength(0);
+});
+
+test("402 on session create reaps warm sessions and retries once", async () => {
+  // The platform reserves credit per LIVE session, so a warm-but-idle
+  // session from a finished conversation can block a new sandbox with a 402
+  // despite a positive balance. The provider must free its own warm sessions
+  // and retry rather than surfacing a bogus "top up" error.
+  async function* answer(): AsyncGenerator<SessionEvent, void, void> {
+    yield { ...base(), type: "agent.message", text: "Answered." };
+    yield { ...base(), type: "session.status_idle", stopReason: { type: "end_turn" } };
+  }
+
+  const warmSession = new FakeSession("ses_warm", answer);
+  const freshSession = new FakeSession("ses_fresh", answer);
+  let creates = 0;
+  const client = makeClient({
+    create: async () => {
+      creates += 1;
+      if (creates === 1) return warmSession;
+      if (creates === 2) throw new FakeHostlerError("insufficient credit balance", 402);
+      return freshSession;
+    },
+    get: async () => {
+      throw new FakeHostlerError("not found", 404);
+    },
+  });
+  const provider = new HostlerAgentProvider(
+    makeFrameworkConfig({ enabled: true, apiKey: "cpk_test" }),
+  );
+  provider._setSdkForTesting(makeSdk(client));
+
+  // Run 1 completes and leaves ses_warm idle-with-timer.
+  const first = await drain(provider.run(makeRunParams({ taskId: "t1" })));
+  expect(first.result.state).toBe("completed");
+
+  // Run 2 (new conversation): create 402s once, warm session is reaped, retry succeeds.
+  seq = 0;
+  const second = await drain(provider.run(makeRunParams({ taskId: "t2" })));
+  expect(second.result).toEqual({ state: "completed", providerTaskId: "ses_fresh" });
+  expect(warmSession.terminated).toBe(true);
+  expect(creates).toBe(3);
 });
 
 test("resolveHostlerModel parses selectors", () => {

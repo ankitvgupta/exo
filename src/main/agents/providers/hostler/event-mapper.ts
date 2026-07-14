@@ -39,6 +39,12 @@ export function createHostlerEventMapper(): HostlerEventMapper {
   // streamed — emit it only when no deltas preceded it.
   let deltaChars = 0;
   let lastMessage: string | null = null;
+  // The platform emits one client-tool call twice — once with locale
+  // "sandbox" (the harness dispatching it) and once with locale "client"
+  // (the park), same toolCallId — verified against the live pi harness.
+  // Emit start/end exactly once per call (mirrors the OpenCode mapper).
+  const startedTools = new Set<string>();
+  const endedTools = new Set<string>();
 
   return {
     next(e: SessionEvent): AgentEvent[] {
@@ -55,7 +61,9 @@ export function createHostlerEventMapper(): HostlerEventMapper {
           return e.text.length > 0 ? [{ type: "text_delta", text: e.text }] : [];
         }
 
-        case "agent.tool_use":
+        case "agent.tool_use": {
+          if (startedTools.has(e.toolCallId)) return [];
+          startedTools.add(e.toolCallId);
           return [
             {
               type: "tool_call_start",
@@ -64,8 +72,11 @@ export function createHostlerEventMapper(): HostlerEventMapper {
               input: e.input,
             },
           ];
+        }
 
         case "agent.tool_result": {
+          if (endedTools.has(e.toolCallId)) return [];
+          endedTools.add(e.toolCallId);
           const text = e.content.map((c) => c.text).join("\n");
           return [
             {

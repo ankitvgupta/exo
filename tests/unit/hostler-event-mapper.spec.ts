@@ -93,6 +93,54 @@ test("tool_use maps to tool_call_start for every locale", () => {
   ).toEqual([{ type: "tool_call_start", toolName: "webfetch", toolCallId: "call_2", input: {} }]);
 });
 
+test("duplicate tool events for one callId emit start/end exactly once", () => {
+  // The live platform emits the same client-tool call twice: locale
+  // "sandbox" (harness dispatch) then locale "client" (the park).
+  const mapper = createHostlerEventMapper();
+
+  expect(
+    mapper.next({
+      ...base(),
+      type: "agent.tool_use",
+      toolCallId: "call_1",
+      name: "read_email",
+      input: { id: "e1" },
+      locale: "sandbox",
+    }),
+  ).toHaveLength(1);
+  expect(
+    mapper.next({
+      ...base(),
+      type: "agent.tool_use",
+      toolCallId: "call_1",
+      name: "read_email",
+      input: { id: "e1" },
+      locale: "client",
+    }),
+  ).toEqual([]);
+
+  expect(
+    mapper.next({
+      ...base(),
+      type: "agent.tool_result",
+      toolCallId: "call_1",
+      name: "read_email",
+      isError: false,
+      content: [{ type: "text", text: "body" }],
+    }),
+  ).toHaveLength(1);
+  expect(
+    mapper.next({
+      ...base(),
+      type: "agent.tool_result",
+      toolCallId: "call_1",
+      name: "read_email",
+      isError: false,
+      content: [{ type: "text", text: "body" }],
+    }),
+  ).toEqual([]);
+});
+
 test("tool_result maps to tool_call_end, wrapping errors", () => {
   const mapper = createHostlerEventMapper();
 

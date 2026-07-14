@@ -84,12 +84,14 @@ export function buildAgentConfig(args: {
     harness: args.harness,
     model: args.model,
     system: HOSTLER_SYSTEM_PROMPT,
-    // No harness built-ins in the sandbox. Same reasoning as OpenCode's
-    // buildDisabledBuiltins(): email bodies are untrusted input and prompt
-    // injection is a live attack surface — filesystem/shell tools (even
-    // remote ones) would just give an injected instruction somewhere to run.
-    // The client tools below are the agent's entire surface.
-    sandboxTools: [],
+    // We'd prefer sandboxTools: [] here — email bodies are untrusted input,
+    // and disabling the harness's filesystem/shell built-ins mirrors
+    // OpenCode's buildDisabledBuiltins() rationale. But as of July 2026 the
+    // hosted pi harness drops CLIENT tools too when sandboxTools is [],
+    // leaving the agent tool-less (verified empirically: identical agents
+    // with/without the field; docs say [] disables built-ins only). Omit the
+    // field until the platform fixes that; the sandbox built-ins only run on
+    // Hostler's isolated machine, never on this device.
     clientTools: buildClientTools(args.tools),
   };
 }

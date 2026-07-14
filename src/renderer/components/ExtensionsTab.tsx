@@ -942,8 +942,8 @@ export function ExtensionsTab() {
                   onChange={(e) => setHostlerHarness(e.target.value)}
                 />
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  &quot;pi&quot; is Hostler&apos;s hosted harness today; &quot;opencode&quot; once
-                  the platform supports it.
+                  Hostler currently hosts &quot;pi&quot;, &quot;opencode&quot;, and
+                  &quot;codex&quot;. &quot;pi&quot; is the default.
                 </p>
               </div>
               <div>

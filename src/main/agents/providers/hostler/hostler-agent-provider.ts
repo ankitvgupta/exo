@@ -177,6 +177,7 @@ export class HostlerAgentProvider implements AgentProvider {
     { timer: ReturnType<typeof setTimeout>; session: HostlerSessionLike }
   >();
   private orphanSweepDone = false;
+  private orphanSweep: Promise<void> | null = null;
 
   constructor(frameworkConfig: AgentFrameworkConfig) {
     this.frameworkConfig = frameworkConfig;
@@ -270,13 +271,7 @@ export class HostlerAgentProvider implements AgentProvider {
           state: "running",
           message: "Starting Hostler cloud sandbox (~10-30s)…",
         };
-        session = await client.sessions.create({
-          agentId: agentRef.id,
-          // Pin the version we just synced — deterministic even if another
-          // device publishes a newer version mid-run.
-          agentVersion: agentRef.version,
-          title: `mail-app:${taskId}`,
-        });
+        session = await this.createSession(client, agentRef, taskId);
       }
       active.session = session;
 
@@ -319,11 +314,7 @@ export class HostlerAgentProvider implements AgentProvider {
           state: "running",
           message: "Starting Hostler cloud sandbox (~10-30s)…",
         };
-        session = await client.sessions.create({
-          agentId: agentRef.id,
-          agentVersion: agentRef.version,
-          title: `mail-app:${taskId}`,
-        });
+        session = await this.createSession(client, agentRef, taskId);
         active.session = session;
         isNewSession = true;
         cursor = 0;
@@ -448,16 +439,7 @@ export class HostlerAgentProvider implements AgentProvider {
     if (!this.frameworkConfig.hostler?.enabled) {
       // Disabled ≠ still billing: terminate warm sessions now instead of
       // waiting out their idle TTL.
-      for (const [sessionId, entry] of this.idleTimers) {
-        clearTimeout(entry.timer);
-        this.sessionSeq.delete(sessionId);
-        entry.session.terminate().catch((err: unknown) => {
-          log.warn(
-            `terminate on disable failed for ${sessionId}: ${err instanceof Error ? err.message : String(err)}`,
-          );
-        });
-      }
-      this.idleTimers.clear();
+      void this.terminateWarmSessions();
     }
   }
 
@@ -478,6 +460,59 @@ export class HostlerAgentProvider implements AgentProvider {
   }
 
   /**
+   * Launch a sandbox session. The platform reserves credit per LIVE session,
+   * so a create can 402 ("insufficient credit") even with a positive balance
+   * while our own warm-but-idle sessions hold reservations (verified against
+   * the live platform, July 2026). In that case, reap the warm sessions now
+   * — exactly what the idle TTL would do later — and retry once.
+   */
+  private async createSession(
+    client: HostlerClientLike,
+    agentRef: { id: string; version: number },
+    taskId: string,
+  ): Promise<HostlerSessionLike> {
+    const options: CreateSessionOptions = {
+      agentId: agentRef.id,
+      // Pin the version we just synced — deterministic even if another
+      // device publishes a newer version mid-run.
+      agentVersion: agentRef.version,
+      title: `mail-app:${taskId}`,
+    };
+    try {
+      return await client.sessions.create(options);
+    } catch (err) {
+      if (errorStatus(err) !== 402) throw err;
+      // Reservations may be held by our own warm sessions OR by orphans the
+      // boot-time sweep (fire-and-forget) is still reaping — settle both,
+      // then retry once. A genuine out-of-credit state throws again here.
+      log.info("Session create hit a credit reservation (402); freeing our sessions and retrying");
+      await this.orphanSweep?.catch(() => undefined);
+      await this.terminateWarmSessions();
+      return await client.sessions.create(options);
+    }
+  }
+
+  /** Terminate every warm (idle, timer-held) session now. Awaited so callers
+   *  can rely on the reservations actually being released. */
+  private async terminateWarmSessions(): Promise<void> {
+    const entries = [...this.idleTimers.values()];
+    for (const [sessionId, entry] of this.idleTimers) {
+      clearTimeout(entry.timer);
+      this.sessionSeq.delete(sessionId);
+    }
+    this.idleTimers.clear();
+    await Promise.allSettled(
+      entries.map((entry) =>
+        entry.session.terminate().catch((err: unknown) => {
+          log.warn(
+            `warm terminate failed for ${entry.session.id}: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }),
+      ),
+    );
+  }
+
+  /**
    * Reap sandboxes leaked by an app quit or worker crash — in those cases the
    * unref'd idle timer dies with the process and nothing else terminates the
    * session, which bills until deleted. Once per worker lifetime, terminate
@@ -489,7 +524,10 @@ export class HostlerAgentProvider implements AgentProvider {
   private sweepOrphanedSessions(client: HostlerClientLike): void {
     if (this.orphanSweepDone) return;
     this.orphanSweepDone = true;
-    void (async () => {
+    // Fire-and-forget, but the promise is kept: createSession awaits it on a
+    // 402 so a session create that races the sweep can retry after the
+    // orphans' credit reservations are actually released.
+    this.orphanSweep = (async () => {
       const rows = await client.sessions.list();
       const orphans = rows.filter(
         (row) => row.status === "idle" && (row.title ?? "").startsWith("mail-app:"),
@@ -505,7 +543,8 @@ export class HostlerAgentProvider implements AgentProvider {
       if (orphans.length > 0) {
         log.info(`Reaped ${orphans.length} orphaned Hostler session(s) from a previous run`);
       }
-    })().catch((err: unknown) => {
+    })();
+    this.orphanSweep.catch((err: unknown) => {
       log.warn(`orphan sweep failed: ${err instanceof Error ? err.message : String(err)}`);
     });
   }

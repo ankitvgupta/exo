@@ -498,10 +498,10 @@ export const ConfigSchema = z.object({
     .object({
       enabled: z.boolean().default(false),
       apiKey: z.string().default(""),
-      // Which agent harness runs in the sandbox. "pi" is Hostler's hosted
-      // harness today; free-text so e.g. "opencode" works as soon as the
-      // platform supports it (unknown harnesses fail fast with a 400 that
-      // lists the supported ones).
+      // Which agent harness runs in the sandbox. Hostler hosts "pi",
+      // "opencode", and "codex" (July 2026); kept free-text so new harnesses
+      // work without an app update — unknown ones fail fast with a 400 that
+      // lists the supported set.
       harness: z.string().default("pi"),
       // "provider/model" or bare model id (bare pairs with "anthropic").
       // Blank uses the documented known-good default (claude-haiku-4-5).
