@@ -8,6 +8,7 @@ import {
   DEFAULT_OLLAMA_MODEL,
   DEFAULT_HOSTLER_HARNESS,
   DEFAULT_BACKGROUND_AGENT_PROVIDER,
+  resolveBackgroundAgentProviderId,
 } from "../../shared/types";
 import { OllamaModelSelect } from "./OllamaModelSelect";
 import { loadExtensionRenderer } from "../extensions/installed-extensions";
@@ -81,6 +82,24 @@ export function ExtensionsTab() {
   const [backgroundAgentProvider, setBackgroundAgentProvider] = useState(
     DEFAULT_BACKGROUND_AGENT_PROVIDER,
   );
+
+  // What the main process will actually run, given the current gates — the
+  // same resolver that prefetch/rerun use, so the fallback warning can't
+  // drift from real behavior.
+  const effectiveBackgroundProvider = resolveBackgroundAgentProviderId({
+    backgroundAgentProvider,
+    opencode: { enabled: opencodeEnabled },
+    hostler: {
+      enabled: hostlerEnabled,
+      apiKey: hostlerApiKey,
+      harness: hostlerHarness || DEFAULT_HOSTLER_HARNESS,
+    },
+    openclaw: {
+      enabled: openclawEnabled,
+      gatewayUrl: openclawGatewayUrl,
+      gatewayToken: openclawGatewayToken,
+    },
+  });
 
   // Blank fields are sent as undefined so the settings deep-merge preserves
   // stored values — e.g. flipping the toggle before the async config load
@@ -1025,21 +1044,18 @@ export function ExtensionsTab() {
             <option value="opencode" disabled={!opencodeEnabled}>
               OpenCode
             </option>
-            <option value="hostler" disabled={!hostlerEnabled}>
+            <option value="hostler" disabled={!hostlerEnabled || !hostlerApiKey}>
               Hostler (cloud)
             </option>
           </select>
         </div>
-        {backgroundAgentProvider === "opencode" && !opencodeEnabled && (
+        {effectiveBackgroundProvider !== backgroundAgentProvider && (
           <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
-            OpenCode is disabled — background drafts fall back to Claude until it&apos;s
-            re-enabled.
-          </p>
-        )}
-        {backgroundAgentProvider === "hostler" && (!hostlerEnabled || !hostlerApiKey) && (
-          <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
-            Hostler is {hostlerEnabled ? "missing an API key" : "disabled"} — background drafts
-            fall back to Claude until it&apos;s configured.
+            {backgroundAgentProvider === "opencode"
+              ? "OpenCode is disabled — background drafts fall back to Claude until it's re-enabled."
+              : backgroundAgentProvider === "hostler"
+                ? `Hostler is ${hostlerEnabled ? "missing an API key" : "disabled"} — background drafts fall back to Claude until it's configured.`
+                : `"${backgroundAgentProvider}" isn't available — background drafts fall back to Claude until it's configured.`}
           </p>
         )}
       </div>

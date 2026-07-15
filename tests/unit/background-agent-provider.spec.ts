@@ -10,6 +10,8 @@ import {
   DEFAULT_BACKGROUND_AGENT_PROVIDER,
   resolveBackgroundAgentProviderId,
 } from "../../src/shared/types";
+import { deriveTraceProviderIds } from "../../src/shared/agent-types";
+import type { ScopedAgentEvent } from "../../src/shared/agent-types";
 
 test.describe("ConfigSchema backgroundAgentProvider", () => {
   test("parses config with backgroundAgentProvider set", () => {
@@ -101,6 +103,36 @@ test.describe("resolveBackgroundAgentProviderId", () => {
     expect(result).toBe("claude");
   });
 
+  test("treats empty string as unset (hand-edited config)", () => {
+    // "" would otherwise reach the orchestrator and throw "Unknown provider: ".
+    const result = resolveBackgroundAgentProviderId({
+      backgroundAgentProvider: "",
+      opencode: undefined,
+      hostler: undefined,
+    });
+    expect(result).toBe("claude");
+  });
+
+  test("falls back to claude when openclaw-agent selected but not configured", () => {
+    const result = resolveBackgroundAgentProviderId({
+      backgroundAgentProvider: "openclaw-agent",
+      opencode: undefined,
+      hostler: undefined,
+      openclaw: { enabled: false, gatewayUrl: "", gatewayToken: "" },
+    });
+    expect(result).toBe("claude");
+  });
+
+  test("returns openclaw-agent when enabled with a gateway URL", () => {
+    const result = resolveBackgroundAgentProviderId({
+      backgroundAgentProvider: "openclaw-agent",
+      opencode: undefined,
+      hostler: undefined,
+      openclaw: { enabled: true, gatewayUrl: "https://gw.example.com", gatewayToken: "t" },
+    });
+    expect(result).toBe("openclaw-agent");
+  });
+
   test("passes through unknown provider ids unchanged", () => {
     // Installed/private providers have config gates we can't see here — the
     // orchestrator fails explicitly for ids that aren't registered.
@@ -110,5 +142,48 @@ test.describe("resolveBackgroundAgentProviderId", () => {
       hostler: undefined,
     });
     expect(result).toBe("my-installed-provider");
+  });
+});
+
+test.describe("deriveTraceProviderIds", () => {
+  const event = (overrides: Partial<ScopedAgentEvent>): ScopedAgentEvent =>
+    ({ type: "text_delta", text: "x", ...overrides }) as ScopedAgentEvent;
+
+  test("collects the single provider id from a stamped trace", () => {
+    const events = [
+      event({ providerId: "hostler" }),
+      event({ providerId: "hostler" }),
+      event({ providerId: "hostler" }),
+    ];
+    expect(deriveTraceProviderIds(events)).toEqual(["hostler"]);
+  });
+
+  test("falls back to claude for legacy traces with no stamped events", () => {
+    const events = [event({}), event({})];
+    expect(deriveTraceProviderIds(events)).toEqual(["claude"]);
+  });
+
+  test("ignores unstamped events when at least one event is stamped", () => {
+    // Orchestrator-emitted confirmation_required events carry no providerId;
+    // replayAgentTrace buckets them under providerIds[0].
+    const events = [
+      event({ providerId: "opencode" }),
+      event({}),
+      event({ providerId: "opencode" }),
+    ];
+    expect(deriveTraceProviderIds(events)).toEqual(["opencode"]);
+  });
+
+  test("preserves first-seen order for multi-provider traces", () => {
+    const events = [
+      event({ providerId: "claude" }),
+      event({ providerId: "hostler" }),
+      event({ providerId: "claude" }),
+    ];
+    expect(deriveTraceProviderIds(events)).toEqual(["claude", "hostler"]);
+  });
+
+  test("returns claude for an empty trace", () => {
+    expect(deriveTraceProviderIds([])).toEqual(["claude"]);
   });
 });

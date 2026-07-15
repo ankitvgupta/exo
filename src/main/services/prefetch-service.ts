@@ -14,15 +14,16 @@ import {
   loadCompletedAgentDraftEmailIds,
   isSenderBlocked,
 } from "../db";
-import { getConfig, getFeatureModelConfig } from "../ipc/settings.ipc";
+import {
+  getConfig,
+  getFeatureModelConfig,
+  getBackgroundAgentProviderId,
+} from "../ipc/settings.ipc";
 import { getExtensionHost } from "../extensions";
 import { agentCoordinator } from "../agents/agent-coordinator";
 import { buildAutoDraftTaskId } from "../agents/task-id";
 import type { AgentContext } from "../agents/types";
-import {
-  DEFAULT_AGENT_DRAFTER_PROMPT,
-  resolveBackgroundAgentProviderId,
-} from "../../shared/types";
+import { DEFAULT_AGENT_DRAFTER_PROMPT } from "../../shared/types";
 import type { Email, DashboardEmail } from "../../shared/types";
 import { createLogger } from "./logger";
 
@@ -1090,7 +1091,7 @@ When you see emails in a thread where ${eaName} is coordinating scheduling with 
       // Track which taskId is active for this email so we can detect superseded tasks
       this.activeAgentTaskIds.set(emailId, taskId);
 
-      const providerId = resolveBackgroundAgentProviderId(config);
+      const providerId = getBackgroundAgentProviderId();
       log.info(`[Prefetch] Agent draft for ${emailId} using provider ${providerId}`);
 
       // Launch the agent and await its actual completion (not just startup)

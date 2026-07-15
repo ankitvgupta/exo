@@ -609,13 +609,18 @@ export const DEFAULT_BACKGROUND_AGENT_PROVIDER = "claude";
  * explicitly for unregistered ids.
  */
 export function resolveBackgroundAgentProviderId(
-  cfg: Pick<Config, "backgroundAgentProvider" | "opencode" | "hostler">,
+  cfg: Pick<Config, "backgroundAgentProvider" | "opencode" | "hostler" | "openclaw">,
 ): string {
-  const requested = cfg.backgroundAgentProvider ?? DEFAULT_BACKGROUND_AGENT_PROVIDER;
+  // `||` (not `??`) so an empty string in a hand-edited config counts as
+  // unset instead of reaching the orchestrator as an unknown provider id.
+  const requested = cfg.backgroundAgentProvider || DEFAULT_BACKGROUND_AGENT_PROVIDER;
   if (requested === "opencode" && !cfg.opencode?.enabled) {
     return DEFAULT_BACKGROUND_AGENT_PROVIDER;
   }
   if (requested === "hostler" && !(cfg.hostler?.enabled && cfg.hostler.apiKey)) {
+    return DEFAULT_BACKGROUND_AGENT_PROVIDER;
+  }
+  if (requested === "openclaw-agent" && !(cfg.openclaw?.enabled && cfg.openclaw.gatewayUrl)) {
     return DEFAULT_BACKGROUND_AGENT_PROVIDER;
   }
   return requested;
