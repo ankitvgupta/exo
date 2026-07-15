@@ -18,6 +18,8 @@ import {
   MODEL_TIER_IDS,
   resolveModelId,
   resolveAgentOllamaConfig,
+  resolveBackgroundAgentProviderId,
+  DEFAULT_BACKGROUND_AGENT_PROVIDER,
   DEFAULT_OLLAMA_MODEL,
   DEFAULT_HOSTLER_HARNESS,
 } from "../../shared/types";
@@ -223,6 +225,31 @@ export function getFeatureModelConfig(feature: keyof ModelConfig): {
   return { provider: "anthropic", model: resolveModelId(mc[feature]) };
 }
 
+/**
+ * Which agent provider background auto-drafts should launch right now.
+ *
+ * Wraps the pure resolveBackgroundAgentProviderId with the one gate it can't
+ * express: OpenCode also needs an LLM credential (its isAvailable() requires
+ * Ollama or Anthropic), and the Anthropic key may come from process.env,
+ * which the renderer-safe resolver can't read. Without this, enabling
+ * OpenCode with no credentials would fail every background draft — and each
+ * failed email is skipped for the rest of the session.
+ *
+ * The bundled opencode binary is deliberately not checked here: it ships
+ * with the app, so its absence is a broken install that should fail loudly
+ * in the provider, not silently fall back.
+ */
+export function getBackgroundAgentProviderId(): string {
+  const config = getConfig();
+  const resolved = resolveBackgroundAgentProviderId(config);
+  if (resolved === "opencode") {
+    const hasAnthropic = Boolean(config.anthropicApiKey || process.env.ANTHROPIC_API_KEY);
+    const hasOllama = Boolean(config.ollamaCloud?.apiKey);
+    if (!hasAnthropic && !hasOllama) return DEFAULT_BACKGROUND_AGENT_PROVIDER;
+  }
+  return resolved;
+}
+
 export function registerSettingsIpc(): void {
   // Validate an Anthropic API key with a minimal API call
   ipcMain.handle(
@@ -348,6 +375,19 @@ export function registerSettingsIpc(): void {
             },
           };
         }
+      }
+      // backgroundAgentProvider routes every background auto-draft to an
+      // agent provider. IPC payloads are compile-time-typed only, so guard
+      // the type here — a persisted non-string would wedge every future
+      // auto-draft on "Unknown provider".
+      if (
+        "backgroundAgentProvider" in config &&
+        typeof config.backgroundAgentProvider !== "string"
+      ) {
+        newConfig = {
+          ...newConfig,
+          backgroundAgentProvider: currentConfig.backgroundAgentProvider,
+        };
       }
       // Deep-merge hostler for the same reason as ollamaCloud: the Extensions
       // card never sends baseUrl (a dev/test escape hatch), so a shallow

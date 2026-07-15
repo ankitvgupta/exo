@@ -539,6 +539,13 @@ export const ConfigSchema = z.object({
         .optional(),
     })
     .optional(),
+  // Which agent provider runs background auto-draft tasks — the agent that
+  // fires on every new email needing a reply, plus the "Regenerate draft"
+  // rerun path. "claude" (default), "opencode", or "hostler" today; kept
+  // free-text so future providers work without a schema change. Resolution
+  // (including fallback when the chosen provider is disabled) happens in
+  // resolveBackgroundAgentProviderId below.
+  backgroundAgentProvider: z.string().optional(),
   ollamaCloud: OllamaCloudConfigSchema.optional(),
   featureProviders: z.record(z.string(), LlmProviderSchema).optional(),
   configVersion: z.number().optional(),
@@ -581,6 +588,42 @@ export function resolveAgentOllamaConfig(
     // explicit query() model param in sync.
     model: oc.featureModels?.agentDrafter ?? oc.defaultModel ?? DEFAULT_OLLAMA_MODEL,
   };
+}
+
+/** Provider id used for background auto-drafts when nothing else is configured. */
+export const DEFAULT_BACKGROUND_AGENT_PROVIDER = "claude";
+
+/**
+ * Resolve which agent provider runs background auto-draft tasks (the agent
+ * that fires on every new email needing a reply, and the "Regenerate draft"
+ * rerun path).
+ *
+ * Falls back to "claude" when the configured provider's config-level gates
+ * aren't met — mirroring each provider's isAvailable() check, which runs in
+ * the agent worker where the main process can't call it. Without the
+ * fallback, disabling e.g. Hostler while it's selected would make every
+ * background draft fail until the user also updated this setting.
+ *
+ * Unknown provider ids (e.g. an installed provider) pass through unchanged:
+ * we can't know their config gates here, and the orchestrator fails
+ * explicitly for unregistered ids.
+ */
+export function resolveBackgroundAgentProviderId(
+  cfg: Pick<Config, "backgroundAgentProvider" | "opencode" | "hostler" | "openclaw">,
+): string {
+  // `||` (not `??`) so an empty string in a hand-edited config counts as
+  // unset instead of reaching the orchestrator as an unknown provider id.
+  const requested = cfg.backgroundAgentProvider || DEFAULT_BACKGROUND_AGENT_PROVIDER;
+  if (requested === "opencode" && !cfg.opencode?.enabled) {
+    return DEFAULT_BACKGROUND_AGENT_PROVIDER;
+  }
+  if (requested === "hostler" && !(cfg.hostler?.enabled && cfg.hostler.apiKey)) {
+    return DEFAULT_BACKGROUND_AGENT_PROVIDER;
+  }
+  if (requested === "openclaw-agent" && !(cfg.openclaw?.enabled && cfg.openclaw.gatewayUrl)) {
+    return DEFAULT_BACKGROUND_AGENT_PROVIDER;
+  }
+  return requested;
 }
 
 // Dashboard-specific types
