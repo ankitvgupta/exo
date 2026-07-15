@@ -682,6 +682,12 @@ async function main() {
         log(
           `result: subtype=${msg.subtype} cost=${msg.total_cost_usd ?? "?"} turns=${msg.num_turns ?? "?"}`,
         );
+        // The result message is terminal by contract, but the SDK stream can
+        // stay open past it (observed with error_max_turns: the run sat until
+        // the 10-minute hard timeout, exit 124, and no report was written —
+        // which also left the Electron child alive to poison the next pre-pr
+        // phase). Break so cleanup + report happen promptly.
+        break;
       }
     }
 
