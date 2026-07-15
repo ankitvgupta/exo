@@ -631,10 +631,14 @@ export class HostlerAgentProvider implements AgentProvider {
       return;
     }
 
-    // pendingState "async": the platform is waiting on this app for a client
-    // tool result. Sandbox/mcp tools also stream tool events but are not ours
-    // to answer.
-    if (!call || call.locale !== "client") return;
+    // pendingState "async": the platform is waiting on this app for a result.
+    // The park itself is authoritative — only client-tool calls park for the
+    // API client. The locale stash can lag it: the platform emits one call
+    // twice (harness dispatch as locale "sandbox", then the park as locale
+    // "client"), so a pending that lands between them finds the stale
+    // sandbox-locale stash. Trust the park over the stash; only mcp-locale
+    // calls (runtime-side dispatch) are never ours to answer.
+    if (!call || call.locale === "mcp") return;
     toolInputs.delete(ev.toolCallId);
     void this.executeClientTool(session, ev.toolCallId, call, toolExecutor);
   }

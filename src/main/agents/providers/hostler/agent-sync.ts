@@ -87,8 +87,8 @@ export function buildAgentConfig(args: {
     // No harness built-ins in the sandbox — email bodies are untrusted input,
     // and disabling filesystem/shell tools mirrors OpenCode's
     // buildDisabledBuiltins() rationale. (An earlier platform bug made []
-    // drop client tools too on the pi harness — fixed and e2e-covered
-    // platform-side in managed-agents#56; verified live on both harnesses.)
+    // drop client tools too on the pi harness — fixed platform-side in
+    // July 2026; verified live on both harnesses.)
     sandboxTools: [],
     clientTools: buildClientTools(args.tools),
   };

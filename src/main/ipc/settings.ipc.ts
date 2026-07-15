@@ -349,7 +349,8 @@ export function registerSettingsIpc(): void {
             ? {
                 enabled: incoming.enabled,
                 apiKey: incoming.apiKey ?? existing?.apiKey ?? "",
-                harness: incoming.harness ?? existing?.harness ?? "pi",
+                // Last resort mirrors ConfigSchema's harness default.
+                harness: incoming.harness ?? existing?.harness ?? "opencode",
                 model: incoming.model ?? existing?.model,
                 baseUrl: incoming.baseUrl ?? existing?.baseUrl,
               }

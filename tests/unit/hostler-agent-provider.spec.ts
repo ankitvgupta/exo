@@ -182,9 +182,7 @@ function makeSdk(client: HostlerClientLike): HostlerSdkModule {
   };
 }
 
-function makeFrameworkConfig(
-  hostler: AgentFrameworkConfig["hostler"],
-): AgentFrameworkConfig {
+function makeFrameworkConfig(hostler: AgentFrameworkConfig["hostler"]): AgentFrameworkConfig {
   return { model: "claude-sonnet-4-5", hostler };
 }
 
@@ -194,7 +192,11 @@ function makeRunParams(overrides?: Partial<AgentRunParams>): AgentRunParams {
     prompt: "How many unread emails do I have?",
     context: { accountId: "acc1", userEmail: "user@example.com" },
     tools: [
-      { name: "read_email", description: "Read an email", inputSchema: z.object({ id: z.string() }) },
+      {
+        name: "read_email",
+        description: "Read an email",
+        inputSchema: z.object({ id: z.string() }),
+      },
     ],
     toolExecutor: async () => "ok",
     netFetch: async () => ({ status: 200, headers: {}, body: "" }),
@@ -602,7 +604,13 @@ test("follow-up after cancel resumes past the interrupted idle instead of replay
       };
     }
     yield { seq: 3, id: "sevt_3", ts: 3, type: "agent.message", text: "Second answer." };
-    yield { seq: 4, id: "sevt_4", ts: 4, type: "session.status_idle", stopReason: { type: "end_turn" } };
+    yield {
+      seq: 4,
+      id: "sevt_4",
+      ts: 4,
+      type: "session.status_idle",
+      stopReason: { type: "end_turn" },
+    };
   }
 
   const session = new FakeSession("ses_1", script);
@@ -623,7 +631,13 @@ test("follow-up after cancel resumes past the interrupted idle instead of replay
   const first = await draining;
   expect(first.result.state).toBe("cancelled");
   session.history = [
-    { seq: 2, id: "sevt_2", ts: 2, type: "session.status_idle", stopReason: { type: "interrupted" } },
+    {
+      seq: 2,
+      id: "sevt_2",
+      ts: 2,
+      type: "session.status_idle",
+      stopReason: { type: "interrupted" },
+    },
   ];
 
   // Turn 2: follow-up on the same session must complete with the new answer.
@@ -672,6 +686,69 @@ test("stream ending without an idle event fails the run (never fakes completion)
     message: "Hostler event stream ended unexpectedly",
   });
   expect(events.filter((e) => e.type === "done")).toHaveLength(0);
+});
+
+test("a park arriving before the client-locale tool_use still executes the tool", async () => {
+  // The platform emits one client-tool call twice (locale "sandbox" from the
+  // harness dispatch, then locale "client" from the park). If the
+  // agent.tool_pending lands between them, the input stash still says
+  // "sandbox" — the park itself is authoritative, so the tool must run.
+  async function* script(s: FakeSession): AsyncGenerator<SessionEvent, void, void> {
+    yield {
+      ...base(),
+      type: "agent.tool_use",
+      toolCallId: "call_1",
+      name: "read_email",
+      input: { id: "e1" },
+      locale: "sandbox",
+    };
+    yield {
+      ...base(),
+      type: "agent.tool_pending",
+      toolCallId: "call_1",
+      name: "read_email",
+      pendingState: "async",
+    };
+    const posted = await s.nextToolResult();
+    yield {
+      ...base(),
+      type: "agent.tool_result",
+      toolCallId: "call_1",
+      name: "read_email",
+      isError: false,
+      content: [{ type: "text", text: posted.content ?? "" }],
+    };
+    yield { ...base(), type: "agent.message", text: "Done." };
+    yield { ...base(), type: "session.status_idle", stopReason: { type: "end_turn" } };
+  }
+
+  const session = new FakeSession("ses_1", script);
+  const client = makeClient({
+    create: async () => session,
+    get: async () => {
+      throw new FakeHostlerError("not found", 404);
+    },
+  });
+  const provider = new HostlerAgentProvider(
+    makeFrameworkConfig({ enabled: true, apiKey: "cpk_test" }),
+  );
+  provider._setSdkForTesting(makeSdk(client));
+
+  const executed: string[] = [];
+  const { result } = await drain(
+    provider.run(
+      makeRunParams({
+        toolExecutor: async (name) => {
+          executed.push(name);
+          return "ok";
+        },
+      }),
+    ),
+  );
+
+  expect(result.state).toBe("completed");
+  expect(executed).toEqual(["read_email"]);
+  expect(session.toolResults).toEqual([{ toolCallId: "call_1", content: "ok" }]);
 });
 
 test("402 on session create reaps warm sessions and retries once", async () => {
