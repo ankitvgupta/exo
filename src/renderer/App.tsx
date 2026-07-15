@@ -43,7 +43,7 @@ import {
   addBreadcrumb,
   captureException,
 } from "./services/posthog";
-import { LocalDraftSchema } from "../shared/types";
+import { LocalDraftSchema, DEFAULT_BACKGROUND_AGENT_PROVIDER } from "../shared/types";
 import type {
   DashboardEmail,
   OutboxStats,
@@ -1177,12 +1177,21 @@ export default function App() {
             // Save sidebar tab — startAgentTask unconditionally sets it to "agent",
             // but background auto-drafts shouldn't steal focus from the user
             const prevTab = store.sidebarTab;
-            store.startAgentTask(taskId, emailId, ["claude"], "", {
-              accountId: email.accountId || "",
-              currentEmailId: emailId,
-              currentThreadId: email.threadId,
-              userEmail: "",
-            });
+            // The background provider is configurable (backgroundAgentProvider),
+            // so derive it from the event — appendAgentEvent drops events whose
+            // providerId has no registered run.
+            store.startAgentTask(
+              taskId,
+              emailId,
+              [event.providerId ?? DEFAULT_BACKGROUND_AGENT_PROVIDER],
+              "",
+              {
+                accountId: email.accountId || "",
+                currentEmailId: emailId,
+                currentThreadId: email.threadId,
+                userEmail: "",
+              },
+            );
             trackEvent("agent_run_started", { source: "auto_draft", provider_count: 1 });
             // Restore tab if this auto-draft is for a different email than what the user is viewing
             if (store.selectedEmailId !== emailId && prevTab !== "agent") {

@@ -113,11 +113,12 @@ run_with_display() {
 # Config files (electron-store) are shared state across workers — we only clean
 # them before/after the full test suite, never during parallel execution.
 #
-# ONLY the project-local .dev-data/ may be cleaned here. Dev/test runs never
-# write anywhere else (src/main/data-dir.ts). An earlier version of this
-# function also cleaned the global per-user app dirs — the packaged app's REAL
-# user data — which deleted the production exo-config.json (all API keys and
-# settings) on every test run. Never add global paths back; the
+# ONLY the project-local .dev-data/ may be cleaned here (test launches resolve
+# their data dir there via src/main/data-dir.ts — the global "Electron" dirs
+# main's hotfix still cleaned are legacy and no longer written). An earlier
+# version of this function cleaned the global per-user app dirs — the packaged
+# app's REAL user data — which deleted the production exo-config.json (all API
+# keys and settings) on every test run. Never add global paths back; the
 # no-global-data-dirs unit test enforces this.
 clean_test_dbs() {
     local dev_data="$PROJECT_DIR/.dev-data"

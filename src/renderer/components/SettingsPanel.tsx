@@ -23,6 +23,8 @@ import {
   SENDER_LOOKUP_PROVIDERS,
   type SenderLookupProvider,
   DEFAULT_OLLAMA_MODEL,
+  DEFAULT_BACKGROUND_AGENT_PROVIDER,
+  resolveBackgroundAgentProviderId,
   type BlockedSender,
 } from "../../shared/types";
 import { useAppStore, type Account, type SettingsTab } from "../store";
@@ -148,6 +150,12 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
   const [chromeProfilePath, setChromeProfilePath] = useState("");
   const [isSavingBrowser, setIsSavingBrowser] = useState(false);
 
+  // Which agent provider runs background auto-drafts (new-email drafter + regenerate).
+  // Provider gates (opencode/hostler enabled state) are derived from generalConfig.
+  const [backgroundAgentProvider, setBackgroundAgentProvider] = useState(
+    DEFAULT_BACKGROUND_AGENT_PROVIDER,
+  );
+
   // PostHog analytics state — initialized once from config, not clobbered by react-query refetch
   const [posthogEnabled, setPosthogEnabled] = useState(false);
   const [isSavingAnalytics, setIsSavingAnalytics] = useState(false);
@@ -213,6 +221,16 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
     },
   });
 
+  // What the main process will actually launch for background drafts, given
+  // the current provider gates — the same resolver prefetch/rerun use, so the
+  // fallback warning in the Agents tab can't drift from real behavior.
+  const effectiveBackgroundProvider = resolveBackgroundAgentProviderId({
+    backgroundAgentProvider,
+    opencode: generalConfig?.opencode,
+    hostler: generalConfig?.hostler,
+    openclaw: generalConfig?.openclaw,
+  });
+
   useEffect(() => {
     if (prompts) {
       setAnalysisPrompt(prompts.analysisPrompt);
@@ -265,6 +283,9 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
       setMcpServers(generalConfig.mcpServers ?? {});
       setCliTools((generalConfig.cliTools ?? []).map((t) => ({ ...t, _key: nextCliToolKey() })));
       setExtraPathDirs(generalConfig.extraPathDirs ?? []);
+      setBackgroundAgentProvider(
+        generalConfig.backgroundAgentProvider || DEFAULT_BACKGROUND_AGENT_PROVIDER,
+      );
       // PostHog analytics config — only set once to avoid clobbering unsaved edits on refetch
       if (!analyticsInitialized.current) {
         analyticsInitialized.current = true;
@@ -313,9 +334,12 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
     return cleanup;
   }, []);
 
-  // Check Claude CLI availability and auth status when Agents tab is shown
+  // Check Claude CLI availability and auth status when Agents tab is shown.
+  // Also refetch config so provider gates flipped in the Extensions tab
+  // (OpenCode/Hostler enablement) are reflected without reopening Settings.
   useEffect(() => {
     if (activeTab !== "agents") return;
+    queryClient.invalidateQueries({ queryKey: ["general-config"] });
     setClaudeAuthStatus("checking");
     (
       window.api.agent.claudeAuthStatus() as Promise<{
@@ -2733,6 +2757,52 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
                 Configure AI agent capabilities including browser automation.
               </p>
+            </div>
+
+            {/* Background agent — which provider runs the automatic new-email drafter */}
+            <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600 p-6">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <h4 className="text-base font-medium text-gray-900 dark:text-gray-100">
+                    Background Agent
+                  </h4>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                    The agent that automatically drafts replies for new emails (and powers
+                    &quot;Regenerate draft&quot;). Enable OpenCode or Hostler in Settings →
+                    Extensions to select them here.
+                  </p>
+                </div>
+                <select
+                  className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                  value={backgroundAgentProvider}
+                  onChange={async (e) => {
+                    const value = e.target.value;
+                    setBackgroundAgentProvider(value);
+                    await window.api.settings.set({ backgroundAgentProvider: value });
+                    queryClient.invalidateQueries({ queryKey: ["general-config"] });
+                  }}
+                >
+                  <option value="claude">Claude (Anthropic) — default</option>
+                  <option value="opencode" disabled={!generalConfig?.opencode?.enabled}>
+                    OpenCode
+                  </option>
+                  <option
+                    value="hostler"
+                    disabled={!generalConfig?.hostler?.enabled || !generalConfig?.hostler?.apiKey}
+                  >
+                    Hostler (cloud)
+                  </option>
+                </select>
+              </div>
+              {effectiveBackgroundProvider !== backgroundAgentProvider && (
+                <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
+                  {backgroundAgentProvider === "opencode"
+                    ? "OpenCode is disabled — background drafts fall back to Claude until it's re-enabled."
+                    : backgroundAgentProvider === "hostler"
+                      ? `Hostler is ${generalConfig?.hostler?.enabled ? "missing an API key" : "disabled"} — background drafts fall back to Claude until it's configured.`
+                      : `"${backgroundAgentProvider}" isn't available — background drafts fall back to Claude until it's configured.`}
+                </p>
+              )}
             </div>
 
             {/* Authentication */}
