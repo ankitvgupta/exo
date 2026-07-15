@@ -1177,7 +1177,10 @@ export default function App() {
             // Save sidebar tab — startAgentTask unconditionally sets it to "agent",
             // but background auto-drafts shouldn't steal focus from the user
             const prevTab = store.sidebarTab;
-            store.startAgentTask(taskId, emailId, ["claude"], "", {
+            // The background provider is configurable (backgroundAgentProvider),
+            // so derive it from the event — appendAgentEvent drops events whose
+            // providerId has no registered run.
+            store.startAgentTask(taskId, emailId, [event.providerId ?? "claude"], "", {
               accountId: email.accountId || "",
               currentEmailId: emailId,
               currentThreadId: email.threadId,

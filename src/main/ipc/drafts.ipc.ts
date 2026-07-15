@@ -18,6 +18,7 @@ import { buildMemoryContext } from "../services/memory-context";
 import { prefetchService } from "../services/prefetch-service";
 import { agentCoordinator } from "../agents/agent-coordinator";
 import { UNTRUSTED_DATA_INSTRUCTION, wrapUntrustedEmail } from "../../shared/prompt-safety";
+import { resolveBackgroundAgentProviderId } from "../../shared/types";
 import type { IpcResponse } from "../../shared/types";
 import { DEMO_INBOX_EMAILS } from "../demo/fake-inbox";
 import { createLogger } from "../services/logger";
@@ -177,7 +178,10 @@ FORMATTING: Write plain text paragraphs separated by blank lines. Do NOT use HTM
   // Rerun agent draft for a single email
   ipcMain.handle(
     "drafts:rerun-agent",
-    async (_, { emailId }: { emailId: string }): Promise<IpcResponse<{ taskId: string }>> => {
+    async (
+      _,
+      { emailId }: { emailId: string },
+    ): Promise<IpcResponse<{ taskId: string; providerIds: string[] }>> => {
       if (useFakeData) {
         return { success: false, error: "Agent drafting is not available in demo/test mode" };
       }
@@ -231,7 +235,8 @@ FORMATTING: Write plain text paragraphs separated by blank lines. Do NOT use HTM
         prefetchService.trackManualAgentDraft(emailId, taskId);
 
         // Launch agent — events auto-stream to renderer via agent:event IPC
-        await agentCoordinator.runAgent(taskId, ["claude"], prompt, context);
+        const providerId = resolveBackgroundAgentProviderId(getConfig());
+        await agentCoordinator.runAgent(taskId, [providerId], prompt, context);
 
         // Link draft to agent task when it completes (async, don't block response)
         agentCoordinator
@@ -252,7 +257,7 @@ FORMATTING: Write plain text paragraphs separated by blank lines. Do NOT use HTM
             prefetchService.markAgentDraftDone(emailId, "failed");
           });
 
-        return { success: true, data: { taskId } };
+        return { success: true, data: { taskId, providerIds: [providerId] } };
       } catch (error) {
         return {
           success: false,

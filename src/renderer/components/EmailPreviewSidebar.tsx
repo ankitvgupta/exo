@@ -264,10 +264,20 @@ export const EmailPreviewSidebar = memo(function EmailPreviewSidebar() {
           if (!email) return;
 
           // Replay entire trace in a single store update (avoids O(n²) from N appendAgentEvent calls)
+          // Derive provider ids from the persisted events — the background
+          // provider is configurable, and replayAgentTrace drops events whose
+          // providerId isn't in this list.
+          const providerIds = [
+            ...new Set(
+              result.data.events
+                .map((e) => e.providerId)
+                .filter((id): id is string => typeof id === "string"),
+            ),
+          ];
           replayAgentTrace(
             taskId,
             email.id,
-            ["claude"],
+            providerIds.length > 0 ? providerIds : ["claude"],
             "",
             {
               accountId: email.accountId || "",
