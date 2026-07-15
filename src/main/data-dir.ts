@@ -1,11 +1,15 @@
 /**
  * Centralized data directory resolution.
  *
- * Non-packaged runs (`!app.isPackaged`) use a project-local `.dev-data/`
- * directory so development never touches production data in
- * `~/Library/Application Support/exo/`.
- *
- * Only packaged (released) builds use `app.getPath("userData")`.
+ * Resolution order:
+ * 1. `EXO_USER_DATA_DIR` (absolute path) — explicit override, honored in ALL
+ *    modes including packaged builds. Used by the packaged smoke tests so a
+ *    locally-built .app (same productName as the real install) never shares
+ *    the production data dir. See user-data-override.ts.
+ * 2. Non-packaged runs (`!app.isPackaged`) use a project-local `.dev-data/`
+ *    directory so development never touches production data in
+ *    `~/Library/Application Support/exo/`.
+ * 3. Only packaged (released) builds use `app.getPath("userData")`.
  *
  * As of 2026-05-20, dev runs start with an empty `.dev-data/` and
  * authenticate fresh against the dedicated test Gmail account (set via
@@ -21,10 +25,11 @@
  * if they want isolation, but the default path is safe (separate from
  * .dev-data/, so production-mode dev runs aren't affected).
  */
-import { join, dirname, isAbsolute } from "path";
+import { join, dirname } from "path";
 import { tmpdir } from "os";
 import { existsSync } from "fs";
 import { createRequire } from "module";
+import { getUserDataOverride } from "./user-data-override";
 
 const requireFromHere = createRequire(import.meta.url);
 
@@ -80,17 +85,8 @@ function findProjectRoot(start: string): string | null {
 }
 
 export function getDataDir(): string {
-  // Explicit override, honored in ALL modes including packaged. A locally-built
-  // .app has the same productName as the real install, so without this the
-  // packaged smoke tests (tests/packaged/) would share — and write into — the
-  // user's production data dir.
-  const override = process.env.EXO_USER_DATA_DIR;
-  if (override) {
-    if (!isAbsolute(override)) {
-      throw new Error(`EXO_USER_DATA_DIR must be an absolute path, got: ${override}`);
-    }
-    return override;
-  }
+  const override = getUserDataOverride();
+  if (override) return override;
 
   const electron = tryLoadElectron();
   if (!electron) {

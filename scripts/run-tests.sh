@@ -22,6 +22,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 cd "$PROJECT_DIR"
 
+# A leftover `export EXO_USER_DATA_DIR` (meant for one-off packaged runs)
+# would redirect every Electron test instance to one shared dir, breaking
+# per-worker isolation. Tests always use the project-local .dev-data/.
+unset EXO_USER_DATA_DIR
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -122,6 +127,9 @@ clean_test_dbs() {
             [ -f "$f" ] && rm -f "$f" && cleaned=$((cleaned + 1))
         done
     fi
+    # Note: this intentionally resets any settings configured via `npm run
+    # dev` in this worktree — .dev-data/ is disposable test-account state,
+    # and e2e suites need a deterministic default config.
     if [ -f "$dev_data/exo-config.json" ]; then
         rm -f "$dev_data/exo-config.json" && cleaned=$((cleaned + 1))
     fi

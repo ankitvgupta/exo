@@ -20,7 +20,7 @@
  * user's production config and database.
  */
 import { test, expect, _electron as electron, type Page, type ElectronApplication } from "@playwright/test";
-import { existsSync, mkdirSync } from "fs";
+import { existsSync, mkdirSync, rmSync } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 
@@ -33,7 +33,13 @@ test.beforeAll(() => {
     test.skip(true, "EXO_PACKAGED_BINARY not set — skipping packaged smoke");
   }
   if (!existsSync(BINARY)) {
-    test.skip(true, `EXO_PACKAGED_BINARY does not exist at ${BINARY} — did you run 'npm run pack'?`);
+    // A set-but-wrong path must FAIL, not skip: the dist/->release/ incident
+    // proved a silent skip keeps CI green while the packaged suite never
+    // runs. Skipping is only acceptable when the suite wasn't requested.
+    throw new Error(
+      `EXO_PACKAGED_BINARY is set but does not exist at ${BINARY} — ` +
+        `did you run 'npm run pack'? (electron-builder outputs to release/)`,
+    );
   }
 });
 
@@ -44,6 +50,9 @@ test.describe("Packaged app smoke", () => {
   let page: Page;
 
   test.beforeAll(async () => {
+    // Start from a clean slate — stale Chromium profile state or config from
+    // a previous run would make the smoke test non-deterministic.
+    rmSync(USER_DATA_DIR, { recursive: true, force: true });
     mkdirSync(USER_DATA_DIR, { recursive: true });
     app = await electron.launch({
       executablePath: BINARY,
@@ -81,6 +90,15 @@ test.describe("Packaged app smoke", () => {
         }
       }
     }
+  });
+
+  test("data dir is redirected away from the real install", async () => {
+    // The whole reason this suite is safe to run locally: EXO_USER_DATA_DIR
+    // must actually take effect. If the override regresses, the packaged
+    // binary reads and writes the user's production data dir while every
+    // other assertion here still passes — so verify it, don't trust it.
+    const userData = await app.evaluate(({ app: electronApp }) => electronApp.getPath("userData"));
+    expect(userData).toBe(USER_DATA_DIR);
   });
 
   test("app launches within 30s and shows the Exo brand", async () => {

@@ -380,3 +380,4 @@ Run `npm run eval` before any prompt change. The eval harness (`tests/evals/`) r
 - `ANTHROPIC_API_KEY` - Required for Claude API
 - `EXO_TEST_MODE=true` - Use mock data for testing
 - `EXO_DEMO_MODE=true` - Use demo data without real API calls
+- `EXO_USER_DATA_DIR` - Absolute-path override for the app data dir, honored even when packaged (used by `tests/packaged/` for isolation; never `export` it persistently)

@@ -63,6 +63,13 @@ import * as calendarExtension from "../extensions/mail-ext-calendar/src/index";
 if (is.dev || process.env.EXO_USER_DATA_DIR) {
   app.setPath("userData", getDataDir());
 }
+// Surface an active override loudly: a leftover `export EXO_USER_DATA_DIR`
+// silently redirects a production launch to a scratch dir — the user sees an
+// "empty" app and the logs land in the override dir, so without this line
+// nothing anywhere records why.
+if (process.env.EXO_USER_DATA_DIR) {
+  log.warn(`[Config] Data dir overridden by EXO_USER_DATA_DIR: ${process.env.EXO_USER_DATA_DIR}`);
+}
 
 // Skip Keychain for Chromium's internal cookie/localStorage encryption.
 // Without this, macOS prompts "wants to access data from other apps" on first launch

@@ -2,13 +2,13 @@ import { test, expect, Page, ElectronApplication } from "@playwright/test";
 import path from "path";
 import { fileURLToPath } from "url";
 import { existsSync, unlinkSync, readdirSync } from "fs";
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 import {
   launchElectronApp as _launchElectronApp,
   takeScreenshot,
   closeApp,
 } from "./launch-helpers";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 /**
  * E2E Tests for Undo Send feature
