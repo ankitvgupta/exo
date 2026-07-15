@@ -93,6 +93,15 @@ export class AgentCoordinator {
       opencode: appConfig.opencode
         ? { enabled: appConfig.opencode.enabled, model: appConfig.opencode.model }
         : { enabled: false },
+      hostler: appConfig.hostler
+        ? {
+            enabled: appConfig.hostler.enabled,
+            apiKey: appConfig.hostler.apiKey || undefined,
+            harness: appConfig.hostler.harness,
+            model: appConfig.hostler.model,
+            baseUrl: appConfig.hostler.baseUrl,
+          }
+        : { enabled: false },
     };
   }
 
@@ -516,6 +525,10 @@ export class AgentCoordinator {
   updateConfig(config: Partial<AgentFrameworkConfig>): void {
     if (this.worker) {
       this.sendToWorker({ type: "config_update", config });
+      // Availability may have changed (e.g. a provider was just enabled with
+      // an API key). Re-broadcast the provider list so the renderer's agent
+      // picker updates without an app restart.
+      this.sendToWorker({ type: "list_providers" });
     }
   }
 

@@ -293,10 +293,15 @@ async function main() {
   // real-mode flows with sender enrichment + draft generation and routinely
   // crashes mid-verification on budget exhaustion (exit 1) before it can emit
   // a verdict. $1.50 gives ~3× headroom over the worst observed run ($0.90).
+  // Action budget likewise: the default 40 turns starves multi-thousand-line
+  // diffs — observed a run that completed every verification probe (all
+  // checks true, zero anomalies) and hit error_max_turns on the very turn
+  // that would have emitted the verdict JSON. 70 gives finish-line headroom
+  // without meaningfully raising cost (the $ budget still caps spend).
   const verifyResult = runPhase(
     "agentic-verify",
     "node",
-    ["scripts/agentic-verify.mjs", "--mode=verify-diff", "--budget-usd=1.5"],
+    ["scripts/agentic-verify.mjs", "--mode=verify-diff", "--budget-usd=1.5", "--action-budget=70"],
     noUiSurface ? { softExits: [3] } : {},
   );
 
