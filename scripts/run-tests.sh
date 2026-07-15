@@ -107,20 +107,22 @@ run_with_display() {
 # Clean up per-worker test databases and stale config left by parallel E2E runs.
 # Config files (electron-store) are shared global state — we only clean them
 # before/after the full test suite, never during parallel execution.
+#
+# ONLY the dev Electron binary's dirs are cleaned. Tests launch via
+# node_modules/electron, whose userData dir is "Electron" — never the packaged
+# app's "exo" dir. exo-config.json under ".../Application Support/exo" is the
+# PRODUCTION config (real API keys and settings); an earlier version of this
+# list included the exo dirs and deleted it on every test run. Do not re-add.
 clean_test_dbs() {
     local home="${HOME:-/root}"
     local cleaned=0
     local data_dirs=(
         "$home/Library/Application Support/Electron/data"
-        "$home/Library/Application Support/exo/data"
         "$home/.config/Electron/data"
-        "$home/.config/exo/data"
     )
     local config_dirs=(
         "$home/Library/Application Support/Electron"
-        "$home/Library/Application Support/exo"
         "$home/.config/Electron"
-        "$home/.config/exo"
     )
     for dir in "${data_dirs[@]}"; do
         if [ -d "$dir" ]; then
