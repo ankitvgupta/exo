@@ -21,7 +21,7 @@
  * if they want isolation, but the default path is safe (separate from
  * .dev-data/, so production-mode dev runs aren't affected).
  */
-import { join, dirname } from "path";
+import { join, dirname, isAbsolute } from "path";
 import { tmpdir } from "os";
 import { existsSync } from "fs";
 import { createRequire } from "module";
@@ -80,6 +80,18 @@ function findProjectRoot(start: string): string | null {
 }
 
 export function getDataDir(): string {
+  // Explicit override, honored in ALL modes including packaged. A locally-built
+  // .app has the same productName as the real install, so without this the
+  // packaged smoke tests (tests/packaged/) would share — and write into — the
+  // user's production data dir.
+  const override = process.env.EXO_USER_DATA_DIR;
+  if (override) {
+    if (!isAbsolute(override)) {
+      throw new Error(`EXO_USER_DATA_DIR must be an absolute path, got: ${override}`);
+    }
+    return override;
+  }
+
   const electron = tryLoadElectron();
   if (!electron) {
     // Non-Electron caller (eval runner, unit test under tsx, etc.).

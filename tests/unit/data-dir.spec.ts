@@ -9,7 +9,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
  * Regression guard for the dev/prod data sever (May 2026).
  *
  * The old `initDevData()` bootstrap copied the user's real Gmail tokens,
- * credentials, and database from `~/Library/Application Support/exo/`
+ * credentials, and database from the packaged app's real user-data dir
  * into `.dev-data/` on first dev run — which meant a fresh worktree could
  * silently re-import real-account state. That's now banned: dev signs in
  * as the dedicated test account (configured via `EXOEMAILTEST_EMAIL`

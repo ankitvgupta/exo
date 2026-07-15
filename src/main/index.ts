@@ -56,11 +56,11 @@ import * as calendarExtension from "../extensions/mail-ext-calendar/src/index";
 
 // Anchor Electron's framework userData (SingletonLock, sessions, cache, IDB,
 // LocalStorage, ServiceWorkers, GPUCache) to the per-worktree `.dev-data/` in
-// dev. Without this, Electron defaults to `~/Library/Application Support/exo/`
-// — the same dir the packaged app uses — so dev runs both pollute real user
-// data and collide on the singleton lock across parallel worktrees. Must run
-// before any `app.getPath("userData")` call below.
-if (is.dev) {
+// dev, or to EXO_USER_DATA_DIR when set (packaged smoke tests). Without this,
+// Electron defaults to the packaged app's real user-data dir, so dev runs both
+// pollute real user data and collide on the singleton lock across parallel
+// worktrees. Must run before any `app.getPath("userData")` call below.
+if (is.dev || process.env.EXO_USER_DATA_DIR) {
   app.setPath("userData", getDataDir());
 }
 

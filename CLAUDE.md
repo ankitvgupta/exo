@@ -299,7 +299,13 @@ All config lives under `app.getPath("userData")` — `~/Library/Application Supp
 - **Database**: `data/exo.db`
 - **App config**: `config.json` (electron-store)
 
-**IMPORTANT:** Reading from `~/Library/Application Support/exo/` is always fine, but **never write to or modify files in that production directory without explicitly asking first**. This is real user data shared across packaged app installs. Dev runs use `.dev-data/` instead.
+**IMPORTANT:** Reading from `~/Library/Application Support/exo/` is always fine, but **never write to, modify, or delete files in that production directory without explicitly asking first**. This is real user data shared across packaged app installs. Dev runs use `.dev-data/` instead.
+
+Hard rules learned from a real incident (July 2026 — `clean_test_dbs()` in `scripts/run-tests.sh` deleted the production `exo-config.json`, wiping the user's API keys and settings, on every `npm test`):
+
+- **Cleanup code in scripts/tests must only ever target project-local paths** (`.dev-data/`, `.packaged-test-data/`, `test-results/`, tmp dirs). Never construct a cleanup path from `$HOME` or `homedir()`. The `no-global-data-dirs` unit test enforces this for `scripts/` and `tests/`.
+- **Never launch a locally-built packaged binary without `EXO_USER_DATA_DIR`** — it shares the real install's data dir (same productName). `tests/packaged/` sets this automatically.
+- If a task seems to require touching the production directory, stop and ask — describe exactly what would be written or deleted.
 
 ## Recent Bug Fixes (Jan 2025)
 

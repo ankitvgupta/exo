@@ -10,14 +10,23 @@
  *   - electron-builder packaging quirks
  *
  * Requires the binary path in EXO_PACKAGED_BINARY. CI sets this to
- * dist/linux-unpacked/exo after `npm run pack`. Locally on macOS,
- * use: `npm run pack && EXO_PACKAGED_BINARY="dist/mac-arm64/Exo.app/Contents/MacOS/Exo" \
+ * release/linux-unpacked/exo after `npm run pack`. Locally on macOS,
+ * use: `npm run pack && EXO_PACKAGED_BINARY="release/mac-arm64/Exo.app/Contents/MacOS/Exo" \
  *   npx playwright test --project=packaged`.
+ *
+ * The packaged binary resolves its data dir to the real per-user app dir
+ * (same productName as the actual install), so we MUST redirect it with
+ * EXO_USER_DATA_DIR or the smoke test writes into — and can corrupt — the
+ * user's production config and database.
  */
 import { test, expect, _electron as electron, type Page, type ElectronApplication } from "@playwright/test";
-import { existsSync } from "fs";
+import { existsSync, mkdirSync } from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const BINARY = process.env.EXO_PACKAGED_BINARY ?? "";
+const USER_DATA_DIR = path.join(__dirname, "../../.packaged-test-data");
 
 test.beforeAll(() => {
   if (!BINARY) {
@@ -35,6 +44,7 @@ test.describe("Packaged app smoke", () => {
   let page: Page;
 
   test.beforeAll(async () => {
+    mkdirSync(USER_DATA_DIR, { recursive: true });
     app = await electron.launch({
       executablePath: BINARY,
       env: {
@@ -43,6 +53,9 @@ test.describe("Packaged app smoke", () => {
         // in CI. The packaging itself is what we're verifying, not
         // real-Gmail behavior.
         EXO_DEMO_MODE: "true",
+        // Isolate ALL data (config, db, logs, Chromium profile) from the
+        // real install's user-data dir — see header comment.
+        EXO_USER_DATA_DIR: USER_DATA_DIR,
         // Test worker isolation pattern from launch-helpers.ts
         TEST_WORKER_INDEX: "0",
       },
