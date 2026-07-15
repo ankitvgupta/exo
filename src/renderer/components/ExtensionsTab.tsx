@@ -72,19 +72,42 @@ export function ExtensionsTab() {
   const [hostlerApiKey, setHostlerApiKey] = useState("");
   const [hostlerHarness, setHostlerHarness] = useState(DEFAULT_HOSTLER_HARNESS);
   const [hostlerModel, setHostlerModel] = useState("");
+  const [hostlerSaveState, setHostlerSaveState] = useState<"idle" | "saving" | "saved" | "error">(
+    "idle",
+  );
+  const [hostlerSaveError, setHostlerSaveError] = useState("");
 
   // Blank fields are sent as undefined so the settings deep-merge preserves
   // stored values — e.g. flipping the toggle before the async config load
   // populates local state must not blank a stored API key.
   const saveHostlerSettings = async (enabled: boolean) => {
-    await window.api.settings.set({
-      hostler: {
-        enabled,
-        apiKey: hostlerApiKey || undefined,
-        harness: hostlerHarness || DEFAULT_HOSTLER_HARNESS,
-        model: hostlerModel || undefined,
-      },
-    });
+    setHostlerSaveState("saving");
+    setHostlerSaveError("");
+    try {
+      const result = (await window.api.settings.set({
+        hostler: {
+          enabled,
+          apiKey: hostlerApiKey || undefined,
+          harness: hostlerHarness || DEFAULT_HOSTLER_HARNESS,
+          model: hostlerModel || undefined,
+        },
+      })) as { success: boolean; error?: string } | undefined;
+
+      if (!result?.success) {
+        setHostlerSaveState("error");
+        setHostlerSaveError(result?.error || "Could not save Hostler settings.");
+        return false;
+      }
+
+      setHostlerSaveState("saved");
+      return true;
+    } catch (error) {
+      setHostlerSaveState("error");
+      setHostlerSaveError(
+        error instanceof Error ? error.message : "Could not save Hostler settings.",
+      );
+      return false;
+    }
   };
 
   const loadExtensions = useCallback(async () => {
@@ -908,10 +931,13 @@ export function ExtensionsTab() {
               type="checkbox"
               className="sr-only peer"
               checked={hostlerEnabled}
+              disabled={hostlerSaveState === "saving"}
               onChange={async (e) => {
                 const val = e.target.checked;
+                const previous = hostlerEnabled;
                 setHostlerEnabled(val);
-                await saveHostlerSettings(val);
+                const saved = await saveHostlerSettings(val);
+                if (!saved) setHostlerEnabled(previous);
               }}
             />
             <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-500 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:after:border-gray-600 peer-checked:bg-blue-600" />
@@ -929,7 +955,12 @@ export function ExtensionsTab() {
                 className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400"
                 placeholder="cpk_..."
                 value={hostlerApiKey}
-                onChange={(e) => setHostlerApiKey(e.target.value)}
+                disabled={hostlerSaveState === "saving"}
+                onChange={(e) => {
+                  setHostlerApiKey(e.target.value);
+                  setHostlerSaveState("idle");
+                  setHostlerSaveError("");
+                }}
               />
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                 Mint one at hostler.dev → Settings → API keys (shown exactly once).
@@ -946,7 +977,12 @@ export function ExtensionsTab() {
                   className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400"
                   placeholder="opencode"
                   value={hostlerHarness}
-                  onChange={(e) => setHostlerHarness(e.target.value)}
+                  disabled={hostlerSaveState === "saving"}
+                  onChange={(e) => {
+                    setHostlerHarness(e.target.value);
+                    setHostlerSaveState("idle");
+                    setHostlerSaveError("");
+                  }}
                 />
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                   Hostler currently hosts &quot;pi&quot;, &quot;opencode&quot;, and
@@ -962,7 +998,12 @@ export function ExtensionsTab() {
                   className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400"
                   placeholder="openai/glm-5.2"
                   value={hostlerModel}
-                  onChange={(e) => setHostlerModel(e.target.value)}
+                  disabled={hostlerSaveState === "saving"}
+                  onChange={(e) => {
+                    setHostlerModel(e.target.value);
+                    setHostlerSaveState("idle");
+                    setHostlerSaveError("");
+                  }}
                 />
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                   Bare model id (pairs with Anthropic) or &quot;provider/model&quot; from
@@ -973,10 +1014,19 @@ export function ExtensionsTab() {
 
             <div className="flex items-center gap-3">
               <button
-                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 dark:bg-blue-500 rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors"
+                className={`px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors disabled:opacity-50 ${
+                  hostlerSaveState === "saved"
+                    ? "bg-green-600 dark:bg-green-500"
+                    : "bg-blue-600 dark:bg-blue-500 hover:bg-blue-700 dark:hover:bg-blue-600"
+                }`}
+                disabled={hostlerSaveState === "saving"}
                 onClick={() => saveHostlerSettings(hostlerEnabled)}
               >
-                Save
+                {hostlerSaveState === "saving"
+                  ? "Saving..."
+                  : hostlerSaveState === "saved"
+                    ? "Saved"
+                    : "Save"}
               </button>
               <p className="text-xs text-gray-500 dark:text-gray-400">
                 Cloud sandboxes take ~10-30s to launch and are kept warm for 5 minutes after a
@@ -984,6 +1034,11 @@ export function ExtensionsTab() {
               </p>
             </div>
           </div>
+        )}
+        {hostlerSaveState === "error" && (
+          <p className="mt-3 text-sm text-red-600 dark:text-red-400" role="alert">
+            {hostlerSaveError}
+          </p>
         )}
       </div>
 
