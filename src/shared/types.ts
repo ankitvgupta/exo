@@ -411,6 +411,11 @@ export const OllamaCloudConfigSchema = z.object({
   featureModels: z.record(z.string(), z.string()).optional(),
 });
 
+/** Default Hostler harness. Single source of truth for the zod default below,
+ *  the provider's fallback, the settings-IPC deep-merge fallback, and the
+ *  Extensions card — renderer-safe (same pattern as DEFAULT_OLLAMA_MODEL). */
+export const DEFAULT_HOSTLER_HARNESS = "opencode";
+
 // Config schema
 export const ConfigSchema = z.object({
   maxEmails: z.number().default(50),
@@ -502,14 +507,36 @@ export const ConfigSchema = z.object({
       // "opencode", and "codex" (July 2026); kept free-text so new harnesses
       // work without an app update — unknown ones fail fast with a 400 that
       // lists the supported set.
-      harness: z.string().default("opencode"),
+      harness: z.string().default(DEFAULT_HOSTLER_HARNESS),
       // "provider/model" (e.g. "openai/kimi-k2.5") or a bare model id, which
       // pairs with "anthropic". Blank uses glm-5.2 from Hostler's brokered
       // catalog (GET /v1/models) — the same model family as the app's own
       // Ollama Cloud default.
       model: z.string().optional(),
-      // Self-hosted Hostler deployments only; no UI — edit config.json.
-      baseUrl: z.string().optional(),
+      // Dev/test escape hatch (e.g. scripts/mock-hostler-server.mjs); no UI,
+      // and the settings IPC only accepts loopback values (see settings.ipc).
+      // Every request carries the Bearer API key and tool results carry email
+      // content, so anything non-loopback must at least be https.
+      baseUrl: z
+        .string()
+        .refine(
+          (value) => {
+            if (value === "") return true;
+            try {
+              const url = new URL(value);
+              return (
+                url.protocol === "https:" ||
+                url.hostname === "127.0.0.1" ||
+                url.hostname === "localhost" ||
+                url.hostname === "[::1]"
+              );
+            } catch {
+              return false;
+            }
+          },
+          { message: "hostler.baseUrl must be a valid https:// URL (or a local loopback URL)" },
+        )
+        .optional(),
     })
     .optional(),
   ollamaCloud: OllamaCloudConfigSchema.optional(),

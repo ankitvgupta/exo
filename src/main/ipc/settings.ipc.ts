@@ -19,6 +19,7 @@ import {
   resolveModelId,
   resolveAgentOllamaConfig,
   DEFAULT_OLLAMA_MODEL,
+  DEFAULT_HOSTLER_HARNESS,
 } from "../../shared/types";
 import { resetAnalyzer } from "./analysis.ipc";
 import { resetArchiveReadyAnalyzer } from "./archive-ready.ipc";
@@ -45,6 +46,18 @@ import { getDataDir } from "../data-dir";
 import { createLogger } from "../services/logger";
 
 const log = createLogger("settings-ipc");
+
+/** True only for URLs whose host is the local machine — the one baseUrl
+ *  class safe to accept over the renderer-reachable settings IPC. */
+function isLoopbackUrl(value: string | undefined): boolean {
+  if (!value) return false;
+  try {
+    const url = new URL(value);
+    return url.hostname === "127.0.0.1" || url.hostname === "localhost" || url.hostname === "[::1]";
+  } catch {
+    return false;
+  }
+}
 
 let _store: Store<{ config: Config }> | null = null;
 function getStore(): Store<{ config: Config }> {
@@ -337,22 +350,30 @@ export function registerSettingsIpc(): void {
         }
       }
       // Deep-merge hostler for the same reason as ollamaCloud: the Extensions
-      // card never sends baseUrl (a config-file-only escape hatch for
-      // self-hosted deployments), so a shallow merge would silently erase it
-      // on every UI save — redirecting the stored API key to hostler.dev.
+      // card never sends baseUrl (a dev/test escape hatch), so a shallow
+      // merge would silently erase it on every UI save.
       if ("hostler" in config) {
         const incoming = config.hostler;
         const existing = currentConfig.hostler;
+        // baseUrl redirects the Bearer API key AND every tool result (email
+        // content) to a different control plane, so it must not be settable
+        // from the renderer (untrusted email HTML renders there — a
+        // compromised renderer could silently point the provider at an
+        // attacker host). Accept it over IPC only for loopback targets (the
+        // mock-server dev flow); anything else keeps the stored value.
+        const incomingBaseUrl =
+          incoming?.baseUrl === "" || isLoopbackUrl(incoming?.baseUrl)
+            ? incoming?.baseUrl
+            : existing?.baseUrl;
         newConfig = {
           ...newConfig,
           hostler: incoming
             ? {
                 enabled: incoming.enabled,
                 apiKey: incoming.apiKey ?? existing?.apiKey ?? "",
-                // Last resort mirrors ConfigSchema's harness default.
-                harness: incoming.harness ?? existing?.harness ?? "opencode",
+                harness: incoming.harness ?? existing?.harness ?? DEFAULT_HOSTLER_HARNESS,
                 model: incoming.model ?? existing?.model,
-                baseUrl: incoming.baseUrl ?? existing?.baseUrl,
+                baseUrl: incomingBaseUrl,
               }
             : undefined,
         };

@@ -9,7 +9,6 @@ import type {
   SessionEvent,
   SessionInfo,
   StreamOptions,
-  ToolConfirmation,
   ToolResult,
 } from "@hostler/sdk";
 import type {
@@ -31,10 +30,9 @@ import {
 } from "./agent-sync";
 import { createHostlerEventMapper } from "./event-mapper";
 import { createLogger } from "../../../services/logger";
+import { DEFAULT_HOSTLER_HARNESS } from "../../../../shared/types";
 
 const log = createLogger("hostler-agent");
-
-export const DEFAULT_HOSTLER_HARNESS = "opencode";
 
 /** Default pairing: the opencode harness driving GLM 5.2 through Hostler's
  *  own model broker (GET /v1/models catalog id "glm-5.2", provider "openai" —
@@ -80,7 +78,6 @@ export interface HostlerSessionLike {
   terminate(): Promise<SessionInfo>;
   events(options?: { since?: number }): Promise<SessionEvent[]>;
   submitToolResult(result: ToolResult, options?: { signal?: AbortSignal }): Promise<void>;
-  confirmTool(confirmation: ToolConfirmation, options?: { signal?: AbortSignal }): Promise<void>;
   stream(options?: StreamOptions): AsyncGenerator<SessionEvent, void, void>;
 }
 
@@ -124,8 +121,22 @@ interface PendingToolCall {
  *  terminate it. Warm sessions make follow-ups instant (no 10–30s sandbox
  *  launch), but Hostler sandboxes bill until deleted, so the window is short.
  *  A follow-up after termination still works — the provider creates a fresh
- *  session and replays context.conversationHistory. */
+ *  session and replays context.conversationHistory. Changing this also
+ *  requires updating the "kept warm for 5 minutes" copy on the Hostler card
+ *  in ExtensionsTab.tsx. */
 const IDLE_SESSION_TTL_MS = 5 * 60 * 1000;
+
+/** Yielded whenever a run has to launch a fresh sandbox (new conversation or
+ *  dead-session recreate) so the sidebar shows why nothing streams yet. */
+const SANDBOX_STARTING_EVENT: AgentEvent = {
+  type: "state",
+  state: "running",
+  message: "Starting Hostler cloud sandbox (~10-30s)…",
+};
+
+/** Boot-sweep threshold for reaping non-idle mail-app sessions — see
+ *  sweepOrphanedSessions. */
+const STALE_RUNNING_SESSION_MS = 60 * 60 * 1000;
 
 /**
  * Hostler Agent Provider — hosted cloud backend for the agent sidebar
@@ -141,7 +152,7 @@ const IDLE_SESSION_TTL_MS = 5 * 60 * 1000;
  *           • streams the session event  ◄──│    SSE event log (durable,
  *             log, maps to AgentEvents      │    replayable via seq cursor)
  *           • executes client tools      ──►│    tool_results park-and-post
- *             locally via toolExecutor      └── sandbox runs the harness (pi)
+ *             locally via toolExecutor      └── sandbox runs the harness
  *
  * Why this shape:
  *   - The model loop runs in Hostler's sandbox, but every mail tool executes
@@ -181,9 +192,16 @@ export class HostlerAgentProvider implements AgentProvider {
   >();
   private orphanSweepDone = false;
   private orphanSweep: Promise<void> | null = null;
+  private readonly idleSessionTtlMs: number;
 
-  constructor(frameworkConfig: AgentFrameworkConfig) {
+  constructor(
+    frameworkConfig: AgentFrameworkConfig,
+    opts?: {
+      /** Test hook — shrinks the reaper TTL so tests don't wait 5 minutes. */ idleSessionTtlMs?: number;
+    },
+  ) {
     this.frameworkConfig = frameworkConfig;
+    this.idleSessionTtlMs = opts?.idleSessionTtlMs ?? IDLE_SESSION_TTL_MS;
   }
 
   /** Test hook: inject a fake SDK module (mirrors AnthropicService._setClientForTesting). */
@@ -262,8 +280,27 @@ export class HostlerAgentProvider implements AgentProvider {
       // timer remains its reaper).
       let session: HostlerSessionLike | null = null;
       let isNewSession = false;
-      const priorId = context.providerConversationIds?.[this.config.id];
+      const rawPriorId = context.providerConversationIds?.[this.config.id];
+      // Session ids are platform-generated (`ses_…`) but round-trip through
+      // the renderer, and the SDK splices them into authenticated URL paths
+      // unencoded — validate the shape before use.
+      const priorId =
+        rawPriorId && /^ses_[A-Za-z0-9_-]+$/.test(rawPriorId) ? rawPriorId : undefined;
       if (priorId) {
+        // One stream per session: two concurrent runs on one session would
+        // both claim its tool parks and double-execute local side effects.
+        // The sidebar disables follow-ups while a run is active; enforce the
+        // invariant here too so non-UI callers can't bypass it.
+        for (const other of this.activeRuns.values()) {
+          if (other !== active && other.session?.id === priorId) {
+            cleanup();
+            yield {
+              type: "error",
+              message: "Another run is already active on this Hostler conversation",
+            };
+            return { state: "failed", providerTaskId: priorId };
+          }
+        }
         session = await client.sessions.get(priorId).catch(() => null);
         if (session) {
           const info = await session.info().catch(() => null);
@@ -273,11 +310,7 @@ export class HostlerAgentProvider implements AgentProvider {
       }
       if (!session) {
         isNewSession = true;
-        yield {
-          type: "state",
-          state: "running",
-          message: "Starting Hostler cloud sandbox (~10-30s)…",
-        };
+        yield SANDBOX_STARTING_EVENT;
         session = await this.createSession(client, agentRef, taskId);
       }
       active.session = session;
@@ -303,7 +336,14 @@ export class HostlerAgentProvider implements AgentProvider {
       if (!isNewSession) {
         const known = this.sessionSeq.get(session.id) ?? 0;
         const tail = await session.events({ since: known });
-        cursor = tail.length > 0 ? tail[tail.length - 1].seq : known;
+        const lastSeq = tail.length > 0 ? tail[tail.length - 1].seq : known;
+        // seq is server-supplied: a non-finite value would fall through the
+        // SDK's `since ?? 0` default and replay the entire log — the exact
+        // side-effect replay this cursor exists to prevent.
+        if (typeof lastSeq !== "number" || !Number.isFinite(lastSeq)) {
+          throw new Error("Hostler event log returned a malformed tail (non-numeric seq)");
+        }
+        cursor = lastSeq;
       }
 
       // --- Send the message. A reused session can die between the info()
@@ -316,11 +356,7 @@ export class HostlerAgentProvider implements AgentProvider {
         if (isNewSession || !isConflict(err)) throw err;
         log.info(`Session ${session.id} no longer live; recreating for task ${taskId}`);
         this.sessionSeq.delete(session.id);
-        yield {
-          type: "state",
-          state: "running",
-          message: "Starting Hostler cloud sandbox (~10-30s)…",
-        };
+        yield SANDBOX_STARTING_EVENT;
         session = await this.createSession(client, agentRef, taskId);
         active.session = session;
         isNewSession = true;
@@ -334,12 +370,15 @@ export class HostlerAgentProvider implements AgentProvider {
       const mapper = createHostlerEventMapper();
       const toolInputs = new Map<string, PendingToolCall>();
       let terminal: AgentRunResult | null = null;
+      let approvalParked: string | null = null;
 
       for await (const ev of session.stream({
         since: cursor,
         signal: abortController.signal,
       })) {
-        this.sessionSeq.set(session.id, ev.seq);
+        if (typeof ev.seq === "number" && Number.isFinite(ev.seq)) {
+          this.sessionSeq.set(session.id, ev.seq);
+        }
 
         for (const mapped of mapper.next(ev)) {
           yield mapped;
@@ -349,7 +388,28 @@ export class HostlerAgentProvider implements AgentProvider {
           // The only event carrying the input — remember it for tool_pending.
           toolInputs.set(ev.toolCallId, { name: ev.name, input: ev.input, locale: ev.locale });
         } else if (ev.type === "agent.tool_pending") {
-          this.handleToolPending(session, ev, toolInputs, toolExecutor);
+          if (ev.pendingState === "approval") {
+            // We never configure always_ask, and this app has no operator
+            // console UX to answer an approval park. Left alone, the park
+            // holds the turn open indefinitely — and a requires_action
+            // session never settles to "idle", so even the reaper couldn't
+            // stop the sandbox from billing. Interrupt and fail instead.
+            approvalParked = ev.name;
+            yield {
+              type: "error",
+              message:
+                `Hostler parked tool "${ev.name}" for operator approval, which this app ` +
+                `cannot answer — interrupting the turn. Decide it in the Hostler console ` +
+                `or remove the tool's always_ask policy from the agent config.`,
+            };
+            void session.interrupt().catch((err: unknown) => {
+              log.warn(
+                `interrupt after approval park failed for ${session.id}: ${err instanceof Error ? err.message : String(err)}`,
+              );
+            });
+          } else {
+            this.handleToolPending(session, ev, toolInputs, toolExecutor, abortController.signal);
+          }
         } else if (ev.type === "session.status_idle") {
           const stop = ev.stopReason;
           if (stop.type === "requires_action") {
@@ -358,8 +418,9 @@ export class HostlerAgentProvider implements AgentProvider {
             continue;
           }
           terminal = {
-            state:
-              stop.type === "end_turn"
+            state: approvalParked
+              ? "failed"
+              : stop.type === "end_turn"
                 ? "completed"
                 : stop.type === "interrupted"
                   ? "cancelled"
@@ -381,6 +442,9 @@ export class HostlerAgentProvider implements AgentProvider {
         // Stream ended without an idle event: local abort (cancel) or the
         // stream closed unexpectedly.
         cleanup();
+        if (approvalParked) {
+          return { state: "failed", providerTaskId: session.id };
+        }
         if (abortController.signal.aborted) {
           yield { type: "state", state: "cancelled" };
           return { state: "cancelled", providerTaskId: session.id };
@@ -443,11 +507,11 @@ export class HostlerAgentProvider implements AgentProvider {
     this.client = null;
     this.agentSync = null;
 
-    if (!this.frameworkConfig.hostler?.enabled) {
-      // Disabled ≠ still billing: terminate warm sessions now instead of
-      // waiting out their idle TTL.
-      void this.terminateWarmSessions();
-    }
+    // Terminate warm sessions on ANY hostler settings change, not just
+    // disable. The warm handles are bound to the previous client (old
+    // apiKey/baseUrl) — after a key rotation their idle-timer terminate()
+    // would 401 and the sandboxes would bill until the platform reaps them.
+    void this.terminateWarmSessions();
   }
 
   // --- Internals ---
@@ -536,9 +600,18 @@ export class HostlerAgentProvider implements AgentProvider {
     // orphans' credit reservations are actually released.
     this.orphanSweep = (async () => {
       const rows = await client.sessions.list();
-      const orphans = rows.filter(
-        (row) => row.status === "idle" && (row.title ?? "").startsWith("mail-app:"),
-      );
+      // Idle mail-app sessions are always orphans worth reaping. Running/
+      // starting ones usually belong to a live turn — but a session stuck
+      // mid-turn when the app died (e.g. a park the dead app never answered)
+      // never settles to idle, so also reap non-idle sessions older than an
+      // hour; no legitimate sidebar turn runs that long.
+      const staleBefore = Date.now() - STALE_RUNNING_SESSION_MS;
+      const orphans = rows.filter((row) => {
+        if (!(row.title ?? "").startsWith("mail-app:")) return false;
+        if (row.status === "idle") return true;
+        const created = Date.parse(row.createdAt);
+        return Number.isFinite(created) && created < staleBefore;
+      });
       for (const row of orphans) {
         const session = await client.sessions.get(row.id).catch(() => null);
         await session?.terminate().catch((err: unknown) => {
@@ -602,45 +675,30 @@ export class HostlerAgentProvider implements AgentProvider {
   }
 
   /**
-   * React to a parked tool call. `async` pendings for client tools run
-   * through the orchestrator's toolExecutor (PermissionGate + confirmation
-   * included) and post the result back; the execution is deliberately not
-   * awaited so the stream loop keeps consuming events — the sandbox holds
-   * the turn open until the result arrives, and parallel tool calls park
-   * concurrently.
+   * React to an async-parked tool call: run it through the orchestrator's
+   * toolExecutor (PermissionGate + confirmation included) and post the result
+   * back. The execution is deliberately not awaited so the stream loop keeps
+   * consuming events — the sandbox holds the turn open until the result
+   * arrives, and parallel tool calls park concurrently. (Approval parks are
+   * handled inline in the run loop, which interrupts the turn.)
    */
   private handleToolPending(
     session: HostlerSessionLike,
     ev: Extract<SessionEvent, { type: "agent.tool_pending" }>,
     toolInputs: Map<string, PendingToolCall>,
     toolExecutor: ToolExecutorFn,
+    signal: AbortSignal,
   ): void {
-    const call = toolInputs.get(ev.toolCallId);
-
-    if (ev.pendingState === "approval") {
-      // We never set always_ask in the agent config, so an approval park only
-      // appears when an operator explicitly added toolConfigs in the Hostler
-      // console — an intentional platform-side control. Auto-answering here
-      // would defeat it, so leave the call parked for the console to decide
-      // (Hostler's documented flow for operator approvals). The turn stays
-      // blocked until someone answers there.
-      log.warn(
-        `Tool call ${ev.toolCallId} (${ev.name}) is approval-gated on the Hostler side; ` +
-          `waiting for a decision in the Hostler console`,
-      );
-      return;
-    }
-
-    // pendingState "async": the platform is waiting on this app for a result.
     // The park itself is authoritative — only client-tool calls park for the
     // API client. The locale stash can lag it: the platform emits one call
     // twice (harness dispatch as locale "sandbox", then the park as locale
     // "client"), so a pending that lands between them finds the stale
     // sandbox-locale stash. Trust the park over the stash; only mcp-locale
     // calls (runtime-side dispatch) are never ours to answer.
+    const call = toolInputs.get(ev.toolCallId);
     if (!call || call.locale === "mcp") return;
     toolInputs.delete(ev.toolCallId);
-    void this.executeClientTool(session, ev.toolCallId, call, toolExecutor);
+    void this.executeClientTool(session, ev.toolCallId, call, toolExecutor, signal);
   }
 
   private async executeClientTool(
@@ -648,6 +706,7 @@ export class HostlerAgentProvider implements AgentProvider {
     toolCallId: string,
     call: PendingToolCall,
     toolExecutor: ToolExecutorFn,
+    signal: AbortSignal,
   ): Promise<void> {
     let result: ToolResult;
     try {
@@ -664,8 +723,11 @@ export class HostlerAgentProvider implements AgentProvider {
       // the message is shown to the model verbatim so it can adjust.
       result = { toolCallId, error: err instanceof Error ? err.message : String(err) };
     }
+    // A cancelled run must not keep shipping results (which may carry email
+    // content) to the cloud session — mirrors the SDK run()'s own invariant.
+    if (signal.aborted) return;
     try {
-      await session.submitToolResult(result);
+      await session.submitToolResult(result, { signal });
     } catch (err) {
       // The session can idle/terminate while a slow tool runs; nothing to do.
       log.warn(
@@ -690,7 +752,7 @@ export class HostlerAgentProvider implements AgentProvider {
           `idle terminate failed for ${session.id}: ${err instanceof Error ? err.message : String(err)}`,
         );
       });
-    }, IDLE_SESSION_TTL_MS);
+    }, this.idleSessionTtlMs);
     // Don't hold the worker process open just to reap a sandbox.
     timer.unref?.();
     this.idleTimers.set(session.id, { timer, session });

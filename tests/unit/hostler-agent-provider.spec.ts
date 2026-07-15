@@ -48,6 +48,12 @@ test.beforeEach(() => {
   seq = 0;
 });
 
+test.afterEach(() => {
+  // _setSdkForTesting mutates module-level sdkCache; never leak a fake SDK
+  // into another test (or a future spec that constructs this provider).
+  new HostlerAgentProvider({ model: "" })._setSdkForTesting(null);
+});
+
 type StreamScript = (session: FakeSession) => AsyncGenerator<SessionEvent, void, void>;
 
 class FakeSession implements HostlerSessionLike {
@@ -168,8 +174,28 @@ function makeAgentsApi(): HostlerAgentsApi & { created: unknown[] } {
 function makeClient(sessions: {
   create: (options: CreateSessionOptions) => Promise<HostlerSessionLike>;
   get: (id: string) => Promise<HostlerSessionLike>;
+  /** Rows the boot-time orphan sweep sees. Defaults to none. */
+  list?: () => Promise<SessionInfo[]>;
 }): HostlerClientLike & { agents: ReturnType<typeof makeAgentsApi> } {
-  return { agents: makeAgentsApi(), sessions };
+  return {
+    agents: makeAgentsApi(),
+    sessions: { list: async () => [], ...sessions },
+  };
+}
+
+function sessionRow(overrides: Partial<SessionInfo> & { id: string }): SessionInfo {
+  return {
+    agentId: "agt_1",
+    agentVersion: 1,
+    status: "idle",
+    title: `mail-app:${overrides.id}`,
+    createdAt: new Date().toISOString(),
+    terminatedAt: null,
+    environmentId: null,
+    vaultIds: [],
+    deploymentId: null,
+    ...overrides,
+  };
 }
 
 function makeSdk(client: HostlerClientLike): HostlerSdkModule {
@@ -790,6 +816,399 @@ test("402 on session create reaps warm sessions and retries once", async () => {
   expect(second.result).toEqual({ state: "completed", providerTaskId: "ses_fresh" });
   expect(warmSession.terminated).toBe(true);
   expect(creates).toBe(3);
+});
+
+async function* simpleAnswer(): AsyncGenerator<SessionEvent, void, void> {
+  yield { ...base(), type: "agent.message", text: "Answered." };
+  yield { ...base(), type: "session.status_idle", stopReason: { type: "end_turn" } };
+}
+
+test("boot sweep reaps idle and stale-running mail-app sessions, spares live and foreign ones", async () => {
+  const idleOrphan = new FakeSession("ses_idle", simpleAnswer);
+  const staleRunning = new FakeSession("ses_stale", simpleAnswer);
+  const freshRunning = new FakeSession("ses_fresh_run", simpleAnswer);
+  const foreign = new FakeSession("ses_foreign", simpleAnswer);
+  const byId = new Map<string, FakeSession>([
+    ["ses_idle", idleOrphan],
+    ["ses_stale", staleRunning],
+    ["ses_fresh_run", freshRunning],
+    ["ses_foreign", foreign],
+  ]);
+  const runSession = new FakeSession("ses_run", simpleAnswer);
+  const client = makeClient({
+    create: async () => runSession,
+    get: async (id) => {
+      const found = byId.get(id);
+      if (!found) throw new FakeHostlerError("not found", 404);
+      return found;
+    },
+    list: async () => [
+      sessionRow({ id: "ses_idle", status: "idle" }),
+      sessionRow({
+        id: "ses_stale",
+        status: "running",
+        createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+      }),
+      sessionRow({ id: "ses_fresh_run", status: "running" }),
+      sessionRow({ id: "ses_foreign", status: "idle", title: "someone-elses-session" }),
+    ],
+  });
+  const provider = new HostlerAgentProvider(
+    makeFrameworkConfig({ enabled: true, apiKey: "cpk_test" }),
+  );
+  provider._setSdkForTesting(makeSdk(client));
+
+  const { result } = await drain(provider.run(makeRunParams()));
+  expect(result.state).toBe("completed");
+
+  // Idle orphan and hour-old running session reaped; fresh turn and foreign
+  // title spared.
+  expect(idleOrphan.terminated).toBe(true);
+  expect(staleRunning.terminated).toBe(true);
+  expect(freshRunning.terminated).toBe(false);
+  expect(foreign.terminated).toBe(false);
+});
+
+test("approval-parked tool interrupts the turn and fails the run", async () => {
+  async function* script(s: FakeSession): AsyncGenerator<SessionEvent, void, void> {
+    yield {
+      ...base(),
+      type: "agent.tool_use",
+      toolCallId: "call_1",
+      name: "send_reply",
+      input: {},
+      locale: "client",
+      evaluatedPermission: "ask",
+    };
+    yield {
+      ...base(),
+      type: "agent.tool_pending",
+      toolCallId: "call_1",
+      name: "send_reply",
+      pendingState: "approval",
+    };
+    // The provider should interrupt; the platform then settles the turn.
+    while (!s.interrupted) {
+      await new Promise((r) => setTimeout(r, 5));
+    }
+    yield { ...base(), type: "session.status_idle", stopReason: { type: "interrupted" } };
+  }
+
+  const session = new FakeSession("ses_1", script);
+  const client = makeClient({
+    create: async () => session,
+    get: async () => {
+      throw new FakeHostlerError("not found", 404);
+    },
+  });
+  const provider = new HostlerAgentProvider(
+    makeFrameworkConfig({ enabled: true, apiKey: "cpk_test" }),
+  );
+  provider._setSdkForTesting(makeSdk(client));
+
+  const executed: string[] = [];
+  const { events, result } = await drain(
+    provider.run(
+      makeRunParams({
+        toolExecutor: async (name) => {
+          executed.push(name);
+          return "ok";
+        },
+      }),
+    ),
+  );
+
+  // Never auto-answered, never executed locally; the run fails with a
+  // pointer instead of hanging (and billing) forever.
+  expect(executed).toEqual([]);
+  expect(session.toolResults).toEqual([]);
+  expect(session.interrupted).toBe(true);
+  expect(result.state).toBe("failed");
+  const error = events.find((e) => e.type === "error");
+  expect(error && "message" in error ? error.message : "").toContain("operator approval");
+});
+
+test("mcp-locale parks are never executed locally", async () => {
+  async function* script(): AsyncGenerator<SessionEvent, void, void> {
+    yield {
+      ...base(),
+      type: "agent.tool_use",
+      toolCallId: "call_1",
+      name: "some_mcp_tool",
+      input: {},
+      locale: "mcp",
+    };
+    yield {
+      ...base(),
+      type: "agent.tool_pending",
+      toolCallId: "call_1",
+      name: "some_mcp_tool",
+      pendingState: "async",
+    };
+    yield { ...base(), type: "agent.message", text: "Done." };
+    yield { ...base(), type: "session.status_idle", stopReason: { type: "end_turn" } };
+  }
+
+  const session = new FakeSession("ses_1", script);
+  const client = makeClient({
+    create: async () => session,
+    get: async () => {
+      throw new FakeHostlerError("not found", 404);
+    },
+  });
+  const provider = new HostlerAgentProvider(
+    makeFrameworkConfig({ enabled: true, apiKey: "cpk_test" }),
+  );
+  provider._setSdkForTesting(makeSdk(client));
+
+  const executed: string[] = [];
+  const { result } = await drain(
+    provider.run(
+      makeRunParams({
+        toolExecutor: async (name) => {
+          executed.push(name);
+          return "ok";
+        },
+      }),
+    ),
+  );
+
+  expect(result.state).toBe("completed");
+  expect(executed).toEqual([]);
+  expect(session.toolResults).toEqual([]);
+});
+
+test("session terminated mid-stream fails the run without a done event", async () => {
+  async function* script(): AsyncGenerator<SessionEvent, void, void> {
+    yield { ...base(), type: "agent.message_delta", text: "partial…" };
+    yield { ...base(), type: "session.status_terminated", reason: "platform maintenance" };
+  }
+
+  const session = new FakeSession("ses_1", script);
+  const client = makeClient({
+    create: async () => session,
+    get: async () => {
+      throw new FakeHostlerError("not found", 404);
+    },
+  });
+  const provider = new HostlerAgentProvider(
+    makeFrameworkConfig({ enabled: true, apiKey: "cpk_test" }),
+  );
+  provider._setSdkForTesting(makeSdk(client));
+
+  const { events, result } = await drain(provider.run(makeRunParams()));
+
+  expect(result.state).toBe("failed");
+  expect(events.some((e) => e.type === "done")).toBe(false);
+  const error = events.find((e) => e.type === "error");
+  expect(error && "message" in error ? error.message : "").toContain("platform maintenance");
+});
+
+test("events() failure on session reuse fails the run and executes nothing", async () => {
+  const session = new FakeSession("ses_prior", simpleAnswer);
+  session.events = () => Promise.reject(new FakeHostlerError("boom", 500));
+  const client = makeClient({
+    create: async () => {
+      throw new Error("must not create");
+    },
+    get: async () => session,
+  });
+  const provider = new HostlerAgentProvider(
+    makeFrameworkConfig({ enabled: true, apiKey: "cpk_test" }),
+  );
+  provider._setSdkForTesting(makeSdk(client));
+
+  const executed: string[] = [];
+  const { result } = await drain(
+    provider.run(
+      makeRunParams({
+        context: {
+          accountId: "acc1",
+          userEmail: "user@example.com",
+          providerConversationIds: { hostler: "ses_prior" },
+        },
+        toolExecutor: async (name) => {
+          executed.push(name);
+          return "ok";
+        },
+      }),
+    ),
+  );
+
+  // A silent cursor=0 fallback would replay historical side-effecting tools;
+  // the run must fail instead.
+  expect(result.state).toBe("failed");
+  expect(executed).toEqual([]);
+  expect(session.sentMessages).toEqual([]);
+});
+
+test("any hostler config change terminates warm sessions (key rotation must not leak sandboxes)", async () => {
+  const session = new FakeSession("ses_warm", simpleAnswer);
+  const client = makeClient({
+    create: async () => session,
+    get: async () => {
+      throw new FakeHostlerError("not found", 404);
+    },
+  });
+  const provider = new HostlerAgentProvider(
+    makeFrameworkConfig({ enabled: true, apiKey: "cpk_old" }),
+  );
+  provider._setSdkForTesting(makeSdk(client));
+
+  const first = await drain(provider.run(makeRunParams()));
+  expect(first.result.state).toBe("completed");
+  expect(session.terminated).toBe(false);
+
+  // Rotate the key while staying enabled: the warm handle is bound to the
+  // old transport, so it must be reaped now, not after its 5-minute TTL.
+  provider.updateConfig({ hostler: { enabled: true, apiKey: "cpk_new" } });
+  await new Promise((r) => setTimeout(r, 10));
+  expect(session.terminated).toBe(true);
+
+  // Unrelated config changes must not touch sessions.
+  const session2 = new FakeSession("ses_warm2", simpleAnswer);
+  const client2 = makeClient({
+    create: async () => session2,
+    get: async () => {
+      throw new FakeHostlerError("not found", 404);
+    },
+  });
+  provider._setSdkForTesting(makeSdk(client2));
+  const second = await drain(provider.run(makeRunParams()));
+  expect(second.result.state).toBe("completed");
+  provider.updateConfig({ browserConfig: { enabled: false, chromeDebugPort: 9222 } });
+  await new Promise((r) => setTimeout(r, 10));
+  expect(session2.terminated).toBe(false);
+});
+
+test("empty final message falls back to a 'Completed' done summary", async () => {
+  async function* script(): AsyncGenerator<SessionEvent, void, void> {
+    yield { ...base(), type: "agent.message", text: "  " };
+    yield { ...base(), type: "session.status_idle", stopReason: { type: "end_turn" } };
+  }
+  const session = new FakeSession("ses_1", script);
+  const client = makeClient({
+    create: async () => session,
+    get: async () => {
+      throw new FakeHostlerError("not found", 404);
+    },
+  });
+  const provider = new HostlerAgentProvider(
+    makeFrameworkConfig({ enabled: true, apiKey: "cpk_test" }),
+  );
+  provider._setSdkForTesting(makeSdk(client));
+
+  const { events, result } = await drain(provider.run(makeRunParams()));
+  expect(result.state).toBe("completed");
+  const done = events.find((e) => e.type === "done");
+  expect(done && "summary" in done ? done.summary : "").toBe("Completed");
+});
+
+test("a second concurrent run on the same session is rejected", async () => {
+  let releaseFirst: (() => void) | null = null;
+  async function* holdOpen(): AsyncGenerator<SessionEvent, void, void> {
+    yield { ...base(), type: "agent.message_delta", text: "thinking…" };
+    await new Promise<void>((r) => {
+      releaseFirst = r;
+    });
+    yield { ...base(), type: "session.status_idle", stopReason: { type: "end_turn" } };
+  }
+
+  const session = new FakeSession("ses_shared", holdOpen);
+  const client = makeClient({
+    create: async () => session,
+    get: async () => session,
+  });
+  const provider = new HostlerAgentProvider(
+    makeFrameworkConfig({ enabled: true, apiKey: "cpk_test" }),
+  );
+  provider._setSdkForTesting(makeSdk(client));
+
+  const sharedContext = {
+    accountId: "acc1",
+    userEmail: "user@example.com",
+    providerConversationIds: { hostler: "ses_shared" },
+  };
+
+  // First run: pull until it has streamed its first delta (session active).
+  const gen1 = provider.run(makeRunParams({ taskId: "t1", context: sharedContext }));
+  const collected1: AgentEvent[] = [];
+  let step1 = await gen1.next();
+  while (!step1.done) {
+    collected1.push(step1.value);
+    if (collected1.some((e) => e.type === "text_delta")) break;
+    step1 = await gen1.next();
+  }
+
+  // Second run on the same conversation while the first is live.
+  const second = await drain(provider.run(makeRunParams({ taskId: "t2", context: sharedContext })));
+  expect(second.result.state).toBe("failed");
+  const error = second.events.find((e) => e.type === "error");
+  expect(error && "message" in error ? error.message : "").toContain("already active");
+
+  // Resume pulling gen1 first — the fake's release hook is only assigned
+  // when its generator body advances to the await, which needs a consumer.
+  const restPromise = (async () => {
+    let rest = await gen1.next();
+    while (!rest.done) rest = await gen1.next();
+    return rest.value;
+  })();
+  const deadline = Date.now() + 2000;
+  while (!releaseFirst && Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 5));
+  }
+  releaseFirst?.();
+  const final = await restPromise;
+  expect(final.state).toBe("completed");
+});
+
+test("concurrent runs share one agent sync (single-flight)", async () => {
+  const sessions = [new FakeSession("ses_a", simpleAnswer), new FakeSession("ses_b", simpleAnswer)];
+  let createCount = 0;
+  const client = makeClient({
+    create: async () => sessions[createCount++],
+    get: async () => {
+      throw new FakeHostlerError("not found", 404);
+    },
+  });
+  const provider = new HostlerAgentProvider(
+    makeFrameworkConfig({ enabled: true, apiKey: "cpk_test" }),
+  );
+  provider._setSdkForTesting(makeSdk(client));
+
+  const [first, second] = await Promise.all([
+    drain(provider.run(makeRunParams({ taskId: "t1" }))),
+    drain(provider.run(makeRunParams({ taskId: "t2" }))),
+  ]);
+  expect(first.result.state).toBe("completed");
+  expect(second.result.state).toBe("completed");
+  // Identical desired config → exactly one agents.create across both runs.
+  expect(client.agents.created).toHaveLength(1);
+});
+
+test("idle reaper terminates a warm session after the TTL", async () => {
+  const session = new FakeSession("ses_1", simpleAnswer);
+  const client = makeClient({
+    create: async () => session,
+    get: async () => {
+      throw new FakeHostlerError("not found", 404);
+    },
+  });
+  const provider = new HostlerAgentProvider(
+    makeFrameworkConfig({ enabled: true, apiKey: "cpk_test" }),
+    { idleSessionTtlMs: 20 },
+  );
+  provider._setSdkForTesting(makeSdk(client));
+
+  const { result } = await drain(provider.run(makeRunParams()));
+  expect(result.state).toBe("completed");
+  expect(session.terminated).toBe(false);
+
+  const deadline = Date.now() + 2000;
+  while (!session.terminated && Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 10));
+  }
+  expect(session.terminated).toBe(true);
 });
 
 test("resolveHostlerModel parses selectors", () => {

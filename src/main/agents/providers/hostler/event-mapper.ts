@@ -26,6 +26,11 @@ import type { AgentEvent } from "../../types";
  *   everything else                → dropped (user echoes, spans, status) —
  *                                    including unknown future event types,
  *                                    which Hostler documents as an open union
+ *
+ * The event stream is remote input: text sizes are capped (a hostile or
+ * runaway control plane must not be able to balloon worker/renderer memory
+ * through unbounded deltas or tool results), and content shapes are guarded
+ * rather than trusted.
  */
 export interface HostlerEventMapper {
   next(e: SessionEvent): AgentEvent[];
@@ -33,32 +38,52 @@ export interface HostlerEventMapper {
   lastMessage(): string | null;
 }
 
+/** Cumulative text budget per message segment (deltas + full message). A
+ *  sidebar reply is a few KB; 1M chars is far beyond any legitimate turn. */
+const MAX_MESSAGE_CHARS = 1_000_000;
+/** Tool results echo back through the timeline UI; cap what one call can pin
+ *  in renderer memory. The full result still went to the model. */
+const MAX_TOOL_RESULT_CHARS = 262_144;
+
+const TRUNCATION_NOTICE = "\n…[truncated by size cap]";
+
 export function createHostlerEventMapper(): HostlerEventMapper {
   // Characters of message_delta emitted since the last agent.message boundary.
   // agent.message carries the full message text that the deltas already
   // streamed — emit it only when no deltas preceded it.
   let deltaChars = 0;
+  let deltaCapNotified = false;
   let lastMessage: string | null = null;
-  // The platform emits one client-tool call twice — once with locale
-  // "sandbox" (the harness dispatching it) and once with locale "client"
-  // (the park), same toolCallId — verified against the live pi harness.
-  // Emit start/end exactly once per call (mirrors the OpenCode mapper).
+  // Early platform builds emitted one client-tool call twice — locale
+  // "sandbox" (harness dispatch) then locale "client" (the park), same
+  // toolCallId. Fixed platform-side (July 2026); kept as cheap defense so a
+  // regression can't render duplicate tool cards (mirrors the OpenCode
+  // mapper's start/end dedup).
   const startedTools = new Set<string>();
   const endedTools = new Set<string>();
 
   return {
     next(e: SessionEvent): AgentEvent[] {
       switch (e.type) {
-        case "agent.message_delta":
-          deltaChars += e.text.length;
-          return [{ type: "text_delta", text: e.text }];
+        case "agent.message_delta": {
+          const text = typeof e.text === "string" ? e.text : "";
+          if (deltaChars >= MAX_MESSAGE_CHARS) {
+            if (deltaCapNotified) return [];
+            deltaCapNotified = true;
+            return [{ type: "text_delta", text: TRUNCATION_NOTICE }];
+          }
+          deltaChars += text.length;
+          return text.length > 0 ? [{ type: "text_delta", text }] : [];
+        }
 
         case "agent.message": {
-          lastMessage = e.text;
+          const text = typeof e.text === "string" ? e.text : "";
+          lastMessage = text.slice(0, MAX_MESSAGE_CHARS);
           const emitted = deltaChars > 0;
           deltaChars = 0;
+          deltaCapNotified = false;
           if (emitted) return [];
-          return e.text.length > 0 ? [{ type: "text_delta", text: e.text }] : [];
+          return text.length > 0 ? [{ type: "text_delta", text: lastMessage }] : [];
         }
 
         case "agent.tool_use": {
@@ -77,7 +102,11 @@ export function createHostlerEventMapper(): HostlerEventMapper {
         case "agent.tool_result": {
           if (endedTools.has(e.toolCallId)) return [];
           endedTools.add(e.toolCallId);
-          const text = e.content.map((c) => c.text).join("\n");
+          const parts = Array.isArray(e.content) ? e.content : [];
+          let text = parts.map((c) => (typeof c?.text === "string" ? c.text : "")).join("\n");
+          if (text.length > MAX_TOOL_RESULT_CHARS) {
+            text = text.slice(0, MAX_TOOL_RESULT_CHARS) + TRUNCATION_NOTICE;
+          }
           return [
             {
               type: "tool_call_end",
