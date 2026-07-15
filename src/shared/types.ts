@@ -503,10 +503,10 @@ export const ConfigSchema = z.object({
       // work without an app update — unknown ones fail fast with a 400 that
       // lists the supported set.
       harness: z.string().default("opencode"),
-      // "provider/model" or bare model id. Bare ids ending in ":cloud" are
-      // Ollama Cloud models (routed via the broker's openai upstream); other
-      // bare ids pair with "anthropic". Blank uses glm-5.2:cloud — the same
-      // default as the app's own Ollama Cloud integration.
+      // "provider/model" (e.g. "openai/kimi-k2.5") or a bare model id, which
+      // pairs with "anthropic". Blank uses glm-5.2 from Hostler's brokered
+      // catalog (GET /v1/models) — the same model family as the app's own
+      // Ollama Cloud default.
       model: z.string().optional(),
       // Self-hosted Hostler deployments only; no UI — edit config.json.
       baseUrl: z.string().optional(),

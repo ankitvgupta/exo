@@ -1749,7 +1749,12 @@ export default function App() {
       <div className="titlebar-drag h-12 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between px-4">
         <div className="flex items-center space-x-4">
           <div className="w-20" /> {/* Space for traffic lights */}
-          <h1 className="text-lg font-semibold text-gray-800 dark:text-gray-200">Exo</h1>
+          <h1 className="text-lg font-semibold text-gray-800 dark:text-gray-200">
+            Exo{" "}
+            <span className="text-xs font-normal text-gray-400">
+              [ankitvgupta/hostler-agent-backend]
+            </span>
+          </h1>
           {/* Account Selector */}
           {accounts.length > 0 && (
             <div className="titlebar-no-drag relative">

@@ -953,13 +953,13 @@ export function ExtensionsTab() {
                 <input
                   type="text"
                   className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400"
-                  placeholder="glm-5.2:cloud"
+                  placeholder="glm-5.2"
                   value={hostlerModel}
                   onChange={(e) => setHostlerModel(e.target.value)}
                 />
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  Bare model id or &quot;provider/model&quot;. Ids ending in &quot;:cloud&quot; run
-                  on Ollama Cloud. Blank uses glm-5.2:cloud.
+                  Bare model id (pairs with Anthropic) or &quot;provider/model&quot; from
+                  Hostler&apos;s catalog. Blank uses glm-5.2.
                 </p>
               </div>
             </div>
