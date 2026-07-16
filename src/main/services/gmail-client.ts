@@ -19,6 +19,7 @@ import type {
   SendAsAlias,
 } from "../../shared/types";
 import { getAccounts } from "../db";
+import { DATA_URI_STRIP_THRESHOLD, inlineImagePlaceholder } from "../db/body-sanitizer";
 import { getDataDir } from "../data-dir";
 import { extractEmail } from "../utils/address-formatting";
 import { createLogger } from "./logger";
@@ -740,8 +741,11 @@ export class GmailClient {
    */
   private collectInlineImages(
     payload: gmail_v1.Schema$MessagePart,
-  ): Map<string, { mimeType: string; data?: string; attachmentId?: string }> {
-    const images = new Map<string, { mimeType: string; data?: string; attachmentId?: string }>();
+  ): Map<string, { mimeType: string; data?: string; attachmentId?: string; size?: number }> {
+    const images = new Map<
+      string,
+      { mimeType: string; data?: string; attachmentId?: string; size?: number }
+    >();
 
     const walk = (part: gmail_v1.Schema$MessagePart) => {
       const headers = part.headers || [];
@@ -754,6 +758,7 @@ export class GmailClient {
           mimeType: part.mimeType,
           data: part.body?.data ?? undefined,
           attachmentId: part.body?.attachmentId ?? undefined,
+          size: part.body?.size ?? undefined,
         });
       }
 
@@ -823,7 +828,10 @@ export class GmailClient {
    */
   private async resolveInlineImages(
     html: string,
-    inlineImages: Map<string, { mimeType: string; data?: string; attachmentId?: string }>,
+    inlineImages: Map<
+      string,
+      { mimeType: string; data?: string; attachmentId?: string; size?: number }
+    >,
     messageId: string,
   ): Promise<string> {
     if (inlineImages.size === 0) return html;
@@ -845,6 +853,21 @@ export class GmailClient {
       [...cidRefs].map(async (cid) => {
         const imageInfo = inlineImages.get(cid);
         if (!imageInfo) return;
+
+        // Oversized images would be stripped to a placeholder by saveEmail
+        // anyway (see db/body-sanitizer.ts) — resolve them to the placeholder
+        // directly so we never download multi-MB attachments just to discard
+        // them. part.body.size is the decoded byte count; base64 is 4/3 of it.
+        const estimatedDataUriLength = imageInfo.size
+          ? Math.ceil(imageInfo.size / 3) * 4
+          : undefined;
+        if (estimatedDataUriLength && estimatedDataUriLength >= DATA_URI_STRIP_THRESHOLD) {
+          replacements.set(
+            `cid:${cid}`,
+            inlineImagePlaceholder(imageInfo.mimeType, estimatedDataUriLength),
+          );
+          return;
+        }
 
         let base64Data = imageInfo.data;
 
