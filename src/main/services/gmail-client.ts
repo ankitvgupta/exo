@@ -39,6 +39,11 @@ const OLD_CONFIG_DIR = join(homedir(), ".config", "exo");
  * Safe to call multiple times — skips files that already exist at the destination.
  */
 export async function migrateOldConfigIfNeeded(): Promise<void> {
+  // An explicitly redirected data dir (packaged smoke tests, scratch runs)
+  // must never be seeded from the legacy location — that would copy real
+  // OAuth tokens/credentials out of production into a disposable dir.
+  if (process.env.EXO_USER_DATA_DIR) return;
+
   const newDir = getConfigDir();
   if (OLD_CONFIG_DIR === newDir) return; // Linux: paths are the same, nothing to do
 
