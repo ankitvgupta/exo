@@ -14,7 +14,6 @@ const DEFAULT_HINTS: Hint[] = [
   { key: "x", label: "select" },
   { key: "c", label: "compose" },
   { key: "/", label: "search" },
-  { key: "b", label: "sidebar" },
   { key: "\u2318K", label: "commands" },
 ];
 

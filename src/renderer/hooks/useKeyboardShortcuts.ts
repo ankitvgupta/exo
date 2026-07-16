@@ -251,7 +251,7 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
 
       // In compose mode, only handle Cmd+Enter for send — except when the
       // editor isn't focused (e.g. auto-opened draft without focus), where
-      // Enter should focus the editor and "b" should switch sidebar tabs.
+      // Enter should focus the editor.
       if (mode === "compose" && isInputFocused()) {
         return;
       }
@@ -674,19 +674,15 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
         return;
       }
 
-      // --- Shift+J/K/Arrow: extend selection up/down ---
-      if (
-        e.shiftKey &&
-        (e.key === "J" || e.key === "K" || e.key === "ArrowDown" || e.key === "ArrowUp") &&
-        !activeSearchQuery
-      ) {
+      // --- Shift+J/K: extend selection up/down ---
+      if (e.shiftKey && (e.key === "J" || e.key === "K") && !activeSearchQuery) {
         e.preventDefault();
         markNavigationActive();
         if (visibleThreads.length === 0) return;
         const currentIndex = visibleThreads.findIndex((t) => t.threadId === selectedThreadId);
         if (currentIndex < 0) return;
 
-        const direction = e.key === "J" || e.key === "ArrowDown" ? 1 : -1;
+        const direction = e.key === "J" ? 1 : -1;
         const nextIndex = currentIndex + direction;
         if (nextIndex < 0 || nextIndex >= visibleThreads.length) return;
 
@@ -768,11 +764,6 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
       switch (e.key) {
         // Navigation
         case "j":
-        case "ArrowDown":
-          // Skip Shift+Arrow — arrow keys don't change e.key when shift is held
-          // (unlike j→J), so without this guard Shift+ArrowDown would navigate
-          // instead of being a no-op like Shift+J in the switch.
-          if (e.shiftKey && e.key.startsWith("Arrow")) break;
           e.preventDefault();
           // Defer any pending sync-driven store updates while navigating
           markNavigationActive();
@@ -784,8 +775,6 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
           break;
 
         case "k":
-        case "ArrowUp":
-          if (e.shiftKey && e.key.startsWith("Arrow")) break;
           e.preventDefault();
           markNavigationActive();
           if (activeSearchQuery) {
@@ -1076,12 +1065,6 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
           }
           break;
 
-        // Switch sidebar tab
-        case "b":
-          e.preventDefault();
-          state.cycleSidebarTab();
-          break;
-
         // z: undo last action (Gmail only — no modifier needed)
         case "z":
           if (isGmail && !e.shiftKey) {
@@ -1201,7 +1184,6 @@ export function getKeyboardShortcuts(bindings: "superhuman" | "gmail") {
       { key: "Cmd+J", description: "Agent action palette" },
     ],
     other: [
-      { key: "b", description: "Switch sidebar tab" },
       { key: "Cmd+,", description: "Settings" },
       { key: "?", description: "Show shortcuts" },
     ],

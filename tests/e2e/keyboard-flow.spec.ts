@@ -85,28 +85,26 @@ test.describe("Keyboard Navigation - j/k Movement", () => {
     }
   });
 
-  test("ArrowDown works the same as j", async () => {
+  test("ArrowDown does not move the selected email", async () => {
     const before = await getSelectedThreadId(page);
+    expect(before).not.toBeNull();
 
     await page.keyboard.press("ArrowDown");
     await page.waitForTimeout(300);
 
     const after = await getSelectedThreadId(page);
-    expect(after).not.toBeNull();
+    expect(after).toBe(before);
   });
 
-  test("ArrowUp works the same as k", async () => {
-    // Move down first
-    await page.keyboard.press("ArrowDown");
-    await page.waitForTimeout(200);
-
+  test("ArrowUp does not move the selected email", async () => {
     const before = await getSelectedThreadId(page);
+    expect(before).not.toBeNull();
 
     await page.keyboard.press("ArrowUp");
     await page.waitForTimeout(300);
 
     const after = await getSelectedThreadId(page);
-    expect(after).not.toBeNull();
+    expect(after).toBe(before);
   });
 
   test("j at the bottom of list stays at last email", async () => {

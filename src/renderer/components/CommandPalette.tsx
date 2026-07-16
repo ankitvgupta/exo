@@ -576,13 +576,6 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
 
       // --- Agents ---
       {
-        id: "open-agents-sidebar",
-        label: "Open Agents Sidebar",
-        category: "Agents",
-        icon: ICONS.settings,
-        execute: () => useAppStore.getState().toggleAgentsSidebar(),
-      },
-      {
         id: "run-with-agents",
         label: "Run with Selected Agents",
         category: "Agents",

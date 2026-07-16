@@ -1,12 +1,16 @@
 import { test, expect, Page, ElectronApplication } from "@playwright/test";
-import { launchElectronApp, pressKeyUntilVisible , closeApp } from "./launch-helpers";
+import {
+  launchElectronApp,
+  pressKeyUntilVisible,
+  closeApp,
+  waitForEmailListReady,
+} from "./launch-helpers";
 
 /**
  * E2E Tests for the sender profile panel.
  *
- * Tests cover the sidebar panel that shows sender information
- * when an email is selected, profile display, switching between
- * emails and verifying the profile updates, and sidebar tab cycling.
+ * Tests cover sender information in email detail views and verify the
+ * deprecated right-side preview sidebar stays hidden.
  *
  * All tests run in DEMO_MODE with fake emails and mock sender profiles.
  */
@@ -73,8 +77,12 @@ test.describe("Sender Profile - Display", () => {
     expect(foundSender).toBe(true);
   });
 
-  test("sidebar panel is available when email is selected", async () => {
-    // Enter full view to see the sidebar
+  test("right preview sidebar is hidden when email is selected", async () => {
+    await waitForEmailListReady(page);
+    const selectedRow = page.locator("div[data-thread-id][data-selected='true']");
+    await pressKeyUntilVisible(page, "j", selectedRow, { timeout: 15000 });
+
+    // Enter full view.
     await page.keyboard.press("Enter");
     await page.waitForTimeout(800);
 
@@ -85,17 +93,20 @@ test.describe("Sender Profile - Display", () => {
       return;
     }
 
-    // Check for sender-related content (avatar, name, email)
-    // The SenderProfilePanel shows a circular avatar and sender details
-    const avatar = page.locator("[class*='rounded-full']").first();
-    await expect(avatar).toBeVisible({ timeout: 3000 });
+    await expect(page.locator(".w-96.exo-preview-shell")).toBeHidden({ timeout: 3000 });
+    await expect(page.locator("[data-testid='sidebar-sender-name']")).toBeHidden({
+      timeout: 3000,
+    });
 
     // Return to split view
     await page.keyboard.press("Escape");
     await page.waitForTimeout(500);
   });
 
-  test("leaving full view preserves row selection and sender sidebar", async () => {
+  test("leaving full view preserves row selection and keeps preview sidebar hidden", async () => {
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(500);
+    await waitForEmailListReady(page);
     const selectedRow = page.locator("div[data-thread-id][data-selected='true']");
     await pressKeyUntilVisible(page, "j", selectedRow, { timeout: 15000 });
     const selectedThreadIdBefore = await selectedRow.getAttribute("data-thread-id");
@@ -103,20 +114,20 @@ test.describe("Sender Profile - Display", () => {
     const replyButton = page.locator("button[title='Reply All']").first();
     await pressKeyUntilVisible(page, "Enter", replyButton, { timeout: 10000 });
 
+    const previewSidebar = page.locator(".w-96.exo-preview-shell");
     const senderName = page.locator("[data-testid='sidebar-sender-name']");
-    await expect(senderName).toBeVisible({ timeout: 5000 });
-    const senderBefore = await senderName.textContent();
+    await expect(previewSidebar).toBeHidden({ timeout: 5000 });
+    await expect(senderName).toBeHidden({ timeout: 5000 });
 
     await page.keyboard.press("Escape");
 
     // Full view is gone, but the row stays highlighted on the email we were
-    // just viewing so j/k resume from there. The preview sidebar keeps showing
-    // that email's sender.
+    // just viewing so j/k resume from there. The preview sidebar stays hidden.
     await expect(replyButton).toBeHidden({ timeout: 5000 });
     await expect(selectedRow).toHaveCount(1);
     expect(await selectedRow.getAttribute("data-thread-id")).toBe(selectedThreadIdBefore);
-    await expect(senderName).toBeVisible({ timeout: 5000 });
-    expect(await senderName.textContent()).toBe(senderBefore);
+    await expect(previewSidebar).toBeHidden({ timeout: 5000 });
+    await expect(senderName).toBeHidden({ timeout: 5000 });
   });
 });
 
@@ -210,31 +221,22 @@ test.describe("Sender Profile - Sidebar Tab Cycling", () => {
     }
   });
 
-  test("pressing 'b' cycles through sidebar tabs", async () => {
-    await expect(page.locator("text=Inbox").first()).toBeVisible({ timeout: 10000 });
+  test("pressing 'b' does not show a sidebar", async () => {
+    await expect(page.locator("text=Exo").first()).toBeVisible({ timeout: 10000 });
 
     // Select an email first
     await page.keyboard.press("j");
     await page.waitForTimeout(500);
 
-    // Get current page content
-    const contentBefore = await page.textContent("body");
-
-    // Press 'b' to cycle sidebar tab
     await page.keyboard.press("b");
     await page.waitForTimeout(500);
+    await expect(page.locator(".w-96.exo-preview-shell")).toBeHidden({ timeout: 3000 });
+    await expect(page.locator(".w-64.exo-preview-shell")).toBeHidden({ timeout: 3000 });
 
-    // Content may change as a different sidebar tab is shown
-    // Just verify no crash
-    const contentAfter = await page.textContent("body");
-    expect(contentAfter).toBeTruthy();
-
-    // Press 'b' again to cycle to next tab
     await page.keyboard.press("b");
     await page.waitForTimeout(500);
-
-    const contentAfterSecond = await page.textContent("body");
-    expect(contentAfterSecond).toBeTruthy();
+    await expect(page.locator(".w-96.exo-preview-shell")).toBeHidden({ timeout: 3000 });
+    await expect(page.locator(".w-64.exo-preview-shell")).toBeHidden({ timeout: 3000 });
   });
 });
 
