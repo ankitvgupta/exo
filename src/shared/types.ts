@@ -411,6 +411,11 @@ export const OllamaCloudConfigSchema = z.object({
   featureModels: z.record(z.string(), z.string()).optional(),
 });
 
+/** Default Hostler harness. Single source of truth for the zod default below,
+ *  the provider's fallback, the settings-IPC deep-merge fallback, and the
+ *  Extensions card — renderer-safe (same pattern as DEFAULT_OLLAMA_MODEL). */
+export const DEFAULT_HOSTLER_HARNESS = "opencode";
+
 // Config schema
 export const ConfigSchema = z.object({
   maxEmails: z.number().default(50),
@@ -490,6 +495,57 @@ export const ConfigSchema = z.object({
       model: z.string().optional(),
     })
     .optional(),
+  // Hostler provider settings — hosted cloud agent backend (hostler.dev).
+  // The agent harness runs in a Hostler sandbox; tool calls still execute
+  // locally in the app via Hostler's client-tools loop. Disabled by default;
+  // users opt in via Settings → Extensions with a Hostler API key.
+  hostler: z
+    .object({
+      enabled: z.boolean().default(false),
+      apiKey: z.string().default(""),
+      // Which agent harness runs in the sandbox. Hostler hosts "pi",
+      // "opencode", and "codex" (July 2026); kept free-text so new harnesses
+      // work without an app update — unknown ones fail fast with a 400 that
+      // lists the supported set.
+      harness: z.string().default(DEFAULT_HOSTLER_HARNESS),
+      // "provider/model" (e.g. "openai/kimi-k2.5") or a bare model id, which
+      // pairs with "anthropic". Blank uses glm-5.2 from Hostler's brokered
+      // catalog (GET /v1/models) — the same model family as the app's own
+      // Ollama Cloud default.
+      model: z.string().optional(),
+      // Dev/test escape hatch (e.g. scripts/mock-hostler-server.mjs); no UI,
+      // and the settings IPC only accepts loopback values (see settings.ipc).
+      // Every request carries the Bearer API key and tool results carry email
+      // content, so anything non-loopback must at least be https.
+      baseUrl: z
+        .string()
+        .refine(
+          (value) => {
+            if (value === "") return true;
+            try {
+              const url = new URL(value);
+              return (
+                url.protocol === "https:" ||
+                url.hostname === "127.0.0.1" ||
+                url.hostname === "localhost" ||
+                url.hostname === "[::1]"
+              );
+            } catch {
+              return false;
+            }
+          },
+          { message: "hostler.baseUrl must be a valid https:// URL (or a local loopback URL)" },
+        )
+        .optional(),
+    })
+    .optional(),
+  // Which agent provider runs background auto-draft tasks — the agent that
+  // fires on every new email needing a reply, plus the "Regenerate draft"
+  // rerun path. "claude" (default), "opencode", or "hostler" today; kept
+  // free-text so future providers work without a schema change. Resolution
+  // (including fallback when the chosen provider is disabled) happens in
+  // resolveBackgroundAgentProviderId below.
+  backgroundAgentProvider: z.string().optional(),
   ollamaCloud: OllamaCloudConfigSchema.optional(),
   featureProviders: z.record(z.string(), LlmProviderSchema).optional(),
   configVersion: z.number().optional(),
@@ -532,6 +588,82 @@ export function resolveAgentOllamaConfig(
     // explicit query() model param in sync.
     model: oc.featureModels?.agentDrafter ?? oc.defaultModel ?? DEFAULT_OLLAMA_MODEL,
   };
+}
+
+/** Provider id used for background auto-drafts when nothing else is configured. */
+export const DEFAULT_BACKGROUND_AGENT_PROVIDER = "claude";
+
+/**
+ * Resolve which agent provider runs background auto-draft tasks (the agent
+ * that fires on every new email needing a reply, and the "Regenerate draft"
+ * rerun path).
+ *
+ * Falls back to "claude" when the configured provider's config-level gates
+ * aren't met — mirroring each provider's isAvailable() check, which runs in
+ * the agent worker where the main process can't call it. Without the
+ * fallback, disabling e.g. Hostler while it's selected would make every
+ * background draft fail until the user also updated this setting.
+ *
+ * Unknown provider ids (e.g. an installed provider) pass through unchanged:
+ * we can't know their config gates here, and the orchestrator fails
+ * explicitly for unregistered ids.
+ */
+export function resolveBackgroundAgentProviderId(
+  cfg: Pick<Config, "backgroundAgentProvider" | "opencode" | "hostler" | "openclaw">,
+): string {
+  // `||` (not `??`) so an empty string in a hand-edited config counts as
+  // unset instead of reaching the orchestrator as an unknown provider id.
+  const requested = cfg.backgroundAgentProvider || DEFAULT_BACKGROUND_AGENT_PROVIDER;
+  if (requested === "opencode" && !cfg.opencode?.enabled) {
+    return DEFAULT_BACKGROUND_AGENT_PROVIDER;
+  }
+  if (requested === "hostler" && !(cfg.hostler?.enabled && cfg.hostler.apiKey)) {
+    return DEFAULT_BACKGROUND_AGENT_PROVIDER;
+  }
+  if (requested === "openclaw-agent" && !(cfg.openclaw?.enabled && cfg.openclaw.gatewayUrl)) {
+    return DEFAULT_BACKGROUND_AGENT_PROVIDER;
+  }
+  return requested;
+}
+
+/** Agent runtimes selectable for background drafts besides the built-in Claude agent. */
+export const EXTERNAL_AGENT_RUNTIMES = ["opencode", "hostler"] as const;
+
+/**
+ * Whether selecting `id` as the background agent provider would actually take
+ * effect, derived from the same resolver that routes background drafts — so
+ * UI enablement can't drift from runtime fallback behavior.
+ */
+export function isAgentRuntimeAvailable(
+  id: string,
+  cfg: Pick<Config, "opencode" | "hostler" | "openclaw">,
+): boolean {
+  return resolveBackgroundAgentProviderId({ ...cfg, backgroundAgentProvider: id }) === id;
+}
+
+/**
+ * Interpret a selection from the Agent Drafter provider dropdown, which mixes
+ * agent runtimes (EXTERNAL_AGENT_RUNTIMES) with LLM providers for the built-in
+ * Claude runtime (LLM_PROVIDERS). Picking a runtime routes background drafts
+ * there and leaves the Claude-runtime model choice untouched; picking an LLM
+ * provider returns the runtime to the built-in Claude agent and selects its
+ * model source. Returns null for values that are neither, so unknown option
+ * values are an explicit no-op rather than a silent misroute.
+ */
+export function applyAgentDrafterSelection(
+  selected: string,
+): { backgroundAgentProvider: string; agentDrafterProvider?: LlmProvider } | null {
+  if ((EXTERNAL_AGENT_RUNTIMES as readonly string[]).includes(selected)) {
+    return { backgroundAgentProvider: selected };
+  }
+  const llmParse = LlmProviderSchema.safeParse(selected);
+  if (llmParse.success) {
+    return {
+      backgroundAgentProvider: DEFAULT_BACKGROUND_AGENT_PROVIDER,
+      agentDrafterProvider: llmParse.data,
+    };
+  }
+  return null;
 }
 
 // Dashboard-specific types

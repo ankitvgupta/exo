@@ -18,7 +18,10 @@ import {
   MODEL_TIER_IDS,
   resolveModelId,
   resolveAgentOllamaConfig,
+  resolveBackgroundAgentProviderId,
+  DEFAULT_BACKGROUND_AGENT_PROVIDER,
   DEFAULT_OLLAMA_MODEL,
+  DEFAULT_HOSTLER_HARNESS,
 } from "../../shared/types";
 import { resetAnalyzer } from "./analysis.ipc";
 import { resetArchiveReadyAnalyzer } from "./archive-ready.ipc";
@@ -45,6 +48,18 @@ import { getDataDir } from "../data-dir";
 import { createLogger } from "../services/logger";
 
 const log = createLogger("settings-ipc");
+
+/** True only for URLs whose host is the local machine — the one baseUrl
+ *  class safe to accept over the renderer-reachable settings IPC. */
+function isLoopbackUrl(value: string | undefined): boolean {
+  if (!value) return false;
+  try {
+    const url = new URL(value);
+    return url.hostname === "127.0.0.1" || url.hostname === "localhost" || url.hostname === "[::1]";
+  } catch {
+    return false;
+  }
+}
 
 let _store: Store<{ config: Config }> | null = null;
 function getStore(): Store<{ config: Config }> {
@@ -210,6 +225,31 @@ export function getFeatureModelConfig(feature: keyof ModelConfig): {
   return { provider: "anthropic", model: resolveModelId(mc[feature]) };
 }
 
+/**
+ * Which agent provider background auto-drafts should launch right now.
+ *
+ * Wraps the pure resolveBackgroundAgentProviderId with the one gate it can't
+ * express: OpenCode also needs an LLM credential (its isAvailable() requires
+ * Ollama or Anthropic), and the Anthropic key may come from process.env,
+ * which the renderer-safe resolver can't read. Without this, enabling
+ * OpenCode with no credentials would fail every background draft — and each
+ * failed email is skipped for the rest of the session.
+ *
+ * The bundled opencode binary is deliberately not checked here: it ships
+ * with the app, so its absence is a broken install that should fail loudly
+ * in the provider, not silently fall back.
+ */
+export function getBackgroundAgentProviderId(): string {
+  const config = getConfig();
+  const resolved = resolveBackgroundAgentProviderId(config);
+  if (resolved === "opencode") {
+    const hasAnthropic = Boolean(config.anthropicApiKey || process.env.ANTHROPIC_API_KEY);
+    const hasOllama = Boolean(config.ollamaCloud?.apiKey);
+    if (!hasAnthropic && !hasOllama) return DEFAULT_BACKGROUND_AGENT_PROVIDER;
+  }
+  return resolved;
+}
+
 export function registerSettingsIpc(): void {
   // Validate an Anthropic API key with a minimal API call
   ipcMain.handle(
@@ -336,6 +376,48 @@ export function registerSettingsIpc(): void {
           };
         }
       }
+      // backgroundAgentProvider routes every background auto-draft to an
+      // agent provider. IPC payloads are compile-time-typed only, so guard
+      // the type here — a persisted non-string would wedge every future
+      // auto-draft on "Unknown provider".
+      if (
+        "backgroundAgentProvider" in config &&
+        typeof config.backgroundAgentProvider !== "string"
+      ) {
+        newConfig = {
+          ...newConfig,
+          backgroundAgentProvider: currentConfig.backgroundAgentProvider,
+        };
+      }
+      // Deep-merge hostler for the same reason as ollamaCloud: the Extensions
+      // card never sends baseUrl (a dev/test escape hatch), so a shallow
+      // merge would silently erase it on every UI save.
+      if ("hostler" in config) {
+        const incoming = config.hostler;
+        const existing = currentConfig.hostler;
+        // baseUrl redirects the Bearer API key AND every tool result (email
+        // content) to a different control plane, so it must not be settable
+        // from the renderer (untrusted email HTML renders there — a
+        // compromised renderer could silently point the provider at an
+        // attacker host). Accept it over IPC only for loopback targets (the
+        // mock-server dev flow); anything else keeps the stored value.
+        const incomingBaseUrl =
+          incoming?.baseUrl === "" || isLoopbackUrl(incoming?.baseUrl)
+            ? incoming?.baseUrl
+            : existing?.baseUrl;
+        newConfig = {
+          ...newConfig,
+          hostler: incoming
+            ? {
+                enabled: incoming.enabled,
+                apiKey: incoming.apiKey ?? existing?.apiKey ?? "",
+                harness: incoming.harness ?? existing?.harness ?? DEFAULT_HOSTLER_HARNESS,
+                model: incoming.model ?? existing?.model,
+                baseUrl: incomingBaseUrl,
+              }
+            : undefined,
+        };
+      }
       getStore().set("config", newConfig);
 
       // If githubToken changed, propagate to auto-updater immediately
@@ -415,6 +497,21 @@ export function registerSettingsIpc(): void {
           opencode: {
             enabled: newConfig.opencode?.enabled ?? false,
             model: newConfig.opencode?.model,
+          },
+        });
+      }
+
+      // Propagate Hostler config to the agent framework. The provider's
+      // updateConfig() drops its cached client / agent sync and, on disable,
+      // terminates any warm cloud sessions so they stop billing.
+      if ("hostler" in config) {
+        agentCoordinator.updateConfig({
+          hostler: {
+            enabled: newConfig.hostler?.enabled ?? false,
+            apiKey: newConfig.hostler?.apiKey || undefined,
+            harness: newConfig.hostler?.harness,
+            model: newConfig.hostler?.model,
+            baseUrl: newConfig.hostler?.baseUrl,
           },
         });
       }
