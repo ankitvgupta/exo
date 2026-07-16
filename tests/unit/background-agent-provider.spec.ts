@@ -9,6 +9,8 @@ import {
   ConfigSchema,
   DEFAULT_BACKGROUND_AGENT_PROVIDER,
   resolveBackgroundAgentProviderId,
+  applyAgentDrafterSelection,
+  isAgentRuntimeAvailable,
 } from "../../src/shared/types";
 import { deriveTraceProviderIds } from "../../src/shared/agent-types";
 import type { ScopedAgentEvent } from "../../src/shared/agent-types";
@@ -185,5 +187,54 @@ test.describe("deriveTraceProviderIds", () => {
 
   test("returns claude for an empty trace", () => {
     expect(deriveTraceProviderIds([])).toEqual(["claude"]);
+  });
+});
+
+test.describe("applyAgentDrafterSelection", () => {
+  test("selecting an external runtime routes background drafts there and leaves the Claude-runtime model untouched", () => {
+    expect(applyAgentDrafterSelection("opencode")).toEqual({
+      backgroundAgentProvider: "opencode",
+    });
+    expect(applyAgentDrafterSelection("hostler")).toEqual({
+      backgroundAgentProvider: "hostler",
+    });
+  });
+
+  test("selecting an LLM provider returns the runtime to the built-in Claude agent", () => {
+    expect(applyAgentDrafterSelection("anthropic")).toEqual({
+      backgroundAgentProvider: DEFAULT_BACKGROUND_AGENT_PROVIDER,
+      agentDrafterProvider: "anthropic",
+    });
+    expect(applyAgentDrafterSelection("ollama-cloud")).toEqual({
+      backgroundAgentProvider: DEFAULT_BACKGROUND_AGENT_PROVIDER,
+      agentDrafterProvider: "ollama-cloud",
+    });
+  });
+
+  test("unknown option values are an explicit no-op, not a misroute", () => {
+    expect(applyAgentDrafterSelection("openclaw-agent")).toBeNull();
+    expect(applyAgentDrafterSelection("")).toBeNull();
+  });
+});
+
+test.describe("isAgentRuntimeAvailable", () => {
+  test("mirrors the resolver gates for opencode", () => {
+    expect(isAgentRuntimeAvailable("opencode", { opencode: { enabled: true } })).toBe(true);
+    expect(isAgentRuntimeAvailable("opencode", { opencode: { enabled: false } })).toBe(false);
+    expect(isAgentRuntimeAvailable("opencode", {})).toBe(false);
+  });
+
+  test("mirrors the resolver gates for hostler (needs enabled AND apiKey)", () => {
+    expect(
+      isAgentRuntimeAvailable("hostler", { hostler: { enabled: true, apiKey: "cpk_x" } }),
+    ).toBe(true);
+    expect(isAgentRuntimeAvailable("hostler", { hostler: { enabled: true } })).toBe(false);
+    expect(
+      isAgentRuntimeAvailable("hostler", { hostler: { enabled: false, apiKey: "cpk_x" } }),
+    ).toBe(false);
+  });
+
+  test("the built-in Claude runtime is always available", () => {
+    expect(isAgentRuntimeAvailable(DEFAULT_BACKGROUND_AGENT_PROVIDER, {})).toBe(true);
   });
 });

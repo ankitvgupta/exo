@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import type {
   InstalledExtensionInfo,
   ExtensionManifest,
@@ -17,8 +18,19 @@ interface ExtensionListResult {
 /**
  * Extensions management tab in Settings.
  * Shows bundled and installed extensions, with install/uninstall controls.
+ *
+ * onOllamaCloudDisabled: disabling Ollama Cloud rewrites featureProviders —
+ * a field the General tab stages locally (hydrated once per panel session).
+ * The parent uses this callback to apply the same reset to its staged copy,
+ * otherwise Save Changes would republish stale ollama-cloud routes with the
+ * now-cleared API key.
  */
-export function ExtensionsTab() {
+export function ExtensionsTab({ onOllamaCloudDisabled }: { onOllamaCloudDisabled?: () => void }) {
+  // Provider gates saved here (opencode.enabled, hostler.enabled/apiKey) feed
+  // the Agent Drafter runtime options in the General tab, which read from the
+  // "general-config" query — invalidate it at each save site so those options
+  // enable/disable without reopening Settings.
+  const queryClient = useQueryClient();
   const [installedExtensions, setInstalledExtensions] = useState<InstalledExtensionInfo[]>([]);
   const [bundledExtensions, setBundledExtensions] = useState<ExtensionManifest[]>([]);
   const [isInstalling, setIsInstalling] = useState(false);
@@ -100,6 +112,7 @@ export function ExtensionsTab() {
       }
 
       setHostlerSaveState("saved");
+      queryClient.invalidateQueries({ queryKey: ["general-config"] });
       return true;
     } catch (error) {
       setHostlerSaveState("error");
@@ -639,6 +652,8 @@ export function ExtensionsTab() {
                     ollamaCloud: { apiKey: "", defaultModel: ollamaCloudModel },
                     featureProviders: reset,
                   });
+                  queryClient.invalidateQueries({ queryKey: ["general-config"] });
+                  onOllamaCloudDisabled?.();
                 }
               }}
             />
@@ -748,6 +763,7 @@ export function ExtensionsTab() {
                     gatewayToken: openclawGatewayToken,
                   },
                 });
+                queryClient.invalidateQueries({ queryKey: ["general-config"] });
               }}
             />
             <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-500 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:after:border-gray-600 peer-checked:bg-blue-600" />
@@ -796,6 +812,7 @@ export function ExtensionsTab() {
                       gatewayToken: openclawGatewayToken,
                     },
                   });
+                  queryClient.invalidateQueries({ queryKey: ["general-config"] });
                   setOpenclawTesting(true);
                   setOpenclawTestResult(null);
                   const result = (await window.api.settings.testOpenclawConnection()) as {
@@ -819,6 +836,7 @@ export function ExtensionsTab() {
                       gatewayToken: openclawGatewayToken,
                     },
                   });
+                  queryClient.invalidateQueries({ queryKey: ["general-config"] });
                 }}
               >
                 Save
@@ -859,12 +877,18 @@ export function ExtensionsTab() {
               onChange={async (e) => {
                 const val = e.target.checked;
                 setOpencodeEnabled(val);
-                await window.api.settings.set({
+                const result = (await window.api.settings.set({
                   opencode: {
                     enabled: val,
                     model: opencodeModel || undefined,
                   },
-                });
+                })) as { success: boolean } | undefined;
+                if (!result?.success) {
+                  // Revert so the toggle doesn't show a state that didn't persist
+                  setOpencodeEnabled(!val);
+                  return;
+                }
+                queryClient.invalidateQueries({ queryKey: ["general-config"] });
               }}
             />
             <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-500 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:after:border-gray-600 peer-checked:bg-blue-600" />
@@ -892,12 +916,15 @@ export function ExtensionsTab() {
               <button
                 className="px-4 py-2 text-sm font-medium text-white bg-blue-600 dark:bg-blue-500 rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors"
                 onClick={async () => {
-                  await window.api.settings.set({
+                  const result = (await window.api.settings.set({
                     opencode: {
                       enabled: opencodeEnabled,
                       model: opencodeModel || undefined,
                     },
-                  });
+                  })) as { success: boolean } | undefined;
+                  if (result?.success) {
+                    queryClient.invalidateQueries({ queryKey: ["general-config"] });
+                  }
                 }}
               >
                 Save
