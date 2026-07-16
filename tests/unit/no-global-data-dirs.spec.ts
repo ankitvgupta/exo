@@ -35,7 +35,8 @@ const FORBIDDEN: { pattern: RegExp; description: string }[] = [
   { pattern: new RegExp(`${AS}/exo`, "i"), description: "macOS prod data dir (exo)" },
   { pattern: new RegExp(`${AS}/Electron`), description: "macOS Electron default data dir" },
   // Shell-escaped space variant: Application\ Support/exo
-  { pattern: new RegExp("Application\\\\\\\\ Support/exo", "i"), description: "escaped macOS prod data dir" },
+  // (regex source `Application\\ Support/exo` — one literal backslash + space)
+  { pattern: new RegExp("Application\\\\ Support/exo", "i"), description: "escaped macOS prod data dir" },
   { pattern: /\.config\/exo/i, description: "Linux prod data dir (exo)" },
   { pattern: /\.config\/Electron/, description: "Linux Electron default data dir" },
   { pattern: /AppData\/Roaming\/exo/i, description: "Windows prod data dir (exo)" },
@@ -63,6 +64,30 @@ function trackedFiles(): string[] {
   });
   return out.split("\0").filter((f) => f.length > 0 && f !== SELF);
 }
+
+// A pattern that matches nothing is a silently dead guard (this happened: the
+// escaped-space variant shipped doubly-escaped and never matched anything).
+// Prove every FORBIDDEN entry catches its canonical bad example.
+test("every forbidden pattern matches its canonical bad example", () => {
+  const BS = "\\";
+  const samples: [string, string][] = [
+    [`rm -f "$dir/${AS}/exo/exo-config.json"`, "macOS prod data dir (exo)"],
+    [`"${AS}/Electron/data"`, "macOS Electron default data dir"],
+    [`rm -rf $HOME/Library/Application${BS} Support/exo`, "escaped macOS prod data dir"],
+    [`rm -f "$home/.config/exo/exo-config.json"`, "Linux prod data dir (exo)"],
+    [`"$home/.config/Electron"`, "Linux Electron default data dir"],
+    [`join(appData, "AppData/Roaming/exo")`, "Windows prod data dir (exo)"],
+    [`join(home, "Library", "${AS}", "exo")`, "segment-joined global data dir"],
+    [`const dir = join(homedir(), ".config")`, "homedir() path construction"],
+    [`const dir = os.homedir()`, "os.homedir path construction"],
+    [`rm -rf "$HOME/Library"`, "$HOME path construction"],
+  ];
+  for (const [sample, description] of samples) {
+    const entry = FORBIDDEN.find((f) => f.description === description);
+    expect(entry, `pattern registered: ${description}`).toBeDefined();
+    expect(entry!.pattern.test(sample), `"${description}" must match: ${sample}`).toBe(true);
+  }
+});
 
 test("scripts/, tests/, benchmarks/ never reference global per-user app-data dirs", () => {
   const files = trackedFiles();
