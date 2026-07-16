@@ -1,18 +1,17 @@
 /**
- * Unit tests for db/body-sanitizer.ts — the write-boundary strip of oversized
- * inline data: URIs from email bodies (see migration 8 for the prod numbers
- * that motivated it).
+ * Unit tests for shared/body-sanitizer.ts — the write-boundary strip of
+ * oversized inline data: URIs from email bodies (see migration 8 for the prod
+ * numbers that motivated it).
  */
 import { test, expect } from "@playwright/test";
 import {
   stripLargeDataUris,
   inlineImagePlaceholder,
   DATA_URI_STRIP_THRESHOLD,
-} from "../../src/main/db/body-sanitizer";
+} from "../../src/shared/body-sanitizer";
 
-function dataUriOfLength(totalLength: number): string {
-  const prefix = "data:image/png;base64,";
-  return prefix + "A".repeat(totalLength - prefix.length);
+function dataUriOfLength(totalLength: number, scheme = "data:image/png;base64,"): string {
+  return scheme + "A".repeat(totalLength - scheme.length);
 }
 
 test.describe("stripLargeDataUris", () => {
@@ -44,6 +43,53 @@ test.describe("stripLargeDataUris", () => {
     const stripped = stripLargeDataUris(body);
     expect(stripped).toContain(small);
     expect(stripped).not.toContain(big);
+  });
+
+  test("strips multiple oversized URIs in one body", () => {
+    const a = dataUriOfLength(DATA_URI_STRIP_THRESHOLD, "data:image/png;base64,");
+    const b = dataUriOfLength(DATA_URI_STRIP_THRESHOLD, "data:image/gif;base64,");
+    const stripped = stripLargeDataUris(`<img src="${a}"><img src="${b}">`);
+    expect(stripped).not.toContain(a);
+    expect(stripped).not.toContain(b);
+    expect(stripped.match(/data:image\/svg\+xml/g)?.length).toBe(2);
+  });
+
+  test("strips single-quoted, uppercase IMG tags (case-insensitive)", () => {
+    const big = dataUriOfLength(DATA_URI_STRIP_THRESHOLD);
+    const stripped = stripLargeDataUris(`<IMG SRC='${big}'>`);
+    expect(stripped).not.toContain(big);
+    expect(stripped).toContain("data:image/svg+xml");
+  });
+
+  test("strips an uppercase DATA: scheme (RFC 2397 case-insensitive) — no bypass", () => {
+    const big = dataUriOfLength(DATA_URI_STRIP_THRESHOLD, "DATA:image/png;base64,");
+    const stripped = stripLargeDataUris(`<img src="${big}">`);
+    expect(stripped).not.toContain(big);
+    expect(stripped).toContain("data:image/svg+xml");
+  });
+
+  test("strips oversized data URIs on non-img elements (video/source)", () => {
+    const big = dataUriOfLength(DATA_URI_STRIP_THRESHOLD, "data:video/mp4;base64,");
+    const stripped = stripLargeDataUris(`<video src="${big}"></video>`);
+    expect(stripped).not.toContain(big);
+    expect(stripped).toContain("data:image/svg+xml");
+  });
+
+  test("is linear-time on adversarial input (many <img with no closing >)", () => {
+    // A quadratic matcher hangs for seconds here; the linear one returns fast.
+    const body = "data:x" + "<img aaaaaaaaaa ".repeat(200_000);
+    const start = Date.now();
+    stripLargeDataUris(body);
+    expect(Date.now() - start).toBeLessThan(1_000);
+  });
+
+  test("sanitizes an injected mime type in the placeholder", () => {
+    const evil =
+      "data:image/png</text><script>x</script>;base64," + "A".repeat(DATA_URI_STRIP_THRESHOLD);
+    const stripped = stripLargeDataUris(`<img src="${evil}">`);
+    // mime failed validation → fell back to "image"; no raw markup leaked
+    expect(stripped).not.toContain("<script>");
+    expect(stripped).toContain("Inline%20image");
   });
 
   test("returns bodies without data: URIs unchanged", () => {

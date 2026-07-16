@@ -12,14 +12,13 @@ import { createRequire } from "module";
 import type BetterSqlite3 from "better-sqlite3";
 import { runMigrations } from "../../src/main/db/migrations";
 import { SCHEMA, FTS5_SCHEMA, FTS5_TRIGGERS } from "../../src/main/db/schema";
-import { DATA_URI_STRIP_THRESHOLD } from "../../src/main/db/body-sanitizer";
+import { DATA_URI_STRIP_THRESHOLD } from "../../src/shared/body-sanitizer";
 
 const require = createRequire(import.meta.url);
 
 type DB = BetterSqlite3.Database;
-let DatabaseCtor:
-  | (new (filename: string | Buffer, options?: BetterSqlite3.Options) => DB)
-  | null = null;
+let DatabaseCtor: (new (filename: string | Buffer, options?: BetterSqlite3.Options) => DB) | null =
+  null;
 let nativeModuleError: string | null = null;
 try {
   DatabaseCtor = require("better-sqlite3");
@@ -69,13 +68,7 @@ function preMigration8Db(): DB {
     `<p>numbers attached</p><img src="${BIG_URI}">`,
     "numbers attached quarterly",
   );
-  insert.run(
-    "small",
-    "t2",
-    "Logo email",
-    `<p>see logo</p><img src="${SMALL_URI}">`,
-    "see logo",
-  );
+  insert.run("small", "t2", "Logo email", `<p>see logo</p><img src="${SMALL_URI}">`, "see logo");
 
   // Mark DB as already migrated through version 7
   db.exec(`
@@ -127,9 +120,7 @@ test.describe("migration 8: strip large data URIs + widen merge-cover index", ()
     // The AFTER UPDATE trigger re-indexes the row with unchanged body_text;
     // search must still find the stripped email exactly once.
     const hits = db
-      .prepare(
-        "SELECT rowid FROM emails_fts WHERE emails_fts MATCH 'quarterly'",
-      )
+      .prepare("SELECT rowid FROM emails_fts WHERE emails_fts MATCH 'quarterly'")
       .all();
     expect(hits.length).toBe(1);
   });
@@ -147,6 +138,41 @@ test.describe("migration 8: strip large data URIs + widen merge-cover index", ()
     ).body;
     expect(bodyAfterSecond).toBe(bodyAfterFirst);
     expect(indexNames(db).has("idx_emails_all_light")).toBe(true);
+  });
+
+  test("a candidate row whose only data URIs are small survives byte-identical", () => {
+    const db = preMigration8Db();
+    // Pad an all-small-URI body past the candidate threshold so it's SELECTed
+    // but stripLargeDataUris leaves it unchanged (exercises the no-op skip).
+    const body = `<p>${"x".repeat(DATA_URI_STRIP_THRESHOLD)}</p><img src="${SMALL_URI}">`;
+    db.prepare(
+      `INSERT INTO emails (id, account_id, thread_id, subject, from_address, to_address, body, body_text, date, fetched_at, label_ids)
+       VALUES ('padded', 'acct1', 't3', 's', 'a@b.com', 'c@d.com', ?, 'x', '2026-07-01T00:00:00Z', 0, '["INBOX"]')`,
+    ).run(body);
+
+    runMigrations(db);
+
+    const after = db.prepare("SELECT body FROM emails WHERE id = 'padded'").get() as {
+      body: string;
+    };
+    expect(after.body).toBe(body);
+  });
+
+  test("idx_emails_all_light covers the getInboxEmails allLight query", () => {
+    if (!DatabaseCtor) throw new Error("better-sqlite3 not loadable");
+    // Fresh DB via SCHEMA (not the pre-migration shape) — asserts the covering
+    // property this PR exists to deliver, on the index schema.ts ships.
+    const db = new DatabaseCtor(":memory:");
+    db.pragma("journal_mode = MEMORY");
+    db.exec(SCHEMA);
+    const plan = db
+      .prepare(
+        "EXPLAIN QUERY PLAN SELECT id, account_id, thread_id, message_id, in_reply_to, date, label_ids FROM emails WHERE account_id = ?",
+      )
+      .all("acct1") as Array<{ detail: string }>;
+    expect(plan.map((r) => r.detail).join("\n")).toContain(
+      "USING COVERING INDEX idx_emails_all_light",
+    );
   });
 
   test("fresh DB (no emails table yet) is a safe no-op", () => {

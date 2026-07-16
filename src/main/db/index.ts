@@ -19,7 +19,7 @@ import type {
 import { createLogger } from "../services/logger";
 import { parseAutoDraftTaskId, AUTO_DRAFT_TASK_ID_LIKE_PATTERN } from "../agents/task-id";
 import { runMigrations } from "./migrations";
-import { stripLargeDataUris } from "./body-sanitizer";
+import { stripLargeDataUris } from "../../shared/body-sanitizer";
 
 const log = createLogger("db");
 
@@ -1088,6 +1088,8 @@ function rowToDashboardEmail(row: Record<string, unknown>): DashboardEmail {
     to: row.to as string,
     ...(row.cc ? { cc: row.cc as string } : {}),
     ...(row.bcc ? { bcc: row.bcc as string } : {}),
+    // Backstop: rows written by saveEmail / migration 8 are already stripped,
+    // but rows from older builds (pre-migration-8) may still hold full bodies.
     body: stripLargeDataUris(row.body as string),
     snippet: row.snippet as string | undefined,
     date: row.date as string,
