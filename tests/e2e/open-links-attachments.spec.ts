@@ -159,7 +159,7 @@ Zoom: https://zoom.us/j/123456789`,
         from: "Jobs <jobs@example.com>",
         to: "Test <test@example.com>",
         date: new Date().toISOString(),
-        body: `<div><a href="${greenhouseUrl}">${greenhouseUrl}</a></div><div>--------------------</div><div>Source</div><div><a href="${greenhouseUrl}">${greenhouseUrl}</a></div><div>--------------------</div><div>❤️</div>`,
+        body: `${greenhouseUrl}<br/><br/>--------------------<br/><br/>Source<br/>${greenhouseUrl}<br/><br/>--------------------<br/><br/>❤️`,
         attachments: [],
       };
 
