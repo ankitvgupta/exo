@@ -103,11 +103,27 @@ export function extractLinks(body: string): OpenableLink[] {
     addLink(rawHref, textLabel || title || ariaLabel);
   }
 
-  const text = doc.body?.textContent ?? body;
-  const urlMatches = text.matchAll(/https?:\/\/[^\s<>"']+/gi);
-  for (const match of urlMatches) {
-    const href = trimUrlCandidate(match[0]);
-    addLink(href, href);
+  const textNodes: string[] = [];
+  if (doc.body) {
+    const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const parent = node.parentElement;
+      if (parent?.closest("a, script, style, template, noscript")) continue;
+      textNodes.push(node.textContent ?? "");
+    }
+  } else {
+    textNodes.push(body);
+  }
+
+  // Scan each visible text node independently. Flattening the whole body with
+  // textContent erases <br> and block boundaries, which can join a URL to the
+  // next label or link and turn the combined text into a bogus valid URL.
+  for (const text of textNodes) {
+    const urlMatches = text.matchAll(/https?:\/\/[^\s<>"']+/gi);
+    for (const match of urlMatches) {
+      const href = trimUrlCandidate(match[0]);
+      addLink(href, href);
+    }
   }
 
   return links;

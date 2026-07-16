@@ -145,6 +145,49 @@ Zoom: https://zoom.us/j/123456789`,
     await expect(palette).toBeHidden();
   });
 
+  test("Cmd+O does not join URLs across HTML element boundaries", async () => {
+    await page.evaluate(() => {
+      const store = (window as unknown as { __ZUSTAND_STORE__?: TestStore }).__ZUSTAND_STORE__;
+      if (!store) return;
+
+      const state = store.getState();
+      const greenhouseUrl = "https://job-boards.greenhouse.io/anthropic/jobs/5195866008";
+      const syntheticEmail = {
+        id: "e2e-openables-adjacent-html-links",
+        threadId: "thread-e2e-openables-adjacent-html-links",
+        subject: "Adjacent HTML links",
+        from: "Jobs <jobs@example.com>",
+        to: "Test <test@example.com>",
+        date: new Date().toISOString(),
+        body: `<div><a href="${greenhouseUrl}">${greenhouseUrl}</a></div><div>--------------------</div><div>Source</div><div><a href="${greenhouseUrl}">${greenhouseUrl}</a></div><div>--------------------</div><div>❤️</div>`,
+        attachments: [],
+      };
+
+      store.setState({
+        emails: [...state.emails.filter((email) => email.id !== syntheticEmail.id), syntheticEmail],
+        selectedEmailId: syntheticEmail.id,
+        selectedThreadId: syntheticEmail.threadId,
+        focusedThreadEmailId: null,
+        viewMode: "split",
+      });
+    });
+
+    await page.keyboard.press("ControlOrMeta+o");
+
+    const palette = page.getByRole("dialog", { name: "Open Links & Attachments" });
+    const input = palette.locator('input[placeholder="Open Links & Attachments..."]');
+    await expect(input).toBeVisible({ timeout: 3000 });
+    await input.fill("5195866008");
+    await expect(palette.locator("[data-index]")).toHaveCount(1);
+    await expect(
+      palette.getByText("job-boards.greenhouse.io/anthropic/jobs/5195866008", { exact: true }),
+    ).toBeVisible();
+    await expect(palette.getByText(/Sourcehttps:\/\/job-boards/)).toBeHidden();
+
+    await page.keyboard.press("Escape");
+    await expect(palette).toBeHidden();
+  });
+
   test("Cmd+O preserves anchor URL punctuation and trims bare URL punctuation", async () => {
     await page.evaluate(() => {
       const store = (window as unknown as { __ZUSTAND_STORE__?: TestStore }).__ZUSTAND_STORE__;
