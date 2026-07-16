@@ -268,10 +268,10 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
         return;
       }
 
-      // Cmd+O / Ctrl+O: open links and attachments for the currently focused
-      // email. Handled before the input-focus/mode bails below so it works in
-      // the same focus states as Cmd+K/J/F.
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "o") {
+      // Cmd+O (macOS) / Ctrl+O (Windows/Linux): open links and attachments for
+      // the currently focused email. Do not intercept Ctrl+O on macOS, where it
+      // is the native Emacs-style open-line binding in text inputs.
+      if ((isMac ? e.metaKey : e.ctrlKey) && e.key.toLowerCase() === "o") {
         e.preventDefault();
         state.openLinksAttachments();
         return;

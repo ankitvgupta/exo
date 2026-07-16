@@ -11,6 +11,7 @@ type TestEmail = {
 type TestStore = {
   getState: () => {
     emails: TestEmail[];
+    isOpenLinksAttachmentsOpen: boolean;
   };
   setState: (patch: Record<string, unknown>) => void;
 };
@@ -62,6 +63,49 @@ test.describe("Open Links & Attachments palette", () => {
 
     await page.keyboard.press("Escape");
     await expect(input).toBeHidden();
+  });
+
+  test("Ctrl+O remains native in text inputs on macOS", async () => {
+    const result = await page.evaluate(() => {
+      const store = (window as unknown as { __ZUSTAND_STORE__?: TestStore }).__ZUSTAND_STORE__;
+      if (!store) return null;
+
+      store.setState({ isOpenLinksAttachmentsOpen: false });
+
+      const originalPlatform = Object.getOwnPropertyDescriptor(navigator, "platform");
+      Object.defineProperty(navigator, "platform", {
+        configurable: true,
+        value: "MacIntel",
+      });
+
+      const textarea = document.createElement("textarea");
+      document.body.appendChild(textarea);
+      textarea.focus();
+
+      try {
+        const event = new KeyboardEvent("keydown", {
+          key: "o",
+          ctrlKey: true,
+          bubbles: true,
+          cancelable: true,
+        });
+        textarea.dispatchEvent(event);
+
+        return {
+          defaultPrevented: event.defaultPrevented,
+          paletteOpen: store.getState().isOpenLinksAttachmentsOpen,
+        };
+      } finally {
+        textarea.remove();
+        if (originalPlatform) {
+          Object.defineProperty(navigator, "platform", originalPlatform);
+        } else {
+          Reflect.deleteProperty(navigator, "platform");
+        }
+      }
+    });
+
+    expect(result).toEqual({ defaultPrevented: false, paletteOpen: false });
   });
 
   test("Escape closes attachment preview without closing the picker", async () => {
