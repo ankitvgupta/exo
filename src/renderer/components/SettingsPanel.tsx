@@ -212,8 +212,14 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
     },
   });
 
-  // Fetch general config
-  const { data: generalConfig } = useQuery({
+  // Fetch general config. The key is shared with other observers (e.g.
+  // useSignature) whose cached copy can be minutes old — force a fresh fetch
+  // per panel open since the once-only hydration below snapshots what it sees.
+  const {
+    data: generalConfig,
+    isError: generalConfigLoadError,
+    isFetchedAfterMount: generalConfigFresh,
+  } = useQuery({
     queryKey: ["general-config"],
     queryFn: async () => {
       const result = await window.api.settings.get();
@@ -222,6 +228,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
       }
       throw new Error(result.error);
     },
+    refetchOnMount: "always",
   });
 
   // What the main process will actually launch for background drafts, given
@@ -275,7 +282,7 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
   // directly, so they stay fresh without this effect re-running.
   const generalInitialized = useRef(false);
   useEffect(() => {
-    if (generalConfig && !generalInitialized.current) {
+    if (generalConfig && generalConfigFresh && !generalInitialized.current) {
       generalInitialized.current = true;
       setEnableSenderLookup(generalConfig.enableSenderLookup ?? true);
       setSenderLookupProvider(generalConfig.senderLookupProvider ?? "anthropic");
@@ -307,7 +314,10 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
         setPosthogEnabled(ph.enabled);
       }
     }
-  }, [generalConfig]);
+    // generalConfigFresh must be a dep: structural sharing can keep the same
+    // data reference across the mount refetch, so the freshness flip is the
+    // only signal that re-runs this effect when cached and fresh data match.
+  }, [generalConfig, generalConfigFresh]);
 
   useEffect(() => {
     if (generalConfig) {
@@ -464,7 +474,8 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
       })) as { success: boolean; error?: string } | undefined;
       if (result?.success) {
         setGeneralSaveResult("saved");
-        setTimeout(() => setGeneralSaveResult(null), 2000);
+        // Functional clear so a later save's error can't be wiped by this timer
+        setTimeout(() => setGeneralSaveResult((v) => (v === "saved" ? null : v)), 2000);
       } else {
         setGeneralSaveResult(result?.error || "Could not save settings.");
       }
@@ -1799,12 +1810,18 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
               {/* Save button — disabled until config has loaded so a failed or
                   slow settings:get can't be overwritten with staged defaults */}
               <div className="flex justify-end items-center gap-3">
+                {generalConfigLoadError && (
+                  <p className="text-sm text-red-600 dark:text-red-400">
+                    Could not load settings — close and reopen Settings to retry. Saving is disabled
+                    so stored settings aren't overwritten.
+                  </p>
+                )}
                 {generalSaveResult && generalSaveResult !== "saved" && (
                   <p className="text-sm text-red-600 dark:text-red-400">{generalSaveResult}</p>
                 )}
                 <button
                   onClick={handleSaveGeneral}
-                  disabled={isSavingGeneral || !generalConfig}
+                  disabled={isSavingGeneral || !generalConfigFresh}
                   className={`px-6 py-2 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50 ${
                     generalSaveResult === "saved"
                       ? "bg-green-600 dark:bg-green-500"
@@ -3559,7 +3576,23 @@ export function SettingsPanel({ onClose, initialTab }: SettingsPanelProps) {
           </div>
         )}
 
-        {activeTab === "extensions" && <ExtensionsTab />}
+        {activeTab === "extensions" && (
+          <ExtensionsTab
+            onOllamaCloudDisabled={() => {
+              // Mirror the persisted featureProviders reset in the staged copy
+              // (hydrated once per session) so Save Changes can't republish
+              // ollama-cloud routes whose API key was just cleared.
+              setFeatureProviders((prev) =>
+                Object.fromEntries(
+                  Object.entries(prev).map(([feature, provider]) => [
+                    feature,
+                    provider === "ollama-cloud" ? "anthropic" : provider,
+                  ]),
+                ),
+              );
+            }}
+          />
+        )}
 
         {activeTab === "analytics" && (
           <div className="max-w-3xl mx-auto space-y-6">

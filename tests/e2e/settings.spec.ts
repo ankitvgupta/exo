@@ -429,6 +429,10 @@ test.describe("Settings Panel - Persistence", () => {
   });
 });
 
+// These tests use ONLY the opencode + backgroundAgentProvider config keys.
+// The electron-store config is shared across parallel e2e workers (only the
+// DB is per-worker), and tests/e2e/hostler-settings.spec.ts owns the hostler
+// key — touching it here would let fullyParallel workers race on it.
 test.describe("Settings Panel - Agent Drafter runtime picker", () => {
   test.describe.configure({ mode: "serial" });
   let electronApp: ElectronApplication;
@@ -443,8 +447,7 @@ test.describe("Settings Panel - Agent Drafter runtime picker", () => {
     await page.evaluate(() =>
       window.api.settings.set({
         backgroundAgentProvider: "claude",
-        hostler: { enabled: true, apiKey: "cpk_test", harness: "opencode" },
-        opencode: { enabled: false },
+        opencode: { enabled: true },
       }),
     );
   });
@@ -454,7 +457,6 @@ test.describe("Settings Panel - Agent Drafter runtime picker", () => {
       await page.evaluate(() =>
         window.api.settings.set({
           backgroundAgentProvider: "claude",
-          hostler: { enabled: false },
           opencode: { enabled: false },
         }),
       );
@@ -464,19 +466,18 @@ test.describe("Settings Panel - Agent Drafter runtime picker", () => {
     }
   });
 
-  test("runtime options are gated by Extensions config", async () => {
+  test("an enabled runtime is selectable in the Agent Drafter row", async () => {
     await page.locator("button[title='Settings']").click();
     await expect(page.locator("h1:has-text('Settings')")).toBeVisible({ timeout: 5000 });
 
     const select = page.getByLabel("Provider for Agent Drafter");
     await select.scrollIntoViewIfNeeded();
-    await expect(select.locator("option[value='hostler']")).toBeEnabled();
-    await expect(select.locator("option[value='opencode']")).toBeDisabled();
+    await expect(select.locator("option[value='opencode']")).toBeEnabled();
   });
 
   test("selecting an external runtime persists only after Save Changes", async () => {
     const select = page.getByLabel("Provider for Agent Drafter");
-    await select.selectOption("hostler");
+    await select.selectOption("opencode");
 
     // The model column is replaced by the Extensions hint while an external
     // runtime is selected.
@@ -496,7 +497,7 @@ test.describe("Settings Panel - Agent Drafter runtime picker", () => {
         };
         return cfg.data?.backgroundAgentProvider;
       })
-      .toBe("hostler");
+      .toBe("opencode");
   });
 
   test("selecting an LLM provider returns the runtime to Claude and restores the model select", async () => {
@@ -516,10 +517,8 @@ test.describe("Settings Panel - Agent Drafter runtime picker", () => {
       .toBe("claude");
   });
 
-  // Runs in the same serial describe (same worker) as the tests above: all of
-  // these tests write backgroundAgentProvider/opencode/hostler in the SHARED
-  // config store (only the DB is per-worker), so splitting them across
-  // describes lets fullyParallel workers race on those keys.
+  // Same serial describe (same worker) as the tests above: they all mutate
+  // the shared backgroundAgentProvider/opencode keys.
   test("shows the fallback warning and keeps the saved runtime selected when gated off", async ({}, testInfo) => {
     // A saved runtime whose Extensions gates are no longer met — the row must
     // surface the fallback instead of silently misrepresenting where drafts
@@ -528,7 +527,6 @@ test.describe("Settings Panel - Agent Drafter runtime picker", () => {
       window.api.settings.set({
         backgroundAgentProvider: "opencode",
         opencode: { enabled: false },
-        hostler: { enabled: false },
       }),
     );
     await closeApp(electronApp);
@@ -542,6 +540,7 @@ test.describe("Settings Panel - Agent Drafter runtime picker", () => {
     const select = page.getByLabel("Provider for Agent Drafter");
     await select.scrollIntoViewIfNeeded();
     await expect(select).toHaveValue("opencode");
+    await expect(select.locator("option[value='opencode']")).toBeDisabled();
     await expect(
       page.getByText(/OpenCode is disabled — background drafts fall back to the built-in agent/),
     ).toBeVisible();
