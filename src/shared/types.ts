@@ -626,6 +626,46 @@ export function resolveBackgroundAgentProviderId(
   return requested;
 }
 
+/** Agent runtimes selectable for background drafts besides the built-in Claude agent. */
+export const EXTERNAL_AGENT_RUNTIMES = ["opencode", "hostler"] as const;
+
+/**
+ * Whether selecting `id` as the background agent provider would actually take
+ * effect, derived from the same resolver that routes background drafts — so
+ * UI enablement can't drift from runtime fallback behavior.
+ */
+export function isAgentRuntimeAvailable(
+  id: string,
+  cfg: Pick<Config, "opencode" | "hostler" | "openclaw">,
+): boolean {
+  return resolveBackgroundAgentProviderId({ ...cfg, backgroundAgentProvider: id }) === id;
+}
+
+/**
+ * Interpret a selection from the Agent Drafter provider dropdown, which mixes
+ * agent runtimes (EXTERNAL_AGENT_RUNTIMES) with LLM providers for the built-in
+ * Claude runtime (LLM_PROVIDERS). Picking a runtime routes background drafts
+ * there and leaves the Claude-runtime model choice untouched; picking an LLM
+ * provider returns the runtime to the built-in Claude agent and selects its
+ * model source. Returns null for values that are neither, so unknown option
+ * values are an explicit no-op rather than a silent misroute.
+ */
+export function applyAgentDrafterSelection(
+  selected: string,
+): { backgroundAgentProvider: string; agentDrafterProvider?: LlmProvider } | null {
+  if ((EXTERNAL_AGENT_RUNTIMES as readonly string[]).includes(selected)) {
+    return { backgroundAgentProvider: selected };
+  }
+  const llmParse = LlmProviderSchema.safeParse(selected);
+  if (llmParse.success) {
+    return {
+      backgroundAgentProvider: DEFAULT_BACKGROUND_AGENT_PROVIDER,
+      agentDrafterProvider: llmParse.data,
+    };
+  }
+  return null;
+}
+
 // Dashboard-specific types
 
 // Email with analysis and draft status for the UI
