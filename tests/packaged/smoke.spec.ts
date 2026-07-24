@@ -26,6 +26,7 @@ import {
   type Page,
   type ElectronApplication,
 } from "@playwright/test";
+import { spawnSync } from "child_process";
 import { existsSync, mkdirSync, rmSync, statSync } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -73,6 +74,35 @@ test.describe("Packaged app smoke", () => {
       timeout: 30_000,
     });
 
+  const closePackagedApp = async (target: ElectronApplication): Promise<void> => {
+    const proc = target.process();
+    let timeout: NodeJS.Timeout | undefined;
+    try {
+      await Promise.race([
+        target.close(),
+        new Promise<never>((_, reject) => {
+          timeout = setTimeout(() => reject(new Error("packaged app shutdown timed out")), 5_000);
+        }),
+      ]);
+    } catch {
+      if (proc.pid) {
+        try {
+          process.kill(proc.pid, "SIGKILL");
+        } catch {
+          /* already gone */
+        }
+      }
+      if (proc.exitCode === null && proc.signalCode === null) {
+        await Promise.race([
+          new Promise<void>((resolve) => proc.once("exit", () => resolve())),
+          new Promise<void>((resolve) => setTimeout(resolve, 5_000)),
+        ]);
+      }
+    } finally {
+      if (timeout) clearTimeout(timeout);
+    }
+  };
+
   test.beforeAll(async () => {
     // Start from a clean slate — stale Chromium profile state or config from
     // a previous run would make the smoke test non-deterministic.
@@ -85,19 +115,7 @@ test.describe("Packaged app smoke", () => {
 
   test.afterAll(async () => {
     if (app) {
-      try {
-        await app.close();
-      } catch {
-        // Packaged app shutdown can hang; force-kill is fine for smoke
-        const proc = app.process();
-        if (proc.pid) {
-          try {
-            process.kill(proc.pid, "SIGKILL");
-          } catch {
-            /* already gone */
-          }
-        }
-      }
+      await closePackagedApp(app);
     }
   });
 
@@ -114,17 +132,39 @@ test.describe("Packaged app smoke", () => {
     await expect(page.locator("text=Exo").first()).toBeVisible({ timeout: 30_000 });
   });
 
-  test("bundles an executable OpenCode platform binary", () => {
-    test.skip(process.platform !== "darwin", "macOS packaged layout assertion");
-
-    const resourcesDir = path.resolve(path.dirname(BINARY), "../Resources");
-    const opencodeBinary = path.join(
+  test("bundles an executable compatible OpenCode platform binary", () => {
+    const resourcesDir =
+      process.platform === "darwin"
+        ? path.resolve(path.dirname(BINARY), "../Resources")
+        : path.resolve(path.dirname(BINARY), "resources");
+    const sdkCommand = process.platform === "win32" ? "opencode.exe" : "opencode";
+    const normalizedPlatform = process.platform === "win32" ? "windows" : process.platform;
+    const packageName = `opencode-${normalizedPlatform}-${process.arch}${
+      process.arch === "x64" ? "-baseline" : ""
+    }`;
+    const sdkCommandPath = path.join(
       resourcesDir,
-      "app.asar.unpacked/node_modules/opencode-darwin-arm64/bin/opencode",
+      "app.asar.unpacked/node_modules",
+      packageName,
+      "bin",
+      sdkCommand,
     );
+    const opencodeBinDir = path.dirname(sdkCommandPath);
 
-    expect(existsSync(opencodeBinary)).toBe(true);
-    expect(statSync(opencodeBinary).mode & 0o111).not.toBe(0);
+    expect(existsSync(sdkCommandPath)).toBe(true);
+    if (process.platform !== "win32") {
+      expect(statSync(sdkCommandPath).mode & 0o111).not.toBe(0);
+    }
+    const version = spawnSync("opencode", ["--version"], {
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        PATH: `${opencodeBinDir}${path.delimiter}${process.env.PATH ?? ""}`,
+      },
+      timeout: 10_000,
+      windowsHide: true,
+    });
+    expect(version.status, version.stderr || version.error?.message).toBe(0);
   });
 
   test("no main-process crash in the first 10s", async () => {
@@ -185,7 +225,7 @@ test.describe("Packaged app smoke", () => {
       });
     });
 
-    await app.close();
+    await closePackagedApp(app);
     app = await launchPackagedApp();
     page = await app.firstWindow();
     await page.waitForLoadState("domcontentloaded");

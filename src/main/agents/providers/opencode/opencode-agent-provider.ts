@@ -732,6 +732,7 @@ function parseModelSelector(
 type ResolveOpencodePlatformBinaryOptions = {
   platform?: NodeJS.Platform;
   arch?: string;
+  resourcesPath?: string;
   resolvePackageJson?: (specifier: string) => string;
   fileExists?: (candidate: string) => boolean;
 };
@@ -739,20 +740,34 @@ type ResolveOpencodePlatformBinaryOptions = {
 /**
  * Resolve OpenCode directly from its platform-specific optional dependency.
  *
- * electron-builder preserves that package's executable under app.asar.unpacked,
- * but does not preserve the postinstall-created opencode-ai/bin shim. Resolving
- * the source package therefore works in both development and packaged builds.
+ * electron-builder preserves platform-package executables under
+ * app.asar.unpacked, but not the postinstall-created opencode-ai/bin shim.
+ * Packaged workers resolve from process.resourcesPath; development resolves the
+ * package normally. x64 distributables use the compatibility-safe baseline.
  */
 export function resolveOpencodePlatformBinary({
   platform = process.platform,
   arch = process.arch,
+  resourcesPath = process.resourcesPath,
   resolvePackageJson = (specifier) => require.resolve(specifier),
   fileExists = existsSync,
 }: ResolveOpencodePlatformBinaryOptions = {}): string | null {
   const normalizedPlatform = platform === "win32" ? "windows" : platform;
-  const packageName = `opencode-${normalizedPlatform}-${arch}`;
+  const packageName = `opencode-${normalizedPlatform}-${arch}${arch === "x64" ? "-baseline" : ""}`;
   const binaryName = platform === "win32" ? "opencode.exe" : "opencode";
   const pathApi = platform === "win32" ? win32 : posix;
+
+  if (resourcesPath) {
+    const packagedCandidate = pathApi.join(
+      resourcesPath,
+      "app.asar.unpacked",
+      "node_modules",
+      packageName,
+      "bin",
+      binaryName,
+    );
+    if (fileExists(packagedCandidate)) return packagedCandidate;
+  }
 
   try {
     const packageJsonPath = resolvePackageJson(`${packageName}/package.json`);
@@ -769,10 +784,8 @@ export function resolveOpencodePlatformBinary({
  * Locate the opencode binary shipped via the opencode-ai npm package.
  * Memoized — the resolved path doesn't change during the worker's lifetime.
  *
- * In dev: node_modules/.bin/opencode (symlink → optionalDep platform binary).
- * In packaged Electron: node_modules/.bin lives inside app.asar; the
- * post-install symlink target is in app.asar.unpacked. Same shape as the
- * Claude Code resolver in claude-agent-provider.ts.
+ * In dev: resolve the optional platform dependency or node_modules/.bin.
+ * In packaged Electron: resolve its executable beneath process.resourcesPath.
  */
 const resolveOpencodeBinary = (() => {
   let cached: string | null | undefined;

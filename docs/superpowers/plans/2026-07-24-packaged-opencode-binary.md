@@ -4,7 +4,7 @@
 
 **Goal:** Make the packaged macOS Exo app discover its bundled OpenCode executable so enabled OpenCode settings produce an OpenCode option in the agent picker.
 
-**Architecture:** Keep the existing development-path discovery and add a direct candidate for OpenCode's platform-specific optional dependency, which electron-builder already unpacks. Cover the path translation with a unit test and the real bundle with the packaged smoke suite.
+**Architecture:** Reuse the platform-package executable electron-builder already preserves beneath `process.resourcesPath`, choosing the compatibility-safe baseline variant on x64. Resolve that path directly in the utility-process worker, then cover PATH lookup, executability, and provider availability with unit and packaged smoke tests.
 
 **Tech Stack:** Electron, TypeScript, Node.js filesystem/module resolution, Playwright.
 
@@ -13,58 +13,33 @@
 - Preserve the existing development resolution paths and memoization.
 - Do not read or modify the production Exo profile during tests.
 - Use Node.js `22.22.0` for install, tests, and packaging.
-- Keep the PR limited to OpenCode binary resolution, its regression coverage, and this plan.
+- Keep the PR limited to OpenCode binary packaging, its regression coverage, and this plan.
 
 ---
 
-### Task 1: Resolve the platform package executable
+### Task 1: Resolve the existing packaged OpenCode executable
 
 **Files:**
 
 - Modify: `src/main/agents/providers/opencode/opencode-agent-provider.ts`
-- Create: `tests/unit/opencode-binary-resolution.spec.ts`
+- Modify: `tests/unit/opencode-binary-resolution.spec.ts`
 
 **Interfaces:**
 
-- Consumes: `platform`, `arch`, and a resolved `opencode-<platform>-<arch>/package.json` path.
-- Produces: `resolveOpencodePlatformBinary(options?: ResolveOpencodePlatformBinaryOptions): string | null`.
+- Consumes: the executable already shipped by the platform-specific optional dependency.
+- Produces: its direct `app.asar.unpacked/node_modules/opencode-<platform>-<arch>[-baseline]/bin/opencode[.exe]` path.
 
-- [ ] **Step 1: Write the failing unit test**
+- [ ] **Step 1: Prove the canonical shim is absent from the pre-fix bundle**
 
-```ts
-import { expect, test } from "@playwright/test";
-import { resolveOpencodePlatformBinary } from "../../src/main/agents/providers/opencode/opencode-agent-provider";
+Inspect `Contents/Resources/app.asar` and `app.asar.unpacked`. Expected: `opencode-ai/package.json` is present, but `opencode-ai/bin/opencode.exe` is absent.
 
-test("maps the packaged darwin arm64 dependency to its executable", () => {
-  expect(
-    resolveOpencodePlatformBinary({
-      platform: "darwin",
-      arch: "arm64",
-      resolvePackageJson: () =>
-        "/Applications/Exo.app/Contents/Resources/app.asar/node_modules/opencode-darwin-arm64/package.json",
-      fileExists: () => true,
-    }),
-  ).toBe(
-    "/Applications/Exo.app/Contents/Resources/app.asar.unpacked/node_modules/opencode-darwin-arm64/bin/opencode",
-  );
-});
-```
+- [ ] **Step 2: Resolve the existing platform binary**
 
-- [ ] **Step 2: Run the unit test and verify RED**
+Resolve the platform dependency beneath `process.resourcesPath`, using the baseline package on x64 so distributables do not inherit the build runner's AVX2 capability. Preserve the normal package-resolution fallback for development.
 
-Run: `npx playwright test --project=unit tests/unit/opencode-binary-resolution.spec.ts`
+- [ ] **Step 3: Keep resolver documentation current**
 
-Expected: FAIL because `resolveOpencodePlatformBinary` is not exported.
-
-- [ ] **Step 3: Implement the minimal candidate helper and resolver branch**
-
-Add a pure helper that joins the package directory with `bin/opencode` (`opencode.exe` on Windows), translates `app.asar` to `app.asar.unpacked`, and return that candidate. Resolve `opencode-${normalizedPlatform}-${process.arch}/package.json` and add the candidate before the legacy shim paths.
-
-- [ ] **Step 4: Run focused OpenCode tests and verify GREEN**
-
-Run: `npx playwright test --project=unit tests/unit/opencode-binary-resolution.spec.ts tests/unit/opencode-resolve-route.spec.ts tests/unit/opencode-event-mapper.spec.ts tests/unit/opencode-mcp-bridge.spec.ts`
-
-Expected: all tests pass.
+Document the packaged and development paths and keep the resolver memoized.
 
 ### Task 2: Prove the packaged artifact
 
@@ -79,7 +54,7 @@ Expected: all tests pass.
 
 - [ ] **Step 1: Add the packaged smoke assertion**
 
-Derive `Contents/Resources/app.asar.unpacked/node_modules/opencode-darwin-arm64/bin/opencode` from the macOS packaged executable, assert it exists, and assert its execute bits are non-zero.
+Derive the platform package's unpacked `bin` directory from the packaged executable, assert the platform SDK command exists, invoke `opencode --version` through the production PATH lookup, and assert POSIX execute bits are non-zero where applicable.
 
 Persist enabled OpenCode settings in the smoke suite's isolated profile, restart that packaged app, open the agent palette, and assert the `OpenCode` provider button is visible.
 
@@ -118,7 +93,7 @@ Run: `npm test`
 
 - [ ] **Step 2: Commit and push**
 
-Stage only the plan, resolver, unit test, and packaged smoke test. Commit as `Fix packaged OpenCode binary resolution`, then push `codex/fix-packaged-opencode-binary` to `upstream-pr`.
+Stage only the plan, resolver, unit coverage, and packaged smoke test. Commit as `Fix packaged OpenCode binary resolution`, then push `codex/fix-packaged-opencode-binary` to `upstream-pr`.
 
 - [ ] **Step 3: Open the draft PR**
 
