@@ -19,8 +19,14 @@
  * EXO_USER_DATA_DIR or the smoke test writes into — and can corrupt — the
  * user's production config and database.
  */
-import { test, expect, _electron as electron, type Page, type ElectronApplication } from "@playwright/test";
-import { existsSync, mkdirSync, rmSync } from "fs";
+import {
+  test,
+  expect,
+  _electron as electron,
+  type Page,
+  type ElectronApplication,
+} from "@playwright/test";
+import { existsSync, mkdirSync, rmSync, statSync } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 
@@ -49,12 +55,8 @@ test.describe("Packaged app smoke", () => {
   let app: ElectronApplication;
   let page: Page;
 
-  test.beforeAll(async () => {
-    // Start from a clean slate — stale Chromium profile state or config from
-    // a previous run would make the smoke test non-deterministic.
-    rmSync(USER_DATA_DIR, { recursive: true, force: true });
-    mkdirSync(USER_DATA_DIR, { recursive: true });
-    app = await electron.launch({
+  const launchPackagedApp = async (): Promise<ElectronApplication> =>
+    electron.launch({
       executablePath: BINARY,
       env: {
         ...process.env,
@@ -70,6 +72,13 @@ test.describe("Packaged app smoke", () => {
       },
       timeout: 30_000,
     });
+
+  test.beforeAll(async () => {
+    // Start from a clean slate — stale Chromium profile state or config from
+    // a previous run would make the smoke test non-deterministic.
+    rmSync(USER_DATA_DIR, { recursive: true, force: true });
+    mkdirSync(USER_DATA_DIR, { recursive: true });
+    app = await launchPackagedApp();
     page = await app.firstWindow();
     await page.waitForLoadState("domcontentloaded");
   });
@@ -103,6 +112,19 @@ test.describe("Packaged app smoke", () => {
 
   test("app launches within 30s and shows the Exo brand", async () => {
     await expect(page.locator("text=Exo").first()).toBeVisible({ timeout: 30_000 });
+  });
+
+  test("bundles an executable OpenCode platform binary", () => {
+    test.skip(process.platform !== "darwin", "macOS packaged layout assertion");
+
+    const resourcesDir = path.resolve(path.dirname(BINARY), "../Resources");
+    const opencodeBinary = path.join(
+      resourcesDir,
+      "app.asar.unpacked/node_modules/opencode-darwin-arm64/bin/opencode",
+    );
+
+    expect(existsSync(opencodeBinary)).toBe(true);
+    expect(statSync(opencodeBinary).mode & 0o111).not.toBe(0);
   });
 
   test("no main-process crash in the first 10s", async () => {
@@ -153,5 +175,24 @@ test.describe("Packaged app smoke", () => {
       for (const e of real) console.error(`  - ${e}`);
     }
     expect(real).toHaveLength(0);
+  });
+
+  test("shows an enabled OpenCode provider after a packaged-app restart", async () => {
+    await page.evaluate(async () => {
+      await window.api.settings.set({
+        anthropicApiKey: "packaged-smoke-placeholder",
+        opencode: { enabled: true },
+      });
+    });
+
+    await app.close();
+    app = await launchPackagedApp();
+    page = await app.firstWindow();
+    await page.waitForLoadState("domcontentloaded");
+    await page.keyboard.press("Meta+j");
+
+    await expect(page.getByRole("button", { name: "OpenCode" })).toBeVisible({
+      timeout: 10_000,
+    });
   });
 });

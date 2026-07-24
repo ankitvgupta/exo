@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
-import { dirname, join, delimiter as pathDelimiter } from "node:path";
+import { dirname, join, delimiter as pathDelimiter, posix, win32 } from "node:path";
 import type { Config, Event } from "@opencode-ai/sdk";
 // Type-only namespace import lets us reference the SDK's function types
 // (typeof OcSdk.createOpencodeServer) without emitting a runtime `require()`,
@@ -729,6 +729,42 @@ function parseModelSelector(
   };
 }
 
+type ResolveOpencodePlatformBinaryOptions = {
+  platform?: NodeJS.Platform;
+  arch?: string;
+  resolvePackageJson?: (specifier: string) => string;
+  fileExists?: (candidate: string) => boolean;
+};
+
+/**
+ * Resolve OpenCode directly from its platform-specific optional dependency.
+ *
+ * electron-builder preserves that package's executable under app.asar.unpacked,
+ * but does not preserve the postinstall-created opencode-ai/bin shim. Resolving
+ * the source package therefore works in both development and packaged builds.
+ */
+export function resolveOpencodePlatformBinary({
+  platform = process.platform,
+  arch = process.arch,
+  resolvePackageJson = (specifier) => require.resolve(specifier),
+  fileExists = existsSync,
+}: ResolveOpencodePlatformBinaryOptions = {}): string | null {
+  const normalizedPlatform = platform === "win32" ? "windows" : platform;
+  const packageName = `opencode-${normalizedPlatform}-${arch}`;
+  const binaryName = platform === "win32" ? "opencode.exe" : "opencode";
+  const pathApi = platform === "win32" ? win32 : posix;
+
+  try {
+    const packageJsonPath = resolvePackageJson(`${packageName}/package.json`);
+    const candidate = pathApi
+      .join(pathApi.dirname(packageJsonPath), "bin", binaryName)
+      .replace(/([\\/])app\.asar([\\/])/, "$1app.asar.unpacked$2");
+    return fileExists(candidate) ? candidate : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Locate the opencode binary shipped via the opencode-ai npm package.
  * Memoized — the resolved path doesn't change during the worker's lifetime.
@@ -742,6 +778,12 @@ const resolveOpencodeBinary = (() => {
   let cached: string | null | undefined;
   return (): string | null => {
     if (cached !== undefined) return cached;
+
+    const platformBinary = resolveOpencodePlatformBinary();
+    if (platformBinary) {
+      cached = platformBinary;
+      return platformBinary;
+    }
 
     const candidates: string[] = [];
 
