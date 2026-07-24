@@ -190,7 +190,7 @@ test.describe("Packaged app smoke", () => {
     if (await settingsBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
       await settingsBtn.click();
     } else {
-      await page.keyboard.press("Meta+,");
+      await page.keyboard.press("ControlOrMeta+,");
     }
     await expect(page.locator("text=Settings").first()).toBeVisible({ timeout: 5000 });
     await page.keyboard.press("Escape");
@@ -229,7 +229,7 @@ test.describe("Packaged app smoke", () => {
     app = await launchPackagedApp();
     page = await app.firstWindow();
     await page.waitForLoadState("domcontentloaded");
-    await page.keyboard.press("Meta+j");
+    await page.keyboard.press("ControlOrMeta+j");
 
     await expect(page.getByRole("button", { name: "OpenCode" })).toBeVisible({
       timeout: 10_000,
