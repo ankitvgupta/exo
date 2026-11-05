@@ -72,7 +72,7 @@ test.describe("Sender Profile - Display", () => {
       "Diana",
       "Tom Blomfield",
       "Nicolas",
-      "Dalton",
+      "Casey",
     ];
 
     let foundSender = false;
@@ -294,7 +294,7 @@ test.describe("Sender Profile - Full View", () => {
       "Diana",
       "Tom",
       "Nicolas",
-      "Dalton",
+      "Casey",
     ];
     let found = false;
     for (const sender of knownSenders) {

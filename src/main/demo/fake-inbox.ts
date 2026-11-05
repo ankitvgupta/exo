@@ -495,17 +495,17 @@ Talk soon!`,
   },
 
   // === STYLE TESTING: Casual contact (Casey Morgan) ===
-  // Inbox email from Dalton that needs a reply
+  // Inbox email from Casey that needs a reply
   {
     id: "demo-casual-inbox",
-    threadId: "thread-casual-dalton-11",
+    threadId: "thread-casual-casey-11",
     subject: "friday?",
     from: "Casey Morgan <casey.morgan@example.com>",
     to: "me@example.com",
     date: new Date(now - 2 * hour).toISOString(),
     body: `yo you free friday? was thinking we grab tacos at that new spot on valencia
 
-dalton`,
+casey`,
     snippet: "yo you free friday? was thinking we grab tacos...",
   },
 
@@ -1120,10 +1120,10 @@ Ankit`,
 
 // Sent emails seeded into DB for style profiling (not shown in inbox)
 export const DEMO_STYLE_SEED_EMAILS: Email[] = [
-  // 10 casual sent emails to Dalton — all lowercase, ~10 words, minimal punctuation
+  // 10 casual sent emails to Casey — all lowercase, ~10 words, minimal punctuation
   {
     id: "demo-sent-casual-01",
-    threadId: "thread-casual-dalton-01",
+    threadId: "thread-casual-casey-01",
     subject: "Re: weekend",
     from: "me@example.com",
     to: "Casey Morgan <casey.morgan@example.com>",
@@ -1134,7 +1134,7 @@ export const DEMO_STYLE_SEED_EMAILS: Email[] = [
   },
   {
     id: "demo-sent-casual-02",
-    threadId: "thread-casual-dalton-02",
+    threadId: "thread-casual-casey-02",
     subject: "Re: that new show",
     from: "me@example.com",
     to: "Casey Morgan <casey.morgan@example.com>",
@@ -1145,7 +1145,7 @@ export const DEMO_STYLE_SEED_EMAILS: Email[] = [
   },
   {
     id: "demo-sent-casual-03",
-    threadId: "thread-casual-dalton-03",
+    threadId: "thread-casual-casey-03",
     subject: "Re: dinner tonight",
     from: "me@example.com",
     to: "Casey Morgan <casey.morgan@example.com>",
@@ -1156,7 +1156,7 @@ export const DEMO_STYLE_SEED_EMAILS: Email[] = [
   },
   {
     id: "demo-sent-casual-04",
-    threadId: "thread-casual-dalton-04",
+    threadId: "thread-casual-casey-04",
     subject: "Re: extra ticket",
     from: "me@example.com",
     to: "Casey Morgan <casey.morgan@example.com>",
@@ -1167,7 +1167,7 @@ export const DEMO_STYLE_SEED_EMAILS: Email[] = [
   },
   {
     id: "demo-sent-casual-05",
-    threadId: "thread-casual-dalton-05",
+    threadId: "thread-casual-casey-05",
     subject: "Re: last night",
     from: "me@example.com",
     to: "Casey Morgan <casey.morgan@example.com>",
@@ -1178,7 +1178,7 @@ export const DEMO_STYLE_SEED_EMAILS: Email[] = [
   },
   {
     id: "demo-sent-casual-06",
-    threadId: "thread-casual-dalton-06",
+    threadId: "thread-casual-casey-06",
     subject: "Re: meetup",
     from: "me@example.com",
     to: "Casey Morgan <casey.morgan@example.com>",
@@ -1189,7 +1189,7 @@ export const DEMO_STYLE_SEED_EMAILS: Email[] = [
   },
   {
     id: "demo-sent-casual-07",
-    threadId: "thread-casual-dalton-07",
+    threadId: "thread-casual-casey-07",
     subject: "Re: article",
     from: "me@example.com",
     to: "Casey Morgan <casey.morgan@example.com>",
@@ -1200,7 +1200,7 @@ export const DEMO_STYLE_SEED_EMAILS: Email[] = [
   },
   {
     id: "demo-sent-casual-08",
-    threadId: "thread-casual-dalton-08",
+    threadId: "thread-casual-casey-08",
     subject: "Re: yo",
     from: "me@example.com",
     to: "Casey Morgan <casey.morgan@example.com>",
@@ -1211,7 +1211,7 @@ export const DEMO_STYLE_SEED_EMAILS: Email[] = [
   },
   {
     id: "demo-sent-casual-09",
-    threadId: "thread-casual-dalton-09",
+    threadId: "thread-casual-casey-09",
     subject: "Re: bbq",
     from: "me@example.com",
     to: "Casey Morgan <casey.morgan@example.com>",
@@ -1222,7 +1222,7 @@ export const DEMO_STYLE_SEED_EMAILS: Email[] = [
   },
   {
     id: "demo-sent-casual-10",
-    threadId: "thread-casual-dalton-10",
+    threadId: "thread-casual-casey-10",
     subject: "Re: road trip idea",
     from: "me@example.com",
     to: "Casey Morgan <casey.morgan@example.com>",
